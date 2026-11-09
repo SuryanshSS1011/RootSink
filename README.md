@@ -497,7 +497,9 @@ releases.
 **Licences.** The code is MIT ([`LICENSE`](LICENSE)). The labels, chains and annotations are
 CC BY 4.0 ([`LICENSE-DATA`](LICENSE-DATA)). Logs and diffs come from each project's own fuzz
 targets and history and stay under that project's licence, which each record names in `license`.
-Every Reproduced-tier bug is already fixed and public, and the only personal data are developer
+The crashing inputs (`data/evidence/arvo/<id>/poc`) are OSS-Fuzz test cases copied unchanged from
+ARVO's public images. They are not covered by CC BY 4.0, and an input derived from a project's own
+files stays under that project's licence. Every Reproduced-tier bug is already fixed and public, and the only personal data are developer
 names and e-mail addresses that the projects themselves publish.
 
 **Citation.** Please cite RootSink using [`CITATION.cff`](CITATION.cff), or GitHub's
