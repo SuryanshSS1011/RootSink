@@ -456,7 +456,8 @@ def review_counts(rows: list[dict], gold: list[dict]) -> dict:
     four56 = [r for r in witnessed if r["chain"][0].get("cwe_id") == 456]
     touches = 0
     for r in four56:
-        f = ((r["chain"][0].get("evidence") or {}).get("location") or {}).get("file") or ""
+        e = r["chain"][0].get("evidence") or {}
+        f = (e.get("origin_site") or e.get("location") or {}).get("file") or ""  # 1.0.7: origin
         files = re.findall(r"^diff --git a/\S+ b/(\S+)", r.get("patch_diff") or "", re.M)
         touches += bool(f) and any(x.split("/")[-1] == f.split("/")[-1] for x in files)
     m |= {"NGoldFourFiveSix": len(four56), "NGoldFourFiveSixFixAtOrigin": touches}
@@ -1099,6 +1100,17 @@ def main(argv=None) -> int:
             out[f"NIrr{tag}OriginInFixFn"] = o.get("other_site_in_fix_function", 0)
             out[f"NIrr{tag}OriginInFixFile"] = o.get("other_site_in_fix_file_only", 0)
             out[f"NIrr{tag}TestedCwe"] = t["source_cwe_exact"]
+            # Function-level match for tested roots, and the 1.0.7 moved roots (added 2026-11-09).
+            fm = loc["tested-repair-site"]["function_match"]["value"]
+            out[f"NIrr{tag}TestedFn"] = round(fm * loc["tested-repair-site"]["n"])
+            mv = rt.get("moved_origin_roots")
+            if mv:
+                out["NIrrMoved"] = mv["n"]
+                out["NIrrMovedDiffer"] = mv["n_functions_differ"]
+                out[f"NIrr{tag}MovedTestedFn"] = mv["names_tested_function"]
+                out[f"NIrr{tag}MovedOriginFn"] = mv["names_origin_function"]
+                out[f"NIrr{tag}MovedOriginOnly"] = mv["names_origin_where_differ"]
+                out[f"NIrr{tag}MovedViaCrash"] = mv["tested_match_via_crash_site"]
             out[f"NIrr{tag}TestedCweCompat"] = t["source_cwe_compatible"]
             # PR-9: a figure pooled over GOLD reweights each site kind to its population share.
             ks = [k for k in kinds_all if k in loc]
@@ -1136,6 +1148,9 @@ def main(argv=None) -> int:
             a, b = m["NIrrOriginCwe"], m["NIrrBOriginCwe"]
             pair = a if a == b else f"{a} and {b}"
             m["IrrOriginCwePair"] = f"{pair} of {m['NIrrOrigin']}"
+            # "97% of items each" when the raters' sink-CWE agreement is equal (added 2026-11-09).
+            sa, sb = m["IrrSinkCwePct"], m["IrrBSinkCwePct"]
+            m["IrrSinkCweItems"] = f"{sa} of items each" if sa == sb else f"{sa} and {sb} of items"
             # "none of the 13 suggested sites" when neither rater judged one the defect.
             pa, pb = m["IrrPctStrictAnnot"], m["IrrBPctStrictAnnot"]
             m["IrrAnnotPair"] = (
@@ -1164,7 +1179,7 @@ def main(argv=None) -> int:
             m["NIrrSiteBothUnclear"] = sd["as_written_both_unclear"]
             gaps = sd["blank_answers"] + sd["sites_without_role"]
             m["IrrBlankPhrase"] = (
-                "Neither sheet left an answer blank or a site without a role"
+                "Neither sheet left an answer or site role blank"
                 if gaps == 0
                 else f"The sheets left {gaps} answers or site roles blank, which count as unclear"
             )
@@ -1233,7 +1248,7 @@ def main(argv=None) -> int:
         med, hi = secs[len(secs) // 2], round(p95(secs) / 60)
         mmed, mhi = mem[len(mem) // 2], p95(mem)
         m["ResourceFigures"] = (
-            f"a scored rebuild took a median of {med}\\,s and {mmed:.1f}\\,GB of memory"
+            f"a scored rebuild took a median of {med}\\,s and used {mmed:.1f}\\,GB"
             f" (95th percentiles {hi}\\,min and {mhi:.0f}\\,GB)"
         )
     url = Path("data/release/URL")
@@ -1267,6 +1282,12 @@ def main(argv=None) -> int:
         da = json.loads(dup.read_text())
         m["PctDupRows"] = pct(da["duplicate_rate"])
         m["NDupSpanning"] = da["clusters_spanning_splits"]
+        n = m["NDupSpanning"]  # the paper's split sentence (added 2026-11-09)
+        m["DupSpanPhrase"] = (
+            "no duplicate group spans two"
+            if n == 0
+            else f"{n} duplicate group{'s' if n > 1 else ''} span{'' if n > 1 else 's'} two"
+        )
     funnels = sorted(Path("data/validation").glob("pr7_*_funnel.json"))
     if funnels:  # PREREGISTRATION PR-7 execution-first mining, every batch summed
         steps = ["selected", "reproduced", "sink", "proof", "CWE derived", "admitted", "gold"]
@@ -1399,6 +1420,10 @@ def main(argv=None) -> int:
                 for k, n in v.items()
                 if k.endswith(" fuzzy")
             )
+        # The withdrawn count's base: tests from both checks (added 2026-11-09).
+        m["NFuzzTestsAll"] = fr["tests"] + (
+            json.loads(f2.read_text())["tests"] if f2.is_file() else 0
+        )
     ru = Path("data/validation/retest_unresolved.json")  # strict re-tests of unresolved tests
     if ru.is_file():
         rc = json.loads(ru.read_text())["counts"]
@@ -1466,6 +1491,13 @@ def main(argv=None) -> int:
             and now[r["id"]]["chain"][0].get("site_kind") == "tested-repair-site"
             for r in dg
         )
+        # The same, split by the snapshot's root kind (1.0.7 moves origin roots by rule).
+        m["NIrrNowTestedOrigin"] = sum(
+            r["chain"][0].get("site_kind") == "origin-site"
+            and now[r["id"]]["chain"][0].get("site_kind") == "tested-repair-site"
+            for r in dg
+        )
+        m["NIrrNowTestedOther"] = m["NIrrNowTested"] - m["NIrrNowTestedOrigin"]
         m["NIrrDropped"] = sum(r["id"] not in now for r in drawn)
         snap = Path("data/irr/snapshot.json")
         if snap.is_file():

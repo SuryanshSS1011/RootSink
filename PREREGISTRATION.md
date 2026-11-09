@@ -1332,3 +1332,120 @@ computed after the outcomes were seen. None changes a reported figure, a label o
    stay admitted under item 3 of the 2026-11-07 entry, and no figure changes.
 2. Both raters agreed that their sheets, initials and self-described backgrounds in
    `data/irr/returned/` be published with the release.
+
+## Release 1.0.7: a witnessed origin with a tested hunk takes the tested site as root (2026-11-09, after the audit, written before it is applied)
+
+1. **Change.** PR-4 kept a witnessed origin (MSan's creation site for CWE-456, the free of a
+   CWE-416) as the root's site even when a single-hunk test of the fix succeeded, and stored the
+   tested site in `evidence.tested_site`. From release 1.0.7 the tested site becomes the root's
+   site (`site_kind: tested-repair-site`) and the origin moves to `evidence.origin_site`. The root
+   keeps its CWE and its evidence kind, because the report still names the CWE.
+   `infra/verify/move_origin_roots.py` applies this after `locate_tested_sites.py`, and a later
+   withdrawal of the test puts the origin back. A root whose tested hunk could not be placed (no
+   `tested_site`) keeps its origin.
+2. **What was seen first.** This entry was written after both audit sheets were scored. Before it,
+   on 2026-11-09, an exploratory comparison found that 30 of the 51 audited GOLD origin roots have
+   a tested hunk in release 1.0.6. The raters named that hunk's function as the root in 25 and 21
+   of them and the origin's function in 3 and 4, and for the 53 audited tested roots they named
+   the root's function in 47 and 46. The rule was chosen with these figures known, so they do not
+   test it. The raters judged the snapshot's sites, and they saw the fix, which contains every
+   tested site.
+3. **Counts before applying.** Counted on a copy of release 1.0.6 before this entry: 392 GOLD and
+   34 silver roots move, and 2 GOLD roots keep their origin because their tested hunk could not be
+   placed. The GOLD contract (`chainforge.integrity`) does not read site kinds, so no tier should
+   change; the release outcome is checked against that.
+4. **Reported.** The paper says the rule follows the audit and gives item 2's figures as
+   exploratory. The audit's planned figures score the snapshot and do not change. The sensitivity
+   figures that score the audit against current root sites read a rater's role only at sites the
+   packet listed, so a moved root whose tested site was not listed counts as unjudged. The paper
+   therefore does not report those site figures for 1.0.7, and `score_audit.py` still computes
+   them.
+
+## Release 1.0.7 outcome (recorded after applying, 2026-11-09)
+
+1. **Moves.** 426 roots moved as counted (392 GOLD, 34 silver), and the 2 GOLD roots whose tested
+   hunk could not be placed keep their origin.
+2. **Tiers.** Item 3 of the entry above expected no tier change, and that was wrong. Twelve silver
+   records became GOLD. Their only gap was I2's rule against a root site in harness or test code:
+   each one's MSan origin lay in a fuzz harness, while its tested hunk lies in library code. The
+   entry overlooked that I2 reads the root's site. One more record lost the same gap and stays
+   silver for I3. No record left GOLD. The contract did not change, so these are its outcomes on
+   the moved sites.
+3. **Splits.** Four kernel records changed split. A kernel record's split unit is the subsystem
+   of its first recorded site, which is now the tested site, and R9 keeps each unit in one fold.
+4. **Derived fields.** `root_site_relation` changed for 220 records, the difficulty proxy for 126
+   and sampling weights for 2539, all recomputed by `rebuild_derived.sh`.
+5. **Audit wording.** `NIrrNowTested` now counts 42 audited roots that are tested sites today:
+   9 suggested sites made tested by later single-hunk tests, as before, and 33 origin roots moved
+   by this rule.
+
+## Release 1.0.7 corrections from an independent check (2026-11-09, before release)
+
+An independent check of the 1.0.7 data, run before release, found the points below. The release
+was regenerated from 1.0.6 with items 1 to 4 applied.
+
+1. **Tested sites outside source code.** A tested site outside C/C++ source no longer becomes a
+   root. One silver record, CHAINFORGE-965301729, has its tested hunk in `configure.ac`, so it
+   keeps its origin and its I2 gap, and stays silver for I3. 425 roots move (392 GOLD, 33
+   silver), not the 426 counted in the outcome entry above.
+2. **PR-4 on a moved root.** `apply_pr4.py` now treats a root with `evidence.origin_site` as a
+   witnessed origin, so a later run keeps its CWE. Without this, 50 moved GOLD roots whose guard
+   class conflicts with their CWE would have been relabelled.
+3. **One statistic read the moved site.** The supplement's count of MSan roots whose fix touches
+   the origin's file now reads `evidence.origin_site`.
+4. **PatchBench comparison rerun.** `compare_patchbench.py` reads PatchBench's metadata and the
+   ARVO index, so `rebuild_derived.sh` does not run it. Rerun on 1.0.7, it matches 30 GOLD
+   records: 22 tested sites (8 in a function the curated patch edits, 6 more in a file it edits,
+   8 elsewhere), 6 origin sites (all outside its files) and 2 suggested sites.
+5. **Item 2 of the 1.0.7 entry overstated its figures.** 33 audited GOLD origin roots had a placed
+   tested hunk, and all 33 moved. 30 of them name a function at both sites, and in 3 of those the
+   two sites share a function, so the counts given there overlap. Where the two functions differ
+   (27 items), the raters named the origin's function in 0 and 1. They named the tested hunk's
+   function in 25 and 21 of the 30, and 6 of each came from naming the listed crash site, whose
+   function is the hunk's. The paper reports these figures.
+6. **Known and not changed in 1.0.7.**
+   1. The supplement's debugger-probe figures were measured on 1.0.6 root lines, and 144 of the
+      774 probed records have since moved their root.
+   2. For 4 of the 12 promoted records the MSan origin is a value the fuzz harness itself
+      created, which is what I2's harness rule guards against. The contract admits them because
+      the root is now the tested site in library code.
+   3. 3 of the 12, and 44 GOLD records in all, have an MSan origin created by a heap deallocation
+      but a CWE-456 label (OPEN_ISSUES #37).
+   4. A moved root keeps `evidence_kind: execution`, which now means that the report names its CWE
+      and places its origin. README.md and SPECIFICATION.md say so.
+   5. Kernel record CHAINFORGE-0800652 moved from train to test, so a model trained on release
+      1.0.6's train split has seen it.
+
+## Release 1.0.7: an MSan origin created by a heap deallocation is a use after free (2026-11-09, written before it is applied)
+
+1. **The defect.** MSan poisons memory when it is freed, so a read of freed memory is reported as
+   a use of an uninitialized value whose origin block says "created by a heap deallocation" and
+   points at the free. The MSan arm labelled every origin CWE-456 and its sink CWE-457, so these
+   records called a use after free a missing initialization (OPEN_ISSUES #37, found by the
+   independent check of 2026-11-09, not by the audit).
+2. **Change.** A CWE-456 root whose archived vulnerable MSan report has an origin block "created
+   by a heap deallocation" becomes CWE-416 (use after free), and its CWE-457 sink becomes CWE-125,
+   the read of freed memory, as PR-2 labels a use-after-free read. The root's site does not move:
+   the origin it already records is the free, now marked with stage `freed (MSan: heap
+   deallocation)` so that `site_kind` reads it as a use-after-free origin. A root already moved to
+   its tested site keeps that site, and the stage goes on its `origin_site`.
+   `infra/verify/relabel_freed_msan.py` applies this after `move_origin_roots.py`.
+3. **Contract.** PR-3 I2 rejects a CWE-416 source unless the report's class is a use-after-free.
+   An MSan report whose origin is a heap deallocation witnesses the freed memory, so I2 now also
+   accepts a CWE-416 source on such a report (`chainforge.integrity.crash_facts` gains
+   `freed_origin`). No other rule changes.
+4. **Counts before applying.** Counted on the 1.0.7 working copy before this entry: 48 records
+   (44 GOLD, 4 silver), of which 28 roots are origin sites and 20 were moved to tested sites. Two
+   are in the audit sample. The audit's planned figures score the snapshot and do not change.
+   With I2 amended and (416, 125) admissible, no tier should change; the outcome is checked
+   against that.
+
+## Release 1.0.7 heap-deallocation relabel: outcome (recorded after applying, 2026-11-09)
+
+1. 48 records were relabelled CWE-456 -> CWE-457 to CWE-416 -> CWE-125 as counted (44 GOLD, of
+   which 24 roots are origin sites and 20 tested sites, and 4 silver). No tier changed.
+2. Every relabelled root reads as `cwe_basis: msan-origin`. Two had kept a stale note saying
+   their CWE-456 source was not attested, and the note now names the MSan origin block.
+3. As a use-after-free read, each chain is now one weakness in two stages (`chain_kind`
+   `stage-decomposition`), and its MITRE grounding was recomputed.
+4. This cures OPEN_ISSUES #37, so item 6.3 of the corrections entry above no longer holds.

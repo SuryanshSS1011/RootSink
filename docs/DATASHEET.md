@@ -19,7 +19,7 @@ value in `dataset.jsonl`, and each protocol it describes to its entry in `PREREG
 | successful single-hunk test the guard rule cannot classify | `evidence.guard_site_proof` |
 | input of the rule that assigned the CWE | `cwe_basis` |
 | evidence floor | `evidence_floor` |
-| tested repair site / origin site / suggested site (earlier "untested site", "annotated source site") | `site_kind: "tested-repair-site"` / `"origin-site"` / `"annotated-site"` (sinks use `"crash-site"`, UBSan intermediates `"witnessed-site"`) |
+| tested repair site / origin site / suggested site (earlier "untested site", "annotated source site") | `site_kind: "tested-repair-site"` / `"origin-site"` / `"annotated-site"` (sinks use `"crash-site"`, UBSan intermediates `"witnessed-site"`); from 1.0.7 a tested root keeps any replaced origin in `evidence.origin_site` |
 | Reproduced / Upstream / Partial / Candidate tier (earlier GOLD / upstream / silver / bronze) | `label_confidence_tier: "gold"` / `"gold-upstream"` / `"silver"` / `"bronze"` |
 | the Reproduced-tier criteria a record failed | `gold_contract_gaps` (criteria are PR-3 in `src/chainforge/integrity.py`) |
 | duplicate group, sampling weight | `duplicate_group`, `sampling_weight` |

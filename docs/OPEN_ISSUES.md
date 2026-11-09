@@ -435,3 +435,12 @@ three were wrong — each had been asserted after a single look rather than inve
 pattern (declaring a route closed too early) has now cost real time three times in this project:
 the CWE-457 arm, the "Docker-only" UBSan rebuild, and this section. Where a route is genuinely
 bounded, the bound is stated with the measurement that establishes it.
+
+### 37. MSan origins created by a heap deallocation are labelled CWE-456 — **cured in 1.0.7** (found 2026-11-09)
+
+In release 1.0.7, 44 GOLD records have a CWE-456 root whose MSan origin block says the value was
+"created by a heap deallocation". That is a read of freed memory, which fits CWE-416, but the
+MSan arm labels every origin CWE-456. The pattern predates 1.0.7, and three of the twelve records
+the 1.0.7 root move promoted carry it. Release 1.0.7 relabels these records CWE-416 -> CWE-125 under a dated
+rule (`relabel_freed_msan.py`), with PR-3 I2 amended to accept such a report; 48 records
+changed (44 GOLD, 4 silver) and no tier changed.

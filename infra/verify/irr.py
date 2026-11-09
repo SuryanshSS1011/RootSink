@@ -446,7 +446,50 @@ def precision(sheet: list[dict], picked: list[dict], current: dict | None = None
     out["gold_by_root_kind"] = by_root_kind(sheet, picked)
     if current is not None:
         out["location_gold_current"] = location_precision_current(sheet, picked, current)
+        out["moved_origin_roots"] = moved_origin_roots(sheet, picked, current)
     return out
+
+
+def moved_origin_roots(sheet: list[dict], picked: list[dict], current: dict) -> dict:
+    """Exploratory (rule log, 2026-11-09): audited GOLD roots that were origin sites in the
+    snapshot and are tested repair sites now. Counts the items whose rater named, as the root
+    function, the tested site's function and the origin's function. The figures were seen before
+    the 1.0.7 rule was written, so they describe it and do not test it."""
+    rows = {s["id"]: s for s in sheet}
+    n_all = n = tested = origin = differ = origin_only = via_crash = 0
+    for k, r in enumerate(picked, 1):
+        c = current.get(r["id"])
+        if r["label_confidence_tier"] != "gold" or not c or c["label_confidence_tier"] != "gold":
+            continue
+        ts, tc = truth(r), truth(c)
+        if not (ts["root_kind"] == "origin-site" and tc["root_kind"] == "tested-repair-site"):
+            continue
+        s = rows.get(f"item-{k}")
+        if s is None:
+            continue
+        n_all += 1
+        if not (ts["root_fn"] and tc["root_fn"]):
+            continue
+        ans = _answer_fn(s.get("source_site", ""), ts["sites"])
+        n += 1
+        tested += ans == tc["root_fn"]
+        origin += ans == ts["root_fn"]
+        # The two sites can share a function; count the origin only where they differ.
+        if ts["root_fn"] != tc["root_fn"]:
+            differ += 1
+            origin_only += ans == ts["root_fn"]
+        # A match that came from naming the listed crash site, whose function is the hunk's.
+        sink_no = ts["sink_site"]
+        via_crash += ans == tc["root_fn"] and s.get("source_site", "").strip() == sink_no != "none"
+    return {
+        "n_moved": n_all,
+        "n": n,
+        "names_tested_function": tested,
+        "names_origin_function": origin,
+        "n_functions_differ": differ,
+        "names_origin_where_differ": origin_only,
+        "tested_match_via_crash_site": via_crash,
+    }
 
 
 def location_precision_current(sheet: list[dict], picked: list[dict], current: dict) -> dict:

@@ -44,14 +44,21 @@ def ran_clean(log_text: str, declared_marker: str | None = None) -> bool:
     return ran and not _CRASHED.search(log_text)
 
 
+# MSan poisons freed memory: a read of it is reported as an uninitialized value whose origin
+# is "created by a heap deallocation" (rule log, 2026-11-09, release 1.0.7).
+FREED_ORIGIN = re.compile(r"Uninitiali[sz]ed value was created by a heap deallocation")
+
+
 def crash_facts(log_text: str) -> dict:
-    """Crash class, whether it is a NULL dereference, and the access direction, from one log."""
+    """Crash class, whether it is a NULL dereference, the access direction, and whether an MSan
+    origin is a heap deallocation (a read of freed memory), from one log."""
     m = _CLASS.search(log_text)
     a = _ACCESS.search(log_text)
     return {
         "class": m.group(1) if m else None,
         "null_deref": bool(_NULL_PAGE.search(log_text)),
         "access": (a.group(1) or a.group(2)).upper() if a else None,
+        "freed_origin": bool(FREED_ORIGIN.search(log_text)),
     }
 
 
@@ -86,7 +93,8 @@ def source_contradiction(rec: dict, facts: dict | None) -> str | None:
     if rec["chain"][0].get("evidence_kind") == "causally-proven":
         return None  # PR-3 I2 governs statically assigned sources; ablation re-earns them (PR-4)
     src = rec["chain"][0]["cwe_id"]
-    if src == 416 and "use-after-free" not in facts["class"]:
+    # An MSan report whose origin is a heap deallocation witnesses freed memory (1.0.7).
+    if src == 416 and "use-after-free" not in facts["class"] and not facts.get("freed_origin"):
         return f"CWE-416 source but the sanitizer reports {facts['class']}"
     if src == 476 and not facts["null_deref"]:
         return f"CWE-476 source but the sanitizer reports {facts['class']}, not a NULL dereference"

@@ -5,7 +5,7 @@
 [![Code: MIT](https://img.shields.io/badge/code-MIT-blue.svg)](LICENSE)
 [![Data: CC BY 4.0](https://img.shields.io/badge/data-CC%20BY%204.0-lightgrey.svg)](LICENSE-DATA)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](pyproject.toml)
-[![Release 1.0.6](https://img.shields.io/badge/release-1.0.6-brightgreen.svg)](data/release/dataset.manifest.json)
+[![Release 1.0.7](https://img.shields.io/badge/release-1.0.7-brightgreen.svg)](data/release/dataset.manifest.json)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.24068722.svg)](https://doi.org/10.5281/zenodo.24068722)
 
 When a C or C++ program crashes under a memory-error detector (a *sanitizer*), the report points
@@ -18,7 +18,7 @@ RootSink records both ends and says how it knows each. A record gives the sink, 
 root-cause site when one is located, the weakness type ([CWE](https://cwe.mitre.org)) of each, the
 evidence behind each one, and, where we ran the crash, the logs and pinned images to run it again.
 In this release 2,869 of the 3,341 records locate the sink and 2,333 locate a candidate root; for
-959 of those, one hunk of the developer's fix, applied alone, stopped the crash there.
+1,384 of those, one hunk of the developer's fix, applied alone, stopped the crash there.
 
 ---
 
@@ -173,7 +173,7 @@ Every instance in `chain` has an `evidence_kind`, listed here from strongest to 
 | `evidence_kind` | Called in the paper | What it means |
 |---|---|---|
 | `causally-proven` | hunk-named | One hunk of the developer's fix, applied alone and rebuilt, stopped the crash on this input, and a rule named the CWE from the check that hunk adds. The hunk is *sufficient*, not proven to be the only or the best repair. |
-| `execution` | sanitizer-reported | A sanitizer report places the instance at a site. |
+| `execution` | sanitizer-reported | A sanitizer report places the instance at a site. A root moved to its tested site in 1.0.7 keeps this kind, because the report still names its CWE; the site the report places is then `evidence.origin_site`. |
 | `attested` | fix-suggested | The fix adds the check the instance lacks, but no run shows the check matters. |
 | `dataflow` | dataflow | Only a static code path supports it. |
 | `inferred` | inferred | Only a labeling rule supports it. |
@@ -189,7 +189,7 @@ way to pick records you can lean on.
 | `site_kind` | Meaning |
 |---|---|
 | `tested-repair-site` | A hunk of the fix, applied alone, stopped the crash there. These are the default localization targets. |
-| `origin-site` | Where the bad state began, as the sanitizer report itself prints it: the allocation of memory MemorySanitizer later found uninitialized, or the free before a use-after-free. It need not be the defect. |
+| `origin-site` | Where the bad state began, as the sanitizer report itself prints it: the allocation of memory MemorySanitizer later found uninitialized, or the free before a use-after-free. It need not be the defect. Since release 1.0.7 a root whose single-hunk test succeeded is a tested repair site instead, and its origin is kept in `evidence.origin_site`. |
 | `annotated-site` | A fix pattern, static analysis or labeling rule placed it. |
 
 Sinks and middle steps use `crash-site` (the top project frame of the crash) and `witnessed-site`

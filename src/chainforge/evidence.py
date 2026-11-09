@@ -433,7 +433,7 @@ def chain_kind(cwes: list[int]) -> str:
 # read from the tested hunk's added lines by the PR-4 guard classifier and is not itself tested.
 CWE_BASES = (
     "guard-class",  # PR-4 classifier over the hunk an intervention showed sufficient
-    "msan-origin",  # MSan origin tracking: the creating site is labelled CWE-456
+    "msan-origin",  # MSan origin tracking: the creating site is CWE-456, a freeing one CWE-416
     "sanitizer-class",  # the class and access of a sanitizer or KASAN report
     "fix-pattern",  # a pattern over the developer fix's added lines, untested
     "crash-class-implied",  # implied by the sink's crash class (e.g. Bad-cast -> 843)

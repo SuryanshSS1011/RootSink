@@ -18,6 +18,7 @@ def test_crash_facts_reads_asan_and_kasan():
         "class": "heap-buffer-overflow",
         "null_deref": False,
         "access": "WRITE",
+        "freed_origin": False,
     }
     assert crash_facts(KASAN_UAF)["class"] == "slab-use-after-free"
     assert crash_facts(KASAN_UAF)["access"] == "WRITE"

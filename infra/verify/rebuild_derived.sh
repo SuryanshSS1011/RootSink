@@ -8,6 +8,8 @@ mkdir -p paper_artifacts  # absent in a fresh clone of the public release
 uv run python infra/verify/apply_license_overrides.py >/dev/null
 uv run python infra/verify/normalize_fix_commits.py >/dev/null
 uv run python infra/verify/locate_tested_sites.py >/dev/null
+uv run python infra/verify/move_origin_roots.py >/dev/null  # 1.0.7: tested site becomes the root
+uv run python infra/verify/relabel_freed_msan.py >/dev/null  # 1.0.7: freed-memory MSan origins
 uv run python infra/verify/stamp_kernel_application.py >/dev/null
 uv run python infra/verify/apply_pr17.py >/dev/null
 uv run python infra/verify/reground_mitre.py >/dev/null

@@ -186,7 +186,11 @@ def main(argv=None) -> int:
         derived = source_for_guard(hunk, nxt, is_admissible_edge) if logged else None
         # PR-4 for origin roots (2026-10-21): a witnessed origin keeps its site and its CWE; a
         # conflicting guard class is recorded, never relabelled.
-        origin = site_kind(src, r.get("provenance") or "") == "origin-site"
+        # From 1.0.7 a moved origin root sits at its tested site and keeps the origin in
+        # evidence.origin_site; it is still a witnessed origin for this rule.
+        origin = site_kind(src, r.get("provenance") or "") == "origin-site" or bool(
+            ev.get("origin_site")
+        )
         conflict = origin and derived is not None and derived != src["cwe_id"]
         proof = {
             "method": "guard-ablation",
