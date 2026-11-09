@@ -136,10 +136,11 @@ def main(argv=None) -> int:
         "conformsTo": "http://mlcommons.org/croissant/1.0",
         "name": "RootSink",
         "description": (
-            "Reproducible C/C++ crashes: each record pairs a sanitizer-witnessed sink with a "
-            "candidate root cause, ordered CWE instances with an evidence category each, the fix "
-            "and sanitizer logs. GOLD certifies the sink and its two-sided reproduction, not the "
-            "root. Record ids keep the working name CHAINFORGE. "
+            "Reproducible C/C++ crashes: each record pairs a sink with a candidate root cause, "
+            "ordered CWE instances with an evidence category each, the fix and, for executed "
+            "records, sanitizer logs; most sinks are sanitizer-witnessed. GOLD certifies the sink "
+            "and its two-sided reproduction, not the root. Record ids keep the working name "
+            "CHAINFORGE. "
             f"{man['total']} records; tiers {man['by_tier']}."
         ),
         "license": "https://creativecommons.org/licenses/by/4.0/",
