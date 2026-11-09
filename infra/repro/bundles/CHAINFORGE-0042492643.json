@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042492643",
+  "chain": "CWE-416->CWE-787",
+  "project": "htslib",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42492643",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "acbfb3c93c0bf3118412baf7499a8467a490b277",
+      "fix_commits": [
+        "acbfb3c93c0bf3118412baf7499a8467a490b277"
+      ],
+      "repo": "https://github.com/samtools/htscodecs"
+    },
+    "patch": "diff --git a/htscodecs/rle.c b/htscodecs/rle.c\nindex fd0965a..7b6bdc9 100644\n--- a/htscodecs/rle.c\n+++ b/htscodecs/rle.c\n@@ -169,7 +169,7 @@ uint8_t *rle_decode(uint8_t *lit, uint64_t lit_len,\n \t    uint32_t rlen;\n \t    run += var_get_u32(run, run_end, &rlen);\n \t    if (rlen) {\n-\t\tif (outp + rlen > out_end)\n+\t\tif (outp + rlen >= out_end)\n \t\t    goto err;\n \t\tmemset(outp, b, rlen+1);\n \t\toutp += rlen+1;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42492643-vul",
+      "digest": "sha256:0214799db9eebe0c32114ea5b7ae765c31803732c6395686b8ed0d507ccd4ba8"
+    },
+    "patched": {
+      "ref": "n132/arvo:42492643-fix",
+      "digest": "sha256:a39aabb2f6643497b1163fa136b41d91af0321207bd7af5b603f7c5041e3b03c"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/htslib/htscodecs/htscodecs/rle.c:174",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/htslib/htscodecs/htscodecs/rle.c:174"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

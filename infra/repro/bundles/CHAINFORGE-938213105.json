@@ -1,0 +1,82 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-938213105",
+  "chain": "CWE-1284->CWE-190->CWE-119",
+  "project": "net-snmp",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42474987",
+    "commit_range": {
+      "introduced": null,
+      "fixed": null,
+      "fix_commits": [
+        "8b429a54b495fb69aa2efa4f15a815aaedd69f0c"
+      ],
+      "repo": "https://github.com/net-snmp/net-snmp"
+    },
+    "patch": "diff --git a/agent/mibgroup/agentx/protocol.c b/agent/mibgroup/agentx/protocol.c\nindex 0b0c944672..829a5459a4 100644\n--- a/agent/mibgroup/agentx/protocol.c\n+++ b/agent/mibgroup/agentx/protocol.c\n@@ -11,6 +11,7 @@\n \n #include <net-snmp/net-snmp-config.h>\n \n+#include <limits.h>\n #include <stdio.h>\n #include <errno.h>\n #if HAVE_STDLIB_H\n@@ -1238,6 +1239,10 @@ agentx_parse_string(const u_char *data, size_t *length, struct rszbuf *string,\n     }\n \n     len = agentx_parse_int(data, network_byte_order);\n+    if (len > UINT_MAX - 4) {\n+        DEBUGMSGTL((\"agentx\", \"Too long: %u\\n\", len));\n+        return NULL;\n+    }\n     if (*length < len + 4) {\n         DEBUGMSGTL((\"agentx\", \"Incomplete string (still too short: %d)\\n\",\n                     (int)*length));\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42474987-vul",
+      "digest": "sha256:3b46fc7cf179b76d623301d7fd8e2a1a5c522edc818c8e8acd9f8833021d2f99"
+    },
+    "patched": {
+      "ref": "n132/arvo:42474987-fix",
+      "digest": "sha256:6789545d39fac5a6be2b42dd311fe68957980cecafd4a5b28c13f8828c9e1a3e"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/net-snmp/agent/mibgroup/agentx/protocol.c:1248",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 190,
+      "role": "intermediate",
+      "witness": {
+        "method": "ubsan-rebuild",
+        "recipe": "SANITIZER=undefined compile && $ENTRYPOINT",
+        "ubsan_options": "print_stacktrace=1:halt_on_error=0:silence_unsigned_overflow=0:symbolize=1"
+      },
+      "witnessed": false
+    },
+    {
+      "cwe_id": 119,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/net-snmp/agent/mibgroup/agentx/protocol.c:1248"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

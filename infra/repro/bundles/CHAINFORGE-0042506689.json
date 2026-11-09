@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042506689",
+  "chain": "CWE-1284->CWE-125",
+  "project": "sleuthkit",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42506689",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "044c493f027b83df9f6ce5d4fc643b8862cce1f8",
+      "fix_commits": [
+        "044c493f027b83df9f6ce5d4fc643b8862cce1f8"
+      ],
+      "repo": "https://github.com/sleuthkit/sleuthkit"
+    },
+    "patch": "diff --git a/tsk/fs/hfs_dent.c b/tsk/fs/hfs_dent.c\nindex 8399ebeb8b..9a69dd7138 100644\n--- a/tsk/fs/hfs_dent.c\n+++ b/tsk/fs/hfs_dent.c\n@@ -258,6 +258,11 @@ hfs_dir_open_meta_cb(HFS_INFO * hfs, int8_t level_type,\n \n         /* This will link the folder to its parent, which is the \"..\" entry */\n         else if (rec_type == HFS_FOLDER_THREAD) {\n+            if ((nodesize < sizeof(hfs_thread)) || (rec_off2 > nodesize - sizeof(hfs_thread))) {\n+                tsk_error_set_errno(TSK_ERR_FS_GENFS);\n+                tsk_error_set_errstr(\"hfs_dir_open_meta: nodesize value out of bounds\");\n+                return HFS_BTREE_CB_ERR;\n+            }\n             hfs_thread *thread = (hfs_thread *) & rec_buf[rec_off2];\n             strcpy(info->fs_name->name, \"..\");\n             info->fs_name->meta_addr =\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42506689-vul",
+      "digest": "sha256:f5df819606760e9583ce5e7aed1fefcf1aa65ff402e5cfb1ff302c132f326165"
+    },
+    "patched": {
+      "ref": "n132/arvo:42506689-fix",
+      "digest": "sha256:ada09f15fae3bdcceb71d1ff1b85d0123f58d3ef1d63a56b28bfc2a090d34119"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/sleuthkit/tsk/fs/hfs_dent.c:264",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/sleuthkit/tsk/fs/hfs_dent.c:264"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

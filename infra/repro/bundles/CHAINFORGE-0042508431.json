@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042508431",
+  "chain": "CWE-1284->CWE-787",
+  "project": "ghostpdl",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42508431",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "30770fce40f0b47c4da1c41e187b45f9f59edc63",
+      "fix_commits": [
+        "30770fce40f0b47c4da1c41e187b45f9f59edc63"
+      ],
+      "repo": "https://cgit.ghostscript.com/ghostpdl.git"
+    },
+    "patch": "From 30770fce40f0b47c4da1c41e187b45f9f59edc63 Mon Sep 17 00:00:00 2001\nFrom: Ken Sharp <ken.sharp@artifex.com>\nDate: Mon, 14 Feb 2022 11:47:24 +0000\nSubject: [PATCH] OSS-fuzz #44610 - don't process 'empty' Xref streams\n\nIf the Xref stream declares it has a /Size of 0, then it has no entries\nso we should simply stop.\n---\n pdf/pdf_xref.c | 2 ++\n 1 file changed, 2 insertions(+)\n\ndiff --git a/pdf/pdf_xref.c b/pdf/pdf_xref.c\nindex edab8e3..c1f6159 100644\n--- a/pdf/pdf_xref.c\n+++ b/pdf/pdf_xref.c\n@@ -175,6 +175,8 @@ static int pdfi_process_xref_stream(pdf_context *ctx, pdf_stream *stream_obj, pd\n     code = pdfi_dict_get_int(ctx, sdict, \"Size\", &size);\n     if (code < 0)\n         return code;\n+    if (size < 1)\n+        return 0;\n \n     if (size < 0 || size > floor((double)ARCH_MAX_SIZE_T / (double)sizeof(xref_entry)))\n         return_error(gs_error_rangecheck);\n-- \n2.55.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42508431-vul",
+      "digest": "sha256:ef62a04938d4e5b1743a2eb34ebf2377946aca08e82aad5211ec13b929115809"
+    },
+    "patched": {
+      "ref": "n132/arvo:42508431-fix",
+      "digest": "sha256:77519fe04b67c7152d3a7d439760c1e880b7dcc83e67b97b0254ec1420f7be24"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/ghostpdl/./pdf/pdf_xref.c:114",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/ghostpdl/./pdf/pdf_xref.c:114"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042471294",
+  "chain": "CWE-20->CWE-125",
+  "project": "libgit2",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42471294",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "41863a00f0d811c659c9ba87ae2cc0c3aae5a77f",
+      "fix_commits": [
+        "41863a00f0d811c659c9ba87ae2cc0c3aae5a77f"
+      ],
+      "repo": "https://github.com/libgit2/libgit2"
+    },
+    "patch": "diff --git a/src/util.c b/src/util.c\nindex 52495f75258..b191d1a16cb 100644\n--- a/src/util.c\n+++ b/src/util.c\n@@ -83,8 +83,11 @@ int git__strntol64(int64_t *result, const char *nptr, size_t nptr_len, const cha\n \t/*\n \t * White space\n \t */\n-\twhile (git__isspace(*p))\n-\t\tp++;\n+\twhile (nptr_len && git__isspace(*p))\n+\t\tp++, nptr_len--;\n+\n+\tif (!nptr_len)\n+\t\tgoto Return;\n \n \t/*\n \t * Sign\ndiff --git a/tests/core/strtol.c b/tests/core/strtol.c\nindex ba79fba5108..ac19a28082c 100644\n--- a/tests/core/strtol.c\n+++ b/tests/core/strtol.c\n@@ -76,6 +76,16 @@ void test_core_strtol__buffer_length_truncates(void)\n \tcl_assert_equal_i(i64, 1);\n }\n \n+void test_core_strtol__buffer_length_with_leading_ws_truncates(void)\n+{\n+\tint64_t i64;\n+\n+\tcl_git_fail(git__strntol64(&i64, \" 1\", 1, NULL, 10));\n+\n+\tcl_git_pass(git__strntol64(&i64, \" 11\", 2, NULL, 10));\n+\tcl_assert_equal_i(i64, 1);\n+}\n+\n void test_core_strtol__error_message_cuts_off(void)\n {\n \tassert_l32_fails(\"2147483657foobar\", 10);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42471294-vul",
+      "digest": "sha256:a39ff24d5b0d6f748ed8c50daba38c0a96ed0b69ef4997bbbbb63953acb439b1"
+    },
+    "patched": {
+      "ref": "n132/arvo:42471294-fix",
+      "digest": "sha256:b26b2381898a2c268c66fd71f9a9527123762a9345d2bea78fa77059cec1949b"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/libgit2/src/util.c:86",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/libgit2/src/util.c:86"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

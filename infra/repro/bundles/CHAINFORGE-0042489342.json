@@ -1,0 +1,77 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042489342",
+  "chain": "CWE-190->CWE-787",
+  "project": "ffmpeg",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42489342",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "b29d351f972f801d0374ca8565cee398b8f69160",
+      "fix_commits": [
+        "b29d351f972f801d0374ca8565cee398b8f69160"
+      ],
+      "repo": "https://git.ffmpeg.org/ffmpeg.git"
+    },
+    "patch": "From b29d351f972f801d0374ca8565cee398b8f69160 Mon Sep 17 00:00:00 2001\nFrom: Michael Niedermayer <michael@niedermayer.cc>\nDate: Sun, 22 Nov 2020 17:24:20 +0100\nSubject: [PATCH] avformat/vividas: Make len signed\n\nFixes: out of array access\nFixes: 27424/clusterfuzz-testcase-minimized-ffmpeg_dem_VIVIDAS_fuzzer-5682070692823040\n\nFound-by: continuous fuzzing process https://github.com/google/oss-fuzz/tree/master/projects/ffmpeg\nSigned-off-by: Michael Niedermayer <michael@niedermayer.cc>\n---\n libavformat/vividas.c | 4 ++--\n 1 file changed, 2 insertions(+), 2 deletions(-)\n\ndiff --git a/libavformat/vividas.c b/libavformat/vividas.c\nindex 46c66bf..4adc125 100644\n--- a/libavformat/vividas.c\n+++ b/libavformat/vividas.c\n@@ -389,8 +389,8 @@ static int track_header(VividasDemuxContext *viv, AVFormatContext *s,  uint8_t *\n             ffio_read_varlen(pb); // len_3\n             num_data = avio_r8(pb);\n             for (j = 0; j < num_data; j++) {\n-                uint64_t len = ffio_read_varlen(pb);\n-                if (len > INT_MAX/2 - xd_size) {\n+                int64_t len = ffio_read_varlen(pb);\n+                if (len < 0 || len > INT_MAX/2 - xd_size) {\n                     return AVERROR_INVALIDDATA;\n                 }\n                 data_len[j] = len;\n-- \n2.55.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42489342-vul",
+      "digest": "sha256:2d3e8ea91bc1d2e272cd8733bda23c4441a2fd5b8d0fa45122cd96f996056de1"
+    },
+    "patched": {
+      "ref": "n132/arvo:42489342-fix",
+      "digest": "sha256:e8eb5948d9d12bddda0ae9780a9fb8b80e2a4a180a9f8c390154c77a8438683b"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/ffmpeg/libavcodec/utils.c:1818",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 190,
+      "role": "source",
+      "witness": {
+        "method": "ubsan-rebuild",
+        "recipe": "SANITIZER=undefined compile && $ENTRYPOINT",
+        "ubsan_options": "print_stacktrace=1:halt_on_error=0:silence_unsigned_overflow=0:symbolize=1"
+      },
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/ffmpeg/libavcodec/utils.c:1818"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

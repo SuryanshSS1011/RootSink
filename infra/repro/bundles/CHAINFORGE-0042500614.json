@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042500614",
+  "chain": "CWE-1284->CWE-125",
+  "project": "libexif",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42500614",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "a4647a5463102c4b0c5a02461edd4cc085dfc1b6",
+      "fix_commits": [
+        "a4647a5463102c4b0c5a02461edd4cc085dfc1b6"
+      ],
+      "repo": "https://github.com/libexif/libexif"
+    },
+    "patch": "diff --git a/libexif/apple/mnote-apple-entry.c b/libexif/apple/mnote-apple-entry.c\nindex e24eda84..6740d8e6 100644\n--- a/libexif/apple/mnote-apple-entry.c\n+++ b/libexif/apple/mnote-apple-entry.c\n@@ -132,12 +132,16 @@ mnote_apple_entry_get_value(MnoteAppleEntry *entry, char *v, unsigned int maxlen\n \t    }\n \t    break;\n \tcase EXIF_FORMAT_RATIONAL:\n+\t    if (size < exif_format_get_size (EXIF_FORMAT_RATIONAL)) return NULL;\n+\t    if (entry->components < 1) return NULL; /* FIXME: could handle more than 1 too */\n \t    vr = exif_get_rational (data, entry->order);\n \t    if (!vr.denominator) break;\n \t    snprintf (v, maxlen, \"%2.4f\", (double) vr.numerator /\n \t\t\t\t\t    vr.denominator);\n \t    break;\n \tcase EXIF_FORMAT_SRATIONAL:\n+\t    if (size < exif_format_get_size (EXIF_FORMAT_SRATIONAL)) return NULL;\n+\t    if (entry->components < 1) return NULL; /* FIXME: could handle more than 1 too */\n \t    vsr = exif_get_srational (data, entry->order);\n \t    if (!vsr.denominator) break;\n \t    snprintf (v, maxlen, \"%2.4f\", (double) vsr.numerator /\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42500614-vul",
+      "digest": "sha256:574be492660ce346551a1b4c8efe6ec9ea10e4af216276bf529a1d2f61e9449c"
+    },
+    "patched": {
+      "ref": "n132/arvo:42500614-fix",
+      "digest": "sha256:0055c35efe5a3d69398b4e2be921ed63368d7f823a7c4064810a1d3f084ffac4"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/libexif/libexif/exif-utils.c:137",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/libexif/libexif/exif-utils.c:137"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

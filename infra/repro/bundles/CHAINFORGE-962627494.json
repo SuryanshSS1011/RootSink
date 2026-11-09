@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-962627494",
+  "chain": "CWE-456->CWE-457",
+  "project": "wolfssl",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42499155",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/wolfssl/wolfssl/commit/60288a5083135a89f1ebb8d3608d53769dbe6417",
+      "fix_commits": [
+        "60288a5083135a89f1ebb8d3608d53769dbe6417"
+      ],
+      "repo": "https://github.com/wolfssl/wolfssl"
+    },
+    "patch": "diff --git a/src/ssl.c b/src/ssl.c\nindex 6178ea55763..27317ff0733 100644\n--- a/src/ssl.c\n+++ b/src/ssl.c\n@@ -2897,9 +2897,14 @@ static int _Rehandshake(WOLFSSL* ssl)\n /* do a secure renegotiation handshake, user forced, we discourage */\n int wolfSSL_Rehandshake(WOLFSSL* ssl)\n {\n-    int ret = WOLFSSL_SUCCESS;\n+    int ret;\n     WOLFSSL_ENTER(\"wolfSSL_Rehandshake\");\n \n+    if (ssl == NULL)\n+        return WOLFSSL_FAILURE;\n+\n+    ret = WOLFSSL_SUCCESS;\n+\n     if (ssl->options.side == WOLFSSL_SERVER_END) {\n         /* Reset option to send certificate verify. */\n         ssl->options.sendVerify = 0;\n@@ -4082,6 +4087,9 @@ WOLFSSL_ABI\n int wolfSSL_pending(WOLFSSL* ssl)\n {\n     WOLFSSL_ENTER(\"SSL_pending\");\n+    if (ssl == NULL)\n+        return WOLFSSL_FAILURE;\n+\n     return ssl->buffers.clearOutputBuffer.length;\n }\n \n@@ -11693,6 +11701,10 @@ WOLFSSL_ABI\n long wolfSSL_CTX_set_session_cache_mode(WOLFSSL_CTX* ctx, long mode)\n {\n     WOLFSSL_ENTER(\"SSL_CTX_set_session_cache_mode\");\n+\n+    if (ctx == NULL)\n+        return WOLFSSL_FAILURE;\n+\n     if (mode == WOLFSSL_SESS_CACHE_OFF)\n         ctx->sessionCacheOff = 1;\n \n@@ -16323,6 +16335,10 @@ int wolfSSL_set_compression(WOLFSSL* ssl)\n     void wolfSSL_set_accept_state(WOLFSSL* ssl)\n     {\n         WOLFSSL_ENTER(\"wolfSSL_set_accept_state\");\n+\n+        if (ssl == NULL)\n+            return;\n+\n         if (ssl->options.side == WOLFSSL_CLIENT_END) {\n     #ifdef HAVE_ECC\n             ecc_key key;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42499155-vul",
+      "digest": "sha256:e00ecb7755d71743bfed53c00d88f788ee8c47d273d5db17b7dc1094e8bc69d2"
+    },
+    "patched": {
+      "ref": "n132/arvo:42499155-fix",
+      "digest": "sha256:920470a0277a1ca6af65a1515840ee1e93ecf50a86d164204a1120bd569a63f3"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/wolf-ssl-ssh-fuzzers/oss-fuzz/projects/wolf-ssl-ssh/fuzzers/wolfssh/wolfssh/src/internal.c:7681",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/wolf-ssl-ssh-fuzzers/oss-fuzz/projects/wolf-ssl-ssh/fuzzers/wolfssh/wolfssh/src/internal.c:7681"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

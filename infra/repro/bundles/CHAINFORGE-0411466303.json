@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0411466303",
+  "chain": "CWE-456->CWE-457",
+  "project": "poco",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "411466303",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "4e27f7f0e2fea964b97bb0c3fbb1ff1d9ef895d7",
+      "fix_commits": [
+        "4e27f7f0e2fea964b97bb0c3fbb1ff1d9ef895d7"
+      ],
+      "repo": "https://github.com/pocoproject/poco"
+    },
+    "patch": "From 4e27f7f0e2fea964b97bb0c3fbb1ff1d9ef895d7 Mon Sep 17 00:00:00 2001\nFrom: =?UTF-8?q?G=C3=BCnter=20Obiltschnig?= <guenter.obiltschnig@appinf.com>\nDate: Fri, 18 Apr 2025 13:37:08 +0200\nSubject: [PATCH] fix(NTLMCredentials): fix potentially uninitialized variable\n\n---\n Net/src/NTLMCredentials.cpp | 2 +-\n 1 file changed, 1 insertion(+), 1 deletion(-)\n\ndiff --git a/Net/src/NTLMCredentials.cpp b/Net/src/NTLMCredentials.cpp\nindex 57340dc..bfe1bee 100644\n--- a/Net/src/NTLMCredentials.cpp\n+++ b/Net/src/NTLMCredentials.cpp\n@@ -209,7 +209,7 @@ bool NTLMCredentials::parseChallengeMessage(const unsigned char* buffer, std::si\n \treader.readRaw(7, signature);\n \tif (signature != NTLMSSP) return false;\n \n-\tPoco::UInt8 zero;\n+\tPoco::UInt8 zero = 1;\n \treader >> zero;\n \tif (zero != 0) return false;\n \n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:411466303-vul",
+      "digest": "sha256:a5c98d9f632bd126fa54927ff1c0774a510027339897d1427d6b719320dc926a"
+    },
+    "patched": {
+      "ref": "n132/arvo:411466303-fix",
+      "digest": "sha256:60c76c0692d05a2084c3b2c1f8878b07553af5b2fee2f77e3b6eed54b6462a05"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/poco/Net/src/NTLMCredentials.cpp:214",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/poco/Net/src/NTLMCredentials.cpp:214"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

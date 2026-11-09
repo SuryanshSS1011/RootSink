@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042481860",
+  "chain": "CWE-1284->CWE-125",
+  "project": "gdal",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42481860",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "572c5cb89f77c1e27ae358bfe51fedaa8e764093",
+      "fix_commits": [
+        "572c5cb89f77c1e27ae358bfe51fedaa8e764093"
+      ],
+      "repo": "https://github.com/OSGeo/gdal"
+    },
+    "patch": "diff --git a/gdal/frmts/iris/irisdataset.cpp b/gdal/frmts/iris/irisdataset.cpp\nindex f7d1a0cc2bc1..bf2fcb7a2f21 100644\n--- a/gdal/frmts/iris/irisdataset.cpp\n+++ b/gdal/frmts/iris/irisdataset.cpp\n@@ -195,6 +195,8 @@ CPLErr IRISRasterBand::IReadBlock( int /* nBlockXOff */,\n     // Every product type has its own size. TODO: Move it like dataType.\n     int nDataLength = 1;\n     if( poGDS->nDataTypeCode == 2 ) nDataLength = 1;\n+    else if( poGDS->nDataTypeCode == 8 ) nDataLength = 2;\n+    else if( poGDS->nDataTypeCode == 9 ) nDataLength = 2;\n     else if( poGDS->nDataTypeCode == 37 ) nDataLength = 2;\n     else if( poGDS->nDataTypeCode == 33 ) nDataLength = 2;\n     else if( poGDS->nDataTypeCode == 32 ) nDataLength = 1;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42481860-vul",
+      "digest": "sha256:1bc4c75e6925191d3f6cfc97cc84d8ae6fab884e40044653d5c29a503d7b3fd0"
+    },
+    "patched": {
+      "ref": "n132/arvo:42481860-fix",
+      "digest": "sha256:7078888cb1e2644ff0496bb4dbca9fac444e83c1d1ef4b1fe51261b2fa6857f0"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/gdal/gdal/frmts/iris/irisdataset.cpp:250",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/gdal/gdal/frmts/iris/irisdataset.cpp:250"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

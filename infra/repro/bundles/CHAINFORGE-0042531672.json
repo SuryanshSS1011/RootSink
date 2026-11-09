@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042531672",
+  "chain": "CWE-20->CWE-125",
+  "project": "upx",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42531672",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "d3e780d617014a883b2b181021b58d11b98eb46c",
+      "fix_commits": [
+        "d3e780d617014a883b2b181021b58d11b98eb46c"
+      ],
+      "repo": "https://github.com/upx/upx"
+    },
+    "patch": "diff --git a/src/p_lx_elf.cpp b/src/p_lx_elf.cpp\nindex 08b16e5a7c..52a84efd87 100644\n--- a/src/p_lx_elf.cpp\n+++ b/src/p_lx_elf.cpp\n@@ -2420,6 +2420,9 @@ tribool PackLinuxElf32::canUnpack() // bool, except -1: format known, but not pa\n     if (checkEhdr(&ehdri)) {\n         return false;\n     }\n+    if (get_te16(&ehdri.e_phnum) < 2) {\n+        throwCantUnpack(\"e_phnum must be >= 2\");\n+    }\n     if (Elf32_Ehdr::ET_DYN==get_te16(&ehdri.e_type)) {\n         PackLinuxElf32help1(fi);\n     }\n@@ -2966,6 +2969,9 @@ tribool PackLinuxElf64::canUnpack() // bool, except -1: format known, but not pa\n     if (checkEhdr(&ehdri)) {\n         return false;\n     }\n+    if (get_te16(&ehdri.e_phnum) < 2) {\n+        throwCantUnpack(\"e_phnum must be >= 2\");\n+    }\n     if (Elf64_Ehdr::ET_DYN==get_te16(&ehdri.e_type)) {\n         PackLinuxElf64help1(fi);\n     }\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42531672-vul",
+      "digest": "sha256:afa99b607af77533bf77568961a8f66f1d557d5ac5cf29fd4572c64f3583809e"
+    },
+    "patched": {
+      "ref": "n132/arvo:42531672-fix",
+      "digest": "sha256:9564cd89663e38cf582a79847a7c4805c3972f276b97f2e6d8393047186da945"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/upx/src/util/../bele.h:124",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/upx/src/util/../bele.h:124"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

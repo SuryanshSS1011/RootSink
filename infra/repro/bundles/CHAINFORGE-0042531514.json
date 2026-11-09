@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042531514",
+  "chain": "CWE-416->CWE-787",
+  "project": "quickjs",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42531514",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "df3781d08265c1a295aef9136c249b408d3a7c95",
+      "fix_commits": [
+        "df3781d08265c1a295aef9136c249b408d3a7c95"
+      ],
+      "repo": "https://github.com/bellard/quickjs"
+    },
+    "patch": "diff --git a/quickjs.c b/quickjs.c\nindex da53504cc..fc33f1601 100644\n--- a/quickjs.c\n+++ b/quickjs.c\n@@ -637,9 +637,11 @@ typedef enum JSIteratorKindEnum {\n \n typedef struct JSForInIterator {\n     JSValue obj;\n-    BOOL is_array;\n-    uint32_t array_length;\n     uint32_t idx;\n+    uint32_t atom_count;\n+    uint8_t in_prototype_chain;\n+    uint8_t is_array;\n+    JSPropertyEnum *tab_atom; /* is_array = FALSE */\n } JSForInIterator;\n \n typedef struct JSRegExp {\n@@ -5399,7 +5401,15 @@ static void js_for_in_iterator_finalizer(JSRuntime *rt, JSValue val)\n {\n     JSObject *p = JS_VALUE_GET_OBJ(val);\n     JSForInIterator *it = p->u.for_in_iterator;\n+    int i;\n+    \n     JS_FreeValueRT(rt, it->obj);\n+    if (!it->is_array) {\n+        for(i = 0; i < it->atom_count; i++) {\n+            JS_FreeAtomRT(rt, it->tab_atom[i].atom);\n+        }\n+        js_free_rt(rt, it->tab_atom);\n+    }\n     js_free_rt(rt, it);\n }\n \n@@ -14842,10 +14852,10 @@ static JSValue js_build_rest(JSContext *ctx, int first, int argc, JSValueConst *\n \n static JSValue build_for_in_iterator(JSContext *ctx, JSValue obj)\n {\n-    JSObject *p;\n+    JSObject *p, *p1;\n     JSPropertyEnum *tab_atom;\n     int i;\n-    JSValue enum_obj, obj1;\n+    JSValue enum_obj;\n     JSForInIterator *it;\n     uint32_t tag, tab_atom_count;\n \n@@ -14868,40 +14878,16 @@ static JSValue build_for_in_iterator(JSContext *ctx, JSValue obj)\n     it->is_array = FALSE;\n     it->obj = obj;\n     it->idx = 0;\n-    p = JS_VALUE_GET_OBJ(enum_obj);\n-    p->u.for_in_iterator = it;\n+    it->tab_atom = NULL;\n+    it->atom_count = 0;\n+    it->in_prototype_chain = FALSE;\n+    p1 = JS_VALUE_GET_OBJ(enum_obj);\n+    p1->u.for_in_iterator = it;\n \n     if (tag == JS_TAG_NULL || tag == JS_TAG_UNDEFINED)\n         return enum_obj;\n \n-    /* fast path: assume no enumerable properties in the prototype chain */\n-    obj1 = JS_DupValue(ctx, obj);\n-    for(;;) {\n-        obj1 = JS_GetPrototypeFree(ctx, obj1);\n-        if (JS_IsNull(obj1))\n-            break;\n-        if (JS_IsException(obj1))\n-            goto fail;\n-        if (JS_GetOwnPropertyNamesInternal(ctx, &tab_atom, &tab_atom_count,\n-                                           JS_VALUE_GET_OBJ(obj1),\n-                                           JS_GPN_STRING_MASK | JS_GPN_ENUM_ONLY)) {\n-            JS_FreeValue(ctx, obj1);\n-            goto fail;\n-        }\n-        js_free_prop_enum(ctx, tab_atom, tab_atom_count);\n-        if (tab_atom_count != 0) {\n-            JS_FreeValue(ctx, obj1);\n-            goto slow_path;\n-        }\n-        /* must check for timeout to avoid infinite loop */\n-        if (js_poll_interrupts(ctx)) {\n-            JS_FreeValue(ctx, obj1);\n-            goto fail;\n-        }\n-    }\n-\n     p = JS_VALUE_GET_OBJ(obj);\n-\n     if (p->fast_array) {\n         JSShape *sh;\n         JSShapeProperty *prs;\n@@ -14913,61 +14899,90 @@ static JSValue build_for_in_iterator(JSContext *ctx, JSValue obj)\n         }\n         /* for fast arrays, we only store the number of elements */\n         it->is_array = TRUE;\n-        it->array_length = p->u.array.count;\n+        it->atom_count = p->u.array.count;\n     } else {\n     normal_case:\n         if (JS_GetOwnPropertyNamesInternal(ctx, &tab_atom, &tab_atom_count, p,\n-                                   JS_GPN_STRING_MASK | JS_GPN_ENUM_ONLY))\n-            goto fail;\n-        for(i = 0; i < tab_atom_count; i++) {\n-            JS_SetPropertyInternal(ctx, enum_obj, tab_atom[i].atom, JS_NULL, enum_obj, 0);\n+                                           JS_GPN_STRING_MASK | JS_GPN_SET_ENUM)) {\n+            JS_FreeValue(ctx, enum_obj);\n+            return JS_EXCEPTION;\n         }\n-        js_free_prop_enum(ctx, tab_atom, tab_atom_count);\n+        it->tab_atom = tab_atom;\n+        it->atom_count = tab_atom_count;\n     }\n     return enum_obj;\n+}\n \n- slow_path:\n-    /* non enumerable properties hide the enumerables ones in the\n-       prototype chain */\n-    obj1 = JS_DupValue(ctx, obj);\n+/* obj -> enum_obj */\n+static __exception int js_for_in_start(JSContext *ctx, JSValue *sp)\n+{\n+    sp[-1] = build_for_in_iterator(ctx, sp[-1]);\n+    if (JS_IsException(sp[-1]))\n+        return -1;\n+    return 0;\n+}\n+\n+/* return -1 if exception, 0 if slow case, 1 if the enumeration is finished */\n+static __exception int js_for_in_prepare_prototype_chain_enum(JSContext *ctx,\n+                                                              JSValueConst enum_obj)\n+{\n+    JSObject *p;\n+    JSForInIterator *it;\n+    JSPropertyEnum *tab_atom;\n+    uint32_t tab_atom_count, i;\n+    JSValue obj1;\n+    \n+    p = JS_VALUE_GET_OBJ(enum_obj);\n+    it = p->u.for_in_iterator;\n+\n+    /* check if there are enumerable properties in the prototype chain (fast path) */\n+    obj1 = JS_DupValue(ctx, it->obj);\n     for(;;) {\n+        obj1 = JS_GetPrototypeFree(ctx, obj1);\n+        if (JS_IsNull(obj1))\n+            break;\n+        if (JS_IsException(obj1))\n+            goto fail;\n         if (JS_GetOwnPropertyNamesInternal(ctx, &tab_atom, &tab_atom_count,\n                                            JS_VALUE_GET_OBJ(obj1),\n-                                           JS_GPN_STRING_MASK | JS_GPN_SET_ENUM)) {\n+                                           JS_GPN_STRING_MASK | JS_GPN_ENUM_ONLY)) {\n             JS_FreeValue(ctx, obj1);\n             goto fail;\n         }\n-        for(i = 0; i < tab_atom_count; i++) {\n-            JS_DefinePropertyValue(ctx, enum_obj, tab_atom[i].atom, JS_NULL,\n-                                   (tab_atom[i].is_enumerable ?\n-                                    JS_PROP_ENUMERABLE : 0));\n-        }\n         js_free_prop_enum(ctx, tab_atom, tab_atom_count);\n-        obj1 = JS_GetPrototypeFree(ctx, obj1);\n-        if (JS_IsNull(obj1))\n-            break;\n-        if (JS_IsException(obj1))\n-            goto fail;\n+        if (tab_atom_count != 0) {\n+            JS_FreeValue(ctx, obj1);\n+            goto slow_path;\n+        }\n         /* must check for timeout to avoid infinite loop */\n         if (js_poll_interrupts(ctx)) {\n             JS_FreeValue(ctx, obj1);\n             goto fail;\n         }\n     }\n-    return enum_obj;\n-\n- fail:\n-    JS_FreeValue(ctx, enum_obj);\n-    return JS_EXCEPTION;\n-}\n+    JS_FreeValue(ctx, obj1);\n+    return 1;\n \n-/* obj -> enum_obj */\n-static __exception int js_for_in_start(JSContext *ctx, JSValue *sp)\n-{\n-    sp[-1] = build_for_in_iterator(ctx, sp[-1]);\n-    if (JS_IsException(sp[-1]))\n-        return -1;\n+ slow_path:\n+    /* add the visited properties, even if they are not enumerable */\n+    if (it->is_array) {\n+        if (JS_GetOwnPropertyNamesInternal(ctx, &tab_atom, &tab_atom_count,\n+                                           JS_VALUE_GET_OBJ(it->obj),\n+                                           JS_GPN_STRING_MASK | JS_GPN_SET_ENUM)) {\n+            goto fail;\n+        }\n+        it->is_array = FALSE;\n+        it->tab_atom = tab_atom;\n+        it->atom_count = tab_atom_count;\n+    }\n+    \n+    for(i = 0; i < it->atom_count; i++) {\n+        if (JS_DefinePropertyValue(ctx, enum_obj, it->tab_atom[i].atom, JS_NULL, JS_PROP_ENUMERABLE) < 0)\n+            goto fail;\n+    }\n     return 0;\n+ fail:\n+    return -1;\n }\n \n /* enum_obj -> enum_obj value done */\n@@ -14977,6 +14992,8 @@ static __exception int js_for_in_next(JSContext *ctx, JSValue *sp)\n     JSObject *p;\n     JSAtom prop;\n     JSForInIterator *it;\n+    JSPropertyEnum *tab_atom;\n+    uint32_t tab_atom_count;\n     int ret;\n \n     enum_obj = sp[-1];\n@@ -14989,28 +15006,68 @@ static __exception int js_for_in_next(JSContext *ctx, JSValue *sp)\n     it = p->u.for_in_iterator;\n \n     for(;;) {\n-        if (it->is_array) {\n-            if (it->idx >= it->array_length)\n-                goto done;\n-            prop = __JS_AtomFromUInt32(it->idx);\n-            it->idx++;\n+        if (it->idx >= it->atom_count) {\n+            if (JS_IsNull(it->obj) || JS_IsUndefined(it->obj))\n+                goto done; /* not an object */\n+            /* no more property in the current object: look in the prototype */\n+            if (!it->in_prototype_chain) {\n+                ret = js_for_in_prepare_prototype_chain_enum(ctx, enum_obj);\n+                if (ret < 0)\n+                    return -1;\n+                if (ret)\n+                    goto done;\n+                it->in_prototype_chain = TRUE;\n+            }\n+            it->obj = JS_GetPrototypeFree(ctx, it->obj);\n+            if (JS_IsException(it->obj))\n+                return -1;\n+            if (JS_IsNull(it->obj))\n+                goto done; /* no more prototype */\n+\n+            /* must check for timeout to avoid infinite loop */\n+            if (js_poll_interrupts(ctx))\n+                return -1;\n+\n+            if (JS_GetOwnPropertyNamesInternal(ctx, &tab_atom, &tab_atom_count,\n+                                               JS_VALUE_GET_OBJ(it->obj),\n+                                               JS_GPN_STRING_MASK | JS_GPN_SET_ENUM)) {\n+                return -1;\n+            }\n+            js_free_prop_enum(ctx, it->tab_atom, it->atom_count);\n+            it->tab_atom = tab_atom;\n+            it->atom_count = tab_atom_count;\n+            it->idx = 0;\n         } else {\n-            JSShape *sh = p->shape;\n-            JSShapeProperty *prs;\n-            if (it->idx >= sh->prop_count)\n-                goto done;\n-            prs = get_shape_prop(sh) + it->idx;\n-            prop = prs->atom;\n-            it->idx++;\n-            if (prop == JS_ATOM_NULL || !(prs->flags & JS_PROP_ENUMERABLE))\n-                continue;\n+            if (it->is_array) {\n+                prop = __JS_AtomFromUInt32(it->idx);\n+                it->idx++;\n+            } else {\n+                BOOL is_enumerable;\n+                prop = it->tab_atom[it->idx].atom;\n+                is_enumerable = it->tab_atom[it->idx].is_enumerable;\n+                it->idx++;\n+                if (it->in_prototype_chain) {\n+                    /* slow case: we are in the prototype chain */\n+                    ret = JS_GetOwnPropertyInternal(ctx, NULL, JS_VALUE_GET_OBJ(enum_obj), prop);\n+                    if (ret < 0)\n+                        return ret;\n+                    if (ret)\n+                        continue; /* already visited */\n+                    /* add to the visited property list */\n+                    if (JS_DefinePropertyValue(ctx, enum_obj, prop, JS_NULL,\n+                                               JS_PROP_ENUMERABLE) < 0)\n+                        return -1;\n+                }\n+                if (!is_enumerable)\n+                    continue;\n+            }\n+            /* check if the property was deleted */\n+            ret = JS_GetOwnPropertyInternal(ctx, NULL, JS_VALUE_GET_OBJ(it->obj), prop);\n+            if (ret < 0)\n+                return ret;\n+            if (ret)\n+                break;\n         }\n-        /* check if the property was deleted */\n-        ret = JS_HasProperty(ctx, it->obj, prop);\n-        if (ret < 0)\n-            return ret;\n-        if (ret)\n-            break;\n     }\n     /* return the property */\n     sp[0] = JS_AtomToValue(ctx, prop);\ndiff --git a/tests/test_loop.js b/tests/test_loop.js\nindex 5fda9d8e3..084d65892 100644\n--- a/tests/test_loop.js\n+++ b/tests/test_loop.js\n@@ -167,6 +167,29 @@ function test_for_in2()\n     assert(tab.toString() == \"x,y\");\n }\n \n+function test_for_in_proxy() {\n+    let removed_key = \"\";\n+    let target = {}\n+    let proxy = new Proxy(target, {\n+        ownKeys: function() {\n+            return [\"a\", \"b\", \"c\"];\n+        },\n+        getOwnPropertyDescriptor: function(target, key) {\n+            if (removed_key != \"\" && key == removed_key)\n+                return undefined;\n+            else\n+                return { enumerable: true, configurable: true, value: this[key] };\n+        }\n+    });\n+    let str = \"\";\n+    for(let o in proxy) {\n+        str += \" \" + o;\n+        if (o == \"a\")\n+            removed_key = \"b\";\n+    }\n+    assert(str == \" a c\");\n+}\n+\n function test_for_break()\n {\n     var i, c;\n@@ -357,6 +380,7 @@ test_switch1();\n test_switch2();\n test_for_in();\n test_for_in2();\n+test_for_in_proxy();\n \n test_try_catch1();\n test_try_catch2();\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42531514-vul",
+      "digest": "sha256:1383f02cde7011eb96303daf73e09b4c19e3c4e1b7c6eb005853b48f82caf49a"
+    },
+    "patched": {
+      "ref": "n132/arvo:42531514-fix",
+      "digest": "sha256:839551c346e7de9c2210e2b2e5793204d420f53b2ef6460634c0602633c1ee39"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "WRITE",
+        "crash_site": "/src/quickjs/./list.h:51",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "WRITE",
+        "site": "/src/quickjs/./list.h:51"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

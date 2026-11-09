@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042498004",
+  "chain": "CWE-1284->CWE-787",
+  "project": "zstd",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42498004",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "c5d6dde502e4e30c7de4476e82b459361fe2f486",
+      "fix_commits": [
+        "c5d6dde502e4e30c7de4476e82b459361fe2f486"
+      ],
+      "repo": "https://github.com/facebook/zstd"
+    },
+    "patch": "diff --git a/lib/compress/zstd_compress.c b/lib/compress/zstd_compress.c\nindex 4c2254abe9c..51cdeaf032b 100644\n--- a/lib/compress/zstd_compress.c\n+++ b/lib/compress/zstd_compress.c\n@@ -651,7 +651,7 @@ ZSTD_compressionParameters ZSTD_adjustCParams_internal(ZSTD_compressionParameter\n \n     if (dictSize && (srcSize+1<2) /* srcSize unknown */ )\n         srcSize = minSrcSize;  /* presumed small when there is a dictionary */\n-    else\n+    else if (srcSize == 0)\n         srcSize -= 1;  /* unknown 0 => -1ULL : presumed large */\n \n     /* resize windowLog if input is small enough, to use less memory */\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42498004-vul",
+      "digest": "sha256:f44e176cf9e86076d76996cfab7ff15df2ce3808406b5cccce66b0acc78a8fe8"
+    },
+    "patched": {
+      "ref": "n132/arvo:42498004-fix",
+      "digest": "sha256:3a89cf22f15fa09d8cfdddb4347d01a6cbe22b870a4592ed47eed611ef3e2f63"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/zstd/tests/fuzz/../../lib/compress/zstd_compress.c:1570",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/zstd/tests/fuzz/../../lib/compress/zstd_compress.c:1570"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

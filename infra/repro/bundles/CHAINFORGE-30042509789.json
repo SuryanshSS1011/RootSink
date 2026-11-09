@@ -1,0 +1,82 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-30042509789",
+  "chain": "CWE-1284->CWE-190->CWE-125",
+  "project": "libjxl",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42509789",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "eadb9f70eb83e7f88246431d355b9bc7387fcc6f",
+      "fix_commits": [
+        "eadb9f70eb83e7f88246431d355b9bc7387fcc6f"
+      ],
+      "repo": "https://github.com/libjxl/libjxl"
+    },
+    "patch": "diff --git a/lib/jxl/render_pipeline/stage_write.cc b/lib/jxl/render_pipeline/stage_write.cc\nindex b4f6033ac6f..e4796bba8cb 100644\n--- a/lib/jxl/render_pipeline/stage_write.cc\n+++ b/lib/jxl/render_pipeline/stage_write.cc\n@@ -289,11 +289,12 @@ class WriteToPixelCallbackStage : public RenderPipelineStage {\n     if (ypos >= height_) return;\n     const float* line_buffers[4];\n     for (size_t c = 0; c < 3; c++) {\n-      line_buffers[c] = GetInputRow(input_rows, c, 0);\n+      line_buffers[c] = GetInputRow(input_rows, c, 0) - xextra;\n     }\n     if (has_alpha_) {\n-      line_buffers[3] = GetInputRow(input_rows, alpha_c_, 0);\n+      line_buffers[3] = GetInputRow(input_rows, alpha_c_, 0) - xextra;\n     } else {\n+      // No xextra offset; opaque_alpha_ is a way to set all values to 1.0f.\n       line_buffers[3] = opaque_alpha_.data();\n     }\n     // TODO(veluca): SIMD.\n@@ -302,14 +303,16 @@ class WriteToPixelCallbackStage : public RenderPipelineStage {\n       size_t j = 0;\n       size_t ix = 0;\n       for (; ix < kMaxPixelsPerCall && ssize_t(ix) + x0 < limit; ix++) {\n-        temp[j++] = line_buffers[0][x0 + ix];\n-        temp[j++] = line_buffers[1][x0 + ix];\n-        temp[j++] = line_buffers[2][x0 + ix];\n+        temp[j++] = line_buffers[0][ix];\n+        temp[j++] = line_buffers[1][ix];\n+        temp[j++] = line_buffers[2][ix];\n         if (rgba_) {\n-          temp[j++] = line_buffers[3][x0 + ix];\n+          temp[j++] = line_buffers[3][ix];\n         }\n       }\n       pixel_callback_(temp, xpos + x0, ypos, ix);\n+      for (size_t c = 0; c < 3; c++) line_buffers[c] += kMaxPixelsPerCall;\n+      if (has_alpha_) line_buffers[3] += kMaxPixelsPerCall;\n     }\n   }\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42509789-vul",
+      "digest": "sha256:f5d258eae8b87707fb901c843e8f478d67e4674338128b2d33f8f160d92862d5"
+    },
+    "patched": {
+      "ref": "n132/arvo:42509789-fix",
+      "digest": "sha256:9d3662d8ce72fafeed3b37029cb81d3d89273eda08d305462e6ddc97460e726d"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/libjxl/lib/jxl/render_pipeline/stage_write.cc:309",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 190,
+      "role": "intermediate",
+      "witness": {
+        "method": "ubsan-rebuild",
+        "recipe": "SANITIZER=undefined compile && $ENTRYPOINT",
+        "ubsan_options": "print_stacktrace=1:halt_on_error=0:silence_unsigned_overflow=0:symbolize=1"
+      },
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/libjxl/lib/jxl/render_pipeline/stage_write.cc:309"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

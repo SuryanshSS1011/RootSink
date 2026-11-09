@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042506941",
+  "chain": "CWE-416->CWE-125",
+  "project": "ghostpdl",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42506941",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "3f5a2b75b2914b41ee600ab6226f1b4061bf267e",
+      "fix_commits": [
+        "3f5a2b75b2914b41ee600ab6226f1b4061bf267e"
+      ],
+      "repo": "https://cgit.ghostscript.com/ghostpdl.git"
+    },
+    "patch": "From 3f5a2b75b2914b41ee600ab6226f1b4061bf267e Mon Sep 17 00:00:00 2001\nFrom: Ken Sharp <ken.sharp@artifex.com>\nDate: Tue, 11 Jan 2022 14:36:16 +0000\nSubject: [PATCH] OSS-fuzz #43268.pdf - beware of repair rebuilding xref\n\nThe file is broken (of course) and causes a repair during the course\nof reading an object form the file while dereferencing an indirect\nreference.\n\nThe repair causes the xref table to be discarded and rebuilt, and that\ncauses the reference to the xref entry to become invalid. Simply update\nthe reference after reading an object to ensure it is up to date.\n---\n pdf/pdf_deref.c | 5 +++++\n 1 file changed, 5 insertions(+)\n\ndiff --git a/pdf/pdf_deref.c b/pdf/pdf_deref.c\nindex 9790520..1740c61 100644\n--- a/pdf/pdf_deref.c\n+++ b/pdf/pdf_deref.c\n@@ -891,6 +891,11 @@ int pdfi_dereference(pdf_context *ctx, uint64_t obj, uint64_t gen, pdf_obj **obj\n \n             code = pdfi_read_object(ctx, SubFile_stream, entry->u.uncompressed.offset);\n \n+            /* pdfi_read_object() could do a repair, which would invalidate the xref and rebuild it.\n+             * reload the xref entry to be certain it is valid.\n+             */\n+            entry = &ctx->xref_table->xref[obj];\n+\n             pdfi_countdown(EODString);\n             pdfi_close_file(ctx, SubFile_stream);\n             if (code < 0) {\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42506941-vul",
+      "digest": "sha256:999b819969733e54c7fb574d7bee46e57e8b1483205c1a413bcbbc27dc869586"
+    },
+    "patched": {
+      "ref": "n132/arvo:42506941-fix",
+      "digest": "sha256:0edd5579d81067fc96c855f2ad100e39be544006121720d2d2dfc1e7333ec403"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/ghostpdl/./pdf/pdf_deref.c:923",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/ghostpdl/./pdf/pdf_deref.c:923"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

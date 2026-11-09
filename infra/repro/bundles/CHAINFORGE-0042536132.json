@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042536132",
+  "chain": "CWE-456->CWE-457",
+  "project": "skia",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42536132",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "7ba427ef40301d199bcd5c0f9a9d41244c495bd6",
+      "fix_commits": [
+        "7ba427ef40301d199bcd5c0f9a9d41244c495bd6"
+      ],
+      "repo": "https://skia.googlesource.com/skia.git"
+    },
+    "patch": "diff --git a/src/core/SkDevice.cpp b/src/core/SkDevice.cpp\nindex 210af80..96a7e8d 100644\n--- a/src/core/SkDevice.cpp\n+++ b/src/core/SkDevice.cpp\n@@ -511,8 +511,11 @@\n         // with a localmatrixshader so that the shader draws as if there was no change to the ctm.\n         if (shader) {\n             SkMatrix inverse;\n-            SkAssertResult(localM.invert(&inverse));\n-            localPaint.setShader(shader->makeWithLocalMatrix(inverse));\n+            if (localM.invert(&inverse)) {\n+                localPaint.setShader(shader->makeWithLocalMatrix(inverse));\n+            } else {\n+                localPaint.setShader(nullptr);  // can't handle this xform\n+            }\n         }\n \n         int subLen = proc((const char*)text);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42536132-vul",
+      "digest": "sha256:bccc3dc85fc9108a108f9f8f49b0ebe86f3962ad2f5bb3e616e203a4fc4b0d8a"
+    },
+    "patched": {
+      "ref": "n132/arvo:42536132-fix",
+      "digest": "sha256:cdc29d8b7e21cd077db990ff5fdfb1eb984ca8b2acfb00fcecc267b2f06d6dd4"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/skia/out/Fuzz_mem_constraints/../../include/core/SkMatrix.h:128",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/skia/out/Fuzz_mem_constraints/../../include/core/SkMatrix.h:128"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

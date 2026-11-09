@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042506574",
+  "chain": "CWE-1284->CWE-787",
+  "project": "ffmpeg",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42506574",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "afdbc940c6011b64c1856f88d2b0609369f87406",
+      "fix_commits": [
+        "afdbc940c6011b64c1856f88d2b0609369f87406"
+      ],
+      "repo": "https://git.ffmpeg.org/ffmpeg.git"
+    },
+    "patch": "From afdbc940c6011b64c1856f88d2b0609369f87406 Mon Sep 17 00:00:00 2001\nFrom: Michael Niedermayer <michael@niedermayer.cc>\nDate: Sat, 25 Dec 2021 20:14:48 +0100\nSubject: [PATCH] avcodec/tiff: Remove messing with jpeg context\n\nThe whole concept is just not correct, also as it seems not to be needed\nat all, all dng files i have decode without this.\n\nFixes: various crashes\nFixes: 42937/clusterfuzz-testcase-minimized-ffmpeg_AV_CODEC_ID_TIFF_fuzzer-4625073334517760\nFixes: 42938/clusterfuzz-testcase-minimized-ffmpeg_AV_CODEC_ID_TIFF_fuzzer-4643368217477120\nFixes: 42939/clusterfuzz-testcase-minimized-ffmpeg_AV_CODEC_ID_TIFF_fuzzer-4925325908246528\nFixes: 42940/clusterfuzz-testcase-minimized-ffmpeg_AV_CODEC_ID_TIFF_fuzzer-4925378806808576\nFixes: 42941/clusterfuzz-testcase-minimized-ffmpeg_AV_CODEC_ID_TIFF_fuzzer-6202009265504256\nFixes: 42944/clusterfuzz-testcase-minimized-ffmpeg_AV_CODEC_ID_TIFF_fuzzer-6076860998483968\n\nFound-by: continuous fuzzing process https://github.com/google/oss-fuzz/tree/master/projects/ffmpeg\nSigned-off-by: Michael Niedermayer <michael@niedermayer.cc>\n---\n libavcodec/tiff.c | 24 ++----------------------\n 1 file changed, 2 insertions(+), 22 deletions(-)\n\ndiff --git a/libavcodec/tiff.c b/libavcodec/tiff.c\nindex 60773d5..fd85d10 100644\n--- a/libavcodec/tiff.c\n+++ b/libavcodec/tiff.c\n@@ -721,20 +721,6 @@ static int dng_decode_jpeg(AVCodecContext *avctx, AVFrame *frame,\n     return 0;\n }\n \n-static int dng_decode_strip(AVCodecContext *avctx, AVFrame *frame)\n-{\n-    TiffContext *s = avctx->priv_data;\n-    int ret = ff_set_dimensions(s->avctx_mjpeg, s->width, s->height);\n-\n-    if (ret < 0)\n-        return ret;\n-\n-    s->jpgframe->width  = s->width;\n-    s->jpgframe->height = s->height;\n-\n-    return dng_decode_jpeg(avctx, frame, s->stripsize, 0, 0, s->width, s->height);\n-}\n-\n static int tiff_unpack_strip(TiffContext *s, AVFrame *p, uint8_t *dst, int stride,\n                              const uint8_t *src, int size, int strip_start, int lines)\n {\n@@ -856,7 +842,7 @@ static int tiff_unpack_strip(TiffContext *s, AVFrame *p, uint8_t *dst, int strid\n             av_log(s->avctx, AV_LOG_ERROR, \"More than one DNG JPEG strips unsupported\\n\");\n             return AVERROR_PATCHWELCOME;\n         }\n-        if ((ret = dng_decode_strip(s->avctx, p)) < 0)\n+        if ((ret = dng_decode_jpeg(s->avctx, p, s->stripsize, 0, 0, s->width, s->height)) < 0)\n             return ret;\n         return 0;\n     }\n@@ -972,13 +958,7 @@ static int dng_decode_tiles(AVCodecContext *avctx, AVFrame *frame,\n     int has_width_leftover, has_height_leftover;\n     int tile_x = 0, tile_y = 0;\n     int pos_x = 0, pos_y = 0;\n-    int ret = ff_set_dimensions(s->avctx_mjpeg, s->tile_width, s->tile_length);\n-\n-    if (ret < 0)\n-        return ret;\n-\n-    s->jpgframe->width  = s->tile_width;\n-    s->jpgframe->height = s->tile_length;\n+    int ret;\n \n     has_width_leftover = (s->width % s->tile_width != 0);\n     has_height_leftover = (s->height % s->tile_length != 0);\n-- \n2.55.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42506574-vul",
+      "digest": "sha256:61f8c87299134f4373f431932fd2f1124b8fef8487b60b7a6da99517a61a6413"
+    },
+    "patched": {
+      "ref": "n132/arvo:42506574-fix",
+      "digest": "sha256:157ce81a306ba9ef7af86165766243131ca097c9d002419f32c08c30484efea7"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/ffmpeg/libavcodec/idctdsp.c:90",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/ffmpeg/libavcodec/idctdsp.c:90"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

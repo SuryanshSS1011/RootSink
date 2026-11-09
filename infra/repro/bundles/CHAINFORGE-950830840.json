@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-950830840",
+  "chain": "CWE-129->CWE-787",
+  "project": "pcre2",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42475150",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/PCRE2Project/pcre2/commit/ab1e3c9309330e8e3562d3e77c90fb1edb971f09",
+      "fix_commits": [
+        "ab1e3c9309330e8e3562d3e77c90fb1edb971f09"
+      ],
+      "repo": "https://github.com/PCRE2Project/pcre2"
+    },
+    "patch": "diff --git a/ChangeLog b/ChangeLog\nindex b22a58a17..9be4acc24 100644\n--- a/ChangeLog\n+++ b/ChangeLog\n@@ -38,6 +38,9 @@ bugs were never in fully released code, but are noted here for the record.\n   \n   (f) Refactor some code in do_callout() to avoid picky compiler warnings about \n       negative indices. Fixes oss-fuzz issue 1454.\n+      \n+  (g) Similarly refactor the way the variable length ovector is addressed for\n+      similar reasons. Fixes oss-fuzz issue 1465.\n  \n       \n 2. Now that pcre2_match() no longer uses recursive function calls (see above),\n@@ -160,6 +163,9 @@ tests to improve coverage.\n 31. If more than one of \"push\", \"pushcopy\", or \"pushtablescopy\" were set in \n pcre2test, a crash could occur.\n \n+32. Make -bigstack in RunTest allocate a 64Mb stack (instead of 16 MB) so that \n+all the tests can run with clang's sanitizing options.\n+\n \n \n Version 10.23 14-February-2017\ndiff --git a/RunTest b/RunTest\nindex c15b68ed4..89c4b771a 100755\n--- a/RunTest\n+++ b/RunTest\n@@ -321,7 +321,7 @@ fi\n \n $sim ./pcre2test -S 1 /dev/null /dev/null\n if [ $? -eq 0 -a \"$bigstack\" != \"\" ] ; then\n-  setstack=\"-S 16\"\n+  setstack=\"-S 64\"\n else\n   setstack=\"\"\n fi\ndiff --git a/src/pcre2_match.c b/src/pcre2_match.c\nindex 41d0fcbde..373ee9e97 100644\n--- a/src/pcre2_match.c\n+++ b/src/pcre2_match.c\n@@ -182,9 +182,15 @@ of use and undefined afterwards. */\n #define Foffset_top        F->offset_top\n #define Foccu              F->occu\n #define Fop                F->op\n-#define Fovector           F->ovector\n #define Freturn_id         F->return_id\n \n+/* We need a cast for this one because F->ovector is a vector of size 2, at the \n+end of the backtrack frame, but when there are capturing parentheses the space \n+allocated is bigger so we want to be able to address more elements. Without the \n+case, -fsanitize=undefined grumbles at this. */\n+\n+#define Fovector           ((PCRE2_SIZE *)(F->ovector))\n+\n \n #ifdef DEBUG_FRAMES_DISPLAY\n /*************************************************\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42475150-vul",
+      "digest": "sha256:0f3b830321120b8125f3bb5fd7c15a15f2f15ffcf00867787d457649c8434749"
+    },
+    "patched": {
+      "ref": "n132/arvo:42475150-fix",
+      "digest": "sha256:cc3d6bf50440cd48a26b068e841e3cb58a4ebfa8776a6dd44ec806782786055d"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "crash_site": "/src/pcre2/src/pcre2_match.c:5576",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 129,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "site": "/src/pcre2/src/pcre2_match.c:5576"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

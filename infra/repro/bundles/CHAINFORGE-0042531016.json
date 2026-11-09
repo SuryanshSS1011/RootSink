@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042531016",
+  "chain": "CWE-456->CWE-457",
+  "project": "mruby",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42531016",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "97b522d77874005adcc1c948bad0a137eb5f2bf5",
+      "fix_commits": [
+        "97b522d77874005adcc1c948bad0a137eb5f2bf5"
+      ],
+      "repo": "https://github.com/mruby/mruby"
+    },
+    "patch": "From 97b522d77874005adcc1c948bad0a137eb5f2bf5 Mon Sep 17 00:00:00 2001\nFrom: \"Yukihiro \\\"Matz\\\" Matsumoto\" <matz@ruby.or.jp>\nDate: Fri, 22 Dec 2023 15:35:21 +0900\nSubject: [PATCH] src/fmt_fp.c: change condition order for memory safety\n\n---\n src/fmt_fp.c | 2 +-\n 1 file changed, 1 insertion(+), 1 deletion(-)\n\ndiff --git a/src/fmt_fp.c b/src/fmt_fp.c\nindex 3eed117..ae80207 100644\n--- a/src/fmt_fp.c\n+++ b/src/fmt_fp.c\n@@ -319,7 +319,7 @@ mrb_format_float(mrb_float f, char *buf, size_t buf_size, char fmt, int prec, ch\n     }\n     if (*rs == '0') {\n       // We need to insert a 1\n-      if (rs[1] == '.' && fmt != 'f') {\n+      if (fmt != 'f' && rs[1] == '.') {\n         // We're going to round 9.99 to 10.00\n         // Move the decimal point\n         rs[0] = '.';\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42531016-vul",
+      "digest": "sha256:a4516609bb232748b32447c2fc3de689cc247081fc6fea68dd5eef89b351fab0"
+    },
+    "patched": {
+      "ref": "n132/arvo:42531016-fix",
+      "digest": "sha256:e5e80e869b7747b2ad16d866411761eeb2fdf0d51966d975ae150479f336aede"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/mruby/src/fmt_fp.c:321",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/mruby/src/fmt_fp.c:321"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

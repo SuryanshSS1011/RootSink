@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042536176",
+  "chain": "CWE-1284->CWE-125",
+  "project": "gdal",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42536176",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "e1b11da3b0bce8a2126af8146bd6000cea25edea",
+      "fix_commits": [
+        "e1b11da3b0bce8a2126af8146bd6000cea25edea"
+      ],
+      "repo": "https://github.com/OSGeo/gdal"
+    },
+    "patch": "diff --git a/gdal/frmts/rik/rikdataset.cpp b/gdal/frmts/rik/rikdataset.cpp\nindex 922a810b4c0f..0ee0f4e0ba06 100644\n--- a/gdal/frmts/rik/rikdataset.cpp\n+++ b/gdal/frmts/rik/rikdataset.cpp\n@@ -355,6 +355,15 @@ CPLErr RIKRasterBand::IReadBlock( int nBlockXOff, int nBlockYOff,\n \n     else if( poRDS->options == 0x0b )\n     {\n+        if( nBlockSize < 5 )\n+        {\n+            CPLFree( blockData );\n+            CPLError( CE_Failure, CPLE_AppDefined,\n+                      \"RIK decompression failed. \"\n+                      \"Not enough bytes.\" );\n+            return CE_Failure;\n+        }\n+\n         const bool LZW_HAS_CLEAR_CODE = !!(blockData[4] & 0x80);\n         const int LZW_MAX_BITS = blockData[4] & 0x1f; // Max 13\n         if( LZW_MAX_BITS > 13 )\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42536176-vul",
+      "digest": "sha256:b0879eb9decc62ce6511481a601ac05329a7405dcda1b0e4766704dbef818caf"
+    },
+    "patched": {
+      "ref": "n132/arvo:42536176-fix",
+      "digest": "sha256:1a679d060443a098371fb8f4a5d358d9301bc81b9fb47ac9c03d37ebeead3fbf"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/gdal/gdal/frmts/rik/rikdataset.cpp:358",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/gdal/gdal/frmts/rik/rikdataset.cpp:358"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042521181",
+  "chain": "CWE-456->CWE-457",
+  "project": "mupdf",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42521181",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "8fdad62ddb46f8798643e9b1a564a2af8b12411d",
+      "fix_commits": [
+        "8fdad62ddb46f8798643e9b1a564a2af8b12411d"
+      ],
+      "repo": "git://git.ghostscript.com/mupdf.git"
+    },
+    "patch": "From 8fdad62ddb46f8798643e9b1a564a2af8b12411d Mon Sep 17 00:00:00 2001\nFrom: Sebastian Rasmussen <sebras@gmail.com>\nDate: Wed, 24 Jan 2018 00:59:35 +0100\nSubject: [PATCH] Bug 698904: Drop pixmap only once upon error when painting\n shades.\n\nIf fz_new_pixmap_with_bbox() threw conv would be NULL and temp would\nbe pointing to a pixmap that would be dropped 2 times.\n\nIf fz_clone_pixmap_area_with_different_seps() threw temp and conv\nwould be pointing to the same pixmap that would be dropped 3 times.\n---\n source/fitz/draw-mesh.c | 14 +++++---------\n 1 file changed, 5 insertions(+), 9 deletions(-)\n\ndiff --git a/source/fitz/draw-mesh.c b/source/fitz/draw-mesh.c\nindex 9083870..b8bf68d 100644\n--- a/source/fitz/draw-mesh.c\n+++ b/source/fitz/draw-mesh.c\n@@ -293,6 +293,7 @@ fz_paint_shade(fz_context *ctx, fz_shade *shade, fz_colorspace *colorspace, cons\n \t\t\t\t}\n \t\t\t\tfz_drop_pixmap(ctx, temp);\n \t\t\t\ttemp = conv;\n+\t\t\t\tconv = NULL;\n \n \t\t\t\t/* Now Change from our device_n colorspace into the target colorspace/spots. */\n \t\t\t\tconv = fz_clone_pixmap_area_with_different_seps(ctx, temp, NULL, dest->colorspace, dest->seps, color_params, NULL);\n@@ -343,22 +344,17 @@ fz_paint_shade(fz_context *ctx, fz_shade *shade, fz_colorspace *colorspace, cons\n \t\t\t\t}\n \t\t\t}\n \t\t\tfz_paint_pixmap_with_overprint(dest, conv, op);\n-\t\t\tfz_drop_pixmap(ctx, conv);\n \t\t}\n \t}\n \tfz_always(ctx)\n-\t{\n-\t\tif (temp != dest)\n-\t\t\tfz_drop_pixmap(ctx, temp);\n-\t\tfz_fin_cached_color_converter(ctx, &ptd.cc);\n-\t}\n-\tfz_catch(ctx)\n \t{\n \t\tif (shade->use_function)\n \t\t{\n-\t\t\tfz_drop_pixmap(ctx, conv);\n \t\t\tfz_drop_pixmap(ctx, temp);\n+\t\t\tfz_drop_pixmap(ctx, conv);\n \t\t}\n-\t\tfz_rethrow(ctx);\n+\t\tfz_fin_cached_color_converter(ctx, &ptd.cc);\n \t}\n+\tfz_catch(ctx)\n+\t\tfz_rethrow(ctx);\n }\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42521181-vul",
+      "digest": "sha256:cc05cd7705aa989bb47c6eec96efd405e3e89ed930c2ed6c618b419821caaa32"
+    },
+    "patched": {
+      "ref": "n132/arvo:42521181-fix",
+      "digest": "sha256:ec17c86687a5e9dbf7237169f27756525d87049aaa166d74a721470d5b7af205"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/mupdf/source/fitz/hash.c:80",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/mupdf/source/fitz/hash.c:80"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

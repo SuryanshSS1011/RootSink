@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042507427",
+  "chain": "CWE-456->CWE-457",
+  "project": "ndpi",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42507427",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "1ff308af0920deb5f14809947887967bdc3848cb",
+      "fix_commits": [
+        "1ff308af0920deb5f14809947887967bdc3848cb"
+      ],
+      "repo": "https://github.com/ntop/nDPI"
+    },
+    "patch": "From 1ff308af0920deb5f14809947887967bdc3848cb Mon Sep 17 00:00:00 2001\nFrom: Ivan Nardi <12729895+IvanNardi@users.noreply.github.com>\nDate: Sun, 16 Jan 2022 20:31:48 +0100\nSubject: [PATCH] TLS: fix a use-of-uninitialized-value error (#1411)\n\nDetected by oss-fuzz:\nhttps://bugs.chromium.org/p/oss-fuzz/issues/detail?id=43705\n---\n src/lib/protocols/tls.c | 3 ++-\n 1 file changed, 2 insertions(+), 1 deletion(-)\n\ndiff --git a/src/lib/protocols/tls.c b/src/lib/protocols/tls.c\nindex cdaed66..fe28b82 100644\n--- a/src/lib/protocols/tls.c\n+++ b/src/lib/protocols/tls.c\n@@ -1870,7 +1870,8 @@ int processClientServerHello(struct ndpi_detection_module_struct *ndpi_struct,\n \t\t  printf(\"Client TLS Invalid len %u vs %u\\n\", s_offset+extension_len, total_len);\n #endif\n \t\t}\n-\t      } else if(extension_id == 13 /* signature algorithms */) {\n+\t      } else if(extension_id == 13 /* signature algorithms */ &&\n+\t                offset+extension_offset+1 < total_len) {\n \t\tint s_offset = offset+extension_offset, safari_signature_algorithms = 0, chrome_signature_algorithms = 0,\n \t\t  duplicate_found = 0, last_signature = 0;\n \t\tu_int16_t tot_signature_algorithms_len = ntohs(*((u_int16_t*)&packet->payload[s_offset]));\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42507427-vul",
+      "digest": "sha256:08a8c05f529d2e52747fed79d1a5fb41a3ddf7d9353bc9367d36f7984a209e9b"
+    },
+    "patched": {
+      "ref": "n132/arvo:42507427-fix",
+      "digest": "sha256:333942dc9d8c835dc98719bccd6b26d6a641e0e1774723fbe6081fa9a61cda81"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/ndpi/src/lib/protocols/tls.c:1423",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/ndpi/src/lib/protocols/tls.c:1423"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

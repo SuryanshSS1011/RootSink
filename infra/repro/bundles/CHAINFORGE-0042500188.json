@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042500188",
+  "chain": "CWE-1284->CWE-787",
+  "project": "net-snmp",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42500188",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "abc8f77c6a1e57c6ba12c77d47026e8602ff93f5",
+      "fix_commits": [
+        "abc8f77c6a1e57c6ba12c77d47026e8602ff93f5"
+      ],
+      "repo": "https://github.com/net-snmp/net-snmp"
+    },
+    "patch": "diff --git a/snmplib/parse.c b/snmplib/parse.c\nindex b3b0bbc995..373fe57a52 100644\n--- a/snmplib/parse.c\n+++ b/snmplib/parse.c\n@@ -2262,7 +2262,7 @@ parse_ranges(FILE * fp, struct range_list **retp)\n         rpp = &(*rpp)->next;\n \n     } while (nexttype == BAR);\n-    if (size) {\n+    if (size && nexttype <= MAXTOKEN) {\n         if (nexttype != RIGHTPAREN)\n             print_error(\"Expected \\\")\\\" after SIZE\", nexttoken, nexttype);\n         nexttype = get_token(fp, nexttoken, nexttype);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42500188-vul",
+      "digest": "sha256:42d4f7d2d9d5922b28b0e4d8cd58aa6c774d888fe1b0e8b71447a2a53a82d1a9"
+    },
+    "patched": {
+      "ref": "n132/arvo:42500188-fix",
+      "digest": "sha256:9e070b2c045abf5c153371441a5c5d210659252e34357e2f6a07b34e4f5441c5"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/net-snmp/snmplib/parse.c:4809",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/net-snmp/snmplib/parse.c:4809"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

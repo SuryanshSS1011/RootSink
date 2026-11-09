@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042510718",
+  "chain": "CWE-1284->CWE-125",
+  "project": "ndpi",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42510718",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "4775be3d85434d4e385f43a47b783844bbfb2571",
+      "fix_commits": [
+        "4775be3d85434d4e385f43a47b783844bbfb2571"
+      ],
+      "repo": "https://github.com/ntop/nDPI"
+    },
+    "patch": "diff --git a/src/lib/protocols/kerberos.c b/src/lib/protocols/kerberos.c\nindex 2694b072f59..e22dd9a94c5 100644\n--- a/src/lib/protocols/kerberos.c\n+++ b/src/lib/protocols/kerberos.c\n@@ -76,7 +76,7 @@ static int krb_decode_asn1_length(struct ndpi_detection_module_struct *ndpi_stru\n     length = 0;\n     for (; i <= length_octet; ++i)\n     {\n-      length |= packet->payload[*kasn1_offset + i] << (length_octet - i) * 8;\n+      length |= (unsigned int)packet->payload[*kasn1_offset + i] << (length_octet - i) * 8;\n     }\n     *kasn1_offset += i;\n   }\n@@ -262,7 +262,7 @@ static int krb_parse(struct ndpi_detection_module_struct * const ndpi_struct,\n   }\n \n   length = krb_decode_asn1_string_type(ndpi_struct, &kasn1_offset, &text);\n-  if (length < 0)\n+  if (length < 3)\n   {\n     return -1;\n   }\n@@ -302,7 +302,7 @@ static int krb_parse(struct ndpi_detection_module_struct * const ndpi_struct,\n   }\n \n   length = krb_decode_asn1_string_type(ndpi_struct, &kasn1_offset, &text);\n-  if (length < 0)\n+  if (length < 3)\n   {\n     return -1;\n   }\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42510718-vul",
+      "digest": "sha256:998fa333b46fd08ecae416f5dafd5f57b0b8e2c5879d69477c17307036ad6925"
+    },
+    "patched": {
+      "ref": "n132/arvo:42510718-fix",
+      "digest": "sha256:dadd6171b678e98279eacc3da9bfafc8b71435bb4780c3dc8422b1aa0bda7c39"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/ndpi/src/lib/protocols/kerberos.c:208",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/ndpi/src/lib/protocols/kerberos.c:208"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

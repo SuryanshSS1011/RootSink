@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0425413855",
+  "chain": "CWE-1285->CWE-125",
+  "project": "glaze",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "425413855",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "6efaddda571f7b76bc38c573a45e6ab78cb6eec6",
+      "fix_commits": [
+        "6efaddda571f7b76bc38c573a45e6ab78cb6eec6"
+      ],
+      "repo": "https://github.com/stephenberry/glaze"
+    },
+    "patch": "diff --git a/include/glaze/json/read.hpp b/include/glaze/json/read.hpp\nindex 994ff4039e..8142b01945 100644\n--- a/include/glaze/json/read.hpp\n+++ b/include/glaze/json/read.hpp\n@@ -533,49 +533,27 @@ namespace glz\n                }\n             }\n \n-            uint64_t c{};\n-            static constexpr uint64_t u_true =\n-               0b00000000'00000000'00000000'00000000'01100101'01110101'01110010'01110100;\n-            static constexpr uint64_t u_false =\n-               0b00000000'00000000'00000000'01100101'01110011'01101100'01100001'01100110;\n-            if constexpr (Opts.null_terminated) {\n-               // Note that because our buffer must be null terminated, we can read one more index without checking:\n-               std::memcpy(&c, it, 5);\n-               // We have to wipe the 5th character for true testing\n-               if ((c & 0xFF'FF'FF'00'FF'FF'FF'FF) == u_true) {\n-                  value = true;\n-                  it += 4;\n-               }\n-               else {\n-                  if (c != u_false) [[unlikely]] {\n-                     ctx.error = error_code::expected_true_or_false;\n-                     return;\n-                  }\n-                  value = false;\n-                  it += 5;\n-               }\n+            uint32_t c;\n+            static constexpr uint32_t u_true = 0b01100101'01110101'01110010'01110100;\n+            static constexpr uint32_t u_fals = 0b01110011'01101100'01100001'01100110;\n+            std::memcpy(&c, it, 4);\n+            it += 4;\n+            if (c == u_true) {\n+               value = true;\n+            }\n+            else if (it == end) [[unlikely]] {\n+               ctx.error = error_code::unexpected_end;\n+               return;\n             }\n             else {\n-               std::memcpy(&c, it, 4);\n-               if (c == u_true) {\n-                  value = true;\n-                  it += 4;\n+               if (c == u_fals && (*it == 'e')) [[likely]] {\n+                  value = false;\n+                  ++it;\n                }\n-               else if (size_t(end - it) < 5) [[unlikely]] {\n-                  ctx.error = error_code::unexpected_end;\n+               else [[unlikely]] {\n+                  ctx.error = error_code::expected_true_or_false;\n                   return;\n                }\n-               else {\n-                  std::memcpy(&c, it, 5);\n-                  if (c == u_false) [[likely]] {\n-                     value = false;\n-                     it += 5;\n-                  }\n-                  else [[unlikely]] {\n-                     ctx.error = error_code::expected_true_or_false;\n-                     return;\n-                  }\n-               }\n             }\n          }\n \ndiff --git a/tests/json_test/json_t_test.cpp b/tests/json_test/json_t_test.cpp\nindex e2e69629c6..56d9b637d1 100644\n--- a/tests/json_test/json_t_test.cpp\n+++ b/tests/json_test/json_t_test.cpp\n@@ -537,4 +537,15 @@ suite json_pointer_extraction_tests = [] {\n    };\n };\n \n+suite fuzz_tests = [] {\n+   \"fuzz1\"_test = [] {\n+      std::string_view s = \"[true,true,tur\";\n+      std::vector<char> buffer{s.data(), s.data() + s.size()};\n+      buffer.push_back('\\0');\n+      glz::json_t json{};\n+      auto ec = glz::read_json(json, buffer);\n+      expect(bool(ec));\n+   };\n+};\n+\n int main() { return 0; }\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:425413855-vul",
+      "digest": "sha256:247ce70443a25f9036788e9699e80c152f95234878a97c487e29e43eb86c5efe"
+    },
+    "patched": {
+      "ref": "n132/arvo:425413855-fix",
+      "digest": "sha256:00020d524e398ddb2a5344946fea72ac65019cf3b0055355056f0b6cb1311c70"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/glaze/include/glaze/json/read.hpp:543",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/glaze/include/glaze/json/read.hpp:543"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042495340",
+  "chain": "CWE-416->CWE-125",
+  "project": "assimp",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42495340",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "785cca1bb43f9e6047cb566a910fcd0e3d49951f",
+      "fix_commits": [
+        "785cca1bb43f9e6047cb566a910fcd0e3d49951f"
+      ],
+      "repo": "https://github.com/assimp/assimp"
+    },
+    "patch": "From 785cca1bb43f9e6047cb566a910fcd0e3d49951f Mon Sep 17 00:00:00 2001\nFrom: Jason C <jason.cipriani@gmail.com>\nDate: Wed, 5 May 2021 17:13:10 -0400\nSubject: [PATCH] [amf] Fix crash when file could not be parsed.\n\nFix double free of mXmlParser (deleted but not reset in ParseFile, then deleted again in ~AMFImporter).\n\nShould probably use a smart pointer instead, though.\n\nPartially addresses https://github.com/assimp/assimp/issues/3888.\n---\n code/AssetLib/AMF/AMFImporter.cpp | 1 +\n 1 file changed, 1 insertion(+)\n\ndiff --git a/code/AssetLib/AMF/AMFImporter.cpp b/code/AssetLib/AMF/AMFImporter.cpp\nindex 1a3efba..add1cdb 100644\n--- a/code/AssetLib/AMF/AMFImporter.cpp\n+++ b/code/AssetLib/AMF/AMFImporter.cpp\n@@ -268,6 +268,7 @@ void AMFImporter::ParseFile(const std::string &pFile, IOSystem *pIOHandler) {\n     mXmlParser = new XmlParser();\n     if (!mXmlParser->parse(file.get())) {\n         delete mXmlParser;\n+        mXmlParser = nullptr;\n         throw DeadlyImportError(\"Failed to create XML reader for file\" + pFile + \".\");\n     }\n \n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42495340-vul",
+      "digest": "sha256:71cabea5c4dab028cefbc27075dde9d9361ecbdb39b32d5330a9d8edae520d53"
+    },
+    "patched": {
+      "ref": "n132/arvo:42495340-fix",
+      "digest": "sha256:97e452709b1ff20a5a50364bf4a57e2640de79eac41cba5d67f3066336e52381"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/assimp/include/assimp/XmlParser.h:91",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/assimp/include/assimp/XmlParser.h:91"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

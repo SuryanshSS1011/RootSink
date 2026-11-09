@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042471414",
+  "chain": "CWE-20->CWE-787",
+  "project": "skia",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42471414",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "6d3cb2a81e6fecc86ff1e9cedda719b7a7e9672a",
+      "fix_commits": [
+        "6d3cb2a81e6fecc86ff1e9cedda719b7a7e9672a"
+      ],
+      "repo": "https://skia.googlesource.com/skia.git"
+    },
+    "patch": "diff --git a/fuzz/Fuzz.h b/fuzz/Fuzz.h\nindex bfee1b3..294bbdf 100644\n--- a/fuzz/Fuzz.h\n+++ b/fuzz/Fuzz.h\n@@ -132,7 +132,8 @@\n \n template <typename T, typename Min, typename Max>\n inline void Fuzz::nextEnum(T* value, Min rmin, Max rmax) {\n-    this->nextRange((uint32_t*)value, (uint32_t)rmin, (uint32_t)rmax);\n+    using U = skstd::underlying_type_t<T>;\n+    this->nextRange((U*)value, (U)rmin, (U)rmax);\n }\n \n template <typename T>\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42471414-vul",
+      "digest": "sha256:cbe5b4ba2ac046eb634a3b669dfd94af46f825be5c901ce40474befacf93fafb"
+    },
+    "patched": {
+      "ref": "n132/arvo:42471414-fix",
+      "digest": "sha256:ba1428c57485d770b99b8421188e666c277a41c74a4be83e25e69bd875909e09"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/skia/out/Fuzz_mem_constraints/../../fuzz/Fuzz.h:100",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/skia/out/Fuzz_mem_constraints/../../fuzz/Fuzz.h:100"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

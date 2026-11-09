@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042493686",
+  "chain": "CWE-1285->CWE-125",
+  "project": "md4c",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42493686",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "f436c3029850c138e54a0de055d61db45130409e",
+      "fix_commits": [
+        "f436c3029850c138e54a0de055d61db45130409e"
+      ],
+      "repo": "https://github.com/mity/md4c"
+    },
+    "patch": "diff --git a/src/md4c.c b/src/md4c.c\nindex 97200b2e..48f0e443 100644\n--- a/src/md4c.c\n+++ b/src/md4c.c\n@@ -2318,7 +2318,7 @@ md_is_inline_link_spec(MD_CTX* ctx, const MD_LINE* lines, int n_lines,\n     /* Optional whitespace followed with final ')'. */\n     while(off < lines[line_index].end  &&  ISWHITESPACE(off))\n         off++;\n-    if(off >= lines[line_index].end  &&  ISNEWLINE(off)) {\n+    if (off >= lines[line_index].end  &&  (off >= ctx->size || ISNEWLINE(off))) {\n         line_index++;\n         if(line_index >= n_lines)\n             return FALSE;\n@@ -2490,6 +2490,7 @@ md_mark_chain(MD_CTX* ctx, int mark_index)\n         case _T('*'):   return md_asterisk_chain(ctx, mark->flags);\n         case _T('_'):   return &UNDERSCORE_OPENERS;\n         case _T('~'):   return (mark->end - mark->beg == 1) ? &TILDE_OPENERS_1 : &TILDE_OPENERS_2;\n+        case _T('!'):   MD_FALLTHROUGH();\n         case _T('['):   return &BRACKET_OPENERS;\n         case _T('|'):   return &TABLECELLBOUNDARIES;\n         default:        return NULL;\n@@ -2630,8 +2631,11 @@ md_rollback(MD_CTX* ctx, int opener_index, int closer_index, int how)\n     for(i = OPENERS_CHAIN_FIRST; i < OPENERS_CHAIN_LAST+1; i++) {\n         MD_MARKCHAIN* chain = &ctx->mark_chains[i];\n \n-        while(chain->tail >= opener_index)\n+        while(chain->tail >= opener_index) {\n+            int same = chain->tail == opener_index;\n             chain->tail = ctx->marks[chain->tail].prev;\n+            if (same) break;\n+        }\n \n         if(chain->tail >= 0)\n             ctx->marks[chain->tail].next = -1;\n@@ -3906,7 +3910,9 @@ md_analyze_permissive_url_autolink(MD_CTX* ctx, int mark_index)\n \n     /* Ok. Lets call it an auto-link. Adapt opener and create closer to zero\n      * length so all the contents becomes the link text. */\n-    MD_ASSERT(closer->ch == 'D');\n+    MD_ASSERT(closer->ch == 'D' ||\n+              (ctx->parser.flags & MD_FLAG_PERMISSIVEWWWAUTOLINKS &&\n+               (closer->ch == '.' || closer->ch == ':' || closer->ch == '@')));\n     opener->end = opener->beg;\n     closer->ch = opener->ch;\n     closer->beg = off;\n@@ -3928,7 +3934,7 @@ md_analyze_permissive_email_autolink(MD_CTX* ctx, int mark_index)\n     OFF end = opener->end;\n     int dot_count = 0;\n \n-    MD_ASSERT(CH(beg) == _T('@'));\n+    MD_ASSERT(opener->ch == _T('@'));\n \n     /* Scan for name before '@'. */\n     while(beg > 0  &&  (ISALNUM(beg-1) || ISANYOF(beg-1, _T(\".-_+\"))))\n@@ -3953,7 +3959,7 @@ md_analyze_permissive_email_autolink(MD_CTX* ctx, int mark_index)\n      * length so all the contents becomes the link text. */\n     closer_index = mark_index + 1;\n     closer = &ctx->marks[closer_index];\n-    MD_ASSERT(closer->ch == 'D');\n+    if (closer->ch != 'D') return;\n \n     opener->beg = beg;\n     opener->end = beg;\n@@ -4260,7 +4266,7 @@ md_process_inlines(MD_CTX* ctx, const MD_LINE* lines, int n_lines)\n                     dest_mark = opener+1;\n                     MD_ASSERT(dest_mark->ch == 'D');\n                     title_mark = opener+2;\n-                    MD_ASSERT(title_mark->ch == 'D');\n+                    if (title_mark->ch != 'D') break;\n \n                     MD_CHECK(md_enter_leave_span_a(ctx, (mark->ch != ']'),\n                                 (opener->ch == '!' ? MD_SPAN_IMG : MD_SPAN_A),\n@@ -5468,20 +5474,16 @@ md_is_html_block_end_condition(MD_CTX* ctx, OFF beg, OFF* p_end)\n \n             while(off < ctx->size  &&  !ISNEWLINE(off)) {\n                 if(CH(off) == _T('<')) {\n-                    if(md_ascii_case_eq(STR(off), _T(\"</script>\"), 9)) {\n-                        *p_end = off + 9;\n-                        return TRUE;\n-                    }\n-\n-                    if(md_ascii_case_eq(STR(off), _T(\"</style>\"), 8)) {\n-                        *p_end = off + 8;\n-                        return TRUE;\n-                    }\n-\n-                    if(md_ascii_case_eq(STR(off), _T(\"</pre>\"), 6)) {\n-                        *p_end = off + 6;\n-                        return TRUE;\n+                  #define FIND_TAG_END(string, length) \\\n+                    if(off + length <= ctx->size && \\\n+                       md_ascii_case_eq(STR(off), _T(string), length)) { \\\n+                        *p_end = off + length; \\\n+                        return TRUE; \\\n                     }\n+                  FIND_TAG_END(\"</script>\", 9)\n+                  FIND_TAG_END(\"</style>\", 8)\n+                  FIND_TAG_END(\"</pre>\", 6)\n+                  #undef FIND_TAG_END\n                 }\n \n                 off++;\n@@ -5505,7 +5507,7 @@ md_is_html_block_end_condition(MD_CTX* ctx, OFF beg, OFF* p_end)\n         case 6:     /* Pass through */\n         case 7:\n             *p_end = beg;\n-            return (ISNEWLINE(beg) ? ctx->html_block_type : FALSE);\n+            return (beg >= ctx->size || ISNEWLINE(beg) ? ctx->html_block_type : FALSE);\n \n         default:\n             MD_UNREACHABLE();\n@@ -6100,8 +6102,9 @@ md_analyze_line(MD_CTX* ctx, OFF beg, OFF* p_end,\n                 task_container->is_task = TRUE;\n                 task_container->task_mark_off = tmp + 1;\n                 off = tmp + 3;\n-                while(ISWHITESPACE(off))\n+                while(off < ctx->size && ISWHITESPACE(off))\n                     off++;\n+                if (off == ctx->size) break;\n                 line->beg = off;\n             }\n         }\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42493686-vul",
+      "digest": "sha256:1715c535d93df19a72b256aa33fc863ab18575a87b93313b3d8e66f137b29b20"
+    },
+    "patched": {
+      "ref": "n132/arvo:42493686-fix",
+      "digest": "sha256:80e212971489e676091c07345ea19400f8bfef585ff504bffc758c6d8e9f4a96"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/md4c/src/md4c.c:2321",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/md4c/src/md4c.c:2321"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

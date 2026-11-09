@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042479836",
+  "chain": "CWE-1284->CWE-125",
+  "project": "opensc",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42479836",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "ef3e2239173cd8ab9714171f122aed24eb93b577",
+      "fix_commits": [
+        "ef3e2239173cd8ab9714171f122aed24eb93b577"
+      ],
+      "repo": "https://github.com/OpenSC/OpenSC"
+    },
+    "patch": "diff --git a/src/libopensc/card-coolkey.c b/src/libopensc/card-coolkey.c\nindex 0ba7f7d70f..53da0abce6 100644\n--- a/src/libopensc/card-coolkey.c\n+++ b/src/libopensc/card-coolkey.c\n@@ -1052,30 +1052,36 @@ coolkey_get_life_cycle(sc_card_t *card, coolkey_life_cycle_t *life_cycle)\n {\n \tcoolkey_status_t status;\n \tu8 *receive_buf;\n-\tsize_t len;\n-\tint r;\n+\tsize_t receive_len;\n+\tint len;\n \n-\tlen = sizeof(*life_cycle);\n+\treceive_len = sizeof(*life_cycle);\n \treceive_buf = (u8 *)life_cycle;\n-\tr = coolkey_apdu_io(card, COOLKEY_CLASS, COOLKEY_INS_GET_LIFE_CYCLE, 0, 0,\n-\t\t\tNULL, 0, &receive_buf, &len, NULL, 0);\n-\tif (r == sizeof(*life_cycle)) {\n+\tlen = coolkey_apdu_io(card, COOLKEY_CLASS, COOLKEY_INS_GET_LIFE_CYCLE, 0, 0,\n+\t\t\tNULL, 0, &receive_buf, &receive_len, NULL, 0);\n+\tif (len == sizeof(*life_cycle)) {\n \t\treturn SC_SUCCESS;\n \t}\n \n-\tlen = 1;\n+\treceive_len = 1;\n \treceive_buf = &life_cycle->life_cycle;\n-\tr = coolkey_apdu_io(card, COOLKEY_CLASS, COOLKEY_INS_GET_LIFE_CYCLE, 0, 0,\n-\t\t\tNULL, 0, &receive_buf, &len, NULL, 0);\n-\tif (r < 0) {\n-\t\treturn r;\n+\tlen = coolkey_apdu_io(card, COOLKEY_CLASS, COOLKEY_INS_GET_LIFE_CYCLE, 0, 0,\n+\t\t\tNULL, 0, &receive_buf, &receive_len, NULL, 0);\n+\tif (len < 0) { /* Error from the trasmittion */\n+\t\treturn len;\n \t}\n-\tlen = sizeof(status);\n+\tif (len != 1) { /* The returned data is invalid */\n+\t\treturn SC_ERROR_INTERNAL;\n+\t}\n+\treceive_len = sizeof(status);\n \treceive_buf = (u8 *)&status;\n-\tr = coolkey_apdu_io(card, COOLKEY_CLASS, COOLKEY_INS_GET_STATUS, 0, 0,\n-\t\t\tNULL, 0, &receive_buf, &len, NULL, 0);\n-\tif (r < 0) {\n-\t\treturn r;\n+\tlen = coolkey_apdu_io(card, COOLKEY_CLASS, COOLKEY_INS_GET_STATUS, 0, 0,\n+\t\t\tNULL, 0, &receive_buf, &receive_len, NULL, 0);\n+\tif (len < 0) { /* Error from the trasmittion */\n+\t\treturn len;\n+\t}\n+\tif (len != sizeof(status)) { /* The returned data is invalid */\n+\t\treturn SC_ERROR_INTERNAL;\n \t}\n \tlife_cycle->protocol_version_major = status.protocol_version_major;\n \tlife_cycle->protocol_version_minor = status.protocol_version_minor;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42479836-vul",
+      "digest": "sha256:26da73df23355606924fa0bef974d8a19b3c2758d1ff5341c1374acce826f0e9"
+    },
+    "patched": {
+      "ref": "n132/arvo:42479836-fix",
+      "digest": "sha256:8666a73e2e7dc4a37483d13541da7bef39b4bcc5b0fb622e0c064a820bdc47f3"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/opensc/src/libopensc/sc.c:218",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/opensc/src/libopensc/sc.c:218"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

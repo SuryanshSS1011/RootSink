@@ -1,0 +1,60 @@
+BUILD_EXIT=0
++ LIBS=("$WORK/src/lib/OpenEXRUtil/libOpenEXRUtil.a" "$WORK/src/lib/OpenEXR/libOpenEXR.a" "$WORK/src/lib/OpenEXRCore/libOpenEXRCore.a" "$WORK/src/lib/IlmThread/libIlmThread.a" "$WORK/src/lib/Iex/libIex.a" "$WORK/_deps/imath-build/src/Imath/libImath*.a")
++ for fuzzer in $SRC/openexr/src/test/OpenEXRFuzzTest/oss-fuzz/*_fuzzer.cc
+++ basename -s .cc /src/openexr/src/test/OpenEXRFuzzTest/oss-fuzz/openexr_exrcheck_fuzzer.cc
++ fuzzer_basename=openexr_exrcheck_fuzzer
++ clang++ -O1 -fno-omit-frame-pointer -gline-tables-only -DFUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION -fsanitize=array-bounds,bool,builtin,enum,float-divide-by-zero,function,integer-divide-by-zero,null,object-size,return,returns-nonnull-attribute,shift,signed-integer-overflow,unsigned-integer-overflow,unreachable,vla-bound,vptr -fno-sanitize-recover=array-bounds,bool,builtin,enum,float-divide-by-zero,function,integer-divide-by-zero,null,object-size,return,returns-nonnull-attribute,shift,signed-integer-overflow,unreachable,vla-bound,vptr -fsanitize=fuzzer-no-link -stdlib=libc++ -std=c++11 -pthread -I /src -I /src/openexr/src/lib/OpenEXRCore -I /src/openexr/src/lib/OpenEXR -I /src/openexr/src/lib/OpenEXRUtil -I /work/cmake /src/openexr/src/test/OpenEXRFuzzTest/oss-fuzz/openexr_exrcheck_fuzzer.cc -fsanitize=fuzzer /work/src/lib/OpenEXRUtil/libOpenEXRUtil.a /work/src/lib/OpenEXR/libOpenEXR.a /work/src/lib/OpenEXRCore/libOpenEXRCore.a /work/src/lib/IlmThread/libIlmThread.a /work/src/lib/Iex/libIex.a /work/_deps/imath-build/src/Imath/libImath-3_2.a -lz -o /out/openexr_exrcheck_fuzzer
+=== REPLAY ===
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 283001611
+INFO: Loaded 1 modules   (49585 inline 8-bit counters): 49585 [0xb52dd8, 0xb5ef89), 
+INFO: Loaded 1 PC tables (49585 PCs): 49585 [0xb5ef90,0xc20aa0), 
+/out/openexr_exrcheck_fuzzer: Running 1 inputs 1 time(s) each.
+Running: /tmp/poc
+/src/openexr/src/lib/OpenEXRUtil/ImfCheckFile.cpp:1558:21: runtime error: unsigned integer overflow: 18446744073709551615 + 20 cannot be represented in type 'unsigned long'
+    #0 0x4b8bd3 in Imf_3_1::(anonymous namespace)::memstream_read(_priv_exr_context_t const*, void*, void*, unsigned long, unsigned long, int (*)(_priv_exr_context_t const*, int, char const*, ...)) /src/openexr/src/lib/OpenEXRUtil/ImfCheckFile.cpp:1558:21
+    #1 0x66fd71 in dispatch_read /src/openexr/src/lib/OpenEXRCore/context.c:49:16
+    #2 0x69d072 in extract_chunk_leader /src/openexr/src/lib/OpenEXRCore/chunk.c:290:10
+    #3 0x69cd08 in extract_chunk_size /src/openexr/src/lib/OpenEXRCore/chunk.c:386:12
+    #4 0x69cd08 in reconstruct_chunk_table /src/openexr/src/lib/OpenEXRCore/chunk.c:491:14
+    #5 0x697243 in extract_chunk_table /src/openexr/src/lib/OpenEXRCore/chunk.c:605:18
+    #6 0x697cdf in exr_read_tile_chunk_info /src/openexr/src/lib/OpenEXRCore/chunk.c:1049:10
+    #7 0x4b7ab7 in Imf_3_1::(anonymous namespace)::readCoreTiledPart(_priv_exr_context_t*, int, bool, bool) /src/openexr/src/lib/OpenEXRUtil/ImfCheckFile.cpp:1358:26
+    #8 0x4b6eb2 in Imf_3_1::(anonymous namespace)::checkCoreFile(_priv_exr_context_t*, bool, bool) /src/openexr/src/lib/OpenEXRUtil/ImfCheckFile.cpp:1489:17
+    #9 0x4b5b23 in runCoreChecks /src/openexr/src/lib/OpenEXRUtil/ImfCheckFile.cpp:1599:15
+    #10 0x4b5b23 in Imf_3_1::checkOpenEXRFile(char const*, unsigned long, bool, bool, bool) /src/openexr/src/lib/OpenEXRUtil/ImfCheckFile.cpp:1652:17
+    #11 0x4b4a28 in LLVMFuzzerTestOneInput /src/openexr/src/test/OpenEXRFuzzTest/oss-fuzz/openexr_exrcheck_fuzzer.cc:17:5
+    #12 0x43f552 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:611:15
+    #13 0x42b102 in fuzzer::RunOneTest(fuzzer::Fuzzer*, char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:324:6
+    #14 0x43096c in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:860:9
+    #15 0x459302 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #16 0x7ff0828b90b2 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x240b2)
+    #17 0x40984d in _start (/out/openexr_exrcheck_fuzzer+0x40984d)
+
+SUMMARY: UndefinedBehaviorSanitizer: undefined-behavior /src/openexr/src/lib/OpenEXRUtil/ImfCheckFile.cpp:1558:21 in 
+/src/openexr/src/lib/OpenEXRCore/context.c:60:28: runtime error: unsigned integer overflow: 18446744073709551615 + 20 cannot be represented in type 'unsigned long'
+    #0 0x66fed4 in dispatch_read /src/openexr/src/lib/OpenEXRCore/context.c:60:28
+    #1 0x69d072 in extract_chunk_leader /src/openexr/src/lib/OpenEXRCore/chunk.c:290:10
+    #2 0x69cd08 in extract_chunk_size /src/openexr/src/lib/OpenEXRCore/chunk.c:386:12
+    #3 0x69cd08 in reconstruct_chunk_table /src/openexr/src/lib/OpenEXRCore/chunk.c:491:14
+    #4 0x697243 in extract_chunk_table /src/openexr/src/lib/OpenEXRCore/chunk.c:605:18
+    #5 0x697cdf in exr_read_tile_chunk_info /src/openexr/src/lib/OpenEXRCore/chunk.c:1049:10
+    #6 0x4b7ab7 in Imf_3_1::(anonymous namespace)::readCoreTiledPart(_priv_exr_context_t*, int, bool, bool) /src/openexr/src/lib/OpenEXRUtil/ImfCheckFile.cpp:1358:26
+    #7 0x4b6eb2 in Imf_3_1::(anonymous namespace)::checkCoreFile(_priv_exr_context_t*, bool, bool) /src/openexr/src/lib/OpenEXRUtil/ImfCheckFile.cpp:1489:17
+    #8 0x4b5b23 in runCoreChecks /src/openexr/src/lib/OpenEXRUtil/ImfCheckFile.cpp:1599:15
+    #9 0x4b5b23 in Imf_3_1::checkOpenEXRFile(char const*, unsigned long, bool, bool, bool) /src/openexr/src/lib/OpenEXRUtil/ImfCheckFile.cpp:1652:17
+    #10 0x4b4a28 in LLVMFuzzerTestOneInput /src/openexr/src/test/OpenEXRFuzzTest/oss-fuzz/openexr_exrcheck_fuzzer.cc:17:5
+    #11 0x43f552 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:611:15
+    #12 0x42b102 in fuzzer::RunOneTest(fuzzer::Fuzzer*, char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:324:6
+    #13 0x43096c in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:860:9
+    #14 0x459302 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #15 0x7ff0828b90b2 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x240b2)
+    #16 0x40984d in _start (/out/openexr_exrcheck_fuzzer+0x40984d)
+
+SUMMARY: UndefinedBehaviorSanitizer: undefined-behavior /src/openexr/src/lib/OpenEXRCore/context.c:60:28 in 
+Executed /tmp/poc in 32 ms
+***
+*** NOTE: fuzzing was not performed, you have only
+***       executed the target code on a fixed set of inputs.
+***
+DOCKER_RUN_RC=0

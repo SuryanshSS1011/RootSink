@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042490332",
+  "chain": "CWE-1285->CWE-125",
+  "project": "openthread",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42490332",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "02f7dbb42be7f75355436ec43bc82d0b2b4caad6",
+      "fix_commits": [
+        "02f7dbb42be7f75355436ec43bc82d0b2b4caad6"
+      ],
+      "repo": "https://github.com/openthread/openthread"
+    },
+    "patch": "diff --git a/src/core/meshcop/meshcop_tlvs.cpp b/src/core/meshcop/meshcop_tlvs.cpp\nindex 61b803a6ea1..839fe1ce514 100644\n--- a/src/core/meshcop/meshcop_tlvs.cpp\n+++ b/src/core/meshcop/meshcop_tlvs.cpp\n@@ -189,7 +189,7 @@ bool ChannelMaskBaseTlv::IsValid(void) const\n \n     VerifyOrExit(entry != nullptr);\n \n-    while (reinterpret_cast<const uint8_t *>(entry) < end)\n+    while (reinterpret_cast<const uint8_t *>(entry) + sizeof(ChannelMaskEntryBase) <= end)\n     {\n         entry = entry->GetNext();\n         VerifyOrExit(reinterpret_cast<const uint8_t *>(entry) <= end);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42490332-vul",
+      "digest": "sha256:97b357ca868ce8b6a90c4c78f8bfe688b0080b20b312cfbc52285aa19645717f"
+    },
+    "patched": {
+      "ref": "n132/arvo:42490332-fix",
+      "digest": "sha256:8becd6588f20f0d4e85b277ca2d2fae62d0510e445db5caf79d826890a1dca84"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/openthread/src/core/./meshcop/meshcop_tlvs.hpp:1298",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/openthread/src/core/./meshcop/meshcop_tlvs.hpp:1298"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

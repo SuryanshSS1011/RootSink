@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-952368936",
+  "chain": "CWE-129->CWE-119",
+  "project": "wireshark",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42525434",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/wireshark/wireshark/commit/433464a2a5cd86c5a6dddca186dac57e3af8c075",
+      "fix_commits": [
+        "433464a2a5cd86c5a6dddca186dac57e3af8c075"
+      ],
+      "repo": "https://github.com/wireshark/wireshark"
+    },
+    "patch": "diff --git a/epan/dissectors/asn1/nbap/nbap.cnf b/epan/dissectors/asn1/nbap/nbap.cnf\nindex 6556794ffcb..75ef91fe12b 100644\n--- a/epan/dissectors/asn1/nbap/nbap.cnf\n+++ b/epan/dissectors/asn1/nbap/nbap.cnf\n@@ -1362,7 +1362,7 @@ nbap_dch_chnl_info = nbap_private_data->nbap_dch_chnl_info;\n     if(nbap_private_data->num_items>0){\n         num_items = nbap_private_data->num_items;\n         dch_id = nbap_private_data->dch_id;\n-        if (num_items > 0 && dch_id != 0xffffffff) {\n+        if (num_items > 0 && num_items < MAX_FP_CHANS + 1 && dch_id != 0xffffffff) {\n             common_physical_channel_id = nbap_private_data->common_physical_channel_id;\n             common_transport_channel_id = nbap_private_data->common_transport_channel_id;\n             switch(nbap_private_data->transport_format_set_type){\n@@ -1407,7 +1407,7 @@ nbap_dch_chnl_info = nbap_private_data->nbap_dch_chnl_info;\n     if(nbap_private_data->num_items>0){\n         num_items = nbap_private_data->num_items;\n         dch_id = nbap_private_data->dch_id;\n-        if (num_items > 0 && dch_id != 0xffffffff) {\n+        if (num_items > 0 && num_items < MAX_FP_CHANS + 1 && dch_id != 0xffffffff) {\n             common_physical_channel_id = nbap_private_data->common_physical_channel_id;\n             common_transport_channel_id = nbap_private_data->common_transport_channel_id;\n             switch(nbap_private_data->transport_format_set_type){\n@@ -1928,7 +1928,7 @@ nbap_edch_channel_info[nbap_private_data->e_dch_macdflow_id].no_ddi_entries = nb\n       return offset;\n   }\n   num_items = nbap_private_data->num_items;\n-  if(num_items>0)\n+  if(num_items > 0 && num_items < MAX_EDCH_DDIS + 1)\n       nbap_edch_channel_info[nbap_private_data->e_dch_macdflow_id].edch_ddi[num_items-1] = nbap_private_data->e_dch_ddi_value;\n \n #.FN_BODY MACdPDU-Size VAL_PTR = &mac_d_pdu_size\n@@ -1945,7 +1945,7 @@ nbap_edch_channel_info = nbap_private_data->nbap_edch_channel_info;\n         return offset;\n     }\n     num_items = nbap_private_data->num_items;\n-    if(num_items>0)\n+    if(num_items > 0 && num_items < MAX_EDCH_DDIS + 1)\n         nbap_edch_channel_info[nbap_private_data->e_dch_macdflow_id].edch_macd_pdu_size[num_items-1] = nbap_private_data->mac_d_pdu_size;\n \n #.FN_BODY LogicalChannelID VAL_PTR = &logical_channel_id\n@@ -1959,7 +1959,7 @@ nbap_edch_channel_info = nbap_private_data->nbap_edch_channel_info;\n \n     nbap_private_data->logical_channel_id = logical_channel_id;\n     num_items = nbap_private_data->num_items;\n-    if(num_items>0)\n+    if(num_items > 0 && num_items < MAX_EDCH_DDIS + 1)\n         nbap_edch_channel_info[nbap_private_data->e_dch_macdflow_id].lchId[num_items-1] = nbap_private_data->logical_channel_id;\n \n #.FN_BODY RLC-Mode VAL_PTR = &rlc_mode\ndiff --git a/epan/dissectors/packet-nbap.c b/epan/dissectors/packet-nbap.c\nindex 3cac8899863..ae7db54cf01 100644\n--- a/epan/dissectors/packet-nbap.c\n+++ b/epan/dissectors/packet-nbap.c\n@@ -11805,7 +11805,7 @@ dissect_nbap_LogicalChannelID(tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *act\n \n     nbap_private_data->logical_channel_id = logical_channel_id;\n     num_items = nbap_private_data->num_items;\n-    if(num_items>0)\n+    if(num_items > 0 && num_items < MAX_EDCH_DDIS + 1)\n         nbap_edch_channel_info[nbap_private_data->e_dch_macdflow_id].lchId[num_items-1] = nbap_private_data->logical_channel_id;\n \n \n@@ -12311,7 +12311,7 @@ nbap_edch_channel_info = nbap_private_data->nbap_edch_channel_info;\n         return offset;\n     }\n     num_items = nbap_private_data->num_items;\n-    if(num_items>0)\n+    if(num_items > 0 && num_items < MAX_EDCH_DDIS + 1)\n         nbap_edch_channel_info[nbap_private_data->e_dch_macdflow_id].edch_macd_pdu_size[num_items-1] = nbap_private_data->mac_d_pdu_size;\n \n \n@@ -15043,7 +15043,7 @@ nbap_dch_chnl_info = nbap_private_data->nbap_dch_chnl_info;\n     if(nbap_private_data->num_items>0){\n         num_items = nbap_private_data->num_items;\n         dch_id = nbap_private_data->dch_id;\n-        if (num_items > 0 && dch_id != 0xffffffff) {\n+        if (num_items > 0 && num_items < MAX_FP_CHANS + 1 && dch_id != 0xffffffff) {\n             common_physical_channel_id = nbap_private_data->common_physical_channel_id;\n             common_transport_channel_id = nbap_private_data->common_transport_channel_id;\n             switch(nbap_private_data->transport_format_set_type){\n@@ -15099,7 +15099,7 @@ nbap_dch_chnl_info = nbap_private_data->nbap_dch_chnl_info;\n     if(nbap_private_data->num_items>0){\n         num_items = nbap_private_data->num_items;\n         dch_id = nbap_private_data->dch_id;\n-        if (num_items > 0 && dch_id != 0xffffffff) {\n+        if (num_items > 0 && num_items < MAX_FP_CHANS + 1 && dch_id != 0xffffffff) {\n             common_physical_channel_id = nbap_private_data->common_physical_channel_id;\n             common_transport_channel_id = nbap_private_data->common_transport_channel_id;\n             switch(nbap_private_data->transport_format_set_type){\n@@ -18313,7 +18313,7 @@ dissect_nbap_E_DCH_DDI_Value(tvbuff_t *tvb _U_, int offset _U_, asn1_ctx_t *actx\n       return offset;\n   }\n   num_items = nbap_private_data->num_items;\n-  if(num_items>0)\n+  if(num_items > 0 && num_items < MAX_EDCH_DDIS + 1)\n       nbap_edch_channel_info[nbap_private_data->e_dch_macdflow_id].edch_ddi[num_items-1] = nbap_private_data->e_dch_ddi_value;\n \n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42525434-vul",
+      "digest": "sha256:794477ff0967269b34b9ab4e7d1a2b2139dc4a5ffb73a7dad16aca64c2ab0177"
+    },
+    "patched": {
+      "ref": "n132/arvo:42525434-fix",
+      "digest": "sha256:4b61c776633649dd5398d007db9785d8218fe9381de426bb8b4b2bfc88a72ebe"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "crash_site": "/src/wireshark/epan/dissectors/./asn1/nbap/nbap.cnf:1795",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 129,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 119,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "site": "/src/wireshark/epan/dissectors/./asn1/nbap/nbap.cnf:1795"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042540519",
+  "chain": "CWE-456->CWE-457",
+  "project": "imagemagick",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42540519",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "306762972e7c7dd2158bf00d39ed2ebd87c49e65",
+      "fix_commits": [
+        "306762972e7c7dd2158bf00d39ed2ebd87c49e65"
+      ],
+      "repo": "https://github.com/imagemagick/imagemagick"
+    },
+    "patch": "From 306762972e7c7dd2158bf00d39ed2ebd87c49e65 Mon Sep 17 00:00:00 2001\nFrom: Dirk Lemstra <dirk@git.imagemagick.org>\nDate: Tue, 26 Jun 2018 22:50:24 +0200\nSubject: [PATCH] Use CXXFLAGS instead of CFLAGS\n\n---\n Magick++/fuzz/build.sh | 5 +++--\n 1 file changed, 3 insertions(+), 2 deletions(-)\n\ndiff --git a/Magick++/fuzz/build.sh b/Magick++/fuzz/build.sh\nindex 16acd2a..c7967a5 100644\n--- a/Magick++/fuzz/build.sh\n+++ b/Magick++/fuzz/build.sh\n@@ -7,7 +7,7 @@ make -j$(nproc) CFLAGS=\"$CFLAGS -fPIC\"\n make install\n popd\n \n-# build xz\n+# Build xz\n pushd \"$SRC/xz\"\n ./autogen.sh\n ./configure --disable-xz --disable-xzdec --disable-lzmadec --disable-lzmainfo --disable-lzma-links --disable-scripts --disable-doc --disable-shared --with-pic=yes --prefix=\"$WORK\"\n@@ -15,6 +15,7 @@ make -j$(nproc)\n make install\n popd\n \n+# Build png\n pushd \"$SRC/libpng\"\n cmake . -DCMAKE_INSTALL_PREFIX=$WORK -DPNG_SHARED=off\n make -j$(nproc)\n@@ -47,7 +48,7 @@ popd\n # build libraw\n pushd \"$SRC/libraw\"\n autoreconf -fiv\n-./configure --prefix=\"$WORK\" --disable-shared --with-pic=yes --disable-examples PKG_CONFIG_PATH=\"$WORK/lib/pkgconfig\" CFLAGS=\"$CFLAGS -DLIBRAW_USE_CALLOC_INSTEAD_OF_MALLOC=on\"\n+./configure --prefix=\"$WORK\" --disable-shared --with-pic=yes --disable-examples PKG_CONFIG_PATH=\"$WORK/lib/pkgconfig\" CXXFLAGS=\"$CXXFLAGS -DLIBRAW_USE_CALLOC_INSTEAD_OF_MALLOC=on\"\n make -j$(nproc)\n make install\n popd\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42540519-vul",
+      "digest": "sha256:934cec083573453c483fd02107b7417f09bb379a395c36ddff1b1f5a7437ba76"
+    },
+    "patched": {
+      "ref": "n132/arvo:42540519-fix",
+      "digest": "sha256:018dfd57c72ecd9779f211c0ded8c53a5f73d77c360af52b438c60c97381ee65"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/libraw/internal/dcraw_common.cpp:6206",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/libraw/internal/dcraw_common.cpp:6206"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042487978",
+  "chain": "CWE-416->CWE-787",
+  "project": "usrsctp",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42487978",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "f4925bd5ebb2db38263eef0ec816bf393293cf9c",
+      "fix_commits": [
+        "f4925bd5ebb2db38263eef0ec816bf393293cf9c"
+      ],
+      "repo": "https://github.com/sctplab/usrsctp"
+    },
+    "patch": "diff --git a/usrsctplib/netinet/sctp.h b/usrsctplib/netinet/sctp.h\nindex 45ae1be86..f0dc35ad5 100755\n--- a/usrsctplib/netinet/sctp.h\n+++ b/usrsctplib/netinet/sctp.h\n@@ -34,7 +34,7 @@\n \n #if defined(__FreeBSD__) && !defined(__Userspace__)\n #include <sys/cdefs.h>\n-__FBSDID(\"$FreeBSD: head/sys/netinet/sctp.h 365071 2020-09-01 21:19:14Z mjg $\");\n+__FBSDID(\"$FreeBSD: head/sys/netinet/sctp.h 366750 2020-10-16 10:44:48Z tuexen $\");\n #endif\n \n #ifndef _NETINET_SCTP_H_\n@@ -626,6 +626,7 @@ struct sctp_error_auth_invalid_hmac {\n  */\n #define SCTP_MAX_SACK_DELAY 500 /* per RFC4960 */\n #define SCTP_MAX_HB_INTERVAL 14400000 /* 4 hours in ms */\n+#define SCTP_MIN_COOKIE_LIFE     1000 /* 1 second in ms */\n #define SCTP_MAX_COOKIE_LIFE  3600000 /* 1 hour in ms */\n \n /* Types of logging/KTR tracing  that can be enabled via the\ndiff --git a/usrsctplib/netinet/sctp_input.c b/usrsctplib/netinet/sctp_input.c\nindex 582ad0b7d..90e344993 100755\n--- a/usrsctplib/netinet/sctp_input.c\n+++ b/usrsctplib/netinet/sctp_input.c\n@@ -34,7 +34,7 @@\n \n #if defined(__FreeBSD__) && !defined(__Userspace__)\n #include <sys/cdefs.h>\n-__FBSDID(\"$FreeBSD: head/sys/netinet/sctp_input.c 366489 2020-10-06 14:26:05Z tuexen $\");\n+__FBSDID(\"$FreeBSD: head/sys/netinet/sctp_input.c 366750 2020-10-16 10:44:48Z tuexen $\");\n #endif\n \n #include <netinet/sctp_os.h>\n@@ -1294,13 +1294,10 @@ sctp_handle_error(struct sctp_chunkhdr *ch,\n \t\t\t\tstruct sctp_error_stale_cookie *stale_cookie;\n \n \t\t\t\tstale_cookie = (struct sctp_error_stale_cookie *)cause;\n-\t\t\t\tasoc->cookie_preserve_req = ntohl(stale_cookie->stale_time);\n-\t\t\t\t/* Double it to be more robust on RTX */\n-\t\t\t\tif (asoc->cookie_preserve_req <= UINT32_MAX / 2) {\n-\t\t\t\t\tasoc->cookie_preserve_req *= 2;\n-\t\t\t\t} else {\n-\t\t\t\t\tasoc->cookie_preserve_req = UINT32_MAX;\n-\t\t\t\t}\n+\t\t\t\t/* stable_time is in usec, convert to msec. */\n+\t\t\t\tasoc->cookie_preserve_req = ntohl(stale_cookie->stale_time) / 1000;\n+\t\t\t\t/* Double it to be more robust on RTX. */\n+\t\t\t\tasoc->cookie_preserve_req *= 2;\n \t\t\t\tasoc->stale_cookie_count++;\n \t\t\t\tif (asoc->stale_cookie_count >\n \t\t\t\t    asoc->max_init_times) {\n@@ -2568,7 +2565,7 @@ sctp_handle_cookie_echo(struct mbuf *m, int iphlen, int offset,\n \tunsigned int sig_offset, cookie_offset;\n \tunsigned int cookie_len;\n \tstruct timeval now;\n-\tstruct timeval time_expires;\n+\tstruct timeval time_entered, time_expires;\n \tint notification = 0;\n \tstruct sctp_nets *netl;\n \tint had_a_existing_tcb = 0;\n@@ -2720,13 +2717,34 @@ sctp_handle_cookie_echo(struct mbuf *m, int iphlen, int offset,\n \t\treturn (NULL);\n \t}\n \n+\tif (sctp_ticks_to_msecs(cookie->cookie_life) > SCTP_MAX_COOKIE_LIFE) {\n+\t\tSCTPDBG(SCTP_DEBUG_INPUT2, \"handle_cookie_echo: Invalid cookie lifetime\\n\");\n+\t\treturn (NULL);\n+\t}\n+\ttime_entered.tv_sec = cookie->time_entered.tv_sec;\n+\ttime_entered.tv_usec = cookie->time_entered.tv_usec;\n+\tif ((time_entered.tv_sec < 0) ||\n+\t    (time_entered.tv_usec < 0) ||\n+\t    (time_entered.tv_usec >= 1000000)) {\n+\t\t/* Invalid time stamp. Cookie must have been modified. */\n+\t\tSCTPDBG(SCTP_DEBUG_INPUT2, \"handle_cookie_echo: Invalid time stamp\\n\");\n+\t\treturn (NULL);\n+\t}\n+\t(void)SCTP_GETTIME_TIMEVAL(&now);\n+#if !(defined(__FreeBSD__) && !defined(__Userspace__))\n+\tif (timercmp(&now, &time_entered, <)) {\n+#else\n+\tif (timevalcmp(&now, &time_entered, <)) {\n+#endif\n+\t\tSCTPDBG(SCTP_DEBUG_INPUT2, \"handle_cookie_echo: cookie generated in the future!\\n\");\n+\t\treturn (NULL);\n+\t}\n \t/*\n-\t * check the cookie timestamps to be sure it's not stale\n+\t * Check the cookie timestamps to be sure it's not stale.\n+\t * cookie_life is in ticks, so we convert to seconds.\n \t */\n-\t(void)SCTP_GETTIME_TIMEVAL(&now);\n-\t/* Expire time is in Ticks, so we convert to seconds */\n-\ttime_expires.tv_sec = cookie->time_entered.tv_sec + sctp_ticks_to_secs(cookie->cookie_life);\n-\ttime_expires.tv_usec = cookie->time_entered.tv_usec;\n+\ttime_expires.tv_sec = time_entered.tv_sec + sctp_ticks_to_secs(cookie->cookie_life);\n+\ttime_expires.tv_usec = time_entered.tv_usec;\n #if !(defined(__FreeBSD__) && !defined(__Userspace__))\n \tif (timercmp(&now, &time_expires, >))\n #else\n@@ -2749,8 +2767,7 @@ sctp_handle_cookie_echo(struct mbuf *m, int iphlen, int offset,\n \t\tSCTP_BUF_LEN(op_err) = sizeof(struct sctp_error_stale_cookie);\n \t\tcause = mtod(op_err, struct sctp_error_stale_cookie *);\n \t\tcause->cause.code = htons(SCTP_CAUSE_STALE_COOKIE);\n-\t\tcause->cause.length = htons((sizeof(struct sctp_paramhdr) +\n-\t\t    (sizeof(uint32_t))));\n+\t\tcause->cause.length = htons(sizeof(struct sctp_error_stale_cookie));\n #if !(defined(__FreeBSD__) && !defined(__Userspace__))\n \t\ttimersub(&now, &time_expires, &diff);\n #else\n@@ -5670,7 +5687,7 @@ sctp_process_control(struct mbuf *m, int iphlen, int *offset, int length,\n \t\t\t\tif (op_err != NULL) {\n \t\t\t\t\tlen = min(SCTP_SIZE32(chk_length), (uint32_t)(length - *offset));\n \t\t\t\t\tcause = mtod(op_err, struct sctp_gen_error_cause *);\n-\t\t\t\t\tcause->code =  htons(SCTP_CAUSE_UNRECOG_CHUNK);\n+\t\t\t\t\tcause->code = htons(SCTP_CAUSE_UNRECOG_CHUNK);\n \t\t\t\t\tcause->length = htons((uint16_t)(len + sizeof(struct sctp_gen_error_cause)));\n \t\t\t\t\tSCTP_BUF_LEN(op_err) = sizeof(struct sctp_gen_error_cause);\n \t\t\t\t\tSCTP_BUF_NEXT(op_err) = SCTP_M_COPYM(m, *offset, len, M_NOWAIT);\ndiff --git a/usrsctplib/netinet/sctp_output.c b/usrsctplib/netinet/sctp_output.c\nindex 8b6fa0ef7..350b43678 100755\n--- a/usrsctplib/netinet/sctp_output.c\n+++ b/usrsctplib/netinet/sctp_output.c\n@@ -34,7 +34,7 @@\n \n #if defined(__FreeBSD__) && !defined(__Userspace__)\n #include <sys/cdefs.h>\n-__FBSDID(\"$FreeBSD: head/sys/netinet/sctp_output.c 366517 2020-10-07 15:22:48Z tuexen $\");\n+__FBSDID(\"$FreeBSD: head/sys/netinet/sctp_output.c 366750 2020-10-16 10:44:48Z tuexen $\");\n #endif\n \n #include <netinet/sctp_os.h>\n@@ -5263,7 +5263,7 @@ sctp_send_initiate(struct sctp_inpcb *inp, struct sctp_tcb *stcb, int so_locked)\n \t}\n \n \t/* now any cookie time extensions */\n-\tif (stcb->asoc.cookie_preserve_req) {\n+\tif (stcb->asoc.cookie_preserve_req > 0) {\n \t\tstruct sctp_cookie_perserve_param *cookie_preserve;\n \n \t\tif (padding_len > 0) {\ndiff --git a/usrsctplib/netinet/sctp_sysctl.h b/usrsctplib/netinet/sctp_sysctl.h\nindex 54aaa6250..006a11f31 100755\n--- a/usrsctplib/netinet/sctp_sysctl.h\n+++ b/usrsctplib/netinet/sctp_sysctl.h\n@@ -34,7 +34,7 @@\n \n #if defined(__FreeBSD__) && !defined(__Userspace__)\n #include <sys/cdefs.h>\n-__FBSDID(\"$FreeBSD: head/sys/netinet/sctp_sysctl.h 365071 2020-09-01 21:19:14Z mjg $\");\n+__FBSDID(\"$FreeBSD: head/sys/netinet/sctp_sysctl.h 366750 2020-10-16 10:44:48Z tuexen $\");\n #endif\n \n #ifndef _NETINET_SCTP_SYSCTL_H_\n@@ -343,10 +343,10 @@ struct sctp_sysctl {\n #define SCTPCTL_INIT_RTO_MAX_MAX\t0xFFFFFFFF\n #define SCTPCTL_INIT_RTO_MAX_DEFAULT\tSCTP_RTO_UPPER_BOUND\n \n-/* valid_cookie_life: Default cookie lifetime in sec */\n-#define SCTPCTL_VALID_COOKIE_LIFE_DESC\t\"Default cookie lifetime in seconds\"\n-#define SCTPCTL_VALID_COOKIE_LIFE_MIN\t0\n-#define SCTPCTL_VALID_COOKIE_LIFE_MAX\t0xFFFFFFFF\n+/* valid_cookie_life: Default cookie lifetime in ms */\n+#define SCTPCTL_VALID_COOKIE_LIFE_DESC\t\t\"Default cookie lifetime in ms\"\n+#define SCTPCTL_VALID_COOKIE_LIFE_MIN\t\tSCTP_MIN_COOKIE_LIFE\n+#define SCTPCTL_VALID_COOKIE_LIFE_MAX\t\tSCTP_MAX_COOKIE_LIFE\n #define SCTPCTL_VALID_COOKIE_LIFE_DEFAULT\tSCTP_DEFAULT_COOKIE_LIFE\n \n /* init_rtx_max: Default maximum number of retransmission for INIT chunks */\ndiff --git a/usrsctplib/netinet/sctp_usrreq.c b/usrsctplib/netinet/sctp_usrreq.c\nindex f287f30f1..56e5ba8f0 100755\n--- a/usrsctplib/netinet/sctp_usrreq.c\n+++ b/usrsctplib/netinet/sctp_usrreq.c\n@@ -34,7 +34,7 @@\n \n #if defined(__FreeBSD__) && !defined(__Userspace__)\n #include <sys/cdefs.h>\n-__FBSDID(\"$FreeBSD: head/sys/netinet/sctp_usrreq.c 366480 2020-10-06 10:41:04Z tuexen $\");\n+__FBSDID(\"$FreeBSD: head/sys/netinet/sctp_usrreq.c 366750 2020-10-16 10:44:48Z tuexen $\");\n #endif\n \n #include <netinet/sctp_os.h>\n@@ -6493,18 +6493,20 @@ sctp_setopt(struct socket *so, int optname, void *optval, size_t optsize,\n \n \t\tSCTP_CHECK_AND_CAST(sasoc, optval, struct sctp_assocparams, optsize);\n \t\tSCTP_FIND_STCB(inp, stcb, sasoc->sasoc_assoc_id);\n-\t\tif (sasoc->sasoc_cookie_life) {\n+\t\tif (sasoc->sasoc_cookie_life > 0) {\n \t\t\t/* boundary check the cookie life */\n-\t\t\tif (sasoc->sasoc_cookie_life < 1000)\n-\t\t\t\tsasoc->sasoc_cookie_life = 1000;\n+\t\t\tif (sasoc->sasoc_cookie_life < SCTP_MIN_COOKIE_LIFE) {\n+\t\t\t\tsasoc->sasoc_cookie_life = SCTP_MIN_COOKIE_LIFE;\n+\t\t\t}\n \t\t\tif (sasoc->sasoc_cookie_life > SCTP_MAX_COOKIE_LIFE) {\n \t\t\t\tsasoc->sasoc_cookie_life = SCTP_MAX_COOKIE_LIFE;\n \t\t\t}\n \t\t}\n \t\tif (stcb) {\n-\t\t\tif (sasoc->sasoc_asocmaxrxt)\n+\t\t\tif (sasoc->sasoc_asocmaxrxt > 0) {\n \t\t\t\tstcb->asoc.max_send_times = sasoc->sasoc_asocmaxrxt;\n-\t\t\tif (sasoc->sasoc_cookie_life) {\n+\t\t\t}\n+\t\t\tif (sasoc->sasoc_cookie_life > 0) {\n \t\t\t\tstcb->asoc.cookie_life = sctp_msecs_to_ticks(sasoc->sasoc_cookie_life);\n \t\t\t}\n \t\t\tSCTP_TCB_UNLOCK(stcb);\n@@ -6514,9 +6516,10 @@ sctp_setopt(struct socket *so, int optname, void *optval, size_t optsize,\n \t\t\t    ((inp->sctp_flags & SCTP_PCB_FLAGS_UDPTYPE) &&\n \t\t\t     (sasoc->sasoc_assoc_id == SCTP_FUTURE_ASSOC))) {\n \t\t\t\tSCTP_INP_WLOCK(inp);\n-\t\t\t\tif (sasoc->sasoc_asocmaxrxt)\n+\t\t\t\tif (sasoc->sasoc_asocmaxrxt > 0) {\n \t\t\t\t\tinp->sctp_ep.max_send_times = sasoc->sasoc_asocmaxrxt;\n-\t\t\t\tif (sasoc->sasoc_cookie_life) {\n+\t\t\t\t}\n+\t\t\t\tif (sasoc->sasoc_cookie_life > 0) {\n \t\t\t\t\tinp->sctp_ep.def_cookie_life = sctp_msecs_to_ticks(sasoc->sasoc_cookie_life);\n \t\t\t\t}\n \t\t\t\tSCTP_INP_WUNLOCK(inp);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42487978-vul",
+      "digest": "sha256:b9d0d21069c629e7abcbe774f8536a583ff346c3dca234fcb4a65da399ecd88b"
+    },
+    "patched": {
+      "ref": "n132/arvo:42487978-fix",
+      "digest": "sha256:49bfb1315ff0d8ccd21738477a2d5dc64043d49abc0b2de8df34a643f1f88cdc"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/usrsctp/usrsctplib/netinet/sctp_input.c:393",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/usrsctp/usrsctplib/netinet/sctp_input.c:393"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042541260",
+  "chain": "CWE-1284->CWE-787",
+  "project": "gdal",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42541260",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "c6a186860fea8711852d3c6ea32b2ee439ed96a3",
+      "fix_commits": [
+        "c6a186860fea8711852d3c6ea32b2ee439ed96a3"
+      ],
+      "repo": "https://github.com/OSGeo/gdal"
+    },
+    "patch": "diff --git a/gdal/frmts/rmf/rmfdataset.cpp b/gdal/frmts/rmf/rmfdataset.cpp\nindex 93aff9833532..55153521c24f 100644\n--- a/gdal/frmts/rmf/rmfdataset.cpp\n+++ b/gdal/frmts/rmf/rmfdataset.cpp\n@@ -1256,6 +1256,43 @@ do {                                                                    \\\n         RMF_READ_ULONG( abyHeader, poDS->sHeader.nExtHdrSize, 316 );\n     }\n \n+    if(poDS->sHeader.nTileTblSize % (sizeof(GUInt32)*2))\n+    {\n+        CPLError( CE_Warning, CPLE_IllegalArg,\n+                  \"Invalid tile table size.\" );\n+        delete poDS;\n+        return nullptr;\n+    }\n+\n+    GUInt64 nMaxTileBits = 2ULL *\n+                           static_cast<GUInt64>(poDS->sHeader.nTileWidth) *\n+                           static_cast<GUInt64>(poDS->sHeader.nTileHeight) *\n+                           static_cast<GUInt64>(poDS->sHeader.nBitDepth);\n+    if(nMaxTileBits > static_cast<GUInt64>(std::numeric_limits<GUInt32>::max()))\n+    {\n+        CPLError(CE_Warning, CPLE_IllegalArg,\n+                 \"Invalid tile size. Width %lu, height %lu, bit depth %lu.\",\n+                 static_cast<unsigned long>(poDS->sHeader.nTileWidth),\n+                 static_cast<unsigned long>(poDS->sHeader.nTileHeight),\n+                 static_cast<unsigned long>(poDS->sHeader.nBitDepth));\n+        delete poDS;\n+        return nullptr;\n+    }\n+\n+    if(poDS->sHeader.nLastTileWidth > poDS->sHeader.nTileWidth ||\n+       poDS->sHeader.nLastTileHeight > poDS->sHeader.nTileHeight)\n+    {\n+        CPLError(CE_Warning, CPLE_IllegalArg,\n+                 \"Invalid last tile size %lu x %lu. \"\n+                 \"It can't be greater than %lu x %lu.\",\n+                 static_cast<unsigned long>(poDS->sHeader.nLastTileWidth),\n+                 static_cast<unsigned long>(poDS->sHeader.nLastTileHeight),\n+                 static_cast<unsigned long>(poDS->sHeader.nTileWidth),\n+                 static_cast<unsigned long>(poDS->sHeader.nTileHeight));\n+        delete poDS;\n+        return nullptr;\n+    }\n+\n     if( poParentDS != nullptr )\n     {\n         if( 0 != memcmp( poDS->sHeader.bySignature,\n@@ -1516,7 +1553,11 @@ do {                                                                    \\\n                 poDS->nBands = 1;\n                 break;\n             default:\n-                break;\n+                CPLError(CE_Warning, CPLE_IllegalArg,\n+                         \"Invalid RSW bit depth %lu.\",\n+                         static_cast<unsigned long>(poDS->sHeader.nBitDepth));\n+                delete poDS;\n+                return nullptr;\n         }\n         eType = GDT_Byte;\n     }\n@@ -1524,13 +1565,29 @@ do {                                                                    \\\n     {\n         poDS->nBands = 1;\n         if( poDS->sHeader.nBitDepth == 8 )\n+        {\n             eType = GDT_Byte;\n+        }\n         else if( poDS->sHeader.nBitDepth == 16 )\n+        {\n             eType = GDT_Int16;\n+        }\n         else if( poDS->sHeader.nBitDepth == 32 )\n+        {\n             eType = GDT_Int32;\n+        }\n         else if( poDS->sHeader.nBitDepth == 64 )\n+        {\n             eType = GDT_Float64;\n+        }\n+        else\n+        {\n+            CPLError(CE_Warning, CPLE_IllegalArg,\n+                     \"Invalid MTW bit depth %lu.\",\n+                     static_cast<unsigned long>(poDS->sHeader.nBitDepth));\n+            delete poDS;\n+            return nullptr;\n+        }\n     }\n \n     if( poDS->sHeader.nTileWidth == 0 || poDS->sHeader.nTileWidth > INT_MAX ||\n@@ -2810,9 +2867,23 @@ CPLErr RMFDataset::ReadTile(int nBlockXOff, int nBlockYOff,\n     {\n         return CE_Failure;\n     }\n-\n-    GUInt32 nTileBytes = paiTiles[2 * nTile + 1];\n     vsi_l_offset nTileOffset = GetFileOffset(paiTiles[2 * nTile]);\n+    GUInt32 nTileBytes = paiTiles[2 * nTile + 1];\n+    // RMF doesn't store compresed tiles with size greater than 80% of\n+    // uncompressed size. But just in case, select twice as many.\n+    GUInt32 nMaxTileBytes = 2 * sHeader.nTileWidth * sHeader.nTileHeight *\n+                            sHeader.nBitDepth / 8;\n+\n+    if(nTileBytes >= nMaxTileBytes)\n+    {\n+        CPLError(CE_Failure, CPLE_AppDefined,\n+                 \"Invalid tile size %lu at offset %ld. Must be less than %lu\",\n+                 static_cast<unsigned long>(nTileBytes),\n+                 static_cast<long>(nTileOffset),\n+                 static_cast<unsigned long>(nMaxTileBytes));\n+        return CE_Failure;\n+    }\n+\n \n     if(nTileOffset == 0)\n     {\n@@ -2886,8 +2957,6 @@ CPLErr RMFDataset::ReadTile(int nBlockXOff, int nBlockYOff,\n \n     if(pabyDecompressBuffer == nullptr)\n     {\n-        GUInt32 nMaxTileBytes = sHeader.nTileWidth * sHeader.nTileHeight *\n-                                sHeader.nBitDepth / 8;\n         pabyDecompressBuffer =\n            reinterpret_cast<GByte*>(VSIMalloc(std::max(1U, nMaxTileBytes)));\n         if(!pabyDecompressBuffer)\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42541260-vul",
+      "digest": "sha256:255b4b7916dccb506a0e8e5e3c3a9e10de1dbba0f2676405efd5d5d0e84c76da"
+    },
+    "patched": {
+      "ref": "n132/arvo:42541260-fix",
+      "digest": "sha256:60e38189c92a7dfe0bf46f09934fbae85a9b307b4423166302b28f01a4ed0dd2"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/gdal/gdal/port/cpl_vsi_mem.cpp:384",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/gdal/gdal/port/cpl_vsi_mem.cpp:384"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

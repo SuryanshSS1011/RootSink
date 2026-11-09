@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042522906",
+  "chain": "CWE-456->CWE-457",
+  "project": "binutils-gdb",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42522906",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "5cdf86d363747a5e0b67165d32ab512ff50d83d2",
+      "fix_commits": [
+        "5cdf86d363747a5e0b67165d32ab512ff50d83d2"
+      ],
+      "repo": "git://sourceware.org/git/binutils-gdb.git"
+    },
+    "patch": "diff --git a/opcodes/csky-dis.c b/opcodes/csky-dis.c\nindex fc7d595cce..1deea049d7 100644\n--- a/opcodes/csky-dis.c\n+++ b/opcodes/csky-dis.c\n@@ -519,7 +519,7 @@ csky_output_operand (char *str, struct operand const *oprnd,\n     case OPRND_TYPE_FCONSTANT:\n       {\n \tint shift = oprnd->shift;\n-\tchar ibytes[8];\n+\tbfd_byte ibytes[8];\n \tint status;\n \tbfd_vma addr;\n \tint nbytes;\n@@ -538,19 +538,13 @@ csky_output_operand (char *str, struct operand const *oprnd,\n \telse\n \t  nbytes = 4;\n \n-\tstatus = dis_info.info->read_memory_func (addr, (bfd_byte *)ibytes,\n+\tstatus = dis_info.info->read_memory_func (addr, ibytes,\n \t\t\t\t\t\t  nbytes, dis_info.info);\n \tif (status != 0)\n \t  /* Address out of bounds.  -> lrw rx, [pc, 0ffset]. */\n \t  sprintf (buf, \"[pc, %d]\\t// from address pool at %x\", (int)value,\n \t\t   (unsigned int)addr);\n-\telse\n-\t  {\n-\t    dis_info.value = addr;\n-\t    value = csky_chars_to_number ((unsigned char *)ibytes, 4);\n-\t  }\n-\n-\tif (oprnd->type == OPRND_TYPE_FCONSTANT)\n+\telse if (oprnd->type == OPRND_TYPE_FCONSTANT)\n \t  {\n \t    double f;\n \n@@ -569,8 +563,10 @@ csky_output_operand (char *str, struct operand const *oprnd,\n \t  }\n \telse\n \t  {\n+\t    dis_info.value = addr;\n \t    dis_info.need_output_symbol = 1;\n-\t    sprintf (buf, \"0x%x\", (unsigned int)value);\n+\t    value = csky_chars_to_number (ibytes, 4);\n+\t    sprintf (buf, \"0x%x\", (unsigned int) value);\n \t  }\n \n \tstrcat (str, buf);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42522906-vul",
+      "digest": "sha256:67e0bb073ce0d51ffb22e624dc54de01b5cc21aea292f9c5d88bf9e3acfa15e4"
+    },
+    "patched": {
+      "ref": "n132/arvo:42522906-fix",
+      "digest": "sha256:e782e619c23255dbead01cfc5d79a713fcc34a339ddbc8bfa570ebd46af01a17"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/binutils-gdb/libiberty/./floatformat.c:504",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/binutils-gdb/libiberty/./floatformat.c:504"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

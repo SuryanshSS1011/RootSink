@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042525273",
+  "chain": "CWE-1285->CWE-125",
+  "project": "libdwarf",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42525273",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "9cae1be75ec333d2b8ab8800df4850ed77a8b025",
+      "fix_commits": [
+        "9cae1be75ec333d2b8ab8800df4850ed77a8b025"
+      ],
+      "repo": "https://github.com/davea42/libdwarf-code"
+    },
+    "patch": "diff --git a/src/lib/libdwarf/dwarf_locationop_read.c b/src/lib/libdwarf/dwarf_locationop_read.c\nindex 97ebdb741..3fe83f743 100644\n--- a/src/lib/libdwarf/dwarf_locationop_read.c\n+++ b/src/lib/libdwarf/dwarf_locationop_read.c\n@@ -70,6 +70,7 @@ read_encoded_addr(Dwarf_Small *loc_ptr,\n     int len = 0;\n     Dwarf_Small op = *loc_ptr;\n     Dwarf_Unsigned operand = 0;\n+\n     len++;\n     if (!op) {\n         op = address_size;\n@@ -613,8 +614,18 @@ _dwarf_read_loc_expr_op(Dwarf_Debug dbg,\n             it means the following is address-size.\n             The address then follows immediately for\n             that number of bytes. */\n-        int length = 0;\n-            int reares = read_encoded_addr(loc_ptr,dbg,\n+            int length = 0;\n+            int reares = 0;\n+\n+            if (loc_ptr >= section_end) {\n+                _dwarf_error_string(dbg,error,\n+                    DW_DLE_LOCEXPR_OFF_SECTION_END,\n+                    \"DW_DLE_LOCEXPR_OFF_SECTION_END \"\n+                    \"at DW_OP_GNU_encoded_addr. \"\n+                    \"Corrupt DWARF\");\n+                return DW_DLV_ERROR;\n+            }\n+            reares = read_encoded_addr(loc_ptr,dbg,\n                 section_end,\n                 address_size,\n                 &operand1, &length,error);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42525273-vul",
+      "digest": "sha256:7fa376dd552c5728e242cb9c5b97406bea6c87fed5110378dc49ff136ab8c683"
+    },
+    "patched": {
+      "ref": "n132/arvo:42525273-fix",
+      "digest": "sha256:24ed751651708f7fe23ce8629de5ee7af4628a7cb0aadfe4e0587db560af9a6f"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/libdwarf/src/lib/libdwarf/dwarf_locationop_read.c:71",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/libdwarf/src/lib/libdwarf/dwarf_locationop_read.c:71"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042508986",
+  "chain": "CWE-476->CWE-787",
+  "project": "librawspeed",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42508986",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "b08b150e21a096e49f56dc044537295991986fa4",
+      "fix_commits": [
+        "b08b150e21a096e49f56dc044537295991986fa4"
+      ],
+      "repo": "https://github.com/darktable-org/rawspeed"
+    },
+    "patch": "diff --git a/src/librawspeed/decompressors/PanasonicDecompressor.cpp b/src/librawspeed/decompressors/PanasonicDecompressor.cpp\nindex a1f91b5bc..cb7ba3bb4 100644\n--- a/src/librawspeed/decompressors/PanasonicDecompressor.cpp\n+++ b/src/librawspeed/decompressors/PanasonicDecompressor.cpp\n@@ -46,11 +46,13 @@ PanasonicDecompressor::PanasonicDecompressor(const RawImage& img,\n   if (width == 0 || height == 0 || width > 5488 || height > 3904)\n     ThrowRDE(\"Unexpected image dimensions found: (%u; %u)\", width, height);\n \n+  if (BufSize < load_flags)\n+    ThrowRDE(\"Bad load_flags: %u, less than BufSize (%u)\", load_flags, BufSize);\n+\n   input.check(load_flags);\n }\n \n struct PanasonicDecompressor::PanaBitpump {\n-  static constexpr uint32 BufSize = 0x4000;\n   ByteStream input;\n   std::vector<uchar8> buf;\n   int vbits = 0;\n@@ -76,6 +78,7 @@ struct PanasonicDecompressor::PanaBitpump {\n        * part of the file. Since there is no chance of affecting output buffer\n        * size we allow the decoder to decode this\n        */\n+      assert(BufSize >= load_flags);\n       auto size = std::min(input.getRemainSize(), BufSize - load_flags);\n       memcpy(buf.data() + load_flags, input.getData(size), size);\n \ndiff --git a/src/librawspeed/decompressors/PanasonicDecompressor.h b/src/librawspeed/decompressors/PanasonicDecompressor.h\nindex d2da03501..2fdb9fd3e 100644\n--- a/src/librawspeed/decompressors/PanasonicDecompressor.h\n+++ b/src/librawspeed/decompressors/PanasonicDecompressor.h\n@@ -29,6 +29,7 @@ namespace rawspeed {\n class RawImage;\n \n class PanasonicDecompressor final : public AbstractParallelizedDecompressor {\n+  static constexpr uint32 BufSize = 0x4000;\n   struct PanaBitpump;\n \n   void decompressThreaded(const RawDecompressorThread* t) const final;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42508986-vul",
+      "digest": "sha256:4b39d49a0055b1b54b16f277c3df9cca19168eb9a9a4f157a781f2368c6b957e"
+    },
+    "patched": {
+      "ref": "n132/arvo:42508986-fix",
+      "digest": "sha256:ec43115a4e71273726e216682d14d771388f38309274abaa16ae9a1bb120e1ef"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/librawspeed/src/librawspeed/decompressors/PanasonicDecompressor.cpp:80",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 476,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/librawspeed/src/librawspeed/decompressors/PanasonicDecompressor.cpp:80"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

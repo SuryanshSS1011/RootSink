@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042534812",
+  "chain": "CWE-416->CWE-787",
+  "project": "mosquitto",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42534812",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "2754b6667d64069bcc3f5e24d43acc83a3a9f27a",
+      "fix_commits": [
+        "2754b6667d64069bcc3f5e24d43acc83a3a9f27a"
+      ],
+      "repo": "https://github.com/eclipse/mosquitto"
+    },
+    "patch": "diff --git a/src/conf.c b/src/conf.c\nindex 7015eac4ef..c79fcc86c6 100644\n--- a/src/conf.c\n+++ b/src/conf.c\n@@ -157,7 +157,7 @@ static int config__add_listener(struct mosquitto__config *config)\n \t\tlog__printf(NULL, MOSQ_LOG_ERR, \"Error: Out of memory.\");\n \t\treturn MOSQ_ERR_NOMEM;\n \t}\n-\tlistener = &config->listeners[config->listener_count-1];\n+\tlistener = &config->listeners[config->listener_count];\n \tmemset(listener, 0, sizeof(struct mosquitto__listener));\n \tlistener->security_options = mosquitto_calloc(1, sizeof(struct mosquitto__security_options));\n \tif(!listener->security_options){\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42534812-vul",
+      "digest": "sha256:0c1b27706dfcbad8e1a4037dec561ef8659d8fef420931326a0665479cd9ebeb"
+    },
+    "patched": {
+      "ref": "n132/arvo:42534812-fix",
+      "digest": "sha256:faf2d90fe59a0e7c4da2351aba3f9bd7e2505cd3754e9e486af4c4909d28285e"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/mosquitto/src/conf.c:161",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/mosquitto/src/conf.c:161"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

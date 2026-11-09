@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042532480",
+  "chain": "CWE-416->CWE-787",
+  "project": "gpac",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42532480",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "523f9e5bb8a7a6e82977f8e7c3cf20ee039edfdd",
+      "fix_commits": [
+        "523f9e5bb8a7a6e82977f8e7c3cf20ee039edfdd"
+      ],
+      "repo": "https://github.com/gpac/gpac"
+    },
+    "patch": "diff --git a/src/filter_core/filter.c b/src/filter_core/filter.c\nindex f88284db8c..f69cf5b2e5 100644\n--- a/src/filter_core/filter.c\n+++ b/src/filter_core/filter.c\n@@ -95,7 +95,7 @@ const char *gf_fs_path_escape_colon_ex(GF_FilterSession *sess, const char *path,\n \tif (sep && ((sep[5]==sess->sep_args) || (sep[5]==0)))\n \t\treturn sep;\n \t//for local files, check if file/dir exists for each ':' specified\n-\t//this allows for file path with ':' \n+\t//this allows for file path with ':'\n \tif (!strncmp(path, \"file://\", 7) || !strstr(path, \"://\")) {\n \t\tsep = (char*)res;\n \t\twhile (1) {\n@@ -1054,7 +1054,8 @@ void filter_solve_prop_template(GF_Filter *filter, GF_FilterPid *pid, char **val\n \t\tinc_sep[0] = 0;\n \t\tinc_end[0] = 0;\n \t\tinc_end+=1;\n-\t\tstrcpy(szInt, inc_sep+6);\n+\t\tstrncpy(szInt, inc_sep+6, GF_ARRAY_LENGTH(szInt));\n+\t\tszInt[ GF_ARRAY_LENGTH(szInt) - 1 ] = 0;\n \t\tainc_crc = (u32) gf_crc_32(szInt, (u32) strlen(szInt) );\n \t\tstep_sep = strchr(szInt, ',');\n \t\tif (step_sep) {\n@@ -1415,7 +1416,7 @@ static const char *gf_filter_load_arg_config(GF_Filter *filter, const char *sec_\n \t\t\tfilter->pid_decode_buffer_max_us = ap.value.uint;\n \t\t}\n \t}\n-\t\n+\n \t//ifce (used by socket and other filters), use core default\n \tif (!strcmp(arg_name, \"ifce\")) {\n \t\topt = gf_opts_get_key(\"core\", \"ifce\");\n@@ -1543,7 +1544,7 @@ static void filter_parse_dyn_args(GF_Filter *filter, const char *args, GF_Filter\n \t) {\n \t\tfilter->force_demux = 1;\n \t}\n-\t//implicit linking mode: if not a script or if script init (initialized called) and no extra pid set, enable clonable \n+\t//implicit linking mode: if not a script or if script init (initialized called) and no extra pid set, enable clonable\n \tif ( (filter->session->flags & GF_FS_FLAG_IMPLICIT_MODE)\n \t\t&& !filter->max_extra_pids\n \t\t&& (for_script || !(filter->freg->flags&GF_FS_REG_SCRIPT))\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42532480-vul",
+      "digest": "sha256:c262e109497789b9a9469daf9c18ed6cf3b7d4e05872d31d8aa17af9a185e723"
+    },
+    "patched": {
+      "ref": "n132/arvo:42532480-fix",
+      "digest": "sha256:72999e52c5089748533fa132bf9a4a6d83f0c05d18a7938eee01f6a124b60c4a"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/gpac/src/filter_core/filter.c:1048",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/gpac/src/filter_core/filter.c:1048"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

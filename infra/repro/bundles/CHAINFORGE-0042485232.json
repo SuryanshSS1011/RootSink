@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042485232",
+  "chain": "CWE-20->CWE-125",
+  "project": "hermes",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42485232",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "f126e71e362dad0f7f1841cbc56b5d85e16e8cc4",
+      "fix_commits": [
+        "f126e71e362dad0f7f1841cbc56b5d85e16e8cc4"
+      ],
+      "repo": "https://github.com/facebook/hermes"
+    },
+    "patch": "diff --git a/lib/Parser/JSLexer.cpp b/lib/Parser/JSLexer.cpp\nindex c31c2cf6d33..5caa1509ec6 100644\n--- a/lib/Parser/JSLexer.cpp\n+++ b/lib/Parser/JSLexer.cpp\n@@ -975,9 +975,11 @@ llvh::Optional<uint32_t> JSLexer::consumeBracedCodePoint(bool errorOnFail) {\n       }\n       // Invalid character, set the failed flag and continue.\n       if (!failed && errorOnFail) {\n-        error(\n-            SMLoc::getFromPointer(curCharPtr_),\n-            \"invalid character in unicode codepoint escape\");\n+        if (!error(\n+                SMLoc::getFromPointer(curCharPtr_),\n+                \"invalid character in unicode codepoint escape\")) {\n+          return llvh::None;\n+        }\n       }\n       failed = true;\n       continue;\n@@ -986,9 +988,11 @@ llvh::Optional<uint32_t> JSLexer::consumeBracedCodePoint(bool errorOnFail) {\n     if (cp > UNICODE_MAX_VALUE) {\n       // Number grew too big, set the failed flag and continue.\n       if (!failed && errorOnFail) {\n-        error(\n-            SMLoc::getFromPointer(start),\n-            \"unicode codepoint escape is too large\");\n+        if (!error(\n+                SMLoc::getFromPointer(start),\n+                \"unicode codepoint escape is too large\")) {\n+          return llvh::None;\n+        }\n       }\n       failed = true;\n     }\n@@ -999,7 +1003,10 @@ llvh::Optional<uint32_t> JSLexer::consumeBracedCodePoint(bool errorOnFail) {\n   // An empty escape sequence is invalid.\n   if (curCharPtr_ == start) {\n     if (!failed && errorOnFail) {\n-      error(SMLoc::getFromPointer(start), \"empty unicode codepoint escape\");\n+      if (!error(\n+              SMLoc::getFromPointer(start), \"empty unicode codepoint escape\")) {\n+        return llvh::None;\n+      }\n     }\n     failed = true;\n   }\ndiff --git a/unittests/Parser/JSLexerTest.cpp b/unittests/Parser/JSLexerTest.cpp\nindex 40fb8657afc..33b53a8badb 100644\n--- a/unittests/Parser/JSLexerTest.cpp\n+++ b/unittests/Parser/JSLexerTest.cpp\n@@ -957,6 +957,25 @@ TEST(JSLexerTest, RegressConsumeBadHexTest) {\n   ASSERT_EQ(0, diag.getErrCountClear());\n }\n \n+TEST(JSLexerTest, ConsumeBadBracedCodePoint) {\n+  JSLexer::Allocator alloc;\n+  SourceErrorManager sm;\n+  DiagContext diag(sm);\n+\n+  // Test an invalid curly brace escape without a terminating curly brace\n+  // This catches an out of bounds read where we hit the error limit and\n+  // curCharPtr_ was set to eof, but JSLexer::consumeBracedCodePoint continued\n+  // to operate on curCharPtr_\n+  // We configure a low error limit to reach the interesting code path faster\n+  // then we use invalid characters in a non terminated curly brace code point\n+  // to trigger JSLexer:error\n+  sm.setErrorLimit(1);\n+  JSLexer lex(\"'\\\\u{12XXXXXXXXXXX'\", sm, alloc);\n+\n+  ASSERT_EQ(TokenKind::string_literal, lex.advance()->getKind());\n+  ASSERT_EQ(TokenKind::eof, lex.advance()->getKind());\n+}\n+\n TEST(JSLexerTest, JSXTest) {\n   JSLexer::Allocator alloc;\n   SourceErrorManager sm;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42485232-vul",
+      "digest": "sha256:8ca7a5dcf40c2025273e7a26c20258dcefcf5a371fcdfe88ddd0c812476f4d63"
+    },
+    "patched": {
+      "ref": "n132/arvo:42485232-fix",
+      "digest": "sha256:ee6849b4ee15b92e66daae99fbc4fc7825686ba7f99a8b432c0206d5ed1dc358"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/hermes/lib/Parser/JSLexer.cpp:956",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/hermes/lib/Parser/JSLexer.cpp:956"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

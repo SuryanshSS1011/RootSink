@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-962635186",
+  "chain": "CWE-456->CWE-457",
+  "project": "libjpeg-turbo.2.1.x",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42525806",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/libjpeg-turbo/libjpeg-turbo/commit/31a301389bc94b6cac513e315cca0c621f7e1684",
+      "fix_commits": [
+        "31a301389bc94b6cac513e315cca0c621f7e1684"
+      ],
+      "repo": "https://github.com/libjpeg-turbo/libjpeg-turbo"
+    },
+    "patch": "diff --git a/ChangeLog.md b/ChangeLog.md\nindex 1a917cbad..92d82cce4 100644\n--- a/ChangeLog.md\n+++ b/ChangeLog.md\n@@ -33,6 +33,11 @@ cannot reliably transform JPEG source images that contain a large amount of\n metadata unless automatic JPEG destination buffer (re)allocation is used or\n `TJXOPT_COPYNONE` is set.\n \n+4. Fixed an issue that caused the C Huffman encoder (which is not used by\n+default on x86 and Arm CPUs) to read from uninitialized memory when attempting\n+to transform a specially-crafted malformed arithmetic-coded JPEG source image\n+into a baseline Huffman-coded JPEG destination image.\n+\n \n 2.1.5.1\n =======\ndiff --git a/jchuff.c b/jchuff.c\nindex 5d0276ad2..063f5b24e 100644\n--- a/jchuff.c\n+++ b/jchuff.c\n@@ -4,7 +4,7 @@\n  * This file was part of the Independent JPEG Group's software:\n  * Copyright (C) 1991-1997, Thomas G. Lane.\n  * libjpeg-turbo Modifications:\n- * Copyright (C) 2009-2011, 2014-2016, 2018-2022, D. R. Commander.\n+ * Copyright (C) 2009-2011, 2014-2016, 2018-2023, D. R. Commander.\n  * Copyright (C) 2015, Matthieu Darbois.\n  * Copyright (C) 2018, Matthias R\u00e4ncker.\n  * Copyright (C) 2020, Arm Limited.\n@@ -588,6 +588,11 @@ encode_one_block(working_state *state, JCOEFPTR block, int last_dc_val,\n \n   /* Find the number of bits needed for the magnitude of the coefficient */\n   nbits = JPEG_NBITS(nbits);\n+  /* Check for out-of-range coefficient values.\n+   * Since we're encoding a difference, the range limit is twice as much.\n+   */\n+  if (nbits > MAX_COEF_BITS + 1)\n+    ERREXIT(state->cinfo, JERR_BAD_DCT_COEF);\n \n   /* Emit the Huffman-coded symbol for the number of bits.\n    * Emit that number of bits of the value, if positive,\n@@ -613,6 +618,9 @@ encode_one_block(working_state *state, JCOEFPTR block, int last_dc_val,\n     temp += nbits; \\\n     nbits ^= temp; \\\n     nbits = JPEG_NBITS_NONZERO(nbits); \\\n+    /* Check for out-of-range coefficient values */ \\\n+    if (nbits > MAX_COEF_BITS) \\\n+      ERREXIT(state->cinfo, JERR_BAD_DCT_COEF); \\\n     /* if run length > 15, must emit special run-length-16 codes (0xF0) */ \\\n     while (r >= 16 * 16) { \\\n       r -= 16 * 16; \\\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42525806-vul",
+      "digest": "sha256:0df8c78b01693c4359871acd2f398c6cc669a02e073121814fc08be4d6fc4516"
+    },
+    "patched": {
+      "ref": "n132/arvo:42525806-fix",
+      "digest": "sha256:fce43c4fe4439918416a4dc2be60918d6289e95ff14e203733bf7abdacf25851"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/libjpeg-turbo.2.0.x/jchuff.c:594",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/libjpeg-turbo.2.0.x/jchuff.c:594"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

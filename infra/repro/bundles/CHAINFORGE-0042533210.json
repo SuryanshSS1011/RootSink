@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042533210",
+  "chain": "CWE-416->CWE-125",
+  "project": "gdal",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42533210",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "7f5837295929561c93c69208f30db78af18dda39",
+      "fix_commits": [
+        "7f5837295929561c93c69208f30db78af18dda39"
+      ],
+      "repo": "https://github.com/OSGeo/gdal"
+    },
+    "patch": "From 7f5837295929561c93c69208f30db78af18dda39 Mon Sep 17 00:00:00 2001\nFrom: Even Rouault <even.rouault@mines-paris.org>\nDate: Sat, 3 Mar 2018 15:44:07 +0000\nSubject: [PATCH] AVCE00: fixes heap-use-after-free. Fixes\n https://bugs.chromium.org/p/oss-fuzz/issues/detail?id=6692. Credit to OSS\n Fuzz\n\ngit-svn-id: https://svn.osgeo.org/gdal/trunk@41607 f0d54148-0727-0410-94bb-9a71ac55c965\n---\n gdal/ogr/ogrsf_frmts/avc/avc_e00parse.cpp   | 11 ++++++++++-\n gdal/ogr/ogrsf_frmts/avc/ogravce00layer.cpp |  7 +++++++\n 2 files changed, 17 insertions(+), 1 deletion(-)\n\ndiff --git a/gdal/ogr/ogrsf_frmts/avc/avc_e00parse.cpp b/gdal/ogr/ogrsf_frmts/avc/avc_e00parse.cpp\nindex ed97221..7120de4 100644\n--- a/gdal/ogr/ogrsf_frmts/avc/avc_e00parse.cpp\n+++ b/gdal/ogr/ogrsf_frmts/avc/avc_e00parse.cpp\n@@ -181,29 +181,35 @@ void    _AVCE00ParseDestroyCurObject(AVCE00ParseInfo  *psInfo)\n     {\n         CPLFree(psInfo->cur.psArc->pasVertices);\n         CPLFree(psInfo->cur.psArc);\n+        psInfo->cur.psArc = nullptr;\n     }\n     else if (psInfo->eFileType == AVCFilePAL ||\n              psInfo->eFileType == AVCFileRPL )\n     {\n         CPLFree(psInfo->cur.psPal->pasArcs);\n         CPLFree(psInfo->cur.psPal);\n+        psInfo->cur.psPal = nullptr;\n     }\n     else if (psInfo->eFileType == AVCFileCNT)\n     {\n         CPLFree(psInfo->cur.psCnt->panLabelIds);\n         CPLFree(psInfo->cur.psCnt);\n+        psInfo->cur.psCnt = nullptr;\n     }\n     else if (psInfo->eFileType == AVCFileLAB)\n     {\n         CPLFree(psInfo->cur.psLab);\n+        psInfo->cur.psLab = nullptr;\n     }\n     else if (psInfo->eFileType == AVCFileTOL)\n     {\n         CPLFree(psInfo->cur.psTol);\n+        psInfo->cur.psTol = nullptr;\n     }\n     else if (psInfo->eFileType == AVCFilePRJ)\n     {\n         CSLDestroy(psInfo->cur.papszPrj);\n+        psInfo->cur.papszPrj = nullptr;\n     }\n     else if (psInfo->eFileType == AVCFileTXT ||\n              psInfo->eFileType == AVCFileTX6)\n@@ -211,15 +217,19 @@ void    _AVCE00ParseDestroyCurObject(AVCE00ParseInfo  *psInfo)\n         CPLFree(psInfo->cur.psTxt->pasVertices);\n         CPLFree(psInfo->cur.psTxt->pszText);\n         CPLFree(psInfo->cur.psTxt);\n+        psInfo->cur.psTxt = nullptr;\n     }\n     else if (psInfo->eFileType == AVCFileRXP)\n     {\n         CPLFree(psInfo->cur.psRxp);\n+        psInfo->cur.psRxp = nullptr;\n     }\n     else if (psInfo->eFileType == AVCFileTABLE)\n     {\n         _AVCDestroyTableFields(psInfo->hdr.psTableDef, psInfo->cur.pasFields);\n         _AVCDestroyTableDef(psInfo->hdr.psTableDef);\n+        psInfo->hdr.psTableDef = nullptr;\n+        psInfo->cur.pasFields = nullptr;\n         psInfo->bTableHdrComplete = FALSE;\n     }\n     else\n@@ -229,7 +239,6 @@ void    _AVCE00ParseDestroyCurObject(AVCE00ParseInfo  *psInfo)\n     }\n \n     psInfo->eFileType = AVCFileUnknown;\n-    psInfo->cur.psArc = nullptr;\n }\n \n /**********************************************************************\ndiff --git a/gdal/ogr/ogrsf_frmts/avc/ogravce00layer.cpp b/gdal/ogr/ogrsf_frmts/avc/ogravce00layer.cpp\nindex 2d9359a..fc21175 100644\n--- a/gdal/ogr/ogrsf_frmts/avc/ogravce00layer.cpp\n+++ b/gdal/ogr/ogrsf_frmts/avc/ogravce00layer.cpp\n@@ -434,6 +434,13 @@ bool OGRAVCE00Layer::CheckSetupTable(AVCE00Section *psTblSectionIn)\n /* -------------------------------------------------------------------- */\n /*      Setup attributes.                                               */\n /* -------------------------------------------------------------------- */\n+    if( psTableRead->hParseInfo->hdr.psTableDef == nullptr )\n+    {\n+        AVCE00ReadCloseE00(psTableRead);\n+        psTableRead = nullptr;\n+        return false;\n+    }\n+\n     AppendTableDefinition( psTableRead->hParseInfo->hdr.psTableDef );\n \n /* -------------------------------------------------------------------- */\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42533210-vul",
+      "digest": "sha256:792617c503a644e85d9c7e2498bbb578fb7c5e27f2468a3c458ff840227a6979"
+    },
+    "patched": {
+      "ref": "n132/arvo:42533210-fix",
+      "digest": "sha256:08be8b176fd5c98bfb18dbe81cba9c9c2440f99da0140dfb9d06db7f70c2f709"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/gdal/gdal/ogr/ogrsf_frmts/avc/ogravclayer.cpp:498",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/gdal/gdal/ogr/ogrsf_frmts/avc/ogravclayer.cpp:498"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

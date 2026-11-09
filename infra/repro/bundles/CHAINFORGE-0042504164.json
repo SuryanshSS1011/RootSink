@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042504164",
+  "chain": "CWE-1284->CWE-787",
+  "project": "libbpf",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42504164",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "738277b77339d5fa7c3590d9e9ecfce8f5f061ee",
+      "fix_commits": [
+        "738277b77339d5fa7c3590d9e9ecfce8f5f061ee"
+      ],
+      "repo": "https://github.com/libbpf/libbpf"
+    },
+    "patch": "diff --git a/src/libbpf.c b/src/libbpf.c\nindex a1bea1953..71f5a0090 100644\n--- a/src/libbpf.c\n+++ b/src/libbpf.c\n@@ -3555,7 +3555,7 @@ static int bpf_object__collect_externs(struct bpf_object *obj)\n \n \tscn = elf_sec_by_idx(obj, obj->efile.symbols_shndx);\n \tsh = elf_sec_hdr(obj, scn);\n-\tif (!sh)\n+\tif (!sh || sh->sh_entsize != sizeof(Elf64_Sym))\n \t\treturn -LIBBPF_ERRNO__FORMAT;\n \n \tdummy_var_btf_id = add_dummy_ksym_var(obj->btf);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42504164-vul",
+      "digest": "sha256:55dc935263b2411d351bff199c1ff514f82284c4f8f9ed9d8677e43a573dddd3"
+    },
+    "patched": {
+      "ref": "n132/arvo:42504164-fix",
+      "digest": "sha256:49a726d30632559862a5c00bf6eff5418c00448d34408b81c5c23d6c6bb4855a"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "SEGV",
+        "direction": "READ",
+        "crash_site": "/src/libbpf/src/libbpf.c:2014",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "SEGV",
+        "direction": "READ",
+        "site": "/src/libbpf/src/libbpf.c:2014"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

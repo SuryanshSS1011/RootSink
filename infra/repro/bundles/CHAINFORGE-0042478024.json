@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042478024",
+  "chain": "CWE-456->CWE-457",
+  "project": "matio",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42478024",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "a47b7cd3aca70e9a0bddf8146eb4ab0cbd19c2c3",
+      "fix_commits": [
+        "a47b7cd3aca70e9a0bddf8146eb4ab0cbd19c2c3"
+      ],
+      "repo": "https://github.com/tbeu/matio"
+    },
+    "patch": "From a47b7cd3aca70e9a0bddf8146eb4ab0cbd19c2c3 Mon Sep 17 00:00:00 2001\nFrom: tbeu <tbeu@users.noreply.github.com>\nDate: Fri, 15 Nov 2019 23:20:41 +0100\nSubject: [PATCH] Fix memory leak\n\nAs reported by https://github.com/tbeu/matio/issues/131\n---\n src/mat.c | 7 ++++++-\n 1 file changed, 6 insertions(+), 1 deletion(-)\n\ndiff --git a/src/mat.c b/src/mat.c\nindex c9c6bd1..e62a9d2 100644\n--- a/src/mat.c\n+++ b/src/mat.c\n@@ -220,6 +220,11 @@ int SafeMulDims(const matvar_t *matvar, size_t* nelems)\n {\n     int i;\n \n+    if ( matvar->rank == 0 ) {\n+        *nelems = 0;\n+        return 0;\n+    }\n+\n     for ( i = 0; i < matvar->rank; i++ ) {\n         if ( !psnip_safe_size_mul(nelems, *nelems, matvar->dims[i]) ) {\n             *nelems = 0;\n@@ -1640,7 +1645,7 @@ Mat_VarFree(matvar_t *matvar)\n         }\n #endif\n         if ( NULL != matvar->internal->fieldnames &&\n-             matvar->internal->num_fields > 0 ) {\n+            matvar->internal->num_fields > 0 ) {\n             size_t i;\n             for ( i = 0; i < matvar->internal->num_fields; i++ ) {\n                 if ( NULL != matvar->internal->fieldnames[i] )\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42478024-vul",
+      "digest": "sha256:06f43a1423571f0152eddc3cb3922cb9eab35948a748b3658f74a05f5d37c83c"
+    },
+    "patched": {
+      "ref": "n132/arvo:42478024-fix",
+      "digest": "sha256:9f0104273a234bb9a779dac0c0fa46905d099bd1c943e964c429f223192fd65e"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/matio/src/mat5.c:1659",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/matio/src/mat5.c:1659"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

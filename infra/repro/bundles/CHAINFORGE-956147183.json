@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-956147183",
+  "chain": "CWE-843->CWE-119",
+  "project": "gdal",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42478416",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/OSGeo/gdal/commit/71b1840f53c3e5710467f5abe260213308ca409e",
+      "fix_commits": [
+        "71b1840f53c3e5710467f5abe260213308ca409e"
+      ],
+      "repo": "https://github.com/OSGeo/gdal"
+    },
+    "patch": "diff --git a/gdal/ogr/ogrsf_frmts/ili/ili2reader.cpp b/gdal/ogr/ogrsf_frmts/ili/ili2reader.cpp\nindex a2b4d0f6b440..9695f83ed46d 100644\n--- a/gdal/ogr/ogrsf_frmts/ili/ili2reader.cpp\n+++ b/gdal/ogr/ogrsf_frmts/ili/ili2reader.cpp\n@@ -414,11 +414,12 @@ static char* fieldName(DOMElement* elem) {\n }\n \n void ILI2Reader::setFieldDefn(OGRFeatureDefn *featureDef, DOMElement* elem) {\n-  int type = 0;\n+  int type = 0; \n   //recursively search children\n-  for (DOMElement *childElem = (DOMElement *)elem->getFirstChild();\n-        type == 0 && childElem && childElem->getNodeType() == DOMNode::ELEMENT_NODE;\n-        childElem = (DOMElement*)childElem->getNextSibling()) {\n+  for (DOMNode *childNode = elem->getFirstChild();\n+        type == 0 && childNode && childNode->getNodeType() == DOMNode::ELEMENT_NODE;\n+        childNode = childNode->getNextSibling()) {\n+    DOMElement* childElem = dynamic_cast<DOMElement*>(childNode);\n     type = getGeometryTypeOfElem(childElem);\n     if (type == 0) {\n       if (childElem->getFirstChild() && childElem->getFirstChild()->getNodeType() == DOMNode::ELEMENT_NODE) {\n@@ -439,9 +440,10 @@ void ILI2Reader::setFieldDefn(OGRFeatureDefn *featureDef, DOMElement* elem) {\n void ILI2Reader::SetFieldValues(OGRFeature *feature, DOMElement* elem) {\n   int type = 0;\n   //recursively search children\n-  for (DOMElement *childElem = (DOMElement *)elem->getFirstChild();\n-        type == 0 && childElem && childElem->getNodeType() == DOMNode::ELEMENT_NODE;\n-        childElem = (DOMElement*)childElem->getNextSibling()) {\n+  for (DOMNode *childNode = elem->getFirstChild();\n+        type == 0 && childNode && childNode->getNodeType() == DOMNode::ELEMENT_NODE;\n+        childNode = childNode->getNextSibling()) {\n+    DOMElement* childElem = dynamic_cast<DOMElement*>(childNode);\n     type = getGeometryTypeOfElem(childElem);\n     if (type == 0) {\n       if (childElem->getFirstChild() && childElem->getFirstChild()->getNodeType() == DOMNode::ELEMENT_NODE) {\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42478416-vul",
+      "digest": "sha256:f3c062a4b1c2b7425aa9fb621ed4fa3bdce4d8b5b69aa1becab73980d6faff10"
+    },
+    "patched": {
+      "ref": "n132/arvo:42478416-fix",
+      "digest": "sha256:8e342978b3429e6a2a8f277e4c002cd552ee53211b06b5f5656d5191c9584181"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "crash_site": "/src/gdal/gdal/ogr/ogrsf_frmts/ili/ili2reader.cpp:421",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 843,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 119,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "site": "/src/gdal/gdal/ogr/ogrsf_frmts/ili/ili2reader.cpp:421"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

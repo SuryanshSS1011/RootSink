@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042475838",
+  "chain": "CWE-456->CWE-457",
+  "project": "leptonica",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42475838",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "41a641203d9eba9469416f9e87ff241ed4f743a7",
+      "fix_commits": [
+        "41a641203d9eba9469416f9e87ff241ed4f743a7"
+      ],
+      "repo": "https://github.com/DanBloomberg/leptonica"
+    },
+    "patch": "From 41a641203d9eba9469416f9e87ff241ed4f743a7 Mon Sep 17 00:00:00 2001\nFrom: Dan Bloomberg <dan.bloomberg@gmail.com>\nDate: Sat, 22 Jun 2019 14:14:39 -0700\nSubject: [PATCH] even.rouault@gmail.com fixed two difficult bugs in tiffio\n found by oss-fuzz\n\nIssues 14773 (heap buffer overflow), 15269 (uninitialized value).\nBoth fixes handle fuzzing overflows: a 64 bit overflow in the read from\nbuffer callback, and a 32 bit overflow in size_t (which is 32 bits in\n32 bit systems).  The readback issue can also be triggered when\nusing versions of tifflib before 4.0, which used uint32 for t_off.\n---\n prog/comparetest.c | 3 ---\n src/tiffio.c       | 6 +++++-\n 2 files changed, 5 insertions(+), 4 deletions(-)\n\ndiff --git a/prog/comparetest.c b/prog/comparetest.c\nindex 775f537..1f19183 100644\n--- a/prog/comparetest.c\n+++ b/prog/comparetest.c\n@@ -131,9 +131,6 @@ static char  mainName[] = \"comparetest\";\n         if (d1 != 16 && !same) {\n             na1 = pixCompareRankDifference(pixs1, pixs2, 1);\n             if (na1) {\n-                fprintf(stderr, \"na1[150] = %20.10f\\n\", na1->array[150]);\n-                fprintf(stderr, \"na1[200] = %20.10f\\n\", na1->array[200]);\n-                fprintf(stderr, \"na1[250] = %20.10f\\n\", na1->array[250]);\n                 numaGetNonzeroRange(na1, 0.00005, &first, &last);\n                 fprintf(stderr, \"Nonzero diff range: first = %d, last = %d\\n\",\n                         first, last);\ndiff --git a/src/tiffio.c b/src/tiffio.c\nindex cd59a83..5a761ff 100644\n--- a/src/tiffio.c\n+++ b/src/tiffio.c\n@@ -2347,7 +2347,8 @@ size_t        amount;\n     amount = L_MIN((size_t)length, mstream->hw - mstream->offset);\n \n         /* Fuzzed files can create this condition! */\n-    if (mstream->offset + amount > mstream->hw) {\n+    if (mstream->offset + amount < amount ||  /* overflow */\n+        mstream->offset + amount > mstream->hw) {\n         fprintf(stderr, \"Bad file: amount too big: %zu\\n\", amount);\n         return 0;\n     }\n@@ -2397,6 +2398,9 @@ L_MEMSTREAM  *mstream;\n     switch (whence) {\n         case SEEK_SET:\n /*            fprintf(stderr, \"seek_set: offset = %d\\n\", offset); */\n+            if((size_t)offset != offset) {  /* size_t overflow on uint32 */\n+                return (toff_t)ERROR_INT(\"too large offset value\", procName, 1);\n+            }\n             mstream->offset = offset;\n             break;\n         case SEEK_CUR:\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42475838-vul",
+      "digest": "sha256:23dcd9582c2bf69138e6b5324be1f6d54b6f43da1e2e4a068caf974571e595eb"
+    },
+    "patched": {
+      "ref": "n132/arvo:42475838-fix",
+      "digest": "sha256:719662193ad82284be46bd3332d7f0d9162fa0df4a4e9db32bfa330c8b725524"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/libtiff/libtiff/tif_color.c:188",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/libtiff/libtiff/tif_color.c:188"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

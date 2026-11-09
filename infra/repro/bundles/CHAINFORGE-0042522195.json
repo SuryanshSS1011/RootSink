@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042522195",
+  "chain": "CWE-20->CWE-125",
+  "project": "mosquitto",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42522195",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "3fd5ba5f186c6225e0c1dc9dd100d125d15ceda7",
+      "fix_commits": [
+        "3fd5ba5f186c6225e0c1dc9dd100d125d15ceda7"
+      ],
+      "repo": "https://github.com/eclipse/mosquitto"
+    },
+    "patch": "diff --git a/src/conf.c b/src/conf.c\nindex 3d9b591f88..57aca7fe0a 100644\n--- a/src/conf.c\n+++ b/src/conf.c\n@@ -1842,15 +1842,16 @@ static int config__read_file_core(struct mosquitto__config *config, bool reload,\n \t\t\t\t\t\tcr->log_dest |= MQTT3_LOG_ANDROID;\n #endif\n \t\t\t\t\t}else if(!strcmp(token, \"file\")){\n-\t\t\t\t\t\tcr->log_dest |= MQTT3_LOG_FILE;\n \t\t\t\t\t\tif(config->log_fptr || config->log_file){\n \t\t\t\t\t\t\tlog__printf(NULL, MOSQ_LOG_ERR, \"Error: Duplicate \\\"log_dest file\\\" value.\");\n \t\t\t\t\t\t\treturn MOSQ_ERR_INVAL;\n \t\t\t\t\t\t}\n \t\t\t\t\t\t/* Get remaining string. */\n-\t\t\t\t\t\ttoken = &token[strlen(token)+1];\n-\t\t\t\t\t\twhile(token[0] == ' ' || token[0] == '\\t'){\n-\t\t\t\t\t\t\ttoken++;\n+\t\t\t\t\t\ttoken = saveptr;\n+\t\t\t\t\t\tif(token && token[0]){\n+\t\t\t\t\t\t\twhile(token[0] == ' ' || token[0] == '\\t'){\n+\t\t\t\t\t\t\t\ttoken++;\n+\t\t\t\t\t\t\t}\n \t\t\t\t\t\t}\n \t\t\t\t\t\tif(token[0]){\n \t\t\t\t\t\t\tconfig->log_file = mosquitto__strdup(token);\n@@ -1862,6 +1863,7 @@ static int config__read_file_core(struct mosquitto__config *config, bool reload,\n \t\t\t\t\t\t\tlog__printf(NULL, MOSQ_LOG_ERR, \"Error: Empty \\\"log_dest file\\\" value in configuration.\");\n \t\t\t\t\t\t\treturn MOSQ_ERR_INVAL;\n \t\t\t\t\t\t}\n+\t\t\t\t\t\tcr->log_dest |= MQTT3_LOG_FILE;\n \t\t\t\t\t}else{\n \t\t\t\t\t\tlog__printf(NULL, MOSQ_LOG_ERR, \"Error: Invalid 'log_dest' value (%s).\", token);\n \t\t\t\t\t\treturn MOSQ_ERR_INVAL;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42522195-vul",
+      "digest": "sha256:e095c529a1920cc290f4c23e634d0f0762e2a61195da8735de525496f9d4367b"
+    },
+    "patched": {
+      "ref": "n132/arvo:42522195-fix",
+      "digest": "sha256:2c2a4c5177c455848ffc59a1722f6e1627a2b58f70f2004a627a18f61fbd8255"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/mosquitto/src/../lib/memory_mosq.c:152",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/mosquitto/src/../lib/memory_mosq.c:152"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

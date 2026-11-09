@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042482542",
+  "chain": "CWE-456->CWE-457",
+  "project": "libspectre",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42482542",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "af1cb4cb719dcb94314bbefc78b59ac426b8fed2",
+      "fix_commits": [
+        "af1cb4cb719dcb94314bbefc78b59ac426b8fed2"
+      ],
+      "repo": "https://gitlab.freedesktop.org/libspectre/libspectre.git"
+    },
+    "patch": "From af1cb4cb719dcb94314bbefc78b59ac426b8fed2 Mon Sep 17 00:00:00 2001\nFrom: Albert Astals Cid <aacid@kde.org>\nDate: Wed, 8 Apr 2020 23:52:43 +0200\nSubject: [PATCH] Fix uninitialized memory read on malformed documents\n\n---\n libspectre/ps.c | 24 +++++++++++++-----------\n 1 file changed, 13 insertions(+), 11 deletions(-)\n\ndiff --git a/libspectre/ps.c b/libspectre/ps.c\nindex 4374272..0883670 100644\n--- a/libspectre/ps.c\n+++ b/libspectre/ps.c\n@@ -1050,15 +1050,17 @@ continuepage:\n \t\t/* Do nothing */\n \t    } else if (doc->pages[doc->numpages].orientation == NONE &&\n \t\tiscomment(line+2, \"PageOrientation:\")) {\n-\t\tsscanf(line+length(\"%%PageOrientation:\"), \"%256s\", text);\n-\t\tif (strcmp(text, \"Portrait\") == 0) {\n-\t\t    doc->pages[doc->numpages].orientation = PORTRAIT;\n-\t\t} else if (strcmp(text, \"Landscape\") == 0) {\n-\t\t    doc->pages[doc->numpages].orientation = LANDSCAPE;\n-\t\t} else if (strcmp(text, \"Seascape\") == 0) {\n-\t\t    doc->pages[doc->numpages].orientation = SEASCAPE;\n-\t\t} else if (strcmp(text, \"UpsideDown\") == 0) {\n-\t\t    doc->pages[doc->numpages].orientation = UPSIDEDOWN;\n+\t\tconst int res = sscanf(line+length(\"%%PageOrientation:\"), \"%256s\", text);\n+\t\tif (res != EOF) {\n+\t\t    if (strcmp(text, \"Portrait\") == 0) {\n+\t\t\tdoc->pages[doc->numpages].orientation = PORTRAIT;\n+\t\t    } else if (strcmp(text, \"Landscape\") == 0) {\n+\t\t\tdoc->pages[doc->numpages].orientation = LANDSCAPE;\n+\t\t    } else if (strcmp(text, \"Seascape\") == 0) {\n+\t\t\tdoc->pages[doc->numpages].orientation = SEASCAPE;\n+\t\t    } else if (strcmp(text, \"UpsideDown\") == 0) {\n+\t\t\tdoc->pages[doc->numpages].orientation = UPSIDEDOWN;\n+\t\t    }\n \t\t}\n \t    } else if (doc->pages[doc->numpages].media == NULL &&\n \t\t       iscomment(line+2, \"PageMedia:\")) {\n@@ -1086,8 +1088,8 @@ continuepage:\n \t\tPS_free(cp);\n \t    } else if ((page_bb_set == NONE || page_bb_set == ATEND) &&\n \t\t       iscomment(line+2, \"PageBoundingBox:\")) {\n-\t\tsscanf(line+length(\"%%PageBoundingBox:\"), \"%256s\", text);\n-\t\tif (strcmp(text, \"(atend)\") == 0 || strcmp(text, \"atend\") == 0) {\n+\t\tconst int res = sscanf(line+length(\"%%PageBoundingBox:\"), \"%256s\", text);\n+\t\tif ((res != EOF) && (strcmp(text, \"(atend)\") == 0 || strcmp(text, \"atend\") == 0)) {\n \t\t    page_bb_set = ATEND;\n \t\t} else {\n \t\t    if (scan_boundingbox(doc->pages[doc->numpages].boundingbox,\n-- \n2.55.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42482542-vul",
+      "digest": "sha256:452a3aea058e02e72face1f03d3f07003c46362bbc71c5a0ac547f349a8f8c96"
+    },
+    "patched": {
+      "ref": "n132/arvo:42482542-fix",
+      "digest": "sha256:06443011770dd0311cb21d72f22e99d058881c0cdbbaafd174953c19e2ad75dc"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/libspectre/libspectre/ps.c:1087",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/libspectre/libspectre/ps.c:1087"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

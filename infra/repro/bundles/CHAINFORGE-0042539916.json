@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042539916",
+  "chain": "CWE-456->CWE-457",
+  "project": "imagemagick",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42539916",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "5f3d02e8955b0b0eb62cf85eca1f56f55d64bd63",
+      "fix_commits": [
+        "5f3d02e8955b0b0eb62cf85eca1f56f55d64bd63"
+      ],
+      "repo": "https://github.com/imagemagick/imagemagick"
+    },
+    "patch": "From 5f3d02e8955b0b0eb62cf85eca1f56f55d64bd63 Mon Sep 17 00:00:00 2001\nFrom: Cristy <urban-warrior@imagemagick.org>\nDate: Thu, 17 May 2018 20:38:41 -0400\nSubject: [PATCH] =?UTF-8?q?Fix=20Schr=C3=B6dinger's=20cat=20problem=20with?=\n =?UTF-8?q?=20clip=20/=20composite=20mask=20o=20Please=20enter=20the=20com?=\n =?UTF-8?q?mit=20message=20for=20your=20changes.=20Lines=20starting?=\nMIME-Version: 1.0\nContent-Type: text/plain; charset=UTF-8\nContent-Transfer-Encoding: 8bit\n\n---\n MagickCore/attribute.c | 15 ++++-----------\n MagickCore/cache.c     | 15 +++++++++------\n MagickCore/channel.c   |  5 +++++\n MagickCore/image.c     |  8 +++++++-\n MagickCore/image.h     |  3 +++\n MagickCore/pixel.c     |  7 +++++++\n 6 files changed, 35 insertions(+), 18 deletions(-)\n\ndiff --git a/MagickCore/attribute.c b/MagickCore/attribute.c\nindex 432df00..32ddfa0 100644\n--- a/MagickCore/attribute.c\n+++ b/MagickCore/attribute.c\n@@ -409,10 +409,7 @@ MagickExport size_t GetImageDepth(const Image *image,ExceptionInfo *exception)\n           {\n             PixelChannel channel = GetPixelChannelChannel(image,i);\n             PixelTrait traits = GetPixelChannelTraits(image,channel);\n-            if ((traits == UndefinedPixelTrait) ||\n-                (channel == IndexPixelChannel) ||\n-                (channel == ReadMaskPixelChannel) ||\n-                (channel == MetaPixelChannel))\n+            if ((traits & UpdatePixelTrait) == 0)\n               continue;\n             if (depth_map[ScaleQuantumToMap(p[i])] > current_depth[id])\n               current_depth[id]=depth_map[ScaleQuantumToMap(p[i])];\n@@ -470,8 +467,7 @@ MagickExport size_t GetImageDepth(const Image *image,ExceptionInfo *exception)\n \n         channel=GetPixelChannelChannel(image,i);\n         traits=GetPixelChannelTraits(image,channel);\n-        if ((traits == UndefinedPixelTrait) || (channel == IndexPixelChannel) ||\n-            (channel == ReadMaskPixelChannel))\n+        if ((traits & UpdatePixelTrait) == 0)\n           continue;\n         while (current_depth[id] < MAGICKCORE_QUANTUM_DEPTH)\n         {\n@@ -1094,9 +1090,7 @@ MagickExport MagickBooleanType SetImageDepth(Image *image,\n \n             channel=GetPixelChannelChannel(image,i);\n             traits=GetPixelChannelTraits(image,channel);\n-            if ((traits == UndefinedPixelTrait) ||\n-                (channel == IndexPixelChannel) ||\n-                (channel == ReadMaskPixelChannel))\n+            if ((traits & UpdatePixelTrait) == 0)\n               continue;\n             q[i]=depth_map[ScaleQuantumToMap(q[i])];\n           }\n@@ -1153,8 +1147,7 @@ MagickExport MagickBooleanType SetImageDepth(Image *image,\n \n         channel=GetPixelChannelChannel(image,i);\n         traits=GetPixelChannelTraits(image,channel);\n-        if ((traits == UndefinedPixelTrait) || (channel == IndexPixelChannel) ||\n-            (channel == ReadMaskPixelChannel))\n+        if ((traits & UpdatePixelTrait) == 0)\n           continue;\n         q[i]=ScaleAnyToQuantum(ScaleQuantumToAny(ClampPixel((MagickRealType)\n           q[i]),range),range);\ndiff --git a/MagickCore/cache.c b/MagickCore/cache.c\nindex a036f8b..2a8f20e 100644\n--- a/MagickCore/cache.c\n+++ b/MagickCore/cache.c\n@@ -5340,12 +5340,15 @@ MagickPrivate MagickBooleanType SyncAuthenticPixelCacheNexus(Image *image,\n   assert(cache_info->signature == MagickCoreSignature);\n   if (cache_info->type == UndefinedCache)\n     return(MagickFalse);\n-  if ((image->write_mask != MagickFalse) &&\n-      (ClipPixelCacheNexus(image,nexus_info,exception) == MagickFalse))\n-    return(MagickFalse);\n-  if ((image->composite_mask != MagickFalse) &&\n-      (MaskPixelCacheNexus(image,nexus_info,exception) == MagickFalse))\n-    return(MagickFalse);\n+  if (image->mask_trait != UpdatePixelTrait)\n+    {\n+      if ((image->write_mask != MagickFalse) &&\n+          (ClipPixelCacheNexus(image,nexus_info,exception) == MagickFalse))\n+        return(MagickFalse);\n+      if ((image->composite_mask != MagickFalse) &&\n+          (MaskPixelCacheNexus(image,nexus_info,exception) == MagickFalse))\n+        return(MagickFalse);\n+    }\n   if (nexus_info->authentic_pixel_cache != MagickFalse)\n     {\n       image->taint=MagickTrue;\ndiff --git a/MagickCore/channel.c b/MagickCore/channel.c\nindex a595583..c2aafb7 100644\n--- a/MagickCore/channel.c\n+++ b/MagickCore/channel.c\n@@ -376,6 +376,11 @@ MagickExport Image *ChannelFxImage(const Image *image,const char *expression,\n               destination_image->alpha_trait=BlendPixelTrait;\n               break;\n             }\n+            case CompositeMaskPixelChannel:\n+            {\n+              destination_image->composite_mask=MagickTrue;\n+              break;\n+            }\n             case ReadMaskPixelChannel:\n             {\n               destination_image->read_mask=MagickTrue;\ndiff --git a/MagickCore/image.c b/MagickCore/image.c\nindex 21be905..2b2bde8 100644\n--- a/MagickCore/image.c\n+++ b/MagickCore/image.c\n@@ -828,7 +828,9 @@ MagickExport Image *CloneImage(const Image *image,const size_t columns,\n   clone_image->colorspace=image->colorspace;\n   clone_image->read_mask=image->read_mask;\n   clone_image->write_mask=image->write_mask;\n+  clone_image->composite_mask=image->composite_mask;\n   clone_image->alpha_trait=image->alpha_trait;\n+  clone_image->mask_trait=image->mask_trait;\n   clone_image->columns=image->columns;\n   clone_image->rows=image->rows;\n   clone_image->dither=image->dither;\n@@ -3193,6 +3195,7 @@ MagickExport MagickBooleanType SetImageMask(Image *image,const PixelMask type,\n   if (SyncImagePixelCache(image,exception) == MagickFalse)\n     return(MagickFalse);\n   status=MagickTrue;\n+  image->mask_trait=UpdatePixelTrait;\n   mask_view=AcquireVirtualCacheView(mask,exception);\n   image_view=AcquireAuthenticCacheView(image,exception);\n #if defined(MAGICKCORE_OPENMP_SUPPORT)\n@@ -3251,6 +3254,7 @@ MagickExport MagickBooleanType SetImageMask(Image *image,const PixelMask type,\n     if (SyncCacheViewAuthenticPixels(image_view,exception) == MagickFalse)\n       status=MagickFalse;\n   }\n+  image->mask_trait=UndefinedPixelTrait;\n   mask_view=DestroyCacheView(mask_view);\n   image_view=DestroyCacheView(image_view);\n   return(status);\n@@ -3321,9 +3325,10 @@ MagickExport MagickBooleanType SetImageRegionMask(Image *image,\n     case WritePixelMask: image->write_mask=MagickTrue; break;\n     default: image->composite_mask=MagickTrue; break;\n   }\n-  if (SetImageStorageClass(image,DirectClass,exception) == MagickFalse)\n+  if (SyncImagePixelCache(image,exception) == MagickFalse)\n     return(MagickFalse);\n   status=MagickTrue;\n+  image->mask_trait=UpdatePixelTrait;\n   image_view=AcquireAuthenticCacheView(image,exception);\n #if defined(MAGICKCORE_OPENMP_SUPPORT)\n   #pragma omp parallel for schedule(static) shared(status) \\\n@@ -3377,6 +3382,7 @@ MagickExport MagickBooleanType SetImageRegionMask(Image *image,\n     if (SyncCacheViewAuthenticPixels(image_view,exception) == MagickFalse)\n       status=MagickFalse;\n   }\n+  image->mask_trait=UndefinedPixelTrait;\n   image_view=DestroyCacheView(image_view);\n   return(status);\n }\ndiff --git a/MagickCore/image.h b/MagickCore/image.h\nindex 1ef596b..62a56a2 100644\n--- a/MagickCore/image.h\n+++ b/MagickCore/image.h\n@@ -358,6 +358,9 @@ struct _Image\n \n   MagickBooleanType\n     composite_mask;\n+\n+  PixelTrait\n+    mask_trait;       /* apply the clip or composite mask */\n };\n \n /*\ndiff --git a/MagickCore/pixel.c b/MagickCore/pixel.c\nindex dd55ce5..f741704 100644\n--- a/MagickCore/pixel.c\n+++ b/MagickCore/pixel.c\n@@ -6239,6 +6239,11 @@ static void LogPixelChannels(const Image *image)\n         name=\"write-mask\";\n         break;\n       }\n+      case CompositeMaskPixelChannel:\n+      {\n+        name=\"composite-mask\";\n+        break;\n+      }\n       case MetaPixelChannel:\n       {\n         name=\"meta\";\n@@ -6318,6 +6323,8 @@ MagickExport ChannelType SetPixelChannelMask(Image *image,\n     SetPixelChannelTraits(image,ReadMaskPixelChannel,CopyPixelTrait);\n   if (image->write_mask != MagickFalse)\n     SetPixelChannelTraits(image,WriteMaskPixelChannel,CopyPixelTrait);\n+  if (image->composite_mask != MagickFalse)\n+    SetPixelChannelTraits(image,CompositeMaskPixelChannel,CopyPixelTrait);\n   if (image->debug != MagickFalse)\n     LogPixelChannels(image);\n   return(mask);\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42539916-vul",
+      "digest": "sha256:747a1d932e9e50f110b1e1d6c14b3bf915e31429aad143993a410cdfaa4d2f61"
+    },
+    "patched": {
+      "ref": "n132/arvo:42539916-fix",
+      "digest": "sha256:6282d0752848fa177bd56c14c90485bd1cf3f4142f5eee0329dc510cd4d20a15"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/imagemagick/MagickCore/cache.c:453",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/imagemagick/MagickCore/cache.c:453"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

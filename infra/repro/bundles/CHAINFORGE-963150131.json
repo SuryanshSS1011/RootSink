@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-963150131",
+  "chain": "CWE-456->CWE-457",
+  "project": "libxslt",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42509255",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://gitlab.gnome.org/GNOME/libxslt.git22f12ce58eb5f41d23bb205530034b29aac03700",
+      "fix_commits": [
+        "22f12ce58eb5f41d23bb205530034b29aac03700"
+      ],
+      "repo": "https://gitlab.gnome.org/GNOME/libxslt.git"
+    },
+    "patch": "From 22f12ce58eb5f41d23bb205530034b29aac03700 Mon Sep 17 00:00:00 2001\nFrom: Nick Wellnhofer <wellnhofer@aevum.de>\nDate: Fri, 18 Mar 2022 15:03:44 +0100\nSubject: [PATCH] Stop calling deprecated libxml2 init functions\n\n---\n libxslt/transform.c | 1 -\n python/libxslt.c    | 1 -\n tests/fuzz/fuzz.c   | 1 -\n xsltproc/xsltproc.c | 1 -\n 4 files changed, 4 deletions(-)\n\ndiff --git a/libxslt/transform.c b/libxslt/transform.c\nindex 57f05bf..2d8fd7f 100644\n--- a/libxslt/transform.c\n+++ b/libxslt/transform.c\n@@ -637,7 +637,6 @@ xsltNewTransformContext(xsltStylesheetPtr style, xmlDocPtr doc) {\n     cur->prof = 0;\n \n     cur->style = style;\n-    xmlXPathInit();\n     cur->xpathCtxt = xmlXPathNewContext(doc);\n     if (cur->xpathCtxt == NULL) {\n \txsltTransformError(NULL, NULL, (xmlNodePtr) doc,\ndiff --git a/python/libxslt.c b/python/libxslt.c\nindex 685e49d..353939e 100644\n--- a/python/libxslt.c\n+++ b/python/libxslt.c\n@@ -1279,7 +1279,6 @@ void initlibxsltmod(void) {\n      * Specific XSLT initializations\n      */\n     libxslt_xsltErrorInitialize();\n-    xmlInitMemory();\n     xmlLoadExtDtdDefaultValue = XML_DETECT_IDS | XML_COMPLETE_ATTRS;\n     xmlDefaultSAXHandler.cdataBlock = NULL;\n     /*\ndiff --git a/tests/fuzz/fuzz.c b/tests/fuzz/fuzz.c\nindex 780c2d4..cf1e238 100644\n--- a/tests/fuzz/fuzz.c\n+++ b/tests/fuzz/fuzz.c\n@@ -53,7 +53,6 @@ static void\n xsltFuzzInit(void) {\n     /* Init libxml2, libxslt and libexslt */\n     xmlInitParser();\n-    xmlXPathInit();\n     xsltInit();\n     exsltRegisterAll();\n \ndiff --git a/xsltproc/xsltproc.c b/xsltproc/xsltproc.c\nindex eec57bc..5fd3a29 100644\n--- a/xsltproc/xsltproc.c\n+++ b/xsltproc/xsltproc.c\n@@ -565,7 +565,6 @@ main(int argc, char **argv)\n     }\n \n     srand(time(NULL));\n-    xmlInitMemory();\n \n #if defined(_WIN32) && !defined(__CYGINW__)\n     setmode(fileno(stdout), O_BINARY);\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42509255-vul",
+      "digest": "sha256:c5445e2a18648b63289947cacfa73058bbf3ed7fa1c4210814cced6d5b36c849"
+    },
+    "patched": {
+      "ref": "n132/arvo:42509255-fix",
+      "digest": "sha256:b675a197ddfbe3b8b244aa28888944c5440e88f70436900b2e4623d38f613fc2"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/libxml2/error.c:186",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/libxml2/error.c:186"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

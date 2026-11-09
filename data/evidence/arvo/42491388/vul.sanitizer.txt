@@ -1,0 +1,87 @@
+======================= INFO =========================
+This binary is built for AFL-fuzz.
+To run the target function on individual input(s) execute this:
+  /out/FuzzJs < INPUT_FILE
+or
+  /out/FuzzJs INPUT_FILE1 [INPUT_FILE2 ... ]
+To fuzz with afl-fuzz execute this:
+  afl-fuzz [afl-flags] /out/FuzzJs [-N]
+afl-fuzz will run N iterations before re-spawning the process (default: 1000)
+======================================================
+Reading 4 bytes from /tmp/poc
+Forced garbage collection requested!
+=================================================================
+==7==ERROR: AddressSanitizer: stack-buffer-overflow on address 0x7fff576ff688 at pc 0x00000066ceb6 bp 0x7fff576ff630 sp 0x7fff576ff628
+READ of size 8 at 0x7fff576ff688 thread T0
+SCARINESS: 38 (8-byte-read-stack-buffer-overflow)
+    #0 0x66ceb5 in JS::Heap::gather_conservative_roots(AK::HashTable<JS::Cell*, AK::Traits<JS::Cell*> >&) /src/serenity/Libraries/LibJS/Heap/Heap.cpp:149:21
+    #1 0x66af1f in JS::Heap::gather_roots(AK::HashTable<JS::Cell*, AK::Traits<JS::Cell*> >&) /src/serenity/Libraries/LibJS/Heap/Heap.cpp:108:5
+    #2 0x66a7e6 in JS::Heap::collect_garbage(JS::Heap::CollectionType, bool) /src/serenity/Libraries/LibJS/Heap/Heap.cpp:99:9
+    #3 0x6851a4 in JS::GlobalObject::gc(JS::VM&, JS::GlobalObject&) /src/serenity/Libraries/LibJS/Runtime/GlobalObject.cpp:183:15
+    #4 0x68ee62 in AK::Function<JS::Value (JS::VM&, JS::GlobalObject&)>::CallableWrapper<JS::Value (*)(JS::VM&, JS::GlobalObject&)>::call(JS::VM&, JS::GlobalObject&) const /src/serenity/Meta/Lagom/build/../../../AK/Function.h:101:58
+    #5 0x8ae277 in AK::Function<JS::Value (JS::VM&, JS::GlobalObject&)>::operator()(JS::VM&, JS::GlobalObject&) const /src/serenity/Meta/Lagom/build/../../../AK/Function.h:58:36
+    #6 0x8ae1e0 in JS::NativeFunction::call() /src/serenity/Libraries/LibJS/Runtime/NativeFunction.cpp:63:12
+    #7 0x74d698 in JS::VM::call_internal(JS::Function&, JS::Value, AK::Optional<JS::MarkedValueList>) /src/serenity/Libraries/LibJS/Runtime/VM.cpp:353:28
+    #8 0x842a67 in JS::Value JS::VM::call<JS::MarkedValueList>(JS::Function&, JS::Value, JS::MarkedValueList) /src/serenity/Meta/Lagom/build/../../../Libraries/LibJS/Runtime/VM.h:282:118
+    #9 0x842a67 in JS::TaggedTemplateLiteral::execute(JS::Interpreter&, JS::GlobalObject&) const /src/serenity/Libraries/LibJS/AST.cpp:1982:15
+    #10 0x81e411 in JS::ExpressionStatement::execute(JS::Interpreter&, JS::GlobalObject&) const /src/serenity/Libraries/LibJS/AST.cpp:126:26
+    #11 0x5a4a15 in JS::Interpreter::execute_statement(JS::GlobalObject&, JS::Statement const&, JS::ScopeType) /src/serenity/Libraries/LibJS/Interpreter.cpp:173:38
+    #12 0x81da7f in JS::Program::execute(JS::Interpreter&, JS::GlobalObject&) const /src/serenity/Libraries/LibJS/AST.cpp:102:24
+    #13 0x5a0d98 in JS::Interpreter::run(JS::GlobalObject&, JS::Program const&) /src/serenity/Libraries/LibJS/Interpreter.cpp:78:27
+    #14 0x5981f7 in LLVMFuzzerTestOneInput /src/serenity/Meta/Lagom/build/../Fuzzers/FuzzJs.cpp:44:22
+    #15 0x59656e in ExecuteFilesOnyByOne /src/libfuzzer/afl/afl_driver.cpp:207:5
+    #16 0x59656e in main /src/libfuzzer/afl/afl_driver.cpp:244:12
+    #17 0x7f8ce6f3483f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2083f)
+    #18 0x4e8658 in _start (/out/FuzzJs+0x4e8658)
+
+DEDUP_TOKEN: JS::Heap::gather_conservative_roots(AK::HashTable<JS::Cell*, AK::Traits<JS::Cell*> >&)--JS::Heap::gather_roots(AK::HashTable<JS::Cell*, AK::Traits<JS::Cell*> >&)--JS::Heap::collect_garbage(JS::Heap::CollectionType, bool)
+Address 0x7fff576ff688 is located in stack of thread T0 at offset 40 in frame
+    #0 0x66c9bf in JS::Heap::gather_conservative_roots(AK::HashTable<JS::Cell*, AK::Traits<JS::Cell*> >&) /src/serenity/Libraries/LibJS/Heap/Heap.cpp:128
+
+DEDUP_TOKEN: JS::Heap::gather_conservative_roots(AK::HashTable<JS::Cell*, AK::Traits<JS::Cell*> >&)
+  This frame has 9 object(s):
+    [32, 40) 'dummy' (line 129) <== Memory access at offset 40 overflows this variable
+    [64, 264) 'buf' (line 135)
+    [336, 368) 'possible_pointers' (line 138)
+    [400, 408) 'data' (line 149)
+    [432, 464) 'all_live_heap_blocks' (line 153)
+    [496, 504) '__begin1' (line 159)
+    [528, 536) '__end1' (line 159)
+    [560, 568) 'possible_heap_block' (line 165)
+    [592, 600) 'cell' (line 167)
+HINT: this may be a false positive if your program uses some custom stack unwind mechanism, swapcontext or vfork
+      (longjmp and C++ exceptions *are* supported)
+SUMMARY: AddressSanitizer: stack-buffer-overflow /src/serenity/Libraries/LibJS/Heap/Heap.cpp:149:21 in JS::Heap::gather_conservative_roots(AK::HashTable<JS::Cell*, AK::Traits<JS::Cell*> >&)
+Shadow bytes around the buggy address:
+  0x10006aed7e80: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x10006aed7e90: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x10006aed7ea0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x10006aed7eb0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x10006aed7ec0: 00 00 00 00 00 00 00 00 00 00 00 00 f1 f1 f1 f1
+=>0x10006aed7ed0: 00[f2]f2 f2 00 00 00 00 00 00 00 00 00 00 00 00
+  0x10006aed7ee0: 00 00 00 00 00 00 00 00 00 00 00 00 00 f2 f2 f2
+  0x10006aed7ef0: f2 f2 f2 f2 f2 f2 00 00 00 00 f2 f2 f2 f2 00 f2
+  0x10006aed7f00: f2 f2 f8 f8 f8 f8 f2 f2 f2 f2 f8 f2 f2 f2 f8 f2
+  0x10006aed7f10: f2 f2 f8 f2 f2 f2 f8 f3 f3 f3 f3 f3 00 00 00 00
+  0x10006aed7f20: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+  Shadow gap:              cc
+==7==ABORTING

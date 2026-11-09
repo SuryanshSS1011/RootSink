@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042524646",
+  "chain": "CWE-416->CWE-787",
+  "project": "wireshark",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42524646",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "e9376e47307daf4dd81658b8d0c356e0936b692c",
+      "fix_commits": [
+        "e9376e47307daf4dd81658b8d0c356e0936b692c"
+      ],
+      "repo": "https://github.com/wireshark/wireshark"
+    },
+    "patch": "From e9376e47307daf4dd81658b8d0c356e0936b692c Mon Sep 17 00:00:00 2001\nFrom: Jakub Zawadzki <darkjames-ws@darkjames.pl>\nDate: Sun, 4 Feb 2018 10:12:31 +0100\nSubject: [PATCH] h225: Fix use after free.\n\nnext_tvb_add_handle() allocates memory in packet scope.\nWhen dissecting another packet from dissect_h225_h225_RasMessage() handler [it don't call next_tvb_init()]\nnext_tvb_add_handle() will write to freed pointer.\n\nFix by calling next_tvb_init() after leaving scope in order to clear list->last pointer.\n\nASAN report:\nERROR: AddressSanitizer: heap-use-after-free on address 0x6070000854f0 at pc 0x00000208574a bp 0x7ffca839cf00 sp 0x7ffca839cef8\nWRITE of size 8 at 0x6070000854f0 thread T0\n    #0 0x2085749 in next_tvb_add_handle /src/wireshark/epan/next_tvb.c\n    #1 0xef8728 in dissect_h225_ParallelH245Control_item /src/wireshark/epan/dissectors/./asn1/h225/h225.cnf:368:3\n(...)\n    #21 0x168f460 in dissect_per_sequence /src/wireshark/epan/dissectors/packet-per.c:1920:12\n    #22 0xef31d3 in dissect_h225_InfoRequestResponse /src/wireshark/epan/dissectors/./asn1/h225/h225.cnf:910:12\n    #23 0x168e7db in dissect_per_choice /src/wireshark/epan/dissectors/packet-per.c\n    #24 0xeed6e3 in dissect_h225_RasMessage /src/wireshark/epan/dissectors/./asn1/h225/h225.cnf:298:12\n    #25 0xef97af in dissect_RasMessage_PDU /src/wireshark/epan/dissectors/./asn1/h225/h225.cnf:339:12\n    #26 0xeef872 in dissect_h225_h225_RasMessage /src/wireshark/epan/dissectors/./asn1/h225/packet-h225-template.c:385:12\n\n0x6070000854f0 is located 0 bytes inside of 72-byte region [0x6070000854f0,0x607000085538)\nfreed by thread T0 here:\n    #0 0x4e2528 in __interceptor_cfree.localalias.0 /src/llvm/projects/compiler-rt/lib/asan/asan_malloc_linux.cc:76\n    #1 0x21263a1 in wmem_simple_free_all /src/wireshark/epan/wmem/wmem_allocator_simple.c:107:9\n    #2 0x205aa4d in wmem_leave_packet_scope /src/wireshark/epan/wmem/wmem_scopes.c:81:5\n(...)\n\npreviously allocated by thread T0 here:\n    #0 0x4e26e8 in __interceptor_malloc /src/llvm/projects/compiler-rt/lib/asan/asan_malloc_linux.cc:88\n    #1 0x225c588 in g_malloc (/out/fuzzshark_test+0x225c588)\n    #2 0x20855e0 in next_tvb_add_handle /src/wireshark/epan/next_tvb.c:40:10\n    #3 0xef8728 in dissect_h225_ParallelH245Control_item /src/wireshark/epan/dissectors/./asn1/h225/h225.cnf:368:3\n\nFound by oss-fuzz/5921\n\nChange-Id: Iea006914a9e0c433d2073f6f4c7a2973d5a33a11\nLink: https://bugs.chromium.org/p/oss-fuzz/issues/detail?id=5921\nReviewed-on: https://code.wireshark.org/review/25593\nPetri-Dish: Jakub Zawadzki <darkjames-ws@darkjames.pl>\nTested-by: Petri Dish Buildbot\nReviewed-by: Anders Broman <a.broman58@gmail.com>\n---\n .../asn1/h225/packet-h225-template.c          | 12 ++++++++++\n epan/dissectors/packet-h225.c                 | 22 ++++++++++++++-----\n 2 files changed, 29 insertions(+), 5 deletions(-)\n\ndiff --git a/epan/dissectors/asn1/h225/packet-h225-template.c b/epan/dissectors/asn1/h225/packet-h225-template.c\nindex e39971d..c92f536 100644\n--- a/epan/dissectors/asn1/h225/packet-h225-template.c\n+++ b/epan/dissectors/asn1/h225/packet-h225-template.c\n@@ -44,6 +44,7 @@\n #include <epan/tap.h>\n #include <epan/stat_tap_ui.h>\n #include <epan/rtd_table.h>\n+#include \"packet-frame.h\"\n #include \"packet-tpkt.h\"\n #include \"packet-per.h\"\n #include \"packet-h225.h\"\n@@ -329,6 +330,14 @@ h225ras_call_t * append_h225ras_call(h225ras_call_t *prev_call, packet_info *pin\n   return h225ras_call;\n }\n \n+static void\n+h225_frame_end(void)\n+{\n+  /* next_tvb pointers are allocated in packet scope, clear it. */\n+  next_tvb_init(&h245_list);\n+  next_tvb_init(&tp_list);\n+}\n+\n static int\n dissect_h225_H323UserInformation(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data _U_)\n {\n@@ -342,6 +351,7 @@ dissect_h225_H323UserInformation(tvbuff_t *tvb, packet_info *pinfo, proto_tree *\n   h225_pi->msg_type = H225_CS;\n   p_add_proto_data(pinfo->pool, pinfo, proto_h225, 0, h225_pi);\n \n+  register_frame_end_routine(pinfo, h225_frame_end);\n   next_tvb_init(&h245_list);\n   next_tvb_init(&tp_list);\n \n@@ -377,6 +387,8 @@ dissect_h225_h225_RasMessage(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree\n   h225_pi->msg_type = H225_RAS;\n   p_add_proto_data(pinfo->pool, pinfo, proto_h225, 0, h225_pi);\n \n+  register_frame_end_routine(pinfo, h225_frame_end);\n+\n   col_set_str(pinfo->cinfo, COL_PROTOCOL, PSNAME);\n \n   it=proto_tree_add_protocol_format(tree, proto_h225, tvb, offset, -1, PSNAME\" RAS\");\ndiff --git a/epan/dissectors/packet-h225.c b/epan/dissectors/packet-h225.c\nindex 65fe553..ad85e2e 100644\n--- a/epan/dissectors/packet-h225.c\n+++ b/epan/dissectors/packet-h225.c\n@@ -52,6 +52,7 @@\n #include <epan/tap.h>\n #include <epan/stat_tap_ui.h>\n #include <epan/rtd_table.h>\n+#include \"packet-frame.h\"\n #include \"packet-tpkt.h\"\n #include \"packet-per.h\"\n #include \"packet-h225.h\"\n@@ -908,7 +909,7 @@ static int hf_h225_stopped = -1;                  /* NULL */\n static int hf_h225_notAvailable = -1;             /* NULL */\n \n /*--- End of included file: packet-h225-hf.c ---*/\n-#line 128 \"./asn1/h225/packet-h225-template.c\"\n+#line 129 \"./asn1/h225/packet-h225-template.c\"\n \n /* Initialize the subtree pointers */\n static gint ett_h225 = -1;\n@@ -1156,7 +1157,7 @@ static gint ett_h225_ServiceControlResponse = -1;\n static gint ett_h225_T_result = -1;\n \n /*--- End of included file: packet-h225-ett.c ---*/\n-#line 132 \"./asn1/h225/packet-h225-template.c\"\n+#line 133 \"./asn1/h225/packet-h225-template.c\"\n \n /* Preferences */\n static guint h225_tls_port = TLS_PORT_CS;\n@@ -7823,7 +7824,7 @@ static int dissect_RasMessage_PDU(tvbuff_t *tvb _U_, packet_info *pinfo _U_, pro\n \n \n /*--- End of included file: packet-h225-fn.c ---*/\n-#line 248 \"./asn1/h225/packet-h225-template.c\"\n+#line 249 \"./asn1/h225/packet-h225-template.c\"\n \n /* Forward declaration we need below */\n void proto_reg_handoff_h225(void);\n@@ -7908,6 +7909,14 @@ h225ras_call_t * append_h225ras_call(h225ras_call_t *prev_call, packet_info *pin\n   return h225ras_call;\n }\n \n+static void\n+h225_frame_end(void)\n+{\n+  /* next_tvb pointers are allocated in packet scope, clear it. */\n+  next_tvb_init(&h245_list);\n+  next_tvb_init(&tp_list);\n+}\n+\n static int\n dissect_h225_H323UserInformation(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void *data _U_)\n {\n@@ -7921,6 +7930,7 @@ dissect_h225_H323UserInformation(tvbuff_t *tvb, packet_info *pinfo, proto_tree *\n   h225_pi->msg_type = H225_CS;\n   p_add_proto_data(pinfo->pool, pinfo, proto_h225, 0, h225_pi);\n \n+  register_frame_end_routine(pinfo, h225_frame_end);\n   next_tvb_init(&h245_list);\n   next_tvb_init(&tp_list);\n \n@@ -7956,6 +7966,8 @@ dissect_h225_h225_RasMessage(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree\n   h225_pi->msg_type = H225_RAS;\n   p_add_proto_data(pinfo->pool, pinfo, proto_h225, 0, h225_pi);\n \n+  register_frame_end_routine(pinfo, h225_frame_end);\n+\n   col_set_str(pinfo->cinfo, COL_PROTOCOL, PSNAME);\n \n   it=proto_tree_add_protocol_format(tree, proto_h225, tvb, offset, -1, PSNAME\" RAS\");\n@@ -11476,7 +11488,7 @@ void proto_register_h225(void) {\n         NULL, HFILL }},\n \n /*--- End of included file: packet-h225-hfarr.c ---*/\n-#line 812 \"./asn1/h225/packet-h225-template.c\"\n+#line 824 \"./asn1/h225/packet-h225-template.c\"\n   };\n \n   /* List of subtrees */\n@@ -11726,7 +11738,7 @@ void proto_register_h225(void) {\n     &ett_h225_T_result,\n \n /*--- End of included file: packet-h225-ettarr.c ---*/\n-#line 818 \"./asn1/h225/packet-h225-template.c\"\n+#line 830 \"./asn1/h225/packet-h225-template.c\"\n   };\n \n   static tap_param h225_stat_params[] = {\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42524646-vul",
+      "digest": "sha256:952ab6a81a2171404e56e041fbaf6f9418b1c301e044c9e2e36fcc0a20f3e0d1"
+    },
+    "patched": {
+      "ref": "n132/arvo:42524646-fix",
+      "digest": "sha256:16a7a2097c4219ecac142bdee91ca3e90bbed0baf6583b06da69f729a5ae02d1"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "WRITE",
+        "crash_site": "/src/wireshark/epan/dissectors/./asn1/h225/h225.cnf:375",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "WRITE",
+        "site": "/src/wireshark/epan/dissectors/./asn1/h225/h225.cnf:375"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

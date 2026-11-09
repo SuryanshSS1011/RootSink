@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0376723679",
+  "chain": "CWE-1284->CWE-125",
+  "project": "unicorn",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "376723679",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "ada8091ccc08d15afbe9c0a6735334e8c94e4bb7",
+      "fix_commits": [
+        "ada8091ccc08d15afbe9c0a6735334e8c94e4bb7"
+      ],
+      "repo": "https://github.com/unicorn-engine/unicorn"
+    },
+    "patch": "diff --git a/qemu/target/s390x/translate.c b/qemu/target/s390x/translate.c\nindex 09eea03e60..e41a3b73b0 100644\n--- a/qemu/target/s390x/translate.c\n+++ b/qemu/target/s390x/translate.c\n@@ -28,6 +28,8 @@\n #  define LOG_DISAS(...) do { } while (0)\n #endif\n \n+#define NUM_REGS 16\n+\n #include \"qemu/osdep.h\"\n #include \"cpu.h\"\n #include \"internal.h\"\n@@ -2089,6 +2091,12 @@ static DisasJumpType op_cksm(DisasContext *s, DisasOps *o)\n     TCGContext *tcg_ctx = s->uc->tcg_ctx;\n     int r2 = get_field(s, r2);\n     TCGv_i64 len = tcg_temp_new_i64(tcg_ctx);\n+    \n+    if (r2 < 0 || r2 + 1 >= NUM_REGS) {\n+        // Handle invalid r2 index\n+        tcg_temp_free_i64(tcg_ctx, len);\n+        return DISAS_NORETURN;\n+    }\n \n     gen_helper_cksm(tcg_ctx, len, tcg_ctx->cpu_env, o->in1, o->in2, tcg_ctx->regs[r2 + 1]);\n     set_cc_static(s);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:376723679-vul",
+      "digest": "sha256:93aea9ae129c7d4410de5c3ef4ac107c478e70f4d1a7bd64a537c6a5cf6469c8"
+    },
+    "patched": {
+      "ref": "n132/arvo:376723679-fix",
+      "digest": "sha256:4619a21947538607aeda29c4feb92917ff91b16e881cb035307ef07cbaf31e08"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/unicorn/qemu/target/s390x/translate.c:2093",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/unicorn/qemu/target/s390x/translate.c:2093"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

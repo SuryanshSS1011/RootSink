@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-959462443",
+  "chain": "CWE-129->CWE-125",
+  "project": "ffmpeg",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42475961",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://git.ffmpeg.org/gitweb/ffmpeg.git/commitdiff/9351a156de724edb69ba6e1f05884fe806a13a21",
+      "fix_commits": [
+        "9351a156de724edb69ba6e1f05884fe806a13a21"
+      ],
+      "repo": "https://git.ffmpeg.org/gitweb/ffmpeg.git/commitdiff"
+    },
+    "patch": "From 9351a156de724edb69ba6e1f05884fe806a13a21 Mon Sep 17 00:00:00 2001\nFrom: Michael Niedermayer <michael@niedermayer.cc>\nDate: Sat, 13 May 2017 19:28:01 +0200\nSubject: [PATCH] avcodec/ac3dec: Keep track of band structure\n\nIt is needed in some corner cases that seem not to be forbidden\nFixes: out of array index\nFixes: 1538/clusterfuzz-testcase-minimized-4696904925446144\n\nFound-by: continuous fuzzing process https://github.com/google/oss-fuzz/tree/master/targets/ffmpeg\nSigned-off-by: Michael Niedermayer <michael@niedermayer.cc>\n---\n libavcodec/ac3dec.c | 27 +++++++++++++++------------\n libavcodec/ac3dec.h |  2 ++\n 2 files changed, 17 insertions(+), 12 deletions(-)\n\ndiff --git a/libavcodec/ac3dec.c b/libavcodec/ac3dec.c\nindex 7e2cbce..ffea9d3 100644\n--- a/libavcodec/ac3dec.c\n+++ b/libavcodec/ac3dec.c\n@@ -761,30 +761,31 @@ static void ac3_upmix_delay(AC3DecodeContext *s)\n  * @param[in] default_band_struct default band structure table\n  * @param[out] num_bands number of bands (optionally NULL)\n  * @param[out] band_sizes array containing the number of bins in each band (optionally NULL)\n+ * @param[in,out] band_struct current band structure\n  */\n static void decode_band_structure(GetBitContext *gbc, int blk, int eac3,\n                                   int ecpl, int start_subband, int end_subband,\n                                   const uint8_t *default_band_struct,\n-                                  int *num_bands, uint8_t *band_sizes)\n+                                  int *num_bands, uint8_t *band_sizes,\n+                                  uint8_t *band_struct, int band_struct_size)\n {\n     int subbnd, bnd, n_subbands, n_bands=0;\n     uint8_t bnd_sz[22];\n-    uint8_t coded_band_struct[22];\n-    const uint8_t *band_struct;\n \n     n_subbands = end_subband - start_subband;\n \n+    if (!blk)\n+        memcpy(band_struct, default_band_struct, band_struct_size);\n+\n+    av_assert0(band_struct_size >= start_subband + n_subbands);\n+\n+    band_struct += start_subband + 1;\n+\n     /* decode band structure from bitstream or use default */\n     if (!eac3 || get_bits1(gbc)) {\n         for (subbnd = 0; subbnd < n_subbands - 1; subbnd++) {\n-            coded_band_struct[subbnd] = get_bits1(gbc);\n+            band_struct[subbnd] = get_bits1(gbc);\n         }\n-        band_struct = coded_band_struct;\n-    } else if (!blk) {\n-        band_struct = &default_band_struct[start_subband+1];\n-    } else {\n-        /* no change in band structure */\n-        return;\n     }\n \n     /* calculate number of bands and band sizes based on band structure.\n@@ -863,7 +864,8 @@ static inline int spx_strategy(AC3DecodeContext *s, int blk)\n                           start_subband, end_subband,\n                           ff_eac3_default_spx_band_struct,\n                           &s->num_spx_bands,\n-                          s->spx_band_sizes);\n+                          s->spx_band_sizes,\n+                          s->spx_band_struct, sizeof(s->spx_band_struct));\n     return 0;\n }\n \n@@ -1000,7 +1002,8 @@ static inline int coupling_strategy(AC3DecodeContext *s, int blk,\n         decode_band_structure(bc, blk, s->eac3, 0, cpl_start_subband,\n                               cpl_end_subband,\n                               ff_eac3_default_cpl_band_struct,\n-                              &s->num_cpl_bands, s->cpl_band_sizes);\n+                              &s->num_cpl_bands, s->cpl_band_sizes,\n+                              s->cpl_band_struct, sizeof(s->cpl_band_struct));\n     } else {\n         /* coupling not in use */\n         for (ch = 1; ch <= fbw_channels; ch++) {\ndiff --git a/libavcodec/ac3dec.h b/libavcodec/ac3dec.h\nindex bac661c..aa4cf04 100644\n--- a/libavcodec/ac3dec.h\n+++ b/libavcodec/ac3dec.h\n@@ -128,6 +128,7 @@ typedef struct AC3DecodeContext {\n     int phase_flags_in_use;                 ///< phase flags in use                     (phsflginu)\n     int phase_flags[AC3_MAX_CPL_BANDS];     ///< phase flags                            (phsflg)\n     int num_cpl_bands;                      ///< number of coupling bands               (ncplbnd)\n+    uint8_t cpl_band_struct[AC3_MAX_CPL_BANDS];\n     uint8_t cpl_band_sizes[AC3_MAX_CPL_BANDS]; ///< number of coeffs in each coupling band\n     int firstchincpl;                       ///< first channel in coupling\n     int first_cpl_coords[AC3_MAX_CHANNELS]; ///< first coupling coordinates states      (firstcplcos)\n@@ -144,6 +145,7 @@ typedef struct AC3DecodeContext {\n     int spx_dst_start_freq;                     ///< spx starting frequency bin for copying (copystartmant)\n                                                 ///< the copy region ends at the start of the spx region.\n     int num_spx_bands;                          ///< number of spx bands                    (nspxbnds)\n+    uint8_t spx_band_struct[SPX_MAX_BANDS];\n     uint8_t spx_band_sizes[SPX_MAX_BANDS];      ///< number of bins in each spx band\n     uint8_t first_spx_coords[AC3_MAX_CHANNELS]; ///< first spx coordinates states           (firstspxcos)\n     INTFLOAT spx_noise_blend[AC3_MAX_CHANNELS][SPX_MAX_BANDS]; ///< spx noise blending factor  (nblendfact)\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42475961-vul",
+      "digest": "sha256:6161e00ad47137453c5c81194cb9da29ba39500fc567f5e71665826605f73f18"
+    },
+    "patched": {
+      "ref": "n132/arvo:42475961-fix",
+      "digest": "sha256:87e6e6bd2e2072ca189518e0f307b1f0c4722593cc064252dc15d83c36a5c379"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "crash_site": "/src/ffmpeg/libavcodec/eac3dec.c:114",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 129,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "site": "/src/ffmpeg/libavcodec/eac3dec.c:114"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

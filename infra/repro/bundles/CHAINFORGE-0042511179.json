@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042511179",
+  "chain": "CWE-456->CWE-457",
+  "project": "knot-dns",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42511179",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "564f616162494a63e4e61b64ff8cefd20fe1bddc",
+      "fix_commits": [
+        "564f616162494a63e4e61b64ff8cefd20fe1bddc"
+      ],
+      "repo": "https://gitlab.labs.nic.cz/knot/knot-dns"
+    },
+    "patch": "From 564f616162494a63e4e61b64ff8cefd20fe1bddc Mon Sep 17 00:00:00 2001\nFrom: Daniel Salzman <daniel.salzman@nic.cz>\nDate: Sat, 30 Apr 2022 14:26:27 +0200\nSubject: [PATCH] contrib: use bzero() instead of explicit_bzero() inside\n memzero() if MSAN detected\n\nMSAN is unable to correctly evaluate explicit_bzero() for memory zeroing in\nwire_ctx operations. Then OSS-Fuzz creates false-positive issues. Using bzero()\nseems to be a reasonable workaround.\n---\n src/contrib/string.c | 9 +++++++++\n 1 file changed, 9 insertions(+)\n\ndiff --git a/src/contrib/string.c b/src/contrib/string.c\nindex 0186686..b4966ad 100644\n--- a/src/contrib/string.c\n+++ b/src/contrib/string.c\n@@ -148,7 +148,16 @@ void *memzero(void *s, size_t n)\n \t\t\t\t\t/* In FreeBSD since 11.0. */\n \t\t\t\t\t/* In glibc since 2.25. */\n \t\t\t\t\t/* In DragonFly BSD since 5.5. */\n+#  if defined(__has_feature)\n+#    if __has_feature(memory_sanitizer)\n+\t#warning \"Memory sanitizer detected. Using bzero() instead of explicit_bzero().\"\n+\tbzero(s, n);\n+#    else\n \texplicit_bzero(s, n);\n+#    endif\n+#  else\n+\texplicit_bzero(s, n);\n+#  endif\n \treturn s;\n #elif defined(HAVE_EXPLICIT_MEMSET)\t/* In NetBSD since 7.0. */\n \treturn explicit_memset(s, 0, n);\n-- \n2.55.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42511179-vul",
+      "digest": "sha256:30578901b7067511ff085f8ed3cd9910cbd55915f6b6c033d08564d4714cadfc"
+    },
+    "patched": {
+      "ref": "n132/arvo:42511179-fix",
+      "digest": "sha256:8846c3fee4bea691b782a4245f082d77de392d3222102e00313873be28775c39"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/knot-dns/src/libknot/rrtype/tsig.c:106",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/knot-dns/src/libknot/rrtype/tsig.c:106"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

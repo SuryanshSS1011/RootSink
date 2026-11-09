@@ -1,0 +1,77 @@
+======================= INFO =========================
+This binary is built for AFL-fuzz.
+To run the target function on individual input(s) execute this:
+  /out/ffmpeg_AV_CODEC_ID_MPEG4_fuzzer < INPUT_FILE
+or
+  /out/ffmpeg_AV_CODEC_ID_MPEG4_fuzzer INPUT_FILE1 [INPUT_FILE2 ... ]
+To fuzz with afl-fuzz execute this:
+  afl-fuzz [afl-flags] /out/ffmpeg_AV_CODEC_ID_MPEG4_fuzzer [-N]
+afl-fuzz will run N iterations before re-spawning the process (default: 1000)
+======================================================
+Reading 825 bytes from /tmp/poc
+=================================================================
+==4152772==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x626000002cda at pc 0x00000055a146 bp 0x7fff72471ba0 sp 0x7fff72471b98
+READ of size 1 at 0x626000002cda thread T0
+SCARINESS: 22 (1-byte-read-heap-buffer-overflow-far-from-bounds)
+    #0 0x55a145 in mpeg4_decode_studio_block /src/ffmpeg/libavcodec/mpeg4videodec.c:1900:17
+    #1 0x558a43 in mpeg4_decode_studio_mb /src/ffmpeg/libavcodec/mpeg4videodec.c:1942:17
+    #2 0x618dc8 in decode_slice /src/ffmpeg/libavcodec/h263dec.c:268:19
+    #3 0x616e79 in ff_h263_decode_frame /src/ffmpeg/libavcodec/h263dec.c:645:17
+    #4 0x5406d6 in decode_simple_internal /src/ffmpeg/libavcodec/decode.c:398:15
+    #5 0x540395 in decode_simple_receive_frame /src/ffmpeg/libavcodec/decode.c:594:15
+    #6 0x536cad in decode_receive_frame_internal /src/ffmpeg/libavcodec/decode.c:612:15
+    #7 0x536284 in avcodec_send_packet /src/ffmpeg/libavcodec/decode.c:674:15
+    #8 0x537633 in compat_decode /src/ffmpeg/libavcodec/decode.c:769:15
+    #9 0x52ec6a in LLVMFuzzerTestOneInput /src/ffmpeg/tools/target_dec_fuzzer.c:245:23
+    #10 0x93077f in ExecuteFilesOnyByOne(int, char**) /src/libfuzzer/afl/afl_driver.cpp:301:5
+    #11 0x930d2e in main /src/libfuzzer/afl/afl_driver.cpp:339:12
+    #12 0x14bfccb9682f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+    #13 0x41d4c8 in _start (/out/ffmpeg_AV_CODEC_ID_MPEG4_fuzzer+0x41d4c8)
+
+DEDUP_TOKEN: mpeg4_decode_studio_block--mpeg4_decode_studio_mb--decode_slice
+0x626000002cda is located 10 bytes to the right of 11216-byte region [0x626000000100,0x626000002cd0)
+allocated by thread T0 here:
+    #0 0x4ec018 in __interceptor_posix_memalign /src/llvm/projects/compiler-rt/lib/asan/asan_malloc_linux.cc:194
+    #1 0x8d9be9 in av_malloc /src/ffmpeg/libavutil/mem.c:87:9
+    #2 0x8da2ab in av_mallocz /src/ffmpeg/libavutil/mem.c:238:17
+    #3 0x5be62f in avcodec_open2 /src/ffmpeg/libavcodec/utils.c:619:32
+    #4 0x52e531 in LLVMFuzzerTestOneInput /src/ffmpeg/tools/target_dec_fuzzer.c:190:15
+    #5 0x93077f in ExecuteFilesOnyByOne(int, char**) /src/libfuzzer/afl/afl_driver.cpp:301:5
+    #6 0x930d2e in main /src/libfuzzer/afl/afl_driver.cpp:339:12
+    #7 0x14bfccb9682f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+
+DEDUP_TOKEN: __interceptor_posix_memalign--av_malloc--av_mallocz
+SUMMARY: AddressSanitizer: heap-buffer-overflow /src/ffmpeg/libavcodec/mpeg4videodec.c:1900:17 in mpeg4_decode_studio_block
+Shadow bytes around the buggy address:
+  0x0c4c7fff8540: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c4c7fff8550: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c4c7fff8560: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c4c7fff8570: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c4c7fff8580: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x0c4c7fff8590: 00 00 00 00 00 00 00 00 00 00 fa[fa]fa fa fa fa
+  0x0c4c7fff85a0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c4c7fff85b0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c4c7fff85c0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c4c7fff85d0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c4c7fff85e0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+  Shadow gap:              cc
+==4152772==ABORTING

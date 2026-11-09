@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042508631",
+  "chain": "CWE-1284->CWE-787",
+  "project": "fmt",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42508631",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "86477f7ecc1606e15abae1ff784e6b0c55d99619",
+      "fix_commits": [
+        "86477f7ecc1606e15abae1ff784e6b0c55d99619"
+      ],
+      "repo": "https://github.com/fmtlib/fmt"
+    },
+    "patch": "diff --git a/include/fmt/format.h b/include/fmt/format.h\nindex 22c0d1b41022..d71715498d8c 100644\n--- a/include/fmt/format.h\n+++ b/include/fmt/format.h\n@@ -2101,8 +2101,9 @@ FMT_CONSTEXPR20 auto do_write_float(OutputIt out, const DecimalFP& fp,\n       throw std::runtime_error(\"fuzz mode - avoiding excessive cpu use\");\n #endif\n     if (fspecs.showpoint) {\n+      ++size;\n       if (num_zeros <= 0 && fspecs.format != float_format::fixed) num_zeros = 1;\n-      if (num_zeros > 0) size += to_unsigned(num_zeros) + 1;\n+      if (num_zeros > 0) size += to_unsigned(num_zeros);\n     }\n     auto grouping = Grouping(loc, fspecs.locale);\n     size += to_unsigned(grouping.count_separators(significand_size));\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42508631-vul",
+      "digest": "sha256:71fda7d2d6a5d52d672a227ccf55609ed41bcf1c170bec46aa59aae278f77c74"
+    },
+    "patched": {
+      "ref": "n132/arvo:42508631-fix",
+      "digest": "sha256:60e03deecd2d280bf92f4f07be4e5c6e3ffe3885d5314a13599f7126978ae556"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/fmt/include/fmt/format.h:2089",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/fmt/include/fmt/format.h:2089"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

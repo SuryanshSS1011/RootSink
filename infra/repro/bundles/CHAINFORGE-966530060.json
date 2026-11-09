@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-966530060",
+  "chain": "CWE-456->CWE-457",
+  "project": "open62541",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42481220",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/open62541/open62541/commit/f642222c77731dfe624e919c83b84c282cb68c0b",
+      "fix_commits": [
+        "f642222c77731dfe624e919c83b84c282cb68c0b"
+      ],
+      "repo": "https://github.com/open62541/open62541"
+    },
+    "patch": "diff --git a/src/ua_types_encoding_json.c b/src/ua_types_encoding_json.c\nindex f44c987152e..61bc2455538 100644\n--- a/src/ua_types_encoding_json.c\n+++ b/src/ua_types_encoding_json.c\n@@ -2321,63 +2321,41 @@ lookAheadForKey(const char* search, CtxJson *ctx,\n }\n \n /* Function used to jump over an object which cannot be parsed */\n-static status\n-jumpOverRec(CtxJson *ctx, ParseCtx *parseCtx,\n-            size_t *resultIndex, UA_UInt16 depth) {\n-    UA_StatusCode ret = UA_STATUSCODE_BADDECODINGERROR;\n+static UA_StatusCode\n+jumpOverRec(CtxJson *ctx, ParseCtx *parseCtx) {\n+    if(ctx->depth >= UA_JSON_ENCODING_MAX_RECURSION - 1)\n+        return UA_STATUSCODE_BADENCODINGERROR;\n+\n     CHECK_TOKEN_BOUNDS;\n-    \n-    if(parseCtx->tokenArray[parseCtx->index].type == JSMN_OBJECT) {\n-        size_t objectCount = (size_t)(parseCtx->tokenArray[parseCtx->index].size);\n-        \n-        parseCtx->index++; /*Object to first Key*/\n-        CHECK_TOKEN_BOUNDS;\n-        \n-        size_t i;\n-        for(i = 0; i < objectCount; i++) {\n-            CHECK_TOKEN_BOUNDS;\n-             \n-            parseCtx->index++; /*value*/\n-            CHECK_TOKEN_BOUNDS;\n-            \n-            if(parseCtx->tokenArray[parseCtx->index].type == JSMN_OBJECT) {\n-               jumpOverRec(ctx, parseCtx, resultIndex, (UA_UInt16)(depth + 1));\n-            } else if(parseCtx->tokenArray[parseCtx->index].type == JSMN_ARRAY) {\n-               jumpOverRec(ctx, parseCtx, resultIndex, (UA_UInt16)(depth + 1));\n-            } else {\n-                /*Only Primitive or string*/\n-                parseCtx->index++;\n-            }\n-        }\n-    } else if(parseCtx->tokenArray[parseCtx->index].type == JSMN_ARRAY) {\n-        size_t arraySize = (size_t)(parseCtx->tokenArray[parseCtx->index].size);\n+    size_t count = (size_t)(parseCtx->tokenArray[parseCtx->index].size);\n+    if(parseCtx->tokenArray[parseCtx->index].type == JSMN_OBJECT)\n+        count = count * 2; /* The size is for both keys and values */\n         \n-        parseCtx->index++; /*Object to first element*/\n+    ctx->depth++;\n+    UA_StatusCode res = UA_STATUSCODE_GOOD;\n+    for(size_t i = 0; i < count; i++) {\n+        parseCtx->index++;\n         CHECK_TOKEN_BOUNDS;\n-        \n-        size_t i;\n-        for(i = 0; i < arraySize; i++) {\n-            if(parseCtx->tokenArray[parseCtx->index].type == JSMN_OBJECT) {\n-               jumpOverRec(ctx, parseCtx, resultIndex, (UA_UInt16)(depth + 1));\n-            } else if(parseCtx->tokenArray[parseCtx->index].type == JSMN_ARRAY) {\n-               jumpOverRec(ctx, parseCtx, resultIndex, (UA_UInt16)(depth + 1));\n-            } else {\n-                /*Only Primitive or string*/\n-                parseCtx->index++;\n-            }\n+        if(parseCtx->tokenArray[parseCtx->index].type == JSMN_OBJECT ||\n+           parseCtx->tokenArray[parseCtx->index].type == JSMN_ARRAY) {\n+            res |= jumpOverRec(ctx, parseCtx);\n         }\n     }\n-    return ret;\n+    ctx->depth--;\n+\n+    return res;\n }\n \n-static status\n+/* returns the index */\n+static UA_StatusCode\n jumpOverObject(CtxJson *ctx, ParseCtx *parseCtx, size_t *resultIndex) {\n     UA_UInt16 oldIndex = parseCtx->index; /* Save index for later restore */\n-    UA_UInt16 depth = 0;\n-    jumpOverRec(ctx, parseCtx, resultIndex, depth);\n+    ctx->depth++;\n+    UA_StatusCode res = jumpOverRec(ctx, parseCtx);\n+    ctx->depth--;\n     *resultIndex = parseCtx->index;\n     parseCtx->index = oldIndex; /* Restore index */\n-    return UA_STATUSCODE_GOOD;\n+    return res;\n }\n \n static status\n@@ -2824,10 +2802,8 @@ DECODE_JSON(ExtensionObject) {\n             memcpy(dst->content.encoded.body.data, bodyJsonString, (size_t)sizeOfJsonString);\n             \n             size_t tokenAfteExtensionObject = 0;\n-            jumpOverObject(ctx, parseCtx, &tokenAfteExtensionObject);\n-            \n-            if(tokenAfteExtensionObject == 0) {\n-                /*next object token not found*/\n+            ret = jumpOverObject(ctx, parseCtx, &tokenAfteExtensionObject);\n+            if(ret != UA_STATUSCODE_GOOD) {\n                 UA_NodeId_deleteMembers(&typeId);\n                 UA_ByteString_deleteMembers(&dst->content.encoded.body);\n                 return UA_STATUSCODE_BADDECODINGERROR;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42481220-vul",
+      "digest": "sha256:af2bb7505862ac127f985b0b5da8b9a89ed4123a1c49fc4115d582b6ec05afce"
+    },
+    "patched": {
+      "ref": "n132/arvo:42481220-fix",
+      "digest": "sha256:68bcbb708c3d2dc30c582d68d99f88255417f7e6ff70f1b46687bc5067406cf4"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/open62541/src/ua_types_encoding_json.c:2353",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/open62541/src/ua_types_encoding_json.c:2353"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

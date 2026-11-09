@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-968557448",
+  "chain": "CWE-456->CWE-457",
+  "project": "dav1d",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42507266",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://code.videolan.org/videolan/dav1d.git726f5856df30ea84a3ffda707c18d2d6472f9730",
+      "fix_commits": [
+        "726f5856df30ea84a3ffda707c18d2d6472f9730"
+      ],
+      "repo": "https://code.videolan.org/videolan/dav1d.git"
+    },
+    "patch": "From 726f5856df30ea84a3ffda707c18d2d6472f9730 Mon Sep 17 00:00:00 2001\nFrom: Henrik Gramner <gramner@twoorioles.com>\nDate: Wed, 12 Jan 2022 16:56:06 +0100\nSubject: [PATCH] Silence false positive msan warnings in CPU detection code\n\n---\n src/cpu.c | 9 ++-------\n 1 file changed, 2 insertions(+), 7 deletions(-)\n\ndiff --git a/src/cpu.c b/src/cpu.c\nindex a8c0abb..2e5e8d9 100644\n--- a/src/cpu.c\n+++ b/src/cpu.c\n@@ -49,16 +49,11 @@\n #endif\n \n static unsigned flags = 0;\n-\n-#if __has_feature(memory_sanitizer)\n-// memory sanitizer is inherently incompatible with asm\n-static unsigned flags_mask = 0;\n-#else\n static unsigned flags_mask = -1;\n-#endif\n \n COLD void dav1d_init_cpu(void) {\n-#if HAVE_ASM\n+#if HAVE_ASM && !__has_feature(memory_sanitizer)\n+// memory sanitizer is inherently incompatible with asm\n #if ARCH_AARCH64 || ARCH_ARM\n     flags = dav1d_get_cpu_flags_arm();\n #elif ARCH_PPC64LE\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42507266-vul",
+      "digest": "sha256:de344e82ac1f23e78579ab2e829fafd3bdbfd4d32c635b5f58c7b1acf986264a"
+    },
+    "patched": {
+      "ref": "n132/arvo:42507266-fix",
+      "digest": "sha256:84b38977fb9c848a4c8751ba03d1b0d821a0b61b91f74187eb561b4c4f2b800e"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": null,
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": null
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

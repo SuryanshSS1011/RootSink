@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-961881560",
+  "chain": "CWE-456->CWE-457",
+  "project": "wavpack",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42481162",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/dbry/WavPack/commit/c4e193f3a360817eb097fb54f2f9f84d5dda7112",
+      "fix_commits": [
+        "c4e193f3a360817eb097fb54f2f9f84d5dda7112"
+      ],
+      "repo": "https://github.com/dbry/WavPack"
+    },
+    "patch": "diff --git a/fuzzing/regression/clusterfuzz-testcase-minimized-fuzzer-5730671461138432 b/fuzzing/regression/clusterfuzz-testcase-minimized-fuzzer-5730671461138432\nnew file mode 100644\nindex 00000000..96572c5b\nBinary files /dev/null and b/fuzzing/regression/clusterfuzz-testcase-minimized-fuzzer-5730671461138432 differ\ndiff --git a/src/tag_utils.c b/src/tag_utils.c\nindex 2040e1c4..d3825b6a 100644\n--- a/src/tag_utils.c\n+++ b/src/tag_utils.c\n@@ -186,11 +186,11 @@ int WavpackDeleteTagItem (WavpackContext *wpc, const char *item)\n         unsigned char *q = p + m_tag->ape_tag_hdr.length - sizeof (APE_Tag_Hdr);\n         int i;\n \n-        for (i = 0; i < m_tag->ape_tag_hdr.item_count; ++i) {\n+        for (i = 0; i < m_tag->ape_tag_hdr.item_count && q - p > 8; ++i) {\n             int vsize, isize;\n \n             vsize = p[0] + (p[1] << 8) + (p[2] << 16) + (p[3] << 24); p += 8;   // skip flags because we don't need them\n-            for (isize = 0; p[isize] && p + isize < q; ++isize);\n+            for (isize = 0; p + isize < q && p[isize]; ++isize);\n \n             if (vsize < 0 || vsize > m_tag->ape_tag_hdr.length || p + isize + vsize + 1 > q)\n                 break;\n@@ -242,7 +242,7 @@ static int get_ape_tag_item (M_Tag *m_tag, const char *item, char *value, int si\n \n         vsize = p[0] + (p[1] << 8) + (p[2] << 16) + (p[3] << 24); p += 4;\n         flags = p[0] + (p[1] << 8) + (p[2] << 16) + (p[3] << 24); p += 4;\n-        for (isize = 0; p[isize] && p + isize < q; ++isize);\n+        for (isize = 0; p + isize < q && p[isize]; ++isize);\n \n         if (vsize < 0 || vsize > m_tag->ape_tag_hdr.length || p + isize + vsize + 1 > q)\n             break;\n@@ -333,7 +333,7 @@ static int get_ape_tag_item_indexed (M_Tag *m_tag, int index, char *item, int si\n \n         vsize = p[0] + (p[1] << 8) + (p[2] << 16) + (p[3] << 24); p += 4;\n         flags = p[0] + (p[1] << 8) + (p[2] << 16) + (p[3] << 24); p += 4;\n-        for (isize = 0; p[isize] && p + isize < q; ++isize);\n+        for (isize = 0; p + isize < q && p[isize]; ++isize);\n \n         if (vsize < 0 || vsize > m_tag->ape_tag_hdr.length || p + isize + vsize + 1 > q)\n             break;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42481162-vul",
+      "digest": "sha256:6334276a9b81fd3a56f916f9285d5936c408d44713baa9ab005f7e5e85e5d44b"
+    },
+    "patched": {
+      "ref": "n132/arvo:42481162-fix",
+      "digest": "sha256:e7033bf6d6a63fa2248527acbca84b12fae4fd9b75cc414fb1567164adce24ec"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/wavpack/src/tag_utils.c:195",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/wavpack/src/tag_utils.c:195"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

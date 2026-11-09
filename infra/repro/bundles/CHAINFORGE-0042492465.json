@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042492465",
+  "chain": "CWE-416->CWE-125",
+  "project": "selinux",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42492465",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "eba0ffee01ee11bb4fc3f6505d9cf69693088621",
+      "fix_commits": [
+        "eba0ffee01ee11bb4fc3f6505d9cf69693088621"
+      ],
+      "repo": "https://github.com/SELinuxProject/selinux"
+    },
+    "patch": "From eba0ffee01ee11bb4fc3f6505d9cf69693088621 Mon Sep 17 00:00:00 2001\nFrom: James Carter <jwcart2@gmail.com>\nDate: Tue, 2 Feb 2021 15:54:17 -0500\nSubject: [PATCH] libsepol/cil: Fix heap-use-after-free when using optional\n blockinherit\n\nThis is based on a patch by Nicolas Iooss. He writes:\n    When secilc compiles the following policy:\n\n        (block b1\n            (optional o1\n                (blockinherit b1)\n                (blockinherit x)\n            )\n        )\n\n    it disables the optional block at pass 3 (CIL_PASS_BLKIN_LINK)\n    because the block \"x\" does not exist.\n    __cil_resolve_ast_last_child_helper() calls\n    cil_tree_children_destroy() on the optional block, which destroys\n    the two blockinherit statements. But the (blockinherit b1) node\n    was referenced inside (block b1) node, in its block->bi_nodes list.\n    Therefore, when this list is used at pass 4 (CIL_PASS_BLKIN_COPY),\n    it contains a node which was freed: this triggers a use-after-free\n    issue\n\n    Fix this issue by removing blockinherit nodes from their lists of\n    nodes block->bi_nodes when they are being destroyed. As\n    cil_destroy_blockinherit() does not have a reference to the node\n    containing the blockinherit data, implement this new logic in\n    cil_tree_node_destroy().\n\n    This issue was found while investigating a testcase from an OSS-Fuzz\n    issue which seems unrelated (a Null-dereference READ in\n    cil_symtab_get_datum,\n    https://bugs.chromium.org/p/oss-fuzz/issues/detail?id=29861).\n\nReported-by: Nicolas Iooss <nicolas.iooss@m4x.org>\nSigned-off-by: James Carter <jwcart2@gmail.com>\nAcked-by: Nicolas Iooss <nicolas.iooss@m4x.org>\n---\n libsepol/cil/src/cil_build_ast.c | 13 +++++++++++++\n 1 file changed, 13 insertions(+)\n\ndiff --git a/libsepol/cil/src/cil_build_ast.c b/libsepol/cil/src/cil_build_ast.c\nindex c6edcde..5094d62 100644\n--- a/libsepol/cil/src/cil_build_ast.c\n+++ b/libsepol/cil/src/cil_build_ast.c\n@@ -300,6 +300,19 @@ void cil_destroy_blockinherit(struct cil_blockinherit *inherit)\n \t\treturn;\n \t}\n \n+\tif (inherit->block != NULL && inherit->block->bi_nodes != NULL) {\n+\t\tstruct cil_tree_node *node;\n+\t\tstruct cil_list_item *item;\n+\n+\t\tcil_list_for_each(item, inherit->block->bi_nodes) {\n+\t\t\tnode = item->data;\n+\t\t\tif (node->data == inherit) {\n+\t\t\t\tcil_list_remove(inherit->block->bi_nodes, CIL_NODE, node, CIL_FALSE);\n+\t\t\t\tbreak;\n+\t\t\t}\n+\t\t}\n+\t}\n+\n \tfree(inherit);\n }\n \n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42492465-vul",
+      "digest": "sha256:72edbf822c904df16e852e145f006e1f170126750452bc73c6b80c36b1cb29f0"
+    },
+    "patched": {
+      "ref": "n132/arvo:42492465-fix",
+      "digest": "sha256:7a3ecf7d03051af7502f462c5f3d556fdc3ba914ac55ad8375e1f005e22fda15"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/selinux/libsepol/src/../cil/src/cil_build_ast.c:249",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/selinux/libsepol/src/../cil/src/cil_build_ast.c:249"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-955056836",
+  "chain": "CWE-129->CWE-125",
+  "project": "ffmpeg",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42476317",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://git.ffmpeg.org/gitweb/ffmpeg.git/commitdiff/c55e637072b694a1db40e21948d218bfa2e744bb",
+      "fix_commits": [
+        "c55e637072b694a1db40e21948d218bfa2e744bb"
+      ],
+      "repo": "https://git.ffmpeg.org/gitweb/ffmpeg.git/commitdiff"
+    },
+    "patch": "From c55e637072b694a1db40e21948d218bfa2e744bb Mon Sep 17 00:00:00 2001\nFrom: Michael Niedermayer <michael@niedermayer.cc>\nDate: Sun, 14 May 2017 14:42:45 +0200\nSubject: [PATCH] avcodec/ac3dec: Fix: runtime error: index -1 out of bounds\n for type 'INTFLOAT [2]'\n\nIt seems dual mono with a LFE channel is not forbidden\n\nFixes: 1570/clusterfuzz-testcase-minimized-6455337349545984\n\nFound-by: continuous fuzzing process https://github.com/google/oss-fuzz/tree/master/targets/ffmpeg\nSigned-off-by: Michael Niedermayer <michael@niedermayer.cc>\n---\n libavcodec/ac3dec.c | 2 +-\n 1 file changed, 1 insertion(+), 1 deletion(-)\n\ndiff --git a/libavcodec/ac3dec.c b/libavcodec/ac3dec.c\nindex ffea9d3..c393076 100644\n--- a/libavcodec/ac3dec.c\n+++ b/libavcodec/ac3dec.c\n@@ -1389,7 +1389,7 @@ static int decode_audio_block(AC3DecodeContext *s, int blk)\n     for (ch = 1; ch <= s->channels; ch++) {\n         int audio_channel = 0;\n         INTFLOAT gain;\n-        if (s->channel_mode == AC3_CHMODE_DUALMONO)\n+        if (s->channel_mode == AC3_CHMODE_DUALMONO && ch <= 2)\n             audio_channel = 2-ch;\n         if (s->heavy_compression && s->compression_exists[audio_channel])\n             gain = s->heavy_dynamic_range[audio_channel];\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42476317-vul",
+      "digest": "sha256:1e2963f83d2653e35d7f047fa5bf0bbc1753e29b55997c6b3c7a35cd83a04f00"
+    },
+    "patched": {
+      "ref": "n132/arvo:42476317-fix",
+      "digest": "sha256:c87636dff50a02bd21a2c8187fc7d5e16fa44f40456e7ab3b9134883677a8674"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "crash_site": "/src/ffmpeg/libavcodec/ac3dec.c:1394",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 129,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "site": "/src/ffmpeg/libavcodec/ac3dec.c:1394"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

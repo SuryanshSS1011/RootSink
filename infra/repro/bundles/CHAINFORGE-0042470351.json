@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042470351",
+  "chain": "CWE-456->CWE-457",
+  "project": "skia",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42470351",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "8051d38358293df1e5b8a1a513f8114147ec9fa3",
+      "fix_commits": [
+        "8051d38358293df1e5b8a1a513f8114147ec9fa3"
+      ],
+      "repo": "https://skia.googlesource.com/skia.git"
+    },
+    "patch": "diff --git a/fuzz/FuzzCommon.cpp b/fuzz/FuzzCommon.cpp\nindex 8176d7f..d6aa94e 100644\n--- a/fuzz/FuzzCommon.cpp\n+++ b/fuzz/FuzzCommon.cpp\n@@ -83,24 +83,33 @@\n                 path->close();\n                 break;\n             case 13:\n-                fuzz->next(&r, &dir);\n+                fuzz->next(&r);\n+                fuzz->nextRange(&ui, 0, 1);\n+                dir = static_cast<SkPath::Direction>(ui);\n                 path->addRect(r, dir);\n                 break;\n             case 14:\n-                fuzz->next(&r, &dir, &ui);\n+                fuzz->nextRange(&ui, 0, 1);\n+                dir = static_cast<SkPath::Direction>(ui);\n+                fuzz->next(&r, &ui);\n                 path->addRect(r, dir, ui);\n                 break;\n             case 15:\n-                fuzz->next(&r, &dir);\n+                fuzz->nextRange(&ui, 0, 1);\n+                dir = static_cast<SkPath::Direction>(ui);\n+                fuzz->next(&r);\n                 path->addOval(r, dir);\n                 break;\n             case 16:\n-                fuzz->next(&r, &dir, &ui);\n+                fuzz->nextRange(&ui, 0, 1);\n+                dir = static_cast<SkPath::Direction>(ui);\n+                fuzz->next(&r, &ui);\n                 path->addOval(r, dir, ui);\n                 break;\n             case 17:\n+                fuzz->nextRange(&ui, 0, 1);\n+                dir = static_cast<SkPath::Direction>(ui);\n                 fuzz_nice_float(fuzz, &a, &b, &c);\n-                fuzz->next(&dir);\n                 path->addCircle(a, b, c, dir);\n                 break;\n             case 18:\n@@ -110,27 +119,35 @@\n                 break;\n             case 19:\n                 fuzz_nice_float(fuzz, &a, &b);\n-                fuzz->next(&r, &dir);\n+                fuzz->next(&r);\n+                fuzz->nextRange(&ui, 0, 1);\n+                dir = static_cast<SkPath::Direction>(ui);\n                 path->addRoundRect(r, a, b, dir);\n                 break;\n             case 20:\n-                fuzz->next(&rr, &dir);\n+                fuzz->next(&rr);\n+                fuzz->nextRange(&ui, 0, 1);\n+                dir = static_cast<SkPath::Direction>(ui);\n                 path->addRRect(rr, dir);\n                 break;\n             case 21:\n-                fuzz->next(&rr, &dir, &ui);\n+                fuzz->nextRange(&ui, 0, 1);\n+                dir = static_cast<SkPath::Direction>(ui);\n+                fuzz->next(&rr, &ui);\n                 path->addRRect(rr, dir, ui);\n                 break;\n             case 22: {\n-                SkPath::AddPathMode mode;\n-                fuzz->next(&m, &mode);\n+                fuzz->nextRange(&ui, 0, 1);\n+                SkPath::AddPathMode mode = static_cast<SkPath::AddPathMode>(ui);\n+                fuzz->next(&m);\n                 FuzzPath(fuzz, &p, maxOps-1);\n                 path->addPath(p, m, mode);\n                 break;\n             }\n             case 23: {\n-                SkPath::AddPathMode mode;\n-                fuzz->next(&m, &mode);\n+                fuzz->nextRange(&ui, 0, 1);\n+                SkPath::AddPathMode mode = static_cast<SkPath::AddPathMode>(ui);\n+                fuzz->next(&m);\n                 path->addPath(*path, m, mode);\n                 break;\n             }\ndiff --git a/src/core/SkPath.cpp b/src/core/SkPath.cpp\nindex 3470477..2808c12 100644\n--- a/src/core/SkPath.cpp\n+++ b/src/core/SkPath.cpp\n@@ -1708,14 +1708,21 @@\n     return *this;\n }\n \n-SkPath& SkPath::reverseAddPath(const SkPath& src) {\n-    SkPathRef::Editor ed(&fPathRef, src.fPathRef->countPoints(), src.fPathRef->countVerbs());\n+SkPath& SkPath::reverseAddPath(const SkPath& srcPath) {\n+    // Detect if we're trying to add ourself\n+    const SkPath* src = &srcPath;\n+    SkTLazy<SkPath> tmp;\n+    if (this == src) {\n+        src = tmp.set(srcPath);\n+    }\n \n-    const SkPoint* pts = src.fPathRef->pointsEnd();\n+    SkPathRef::Editor ed(&fPathRef, src->fPathRef->countPoints(), src->fPathRef->countVerbs());\n+\n+    const SkPoint* pts = src->fPathRef->pointsEnd();\n     // we will iterator through src's verbs backwards\n-    const uint8_t* verbs = src.fPathRef->verbsMemBegin(); // points at the last verb\n-    const uint8_t* verbsEnd = src.fPathRef->verbs(); // points just past the first verb\n-    const SkScalar* conicWeights = src.fPathRef->conicWeightsEnd();\n+    const uint8_t* verbs = src->fPathRef->verbsMemBegin(); // points at the last verb\n+    const uint8_t* verbsEnd = src->fPathRef->verbs(); // points just past the first verb\n+    const SkScalar* conicWeights = src->fPathRef->conicWeightsEnd();\n \n     bool needMove = true;\n     bool needClose = false;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42470351-vul",
+      "digest": "sha256:26e99f4063d0f0c6383c7e15252b7c1d2c33c5cd692f841fb4ef638aadd6286f"
+    },
+    "patched": {
+      "ref": "n132/arvo:42470351-fix",
+      "digest": "sha256:a8290a1f15a5cc370b90ca32c519e2d778229831289eded030f6725872fc3301"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/skia/out/Fuzz/../../src/core/SkPath.cpp:1667",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/skia/out/Fuzz/../../src/core/SkPath.cpp:1667"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042477577",
+  "chain": "CWE-456->CWE-457",
+  "project": "matio",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42477577",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "69f7141f5d47eae33ecdd8e88ca0b50e25ce883a",
+      "fix_commits": [
+        "69f7141f5d47eae33ecdd8e88ca0b50e25ce883a"
+      ],
+      "repo": "https://github.com/tbeu/matio"
+    },
+    "patch": "From 69f7141f5d47eae33ecdd8e88ca0b50e25ce883a Mon Sep 17 00:00:00 2001\nFrom: tbeu <tbeu@users.noreply.github.com>\nDate: Thu, 29 Aug 2019 20:20:42 +0200\nSubject: [PATCH] Fix uninitialized variable\n\nAs reported by https://bugs.chromium.org/p/oss-fuzz/issues/detail?id=16834\n---\n src/mat4.c | 2 +-\n 1 file changed, 1 insertion(+), 1 deletion(-)\n\ndiff --git a/src/mat4.c b/src/mat4.c\nindex a786c21..601a3d6 100644\n--- a/src/mat4.c\n+++ b/src/mat4.c\n@@ -865,7 +865,7 @@ Mat_VarReadNextInfo4(mat_t *mat)\n     }\n \n     matvar->rank = 2;\n-    matvar->dims = (size_t*)malloc(2*sizeof(*matvar->dims));\n+    matvar->dims = (size_t*)calloc(2, sizeof(*matvar->dims));\n     if ( NULL == matvar->dims ) {\n         Mat_VarFree(matvar);\n         return NULL;\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42477577-vul",
+      "digest": "sha256:232a6a7c3702d72ba4783a3510d70cac98f85d88a67dca7200d7ab0354007721"
+    },
+    "patched": {
+      "ref": "n132/arvo:42477577-fix",
+      "digest": "sha256:b9e66dd6f7b43c8ccdc4d0d383fd2cf86c2f2f879e974e6798a3dddbad73f136"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/matio/src/./safe-math.h:817",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/matio/src/./safe-math.h:817"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

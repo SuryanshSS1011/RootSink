@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042531553",
+  "chain": "CWE-1284->CWE-125",
+  "project": "ntopng",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42531553",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "fa57f7ba406b00c7d18f123529010f63ba8da6cf",
+      "fix_commits": [
+        "fa57f7ba406b00c7d18f123529010f63ba8da6cf"
+      ],
+      "repo": "https://github.com/ntop/ntopng"
+    },
+    "patch": "From fa57f7ba406b00c7d18f123529010f63ba8da6cf Mon Sep 17 00:00:00 2001\nFrom: Luca Deri <deri@ntop.org>\nDate: Tue, 2 Jan 2024 17:17:29 +0100\nSubject: [PATCH] Added check to avoid memory issues (heap overflow) during\n DHCP packet dissection\n\n---\n src/NetworkInterface.cpp | 100 +++++++++++++++++++--------------------\n 1 file changed, 50 insertions(+), 50 deletions(-)\n\ndiff --git a/src/NetworkInterface.cpp b/src/NetworkInterface.cpp\nindex 94d4a0c..d0ad780 100644\n--- a/src/NetworkInterface.cpp\n+++ b/src/NetworkInterface.cpp\n@@ -2094,64 +2094,63 @@ bool NetworkInterface::processPacket(int32_t if_index, u_int32_t bridge_iface_id\n \t    mac->incNumDHCPReplies();\n \t  }\n \n-\t  for (u_int32_t i = 240; i < trusted_payload_len;) {\n+\t  for (u_int32_t i = 240; (i+1) < trusted_payload_len;) {\n \t    u_int8_t id = payload[i], len = payload[i + 1];\n \n \t    if (len == 0) break;\n \n #ifdef DHCP_DEBUG\n-\t    ntop->getTrace()->traceEvent(TRACE_WARNING,\n-\t\t\t\t\t \"[DHCP] [id=%u][len=%u]\", id, len);\n-#endif\n-\n-\t    if (id == 12 /* Host Name */) {\n-\t      char name[64], buf[24], *client_mac, key[64];\n-\t      int j;\n-\n-\t      j = ndpi_min(len, sizeof(name) - 1);\n-\t      strncpy((char *)name, (char *)&payload[i + 2], j);\n-\t      name[j] = '\\0';\n-\n-\t      client_mac = Utils::formatMac(&payload[28], buf, sizeof(buf));\n-\t      ntop->getTrace()->traceEvent(TRACE_INFO, \"[DHCP] %s = '%s'\",\n-\t\t\t\t\t   client_mac, name);\n-\n-\t      snprintf(key, sizeof(key), DHCP_CACHE, get_id(), client_mac);\n-\t      ntop->getRedis()->set(key, name, 86400 /* 1d duration */);\n-\n-\t      if ((payload_cli_mac = getMac(\n-\t\t\t\t\t    &payload[28], false /* Do not create if missing */,\n-\t\t\t\t\t    true /* Inline call */)))\n-\t\tpayload_cli_mac->inlineSetDHCPName(name);\n-\n+\t    ntop->getTrace()->traceEvent(TRACE_WARNING, \"[DHCP] [id=%u][len=%u]\", id, len);\n+#endif\n+\n+\t    if((i + 2 + len) < trusted_payload_len) {\n+\t      if (id == 12 /* Host Name */) {\n+\t\tchar name[64], buf[24], *client_mac, key[64];\n+\t\tint j;\n+\n+\t\tj = ndpi_min(len, sizeof(name) - 1);\n+\t\tstrncpy((char *)name, (char *)&payload[i + 2], j);\n+\t\tname[j] = '\\0';\n+\t      \n+\t\tclient_mac = Utils::formatMac(&payload[28], buf, sizeof(buf));\n+\t\tntop->getTrace()->traceEvent(TRACE_INFO, \"[DHCP] %s = '%s'\",\n+\t\t\t\t\t     client_mac, name);\n+\t      \n+\t\tsnprintf(key, sizeof(key), DHCP_CACHE, get_id(), client_mac);\n+\t\tntop->getRedis()->set(key, name, 86400 /* 1d duration */);\n+\t      \n+\t\tif ((payload_cli_mac = getMac(&payload[28], false /* Do not create if missing */,\n+\t\t\t\t\t      true /* Inline call */)))\n+\t\t  payload_cli_mac->inlineSetDHCPName(name);\n+\t      \n #ifdef DHCP_DEBUG\n-\t      ntop->getTrace()->traceEvent(TRACE_WARNING, \"[DHCP] %s = '%s'\",\n-\t\t\t\t\t   client_mac, name);\n-#endif\n-\t    } else if ((id == 55 /* Parameters List (Fingerprint) */) &&\n-\t\t       flow->get_ndpi_flow()) {\n-\t      char fingerprint[64], buf[32];\n-\t      u_int idx, offset = 0;\n-\n-\t      len = ndpi_min(len, sizeof(buf) / 2);\n-\n-\t      for (idx = 0; idx < len; idx++) {\n-\t\tsnprintf((char *)&fingerprint[offset],\n-\t\t\t sizeof(fingerprint) - offset - 1, \"%02X\",\n-\t\t\t payload[i + 2 + idx] & 0xFF);\n-\t\toffset += 2;\n-\t      }\n+\t\tntop->getTrace()->traceEvent(TRACE_WARNING, \"[DHCP] %s = '%s'\",\n+\t\t\t\t\t     client_mac, name);\n+#endif\t      \n+\t      } else if ((id == 55 /* Parameters List (Fingerprint) */) && flow->get_ndpi_flow()) {\n+\t\tchar fingerprint[64], buf[32];\n+\t\tu_int idx, offset = 0;\n+\n+\t\tlen = ndpi_min(len, sizeof(buf) / 2);\n+\n+\t\tfor (idx = 0; idx < len; idx++) {\n+\t\t  snprintf((char *)&fingerprint[offset],\n+\t\t\t   sizeof(fingerprint) - offset - 1, \"%02X\",\n+\t\t\t   payload[i + 2 + idx] & 0xFF);\n+\t\t  offset += 2;\n+\t\t}\n \n #ifdef DHCP_DEBUG\n-\t      ntop->getTrace()->traceEvent(TRACE_WARNING, \"%s = %s\",\n-\t\t\t\t\t   mac->print(buf, sizeof(buf)),\n-\t\t\t\t\t   fingerprint);\n-#endif\n-\t      mac->inlineSetFingerprint(\n-\t\t\t\t\t(char *)flow->get_ndpi_flow()->protos.dhcp.fingerprint);\n-\t    } else if (id == 0xFF)\n-\t      break; /* End of options */\n-\n+\t\tntop->getTrace()->traceEvent(TRACE_WARNING, \"%s = %s\",\n+\t\t\t\t\t     mac->print(buf, sizeof(buf)),\n+\t\t\t\t\t     fingerprint);\n+#endif\n+\t\tmac->inlineSetFingerprint((char *)flow->get_ndpi_flow()->protos.dhcp.fingerprint);\n+\t      } else if (id == 0xFF)\n+\t\tbreak; /* End of options */\n+\t    } else\n+\t      break; /* Invalid lenght */\n+\t    \n \t    i += len + 2;\n \t  }\n \t}\n@@ -2160,6 +2159,7 @@ bool NetworkInterface::processPacket(int32_t if_index, u_int32_t bridge_iface_id\n       if (*dstHost) {\n         char host_name[64];\n         Mac *dst_mac = (*dstHost)->getMac();\n+\t\n         if (dst_mac && !(dst_mac->isBroadcast())) {\n           flow->setDHCPHostName(dst_mac->getDHCPNameNotLowerCase(host_name, sizeof(host_name)));\n         }\n-- \n2.55.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42531553-vul",
+      "digest": "sha256:267223195d6d627342f978e275cecdbb76795e33a3ea872759f051bed9cd7e26"
+    },
+    "patched": {
+      "ref": "n132/arvo:42531553-fix",
+      "digest": "sha256:7d4ed8c9c30f94b5cb54270d137f3f1c1039764bbbcc969a5ff527b32129eb3d"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/ntopng/src/NetworkInterface.cpp:2114",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/ntopng/src/NetworkInterface.cpp:2114"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

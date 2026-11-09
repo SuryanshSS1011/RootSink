@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042479939",
+  "chain": "CWE-1284->CWE-125",
+  "project": "libavc",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42479939",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "fa8ec83555b0946d01c60f6df9751c1aa490bf85",
+      "fix_commits": [
+        "fa8ec83555b0946d01c60f6df9751c1aa490bf85"
+      ],
+      "repo": "https://android.googlesource.com/platform/external/libavc"
+    },
+    "patch": "diff --git a/decoder/ih264d_parse_slice.c b/decoder/ih264d_parse_slice.c\nindex 35a078a..927f1c0 100644\n--- a/decoder/ih264d_parse_slice.c\n+++ b/decoder/ih264d_parse_slice.c\n@@ -1037,7 +1037,6 @@\n                         ps_st_next_dpb->ps_prev_short = ps_st_curr_dpb->ps_prev_short;\n                     }\n                     ps_dec->ps_dpb_mgr->u1_num_st_ref_bufs--;\n-                    ps_dec->ps_dpb_mgr->u1_num_lt_ref_bufs++;\n                     no_of_nodes_deleted++;\n                     break;\n                 }\n@@ -1315,7 +1314,12 @@\n \n     if(i1_is_end_of_poc || ps_dec->u1_first_slice_in_stream)\n     {\n-        if(u2_frame_num != ps_dec->u2_prv_frame_num\n+        /* If the current slice is not a field or frame number of the current\n+         * slice doesn't match with previous slice, and decoder is expecting\n+         * to decode a field i.e. ps_dec->u1_top_bottom_decoded is not 0 and\n+         * is not (TOP_FIELD_ONLY | BOT_FIELD_ONLY), treat it as a dangling\n+         * field */\n+        if((u1_field_pic_flag == 0 || u2_frame_num != ps_dec->u2_prv_frame_num)\n                && ps_dec->u1_top_bottom_decoded != 0\n                    && ps_dec->u1_top_bottom_decoded\n                        != (TOP_FIELD_ONLY | BOT_FIELD_ONLY))\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42479939-vul",
+      "digest": "sha256:b163807270a349d3228a64649badf1f34e7df80d70794ea877c896fba9c7cbb8"
+    },
+    "patched": {
+      "ref": "n132/arvo:42479939-fix",
+      "digest": "sha256:d8e5c82bf63dfea022d17d29aa7b612b10a3f8930c1ec883ee06b1f225f1c342"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/libavc/decoder/ih264d_thread_parse_decode.c:510",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/libavc/decoder/ih264d_thread_parse_decode.c:510"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042497161",
+  "chain": "CWE-416->CWE-125",
+  "project": "libxml2",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42497161",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "8f5ccada05ddd4a1ff8e399ad39fc7cd4bd33325",
+      "fix_commits": [
+        "8f5ccada05ddd4a1ff8e399ad39fc7cd4bd33325"
+      ],
+      "repo": "https://gitlab.gnome.org/GNOME/libxml2.git"
+    },
+    "patch": "From 8f5ccada05ddd4a1ff8e399ad39fc7cd4bd33325 Mon Sep 17 00:00:00 2001\nFrom: David Kilzer <ddkilzer@apple.com>\nDate: Wed, 7 Jul 2021 19:24:36 -0700\nSubject: [PATCH] xmlAddChild() and xmlAddNextSibling() may not attach their\n second argument\n\nUse the return value of xmlAddChild() and xmlAddNextSibling()\ninstead of the second argument directly.\n\nFound by OSS-Fuzz.\n\nFixes #316\n---\n xinclude.c | 14 ++++++--------\n xpointer.c | 13 ++++++-------\n 2 files changed, 12 insertions(+), 15 deletions(-)\n\ndiff --git a/xinclude.c b/xinclude.c\nindex b2e6ea1..2a0614d 100644\n--- a/xinclude.c\n+++ b/xinclude.c\n@@ -1014,15 +1014,15 @@ xmlXIncludeCopyRange(xmlXIncludeCtxtPtr ctxt, xmlDocPtr target,\n \t\tif (list == NULL) {\n \t\t    list = tmp;\n \t\t    listParent = cur->parent;\n+\t\t    last = tmp;\n \t\t} else {\n \t\t    if (level == lastLevel)\n-\t\t\txmlAddNextSibling(last, tmp);\n+\t\t\tlast = xmlAddNextSibling(last, tmp);\n \t\t    else {\n-\t\t\txmlAddChild(last, tmp);\n+\t\t\tlast = xmlAddChild(last, tmp);\n \t\t\tlastLevel = level;\n \t\t    }\n \t\t}\n-\t\tlast = tmp;\n \n \t\tif (index2 > 1) {\n \t\t    end = xmlXIncludeGetNthChild(cur, index2 - 1);\n@@ -1103,12 +1103,11 @@ xmlXIncludeCopyRange(xmlXIncludeCtxtPtr ctxt, xmlDocPtr target,\n \t    }\n \t    if (tmp != NULL) {\n \t\tif (level == lastLevel)\n-\t\t    xmlAddNextSibling(last, tmp);\n+\t\t    last = xmlAddNextSibling(last, tmp);\n \t\telse {\n-\t\t    xmlAddChild(last, tmp);\n+\t\t    last = xmlAddChild(last, tmp);\n \t\t    lastLevel = level;\n \t\t}\n-\t\tlast = tmp;\n \t    }\n \t}\n \t/*\n@@ -1186,8 +1185,7 @@ xmlXIncludeCopyXPointer(xmlXIncludeCtxtPtr ctxt, xmlDocPtr target,\n \t\t\t\t    if (last == NULL) {\n \t\t\t\t\tlist = last = tmp;\n \t\t\t\t    } else {\n-\t\t\t\t\txmlAddNextSibling(last, tmp);\n-\t\t\t\t\tlast = tmp;\n+\t\t\t\t\tlast = xmlAddNextSibling(last, tmp);\n \t\t\t\t    }\n \t\t\t\t    cur = cur->next;\n \t\t\t\t    continue;\ndiff --git a/xpointer.c b/xpointer.c\nindex 27a6a8c..fe2fca5 100644\n--- a/xpointer.c\n+++ b/xpointer.c\n@@ -1483,16 +1483,16 @@ xmlXPtrBuildRangeNodeList(xmlXPathObjectPtr range) {\n \t\treturn(list);\n \t    } else {\n \t\ttmp = xmlCopyNode(cur, 0);\n-\t\tif (list == NULL)\n+\t\tif (list == NULL) {\n \t\t    list = tmp;\n-\t\telse {\n+\t\t    parent = tmp;\n+\t\t} else {\n \t\t    if (last != NULL)\n-\t\t\txmlAddNextSibling(last, tmp);\n+\t\t\tparent = xmlAddNextSibling(last, tmp);\n \t\t    else\n-\t\t\txmlAddChild(parent, tmp);\n+\t\t\tparent = xmlAddChild(parent, tmp);\n \t\t}\n \t\tlast = NULL;\n-\t\tparent = tmp;\n \n \t\tif (index2 > 1) {\n \t\t    end = xmlXPtrGetNthChild(cur, index2 - 1);\n@@ -1574,8 +1574,7 @@ xmlXPtrBuildRangeNodeList(xmlXPathObjectPtr range) {\n \t\tif (last != NULL)\n \t\t    xmlAddNextSibling(last, tmp);\n \t\telse {\n-\t\t    xmlAddChild(parent, tmp);\n-\t\t    last = tmp;\n+\t\t    last = xmlAddChild(parent, tmp);\n \t\t}\n \t    }\n \t}\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42497161-vul",
+      "digest": "sha256:514c984ff833ee8bd83a705ec7a2bd8ca556b2d2d12ea01b9d7dce100b46af4c"
+    },
+    "patched": {
+      "ref": "n132/arvo:42497161-fix",
+      "digest": "sha256:1863b4690da565f00aca87947850bf167a124683606be275ae89fb73dabc4f92"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/libxml2/tree.c:3013",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/libxml2/tree.c:3013"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

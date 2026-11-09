@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042532326",
+  "chain": "CWE-416->CWE-125",
+  "project": "gpac",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42532326",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "fe46265eda4375086374ed41a4bb7f3906ced4ca",
+      "fix_commits": [
+        "fe46265eda4375086374ed41a4bb7f3906ced4ca"
+      ],
+      "repo": "https://github.com/gpac/gpac"
+    },
+    "patch": "From fe46265eda4375086374ed41a4bb7f3906ced4ca Mon Sep 17 00:00:00 2001\nFrom: jeanlf <jeanlf@gpac.io>\nDate: Wed, 31 Jan 2024 18:36:02 +0100\nSubject: [PATCH] fixed possible use after free in broken ogg streams\n\n---\n src/filters/dmx_ogg.c | 19 ++++++++++---------\n 1 file changed, 10 insertions(+), 9 deletions(-)\n\ndiff --git a/src/filters/dmx_ogg.c b/src/filters/dmx_ogg.c\nindex a0d91b4..80465f6 100644\n--- a/src/filters/dmx_ogg.c\n+++ b/src/filters/dmx_ogg.c\n@@ -429,15 +429,16 @@ static void oggdmx_check_dur(GF_Filter *filter, GF_OGGDmxCtx *ctx)\n \t\tif (ogg_page_bos(&oggpage)) {\n \t\t\togg_stream_init(&os, ogg_page_serialno(&oggpage));\n \t\t\tif (ogg_stream_pagein(&os, &oggpage) >= 0 ) {\n-\t\t\t\togg_stream_packetpeek(&os, &oggpacket);\n-\t\t\t\tif (ogg_stream_pagein(&os, &oggpage) >= 0 ) {\n-\t\t\t\t\togg_stream_packetpeek(&os, &oggpacket);\n-\t\t\t\t\toggdmx_get_stream_info(&oggpacket, &info);\n-\t\t\t\t}\n-\t\t\t\tif (!has_stream) {\n-\t\t\t\t\thas_stream = GF_TRUE;\n-\t\t\t\t\togg_stream_init(&the_os, ogg_page_serialno(&oggpage));\n-\t\t\t\t\tthe_info = info;\n+\t\t\t\tif (ogg_stream_packetpeek(&os, &oggpacket)>0) {\n+\t\t\t\t\tif (ogg_stream_pagein(&os, &oggpage) >= 0 ) {\n+\t\t\t\t\t\togg_stream_packetpeek(&os, &oggpacket);\n+\t\t\t\t\t\toggdmx_get_stream_info(&oggpacket, &info);\n+\t\t\t\t\t}\n+\t\t\t\t\tif (!has_stream) {\n+\t\t\t\t\t\thas_stream = GF_TRUE;\n+\t\t\t\t\t\togg_stream_init(&the_os, ogg_page_serialno(&oggpage));\n+\t\t\t\t\t\tthe_info = info;\n+\t\t\t\t\t}\n \t\t\t\t}\n \t\t\t}\n \t\t\togg_stream_clear(&os);\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42532326-vul",
+      "digest": "sha256:bc4099b6cab77b6835e09bed499208e67deed508382c38d683a42d394f4b067c"
+    },
+    "patched": {
+      "ref": "n132/arvo:42532326-fix",
+      "digest": "sha256:f36a1bd2f9d2eea1622b079da8aaddca3cde2a130c46839493bf3f5a1056955c"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/gpac/src/filters/dmx_ogg.c:132",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/gpac/src/filters/dmx_ogg.c:132"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

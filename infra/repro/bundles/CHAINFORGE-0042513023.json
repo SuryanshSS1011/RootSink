@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042513023",
+  "chain": "CWE-416->CWE-125",
+  "project": "ghostpdl",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42513023",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "6fd0c14775db5d10563f8b0401ee9f3f6bd29310",
+      "fix_commits": [
+        "6fd0c14775db5d10563f8b0401ee9f3f6bd29310"
+      ],
+      "repo": "https://cgit.ghostscript.com/ghostpdl.git"
+    },
+    "patch": "From 6fd0c14775db5d10563f8b0401ee9f3f6bd29310 Mon Sep 17 00:00:00 2001\nFrom: Chris Liddell <chris.liddell@artifex.com>\nDate: Tue, 5 Jul 2022 12:56:22 +0100\nSubject: [PATCH] oss-fuzz 48745: Don't free font data unless FAPI owns it.\n\n---\n base/fapi_ft.c | 3 ++-\n 1 file changed, 2 insertions(+), 1 deletion(-)\n\ndiff --git a/base/fapi_ft.c b/base/fapi_ft.c\nindex 1d04bb3..267d57d 100644\n--- a/base/fapi_ft.c\n+++ b/base/fapi_ft.c\n@@ -1332,7 +1332,8 @@ gs_fapi_ft_get_scaled_font(gs_fapi_server * a_server, gs_fapi_font * a_font,\n                              &ft_face);\n             if (ft_error) {\n                 delete_inc_int (a_server, ft_inc_int);\n-                FF_free(s->ftmemory, own_font_data);\n+                if (data_owned)\n+                    FF_free(s->ftmemory, own_font_data);\n                 return ft_to_gs_error(ft_error);\n             }\n         }\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42513023-vul",
+      "digest": "sha256:9258f930c985b9de62532ca502a58a28d7fa93a11020ac60aad64aff07f31858"
+    },
+    "patched": {
+      "ref": "n132/arvo:42513023-fix",
+      "digest": "sha256:4f58df5b3b48747f3510c652e90d4d7f50d49c2ed0e662f8cc0b1ce9116b1d1a"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/ghostpdl/./freetype/src/base/ftstream.c:655",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/ghostpdl/./freetype/src/base/ftstream.c:655"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

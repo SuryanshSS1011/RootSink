@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042515409",
+  "chain": "CWE-416->CWE-125",
+  "project": "ghostpdl",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42515409",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "81c55ab199af28abf7e405f1e3ab2e76608b116b",
+      "fix_commits": [
+        "81c55ab199af28abf7e405f1e3ab2e76608b116b"
+      ],
+      "repo": "https://cgit.ghostscript.com/ghostpdl.git"
+    },
+    "patch": "From 81c55ab199af28abf7e405f1e3ab2e76608b116b Mon Sep 17 00:00:00 2001\nFrom: Chris Liddell <chris.liddell@artifex.com>\nDate: Fri, 2 Sep 2022 10:55:52 +0100\nSubject: [PATCH] oss-fuzz 50893: xpswrite: Fix order of operations freeing\n TIFF object\n\nWe can't free our libtiff \"client data) until we've completed writing the TIFF\n(which also frees the libtiff context), but having completed writing the TIFF,\nwe can no longer access our client data through the libtiff context.\n\nWe have to retrieve a pointer to our client data, complete the TIFF writing\nprocess, then free our client data using the pointer we previously retrieved.\n---\n devices/vector/gdevxps.c | 23 ++++++++++-------------\n 1 file changed, 10 insertions(+), 13 deletions(-)\n\ndiff --git a/devices/vector/gdevxps.c b/devices/vector/gdevxps.c\nindex 218b3c0..20d9dbd 100644\n--- a/devices/vector/gdevxps.c\n+++ b/devices/vector/gdevxps.c\n@@ -1790,7 +1790,7 @@ static TIFF* tiff_from_name(gx_device_xps *dev, const char *name, int big_endian\n static int tiff_set_values(xps_image_enum_t *pie, TIFF *tif,\n                             cmm_profile_t *profile, bool force8bit);\n static void xps_tiff_set_handlers(void);\n-static void tiff_client_release(gx_device_xps* dev, TIFF* t);\n+static void xps_tiff_cleanup(xps_image_enum_t *xpie);\n \n /* Check if we have the ICC profile in the package */\n static xps_icc_data_t*\n@@ -2296,9 +2296,7 @@ xps_image_end_image(gx_image_enum_common_t * info, bool draw_last)\n     /* N.B. Write the final strip, if any. */\n \n     code = TIFFWriteDirectory(pie->tif);\n-    tiff_client_release((gx_device_xps*)(pie->dev), pie->tif);\n-    TIFFCleanup(pie->tif);\n-    pie->tif = NULL;\n+    xps_tiff_cleanup(pie);\n \n     /* Stuff the image into the zip archive and close the file */\n     code = xps_add_tiff_image(pie);\n@@ -2575,11 +2573,14 @@ tiff_from_name(gx_device_xps *dev, const char *name, int big_endian, bool usebig\n     return t;\n }\n \n-static void\n-tiff_client_release(gx_device_xps *dev, TIFF *t)\n+static void xps_tiff_cleanup(xps_image_enum_t *xpie)\n {\n-    gs_free_object(dev->memory->non_gc_memory, TIFFClientdata(t),\n-        \"tiff_client_release\");\n+    if (xpie->tif != NULL) {\n+        void *t = TIFFClientdata(xpie->tif);\n+        TIFFCleanup(xpie->tif);\n+        xpie->tif = NULL;\n+        gs_free_object(xpie->memory->non_gc_memory, t, \"xps_image_enum_finalize\");\n+    }\n }\n \n static void\n@@ -2588,11 +2589,7 @@ xps_image_enum_finalize(const gs_memory_t *cmem, void *vptr)\n     xps_image_enum_t *xpie = (xps_image_enum_t *)vptr;\n     gx_device_xps *xdev = (gx_device_xps *)xpie->dev;\n \n-    if (xpie->tif != NULL) {\n-        tiff_client_release((gx_device_xps*)(xpie->dev), xpie->tif);\n-        TIFFCleanup(xpie->tif);\n-        xpie->tif = NULL;\n-    }\n+    xps_tiff_cleanup(xpie);\n \n     xpie->dev = NULL;\n     if (xpie->pcs != NULL)\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42515409-vul",
+      "digest": "sha256:cdf9d7aae57e18f53feed1477b184e20bca00b04dfff5ab4fe20ad4731a873c3"
+    },
+    "patched": {
+      "ref": "n132/arvo:42515409-fix",
+      "digest": "sha256:1fd21757b45661304077689fd2d07691d211403991f973377481f5de7c7243f7"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/ghostpdl/./devices/vector/gdevxps.c:2411",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/ghostpdl/./devices/vector/gdevxps.c:2411"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

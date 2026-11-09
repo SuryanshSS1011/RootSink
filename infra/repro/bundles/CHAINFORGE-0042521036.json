@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042521036",
+  "chain": "CWE-456->CWE-457",
+  "project": "mupdf",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42521036",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "ace9e69017c08e1e4ce5912014177414c0382004",
+      "fix_commits": [
+        "ace9e69017c08e1e4ce5912014177414c0382004"
+      ],
+      "repo": "git://git.ghostscript.com/mupdf.git"
+    },
+    "patch": "From ace9e69017c08e1e4ce5912014177414c0382004 Mon Sep 17 00:00:00 2001\nFrom: Sebastian Rasmussen <sebras@gmail.com>\nDate: Thu, 1 Mar 2018 17:55:24 +0800\nSubject: [PATCH] Fix 699086: Handle freetype not returning glyph advance.\n\n---\n source/fitz/font.c | 14 ++++++++++----\n 1 file changed, 10 insertions(+), 4 deletions(-)\n\ndiff --git a/source/fitz/font.c b/source/fitz/font.c\nindex 54378e5..1e0bd0e 100644\n--- a/source/fitz/font.c\n+++ b/source/fitz/font.c\n@@ -641,13 +641,16 @@ fz_adjust_ft_glyph_width(fz_context *ctx, fz_font *font, int gid, fz_matrix *trm\n \t/* Fudge the font matrix to stretch the glyph if we've substituted the font. */\n \tif (font->flags.ft_stretch && font->width_table /* && font->wmode == 0 */)\n \t{\n-\t\tFT_Fixed adv;\n+\t\tFT_Error fterr;\n+\t\tFT_Fixed adv = 0;\n \t\tfloat subw;\n \t\tfloat realw;\n \n \t\tfz_lock(ctx, FZ_LOCK_FREETYPE);\n-\t\tFT_Get_Advance(font->ft_face, gid, FT_LOAD_NO_SCALE | FT_LOAD_NO_HINTING | FT_LOAD_IGNORE_TRANSFORM, &adv);\n+\t\tfterr = FT_Get_Advance(font->ft_face, gid, FT_LOAD_NO_SCALE | FT_LOAD_NO_HINTING | FT_LOAD_IGNORE_TRANSFORM, &adv);\n \t\tfz_unlock(ctx, FZ_LOCK_FREETYPE);\n+\t\tif (fterr)\n+\t\t\tfz_warn(ctx, \"freetype getting character advance: %s\", ft_error_string(fterr));\n \n \t\trealw = adv * 1000.0f / ((FT_Face)font->ft_face)->units_per_EM;\n \t\tif (gid < font->width_count)\n@@ -1513,7 +1516,8 @@ int fz_glyph_cacheable(fz_context *ctx, fz_font *font, int gid)\n static float\n fz_advance_ft_glyph(fz_context *ctx, fz_font *font, int gid, int wmode)\n {\n-\tFT_Fixed adv;\n+\tFT_Error fterr;\n+\tFT_Fixed adv = 0;\n \tint mask;\n \n \t/* Substitute font widths. */\n@@ -1528,8 +1532,10 @@ fz_advance_ft_glyph(fz_context *ctx, fz_font *font, int gid, int wmode)\n \tif (wmode)\n \t\tmask |= FT_LOAD_VERTICAL_LAYOUT;\n \tfz_lock(ctx, FZ_LOCK_FREETYPE);\n-\tFT_Get_Advance(font->ft_face, gid, mask, &adv);\n+\tfterr = FT_Get_Advance(font->ft_face, gid, mask, &adv);\n \tfz_unlock(ctx, FZ_LOCK_FREETYPE);\n+\tif (fterr)\n+\t\tfz_warn(ctx, \"freetype getting character advance: %s\", ft_error_string(fterr));\n \treturn (float) adv / ((FT_Face)font->ft_face)->units_per_EM;\n }\n \n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42521036-vul",
+      "digest": "sha256:2a1ce688f06f25cb3e78e5c798e8738fae7577f06d404a203cc13f3dcd1196e2"
+    },
+    "patched": {
+      "ref": "n132/arvo:42521036-fix",
+      "digest": "sha256:a0c57d01d67ff2a48b7ff51a0c6b6dc5ff1ecae6f8b65e93984e8ee4be4d7cfd"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/mupdf/source/fitz/font.c:638",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/mupdf/source/fitz/font.c:638"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

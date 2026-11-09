@@ -1,0 +1,73 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042499827",
+  "chain": "CWE-416->CWE-787",
+  "project": "spice-usbredir",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42499827",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "03c519ff5831ba75120e00ebebbf1d5a1f7220ab\n3dae79daa70c0b62e64fc6bf1b7e68757a812db0",
+      "fix_commits": [
+        "03c519ff5831ba75120e00ebebbf1d5a1f7220ab",
+        "3dae79daa70c0b62e64fc6bf1b7e68757a812db0"
+      ],
+      "repo": "https://gitlab.freedesktop.org/spice/usbredir.git"
+    },
+    "patch": "diff --git a/ChangeLog.md b/ChangeLog.md\nindex 30ea755a6eaad4b83e342aa2f8871dc6e52ca68b..9c8c4c7d6cfb5342af29a3749be576bf499772f3 100644\n--- a/ChangeLog.md\n+++ b/ChangeLog.md\n@@ -1,3 +1,12 @@\n+# usbredir-0.11.0 - 10 Aug 2021\n+\n+- !40 Fixes use-after-free on usbredirparser serialization\n+- !25 Fixes memory leak in usbredirparser\n+- !32 Fixes build in MacOS related to visibility of exported symbols\n+- !36 Adds usbredirfilter_free function\n+- !29 Adds Fuzzing for Filters\n+- !34 Improvements to usbredirfilter_string_to_rules()\n+\n # usbredir-0.10.0 - 27 May 2021\n \n - !23 Fixes 0.9.0 regression in bulk transfer message size\ndiff --git a/meson.build b/meson.build\nindex 8b80742f18c76e39572df236a32a561feb5982b2..6e773a7dc530101363be336964ecb0523d97ffe8 100644\n--- a/meson.build\n+++ b/meson.build\n@@ -1,5 +1,5 @@\n project('usbredir', 'c', 'cpp',\n-    version: '0.10.0',\n+    version: '0.11.0',\n     license: 'LGPLv2.1+',\n     meson_version : '>= 0.53',\n     default_options : [\ndiff --git a/usbredirparser/meson.build b/usbredirparser/meson.build\nindex 0902fa7159fb810bd7858f05e15e4a362d2947b9..00776697ad7e019bbd2f4392fe6f9602f905148a 100644\n--- a/usbredirparser/meson.build\n+++ b/usbredirparser/meson.build\n@@ -1,8 +1,8 @@\n # so verison, see:\n # http://www.gnu.org/software/libtool/manual/html_node/Updating-version-info.html\n-usbredir_parser_current = 1\n-usbredir_parser_revision = 3\n-usbredir_parser_age = 0\n+usbredir_parser_current = 2\n+usbredir_parser_revision = 0\n+usbredir_parser_age = 1\n usbredir_parser_so_version = '@0@.@1@.@2@'.format(\n     usbredir_parser_current - usbredir_parser_age,\n     usbredir_parser_age,\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42499827-vul",
+      "digest": "sha256:e92c48ce39704bf44e8d23ca64aabd6ebf07f8da62e7e0fb89473932bf8555a3"
+    },
+    "patched": {
+      "ref": "n132/arvo:42499827-fix",
+      "digest": "sha256:3e3ef0746fada07cecf14bfd857bd81c0e848ee6d9a71c15e082bfb3ea512c8c"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "WRITE",
+        "crash_site": null,
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "WRITE",
+        "site": null
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

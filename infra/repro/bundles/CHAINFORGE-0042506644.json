@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042506644",
+  "chain": "CWE-416->CWE-125",
+  "project": "open62541",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42506644",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "9165b056a95f3ff5db23dbf9628acb1efee6f86b",
+      "fix_commits": [
+        "9165b056a95f3ff5db23dbf9628acb1efee6f86b"
+      ],
+      "repo": "https://github.com/open62541/open62541"
+    },
+    "patch": "From 9165b056a95f3ff5db23dbf9628acb1efee6f86b Mon Sep 17 00:00:00 2001\nFrom: Stefan Profanter <git@s.profanter.me>\nDate: Sun, 19 Nov 2017 15:51:51 +0100\nSubject: [PATCH] Fix double free of node id\n\nSee https://bugs.chromium.org/p/oss-fuzz/issues/detail?id=4296\n\nCredit to oss-fuzz\n---\n src/ua_types_encoding_binary.c | 2 +-\n 1 file changed, 1 insertion(+), 1 deletion(-)\n\ndiff --git a/src/ua_types_encoding_binary.c b/src/ua_types_encoding_binary.c\nindex 8853b2b..373b5ae 100644\n--- a/src/ua_types_encoding_binary.c\n+++ b/src/ua_types_encoding_binary.c\n@@ -943,7 +943,7 @@ ExtensionObject_decodeBinaryContent(UA_ExtensionObject *dst, const UA_NodeId *ty\n     /* Unknown type, just take the binary content */\n     if(!type) {\n         dst->encoding = UA_EXTENSIONOBJECT_ENCODED_BYTESTRING;\n-        dst->content.encoded.typeId = *typeId;\n+        UA_NodeId_copy(typeId, &dst->content.encoded.typeId);\n         return ByteString_decodeBinary(&dst->content.encoded.body);\n     }\n \n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42506644-vul",
+      "digest": "sha256:3c222d00fd21619dc39f93dcd61bb2277c4788268f131f5793172fb261db74e8"
+    },
+    "patched": {
+      "ref": "n132/arvo:42506644-fix",
+      "digest": "sha256:0b554f551504b1c8f2517150df999ef17e9eb97f2ea302f0252529393c6f9edd"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/open62541/src/ua_types.c:1036",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/open62541/src/ua_types.c:1036"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

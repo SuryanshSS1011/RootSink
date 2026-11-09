@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042519134",
+  "chain": "CWE-416->CWE-125",
+  "project": "kimageformats",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42519134",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "f4ca3f6783bb3d78a9f158efe4874d426b75ae72",
+      "fix_commits": [
+        "f4ca3f6783bb3d78a9f158efe4874d426b75ae72"
+      ],
+      "repo": "https://invent.kde.org/frameworks/kimageformats.git"
+    },
+    "patch": "From f4ca3f6783bb3d78a9f158efe4874d426b75ae72 Mon Sep 17 00:00:00 2001\nFrom: =?UTF-8?q?Daniel=20Novomesk=C3=BD?= <dnovomesky@gmail.com>\nDate: Tue, 13 Dec 2022 11:11:38 +0100\nSubject: [PATCH] heif: fix error handling\n\n---\n src/imageformats/heif.cpp | 9 +++++----\n 1 file changed, 5 insertions(+), 4 deletions(-)\n\ndiff --git a/src/imageformats/heif.cpp b/src/imageformats/heif.cpp\nindex b10b142..3365d92 100644\n--- a/src/imageformats/heif.cpp\n+++ b/src/imageformats/heif.cpp\n@@ -289,13 +289,14 @@ bool HEIFHandler::write_helper(const QImage &image)\n \n     heif_encoder_release(encoder);\n     heif_image_release(h_image);\n-    heif_context_free(context);\n \n     if (err.code) {\n         qWarning() << \"Writing HEIF image failed:\" << err.message;\n+        heif_context_free(context);\n         return false;\n     }\n \n+    heif_context_free(context);\n     return true;\n }\n \n@@ -433,8 +434,8 @@ bool HEIFHandler::ensureDecoder()\n     struct heif_error err = heif_context_read_from_memory(ctx, static_cast<const void *>(buffer.constData()), buffer.size(), nullptr);\n \n     if (err.code) {\n-        heif_context_free(ctx);\n         qWarning() << \"heif_context_read_from_memory error:\" << err.message;\n+        heif_context_free(ctx);\n         m_parseState = ParseHeicError;\n         return false;\n     }\n@@ -442,8 +443,8 @@ bool HEIFHandler::ensureDecoder()\n     struct heif_image_handle *handle = nullptr;\n     err = heif_context_get_primary_image_handle(ctx, &handle);\n     if (err.code) {\n-        heif_context_free(ctx);\n         qWarning() << \"heif_context_get_primary_image_handle error:\" << err.message;\n+        heif_context_free(ctx);\n         m_parseState = ParseHeicError;\n         return false;\n     }\n@@ -496,9 +497,9 @@ bool HEIFHandler::ensureDecoder()\n     }\n \n     if (err.code) {\n+        qWarning() << \"heif_decode_image error:\" << err.message;\n         heif_image_handle_release(handle);\n         heif_context_free(ctx);\n-        qWarning() << \"heif_decode_image error:\" << err.message;\n         m_parseState = ParseHeicError;\n         return false;\n     }\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42519134-vul",
+      "digest": "sha256:1393ad93eef3242684e2c78737bc6ef79b951432dfdd73cf3bdc0069707b6f3f"
+    },
+    "patched": {
+      "ref": "n132/arvo:42519134-fix",
+      "digest": "sha256:02293cfc7f353c9454b970c2bc055981d5f8eead51682fd66cefd22b375e173f"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/qtbase/include/QtCore/../../src/corelib/text/qstring.h:706",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/qtbase/include/QtCore/../../src/corelib/text/qstring.h:706"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

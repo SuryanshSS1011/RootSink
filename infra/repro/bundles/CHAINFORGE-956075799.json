@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-956075799",
+  "chain": "CWE-129->CWE-125",
+  "project": "lcms",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42507312",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/mm2/Little-CMS/commit/343efbac4db1e509c5027c53dd8c7d27104c796c",
+      "fix_commits": [
+        "343efbac4db1e509c5027c53dd8c7d27104c796c"
+      ],
+      "repo": "https://github.com/mm2/Little-CMS"
+    },
+    "patch": "diff --git a/src/cmsintrp.c b/src/cmsintrp.c\nindex 3d9a40530..22de3e550 100644\n--- a/src/cmsintrp.c\n+++ b/src/cmsintrp.c\n@@ -200,8 +200,8 @@ void LinLerp1D(CMSREGISTER const cmsUInt16Number Value[],\n     int val3;\n     const cmsUInt16Number* LutTable = (cmsUInt16Number*) p ->Table;\n \n-    // if last value...\n-    if (Value[0] == 0xffff) {\n+    // if last value or just one point\n+    if (Value[0] == 0xffff || p->Domain[0] == 0) {\n \n         Output[0] = LutTable[p -> Domain[0]];      \n     }\n@@ -240,7 +240,7 @@ void LinLerp1Dfloat(const cmsFloat32Number Value[],\n        val2 = fclamp(Value[0]);\n \n        // if last value...\n-       if (val2 == 1.0) {\n+       if (val2 == 1.0 || p->Domain[0] == 0) {\n            Output[0] = LutTable[p -> Domain[0]];          \n        }\n        else\n@@ -274,20 +274,34 @@ void Eval1Input(CMSREGISTER const cmsUInt16Number Input[],\n        cmsUInt32Number OutChan;\n        const cmsUInt16Number* LutTable = (cmsUInt16Number*) p16 -> Table;\n \n-       v = Input[0] * p16 -> Domain[0];\n-       fk = _cmsToFixedDomain(v);\n \n-       k0 = FIXED_TO_INT(fk);\n-       rk = (cmsUInt16Number) FIXED_REST_TO_INT(fk);\n+       // if last value...\n+       if (Input[0] == 0xffff || p16->Domain[0] == 0) {\n+\n+           cmsUInt16Number y0 = LutTable[p16->Domain[0]];\n+\n+           for (OutChan = 0; OutChan < p16->nOutputs; OutChan++) {\n+               Output[OutChan] = y0;\n+           }\n+       }\n+       else\n+       {\n+\n+           v = Input[0] * p16->Domain[0];\n+           fk = _cmsToFixedDomain(v);\n+\n+           k0 = FIXED_TO_INT(fk);\n+           rk = (cmsUInt16Number)FIXED_REST_TO_INT(fk);\n \n-       k1 = k0 + (Input[0] != 0xFFFFU ? 1 : 0);\n+           k1 = k0 + (Input[0] != 0xFFFFU ? 1 : 0);\n \n-       K0 = p16 -> opta[0] * k0;\n-       K1 = p16 -> opta[0] * k1;\n+           K0 = p16->opta[0] * k0;\n+           K1 = p16->opta[0] * k1;\n \n-       for (OutChan=0; OutChan < p16->nOutputs; OutChan++) {\n+           for (OutChan = 0; OutChan < p16->nOutputs; OutChan++) {\n \n-           Output[OutChan] = LinearInterp(rk, LutTable[K0+OutChan], LutTable[K1+OutChan]);\n+               Output[OutChan] = LinearInterp(rk, LutTable[K0 + OutChan], LutTable[K1 + OutChan]);\n+           }\n        }\n }\n \n@@ -308,7 +322,7 @@ void Eval1InputFloat(const cmsFloat32Number Value[],\n     val2 = fclamp(Value[0]);\n \n     // if last value...\n-    if (val2 == 1.0) {\n+    if (val2 == 1.0 || p->Domain[0] == 0) {\n \n         y0 = LutTable[p->Domain[0]];\n \ndiff --git a/src/cmstypes.c b/src/cmstypes.c\nindex 9ff2b1130..d64369fea 100644\n--- a/src/cmstypes.c\n+++ b/src/cmstypes.c\n@@ -3564,42 +3564,48 @@ void *Type_UcrBg_Read(struct _cms_typehandler_struct* self, cmsIOHANDLER* io, cm\n {\n     cmsUcrBg* n = (cmsUcrBg*) _cmsMallocZero(self ->ContextID, sizeof(cmsUcrBg));\n     cmsUInt32Number CountUcr, CountBg;\n+    cmsInt32Number SignedSizeOfTag = (cmsInt32Number)SizeOfTag;\n     char* ASCIIString;\n \n     *nItems = 0;\n     if (n == NULL) return NULL;\n \n     // First curve is Under color removal\n+\n+    if (SignedSizeOfTag < sizeof(cmsUInt32Number)) return NULL;    \n     if (!_cmsReadUInt32Number(io, &CountUcr)) return NULL;\n-    if (SizeOfTag < sizeof(cmsUInt32Number)) return NULL;\n-    SizeOfTag -= sizeof(cmsUInt32Number);\n+    SignedSizeOfTag -= sizeof(cmsUInt32Number);\n \n     n ->Ucr = cmsBuildTabulatedToneCurve16(self ->ContextID, CountUcr, NULL);\n     if (n ->Ucr == NULL) return NULL;\n \n+    if (SignedSizeOfTag < (cmsInt32Number)CountUcr * sizeof(cmsUInt16Number)) return NULL;\n     if (!_cmsReadUInt16Array(io, CountUcr, n ->Ucr->Table16)) return NULL;\n-    if (SizeOfTag < sizeof(cmsUInt32Number)) return NULL;\n-    SizeOfTag -= CountUcr * sizeof(cmsUInt16Number);\n+  \n+    SignedSizeOfTag -= CountUcr * sizeof(cmsUInt16Number);\n \n     // Second curve is Black generation\n+\n+    if (SignedSizeOfTag < sizeof(cmsUInt32Number)) return NULL;    \n     if (!_cmsReadUInt32Number(io, &CountBg)) return NULL;\n-    if (SizeOfTag < sizeof(cmsUInt32Number)) return NULL;\n-    SizeOfTag -= sizeof(cmsUInt32Number);\n+    SignedSizeOfTag -= sizeof(cmsUInt32Number);\n \n     n ->Bg = cmsBuildTabulatedToneCurve16(self ->ContextID, CountBg, NULL);\n     if (n ->Bg == NULL) return NULL;\n+\n+    if (SignedSizeOfTag < (cmsInt32Number) CountBg * sizeof(cmsUInt16Number)) return NULL;    \n     if (!_cmsReadUInt16Array(io, CountBg, n ->Bg->Table16)) return NULL;\n-    if (SizeOfTag < CountBg * sizeof(cmsUInt16Number)) return NULL;\n-    SizeOfTag -= CountBg * sizeof(cmsUInt16Number);\n-    if (SizeOfTag == UINT_MAX) return NULL;\n+    SignedSizeOfTag -= CountBg * sizeof(cmsUInt16Number);\n+\n+    if (SignedSizeOfTag < 0 || SignedSizeOfTag > 32000) return NULL;\n \n     // Now comes the text. The length is specified by the tag size\n     n ->Desc = cmsMLUalloc(self ->ContextID, 1);\n     if (n ->Desc == NULL) return NULL;\n \n-    ASCIIString = (char*) _cmsMalloc(self ->ContextID, SizeOfTag + 1);\n-    if (io ->Read(io, ASCIIString, sizeof(char), SizeOfTag) != SizeOfTag) return NULL;\n-    ASCIIString[SizeOfTag] = 0;\n+    ASCIIString = (char*) _cmsMalloc(self ->ContextID, SignedSizeOfTag + 1);\n+    if (io ->Read(io, ASCIIString, sizeof(char), SignedSizeOfTag) != (cmsUInt32Number) SignedSizeOfTag) return NULL;\n+    ASCIIString[SignedSizeOfTag] = 0;\n     cmsMLUsetASCII(n ->Desc, cmsNoLanguage, cmsNoCountry, ASCIIString);\n     _cmsFree(self ->ContextID, ASCIIString);\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42507312-vul",
+      "digest": "sha256:6fecdb4d633c1bfa8cb1c033531a701d491daef4d3b45d2343f98c86504d8a5a"
+    },
+    "patched": {
+      "ref": "n132/arvo:42507312-fix",
+      "digest": "sha256:82f4c1726601a67f3d26dab5863296cfe23b202c1035d93e1aaeed710a05c105"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "crash_site": "/src/lcms/src/cmsio0.c:1622",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 129,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "site": "/src/lcms/src/cmsio0.c:1622"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

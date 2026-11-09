@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042524653",
+  "chain": "CWE-1284->CWE-125",
+  "project": "ntopng",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42524653",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "18315b80ba40e56fc2981c848d86e604d223bde6",
+      "fix_commits": [
+        "18315b80ba40e56fc2981c848d86e604d223bde6"
+      ],
+      "repo": "https://github.com/ntop/ntopng"
+    },
+    "patch": "diff --git a/src/NetworkInterface.cpp b/src/NetworkInterface.cpp\nindex be4ea5d09b2b..938361cd2fa5 100644\n--- a/src/NetworkInterface.cpp\n+++ b/src/NetworkInterface.cpp\n@@ -2402,7 +2402,7 @@ bool NetworkInterface::dissectPacket(u_int32_t bridge_iface_idx,\n   struct ndpi_ethhdr *ethernet = NULL, dummy_ethernet;\n   u_int64_t time;\n   u_int16_t eth_type, ip_offset = 0, vlan_id = 0, eth_offset = 0,\n-                      encapsulation_overhead = 0;\n+    encapsulation_overhead = 0;\n   u_int32_t null_type;\n   int pcap_datalink_type = get_datalink();\n   bool pass_verdict = true;\n@@ -2420,7 +2420,9 @@ bool NetworkInterface::dissectPacket(u_int32_t bridge_iface_idx,\n   if (getIfType() == interface_type_NETFILTER)\n     len_on_wire += sizeof(struct ndpi_ethhdr);\n \n-  if (h->len > ifMTU) {\n+  if (h->len == 0) {\n+    return (false);\n+  } else if (h->len > ifMTU) {\n     if (!mtuWarningShown) {\n #ifdef __linux__\n       ntop->getTrace()->traceEvent(\n@@ -2455,6 +2457,9 @@ bool NetworkInterface::dissectPacket(u_int32_t bridge_iface_idx,\n \n datalink_check:\n   if (pcap_datalink_type == DLT_NULL) {\n+    if (h->caplen < sizeof(u_int32_t))\n+      return (false);\n+\n     memcpy(&null_type, &packet[eth_offset], sizeof(u_int32_t));\n \n     switch (null_type) {\n@@ -2476,19 +2481,26 @@ bool NetworkInterface::dissectPacket(u_int32_t bridge_iface_idx,\n     if (sender_mac) memcpy(&dummy_ethernet.h_source, sender_mac, 6);\n     ip_offset = 4 + eth_offset;\n   } else if (pcap_datalink_type == DLT_EN10MB) {\n+    if (h->caplen < sizeof(ndpi_ethhdr))\n+      return (false);\n+\n     ethernet = (struct ndpi_ethhdr *)&packet[eth_offset];\n     ip_offset = sizeof(struct ndpi_ethhdr) + eth_offset;\n     eth_type = ntohs(ethernet->h_proto);\n   } else if (pcap_datalink_type == 113 /* Linux Cooked Capture */) {\n+    if (h->caplen < 16)\n+      return (false);\n+\n     ethernet = (struct ndpi_ethhdr *)&dummy_ethernet;\n     if (sender_mac) memcpy(&dummy_ethernet.h_source, sender_mac, 6);\n     eth_type = (packet[eth_offset + 14] << 8) + packet[eth_offset + 15];\n     ip_offset = 16 + eth_offset;\n #ifdef DLT_RAW\n-  } else if (pcap_datalink_type ==\n-                 DLT_RAW /* Linux TUN/TAP device in TUN mode; Raw IP capture */\n-             || pcap_datalink_type ==\n-                    14 /* raw IP DLT_RAW on OpenBSD captures */) {\n+  } else if (pcap_datalink_type == DLT_RAW /* Linux TUN/TAP device in TUN mode; Raw IP capture */\n+             || pcap_datalink_type == 14 /* raw IP DLT_RAW on OpenBSD captures */) {\n+    if (h->caplen < sizeof(u_int32_t))\n+      return (false);\n+\n     switch ((packet[eth_offset] & 0xf0) >> 4) {\n       case 4:\n         eth_type = ETHERTYPE_IP;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42524653-vul",
+      "digest": "sha256:068ae6ac85996ff48222be996cf861dc8da5ad7cd484a717e58a75e1b4a33a39"
+    },
+    "patched": {
+      "ref": "n132/arvo:42524653-fix",
+      "digest": "sha256:30ef30dc1f6f07d35ab9d79f6ba819c9f204d3f5ace063bca33197dad86c02b2"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/ntopng/src/NetworkInterface.cpp:2445",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/ntopng/src/NetworkInterface.cpp:2445"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

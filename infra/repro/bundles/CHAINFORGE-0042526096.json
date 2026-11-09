@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042526096",
+  "chain": "CWE-1284->CWE-125",
+  "project": "cyclonedds",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42526096",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "748f19f0c5da7ecec73d350772c784e46c7d9d64",
+      "fix_commits": [
+        "748f19f0c5da7ecec73d350772c784e46c7d9d64"
+      ],
+      "repo": "https://github.com/eclipse-cyclonedds/cyclonedds"
+    },
+    "patch": "diff --git a/src/core/ddsi/src/ddsi_typewrap.c b/src/core/ddsi/src/ddsi_typewrap.c\nindex 2e20e92f40..9301282d01 100644\n--- a/src/core/ddsi/src/ddsi_typewrap.c\n+++ b/src/core/ddsi/src/ddsi_typewrap.c\n@@ -584,15 +584,25 @@ static dds_return_t xt_valid_struct_member_ids (struct ddsi_domaingv *gv, const\n {\n   assert (ddsi_xt_is_resolved (t) && t->_d == DDS_XTypes_TK_STRUCTURE);\n   dds_return_t ret = DDS_RETCODE_OK;\n+\n   uint32_t cnt = 0;\n   for (const struct xt_type *t1 = t; t1 && ddsi_xt_is_resolved (t1); t1 = t1->_u.structure.base_type ? &t1->_u.structure.base_type->xt : NULL)\n     cnt += t1->_u.structure.members.length;\n   if (cnt == 0 && !t->_u.structure.base_type)\n   {\n     GVTRACE (\"struct has no members\\n\");\n-    return DDS_RETCODE_BAD_PARAMETER;\n+    ret = DDS_RETCODE_BAD_PARAMETER;\n+    goto failed;\n   }\n+\n   DDS_XTypes_MemberId *ids = ddsrt_malloc (cnt * sizeof (*ids));\n+  if (ids == NULL)\n+  {\n+    GVTRACE (\"out-of-memory while checking struct member ids\\n\");\n+    ret = DDS_RETCODE_BAD_PARAMETER;\n+    goto failed;\n+  }\n+\n   uint32_t cnt1 = cnt;\n   for (const struct xt_type *t1 = t; t1 && ddsi_xt_is_resolved (t1); t1 = t1->_u.structure.base_type ? &t1->_u.structure.base_type->xt : NULL)\n   {\n@@ -606,12 +616,13 @@ static dds_return_t xt_valid_struct_member_ids (struct ddsi_domaingv *gv, const\n     {\n       GVTRACE (\"duplicate member id %\"PRIu32\" in struct\\n\", ids[n]);\n       ret = DDS_RETCODE_BAD_PARAMETER;\n-      goto err;\n+      goto failed_duplicate;\n     }\n   }\n \n-err:\n+failed_duplicate:\n   ddsrt_free (ids);\n+failed:\n   return ret;\n }\n \n@@ -619,13 +630,23 @@ static dds_return_t xt_valid_union_member_ids (struct ddsi_domaingv *gv, const s\n {\n   assert (ddsi_xt_is_resolved (t) && t->_d == DDS_XTypes_TK_UNION);\n   dds_return_t ret = DDS_RETCODE_OK;\n+\n   uint32_t cnt = t->_u.union_type.members.length;\n   if (cnt == 0)\n   {\n     GVTRACE (\"union has no members\\n\");\n-    return DDS_RETCODE_BAD_PARAMETER;\n+    ret = DDS_RETCODE_BAD_PARAMETER;\n+    goto failed;\n   }\n+\n   DDS_XTypes_MemberId *ids = ddsrt_malloc (cnt * sizeof (*ids));\n+  if (ids == NULL)\n+  {\n+    GVTRACE (\"out-of-memory while checking union member ids\\n\");\n+    ret = DDS_RETCODE_BAD_PARAMETER;\n+    goto failed;\n+  }\n+\n   for (uint32_t n = 0; n < cnt; n++)\n     ids[n] = t->_u.union_type.members.seq[n].id;\n   qsort (ids, cnt, sizeof (*ids), xt_member_id_cmp);\n@@ -635,12 +656,13 @@ static dds_return_t xt_valid_union_member_ids (struct ddsi_domaingv *gv, const s\n     {\n       GVTRACE (\"duplicate member id %\"PRIu32\" in union\\n\", ids[n]);\n       ret = DDS_RETCODE_BAD_PARAMETER;\n-      goto err;\n+      goto failed_duplicate;\n     }\n   }\n \n-err:\n+failed_duplicate:\n   ddsrt_free (ids);\n+failed:\n   return ret;\n }\n \n@@ -654,8 +676,23 @@ static dds_return_t xt_valid_enum_values (struct ddsi_domaingv *gv, const struct\n {\n   assert (ddsi_xt_is_resolved (t) && t->_d == DDS_XTypes_TK_ENUM);\n   dds_return_t ret = DDS_RETCODE_OK;\n+\n   uint32_t cnt = t->_u.enum_type.literals.length;\n+  if (cnt == 0)\n+  {\n+    GVTRACE (\"enum has no members\\n\");\n+    ret = DDS_RETCODE_BAD_PARAMETER;\n+    goto failed;\n+  }\n+\n   int32_t *values = ddsrt_malloc (cnt * sizeof (*values));\n+  if (values == NULL)\n+  {\n+    GVTRACE (\"out-of-memory while checking enum values\\n\");\n+    ret = DDS_RETCODE_OUT_OF_RESOURCES;\n+    goto failed;\n+  }\n+\n   for (uint32_t n = 0; n < cnt; n++)\n     values[n] = t->_u.enum_type.literals.seq[n].value;\n   qsort (values, cnt, sizeof (*values), xt_enum_value_cmp);\n@@ -665,12 +702,13 @@ static dds_return_t xt_valid_enum_values (struct ddsi_domaingv *gv, const struct\n     {\n       GVTRACE (\"duplicate enum value %\"PRIi32\"\\n\", values[n]);\n       ret = DDS_RETCODE_BAD_PARAMETER;\n-      goto err;\n+      goto failed_duplicate;\n     }\n   }\n \n-err:\n+failed_duplicate:\n   ddsrt_free (values);\n+failed:\n   return ret;\n }\n \n@@ -685,7 +723,21 @@ static dds_return_t xt_valid_bitmask_positions (struct ddsi_domaingv *gv, const\n   assert (ddsi_xt_is_resolved (t) && t->_d == DDS_XTypes_TK_BITMASK);\n   dds_return_t ret = DDS_RETCODE_OK;\n   uint32_t cnt = t->_u.bitmask.bitflags.length;\n+  if (cnt == 0)\n+  {\n+    GVTRACE (\"bitmask has no bitflags\\n\");\n+    ret = DDS_RETCODE_BAD_PARAMETER;\n+    goto failed;\n+  }\n+\n   uint16_t *positions = ddsrt_malloc (cnt * sizeof (*positions));\n+  if (positions == NULL)\n+  {\n+    GVTRACE (\"out-of-memory while checking bitmask positions\\n\");\n+    ret = DDS_RETCODE_OUT_OF_RESOURCES;\n+    goto failed;\n+  }\n+\n   for (uint32_t n = 0; n < cnt; n++)\n     positions[n] = t->_u.bitmask.bitflags.seq[n].position;\n   qsort (positions, cnt, sizeof (*positions), xt_bitmask_position_cmp);\n@@ -695,12 +747,13 @@ static dds_return_t xt_valid_bitmask_positions (struct ddsi_domaingv *gv, const\n     {\n       GVTRACE (\"duplicate bitmask position %\"PRIu16\"\\n\", positions[n]);\n       ret = DDS_RETCODE_BAD_PARAMETER;\n-      goto err;\n+      goto failed_duplicate;\n     }\n   }\n \n-err:\n+failed_duplicate:\n   ddsrt_free (positions);\n+failed:\n   return ret;\n }\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42526096-vul",
+      "digest": "sha256:91c6e2ed45fac75496bef1f0b167381f01b2aaf90a1390a00420c5f84baf91fe"
+    },
+    "patched": {
+      "ref": "n132/arvo:42526096-fix",
+      "digest": "sha256:9fb42c24ab1a92a8d355b7d213f8b9c81bd8eaab2ad0e1eee0cda3474d12fd2e"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/cyclonedds/src/core/ddsi/src/ddsi_typewrap.c:664",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/cyclonedds/src/core/ddsi/src/ddsi_typewrap.c:664"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

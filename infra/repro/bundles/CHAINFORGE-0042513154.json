@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042513154",
+  "chain": "CWE-1284->CWE-125",
+  "project": "libpcap",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42513154",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "e2c0fd75e48a3cbf1bf48b8afe28fff50d8e0877",
+      "fix_commits": [
+        "e2c0fd75e48a3cbf1bf48b8afe28fff50d8e0877"
+      ],
+      "repo": "https://github.com/the-tcpdump-group/libpcap"
+    },
+    "patch": "diff --git a/pcap-common.c b/pcap-common.c\nindex b12ee21589..d0f3ddf446 100644\n--- a/pcap-common.c\n+++ b/pcap-common.c\n@@ -1836,7 +1836,8 @@ fixup_pcap_pkthdr(int linktype, struct pcap_pkthdr *hdr, const u_char *data)\n \tconst pcap_usb_header_mmapped *usb_hdr;\n \n \tusb_hdr = (const pcap_usb_header_mmapped *) data;\n-\tif (linktype == DLT_USB_LINUX_MMAPPED) {\n+\tif (linktype == DLT_USB_LINUX_MMAPPED &&\n+\t    hdr->caplen >= sizeof (pcap_usb_header_mmapped)) {\n \t\t/*\n \t\t * In older versions of libpcap, in memory-mapped captures,\n \t\t * the \"on-the-bus length\" for completion events for\n@@ -1849,6 +1850,8 @@ fixup_pcap_pkthdr(int linktype, struct pcap_pkthdr *hdr, const u_char *data)\n \t\t * is 0 if we *do* have data), and the total on-the-network\n \t\t * length is equal to the value calculated from the raw URB\n \t\t * length, then it might be one of those transfers.\n+\t\t *\n+\t\t * We only do this if we hae the full USB pseudo-header.\n \t\t */\n \t\tif (!usb_hdr->data_flag &&\n \t\t    hdr->len == sizeof(pcap_usb_header_mmapped) +\ndiff --git a/pcap-usb-linux-common.c b/pcap-usb-linux-common.c\nindex d5d9e5383f..6bd044c953 100644\n--- a/pcap-usb-linux-common.c\n+++ b/pcap-usb-linux-common.c\n@@ -41,13 +41,11 @@ fix_linux_usb_mmapped_length(struct pcap_pkthdr *pkth, const u_char *bp)\n \tconst pcap_usb_header_mmapped *hdr;\n \tu_int bytes_left;\n \n+\t/*\n+\t * All callers of this routine must ensure that pkth->caplen is\n+\t * >= sizeof (pcap_usb_header_mmapped).\n+\t */\n \tbytes_left = pkth->caplen;\n-\tif (bytes_left < sizeof (pcap_usb_header_mmapped)) {\n-\t\t/*\n-\t\t * We don't have the full metadata header, so give up.\n-\t\t */\n-\t\treturn;\n-\t}\n \tbytes_left -= sizeof (pcap_usb_header_mmapped);\n \n \thdr = (const pcap_usb_header_mmapped *) bp;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42513154-vul",
+      "digest": "sha256:8c78f55a54e508c1444210576a0529c4d82a1de1013f08ffe321a5327f3abe10"
+    },
+    "patched": {
+      "ref": "n132/arvo:42513154-fix",
+      "digest": "sha256:ebbb8822acd340f010dd43badba75af8f913ef69555e72abf56d0da4c051cf6f"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/libpcap/pcap-common.c:1853",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/libpcap/pcap-common.c:1853"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

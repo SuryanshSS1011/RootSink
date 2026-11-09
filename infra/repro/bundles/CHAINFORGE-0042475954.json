@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042475954",
+  "chain": "CWE-20->CWE-125",
+  "project": "c-ares",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42475954",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "5dd3629bc93449840c36dd635ea6cce606b8c366",
+      "fix_commits": [
+        "5dd3629bc93449840c36dd635ea6cce606b8c366"
+      ],
+      "repo": "https://github.com/c-ares/c-ares"
+    },
+    "patch": "diff --git a/ares_parse_a_reply.c b/ares_parse_a_reply.c\nindex 8c8da835eb..850c39c0bf 100644\n--- a/ares_parse_a_reply.c\n+++ b/ares_parse_a_reply.c\n@@ -125,6 +125,11 @@ int ares_parse_a_reply(const unsigned char *abuf, int alen,\n       goto enomem;\n     }\n \n+  for (i = 0; i < naddrs + 1; ++i)\n+    {\n+      hostent->h_addr_list[i] = NULL;\n+    }\n+\n   if (ai.cnames)\n     {\n       hostent->h_name = strdup(ai.cnames->name);\n@@ -147,26 +152,33 @@ int ares_parse_a_reply(const unsigned char *abuf, int alen,\n           goto enomem;\n         }\n \n+      i = 0;\n       next = ai.nodes;\n-      for (i = 0; i < naddrs; i++)\n+      while (next)\n         {\n-          hostent->h_addr_list[i] = (char*)&addrs[i];\n-          memcpy(hostent->h_addr_list[i], &(((struct sockaddr_in *)next->ai_addr)->sin_addr), sizeof(struct in_addr));\n-          if (naddrttls)\n+          if (next->ai_family == AF_INET)\n             {\n-                if(next->ai_ttl > cname_ttl)\n-                  addrttls[i].ttl = cname_ttl;\n-                else\n-                  addrttls[i].ttl = next->ai_ttl;\n-\n-                memcpy(&addrttls[i].ipaddr, &(((struct sockaddr_in *)next->ai_addr)->sin_addr), sizeof(struct in_addr));\n+              hostent->h_addr_list[i] = (char *)&addrs[i];\n+              memcpy(hostent->h_addr_list[i],\n+                     &(((struct sockaddr_in *)next->ai_addr)->sin_addr),\n+                     sizeof(struct in_addr));\n+              if (naddrttls)\n+                {\n+                  if (next->ai_ttl > cname_ttl)\n+                    addrttls[i].ttl = cname_ttl;\n+                  else\n+                    addrttls[i].ttl = next->ai_ttl;\n+\n+                  memcpy(&addrttls[i].ipaddr,\n+                         &(((struct sockaddr_in *)next->ai_addr)->sin_addr),\n+                         sizeof(struct in_addr));\n+                }\n+              ++i;\n             }\n           next = next->ai_next;\n         }\n     }\n \n-  hostent->h_addr_list[naddrs] = NULL;\n-\n   if (host)\n     {\n       *host = hostent;\ndiff --git a/ares_parse_aaaa_reply.c b/ares_parse_aaaa_reply.c\nindex b296a98a0e..c56279fa05 100644\n--- a/ares_parse_aaaa_reply.c\n+++ b/ares_parse_aaaa_reply.c\n@@ -127,6 +127,11 @@ int ares_parse_aaaa_reply(const unsigned char *abuf, int alen,\n       goto enomem;\n     }\n \n+  for (i = 0; i < naddrs + 1; ++i)\n+    {\n+      hostent->h_addr_list[i] = NULL;\n+    }\n+\n   if (ai.cnames)\n     {\n       hostent->h_name = strdup(ai.cnames->name);\n@@ -149,26 +154,33 @@ int ares_parse_aaaa_reply(const unsigned char *abuf, int alen,\n           goto enomem;\n         }\n \n+      i = 0;\n       next = ai.nodes;\n-      for (i = 0; i < naddrs; i++)\n+      while (next)\n         {\n-          hostent->h_addr_list[i] = (char*)&addrs[i];\n-          memcpy(hostent->h_addr_list[i], &(((struct sockaddr_in6 *)next->ai_addr)->sin6_addr), sizeof(struct ares_in6_addr));\n-          if (naddrttls)\n+          if(next->ai_family == AF_INET6)\n             {\n-                if(next->ai_ttl > cname_ttl)\n-                  addrttls[i].ttl = cname_ttl;\n-                else\n-                  addrttls[i].ttl = next->ai_ttl;\n-\n-                memcpy(&addrttls[i].ip6addr, &(((struct sockaddr_in6 *)next->ai_addr)->sin6_addr), sizeof(struct ares_in6_addr));\n+              hostent->h_addr_list[i] = (char*)&addrs[i];\n+              memcpy(hostent->h_addr_list[i],\n+                     &(((struct sockaddr_in6 *)next->ai_addr)->sin6_addr),\n+                     sizeof(struct ares_in6_addr));\n+              if (naddrttls)\n+                {\n+                    if(next->ai_ttl > cname_ttl)\n+                      addrttls[i].ttl = cname_ttl;\n+                    else\n+                      addrttls[i].ttl = next->ai_ttl;\n+\n+                    memcpy(&addrttls[i].ip6addr,\n+                           &(((struct sockaddr_in6 *)next->ai_addr)->sin6_addr),\n+                           sizeof(struct ares_in6_addr));\n+                }\n+              ++i;\n             }\n           next = next->ai_next;\n         }\n     }\n \n-  hostent->h_addr_list[naddrs] = NULL;\n-\n   if (host)\n     {\n       *host = hostent;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42475954-vul",
+      "digest": "sha256:cac41dd5cf1856e498c9f202846cfa1c199d1228505e45d3780dca9b472b836a"
+    },
+    "patched": {
+      "ref": "n132/arvo:42475954-fix",
+      "digest": "sha256:094d0158cce319448517a124dfc136ed1558fb27396bdbfb23d7c3cce93a05b2"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/c-ares/ares_parse_aaaa_reply.c:156",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/c-ares/ares_parse_aaaa_reply.c:156"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

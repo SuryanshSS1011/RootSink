@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042471500",
+  "chain": "CWE-416->CWE-125",
+  "project": "radare2",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42471500",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "5783cf42c40aaed9b9180ae7069c7a60ea86dc45",
+      "fix_commits": [
+        "5783cf42c40aaed9b9180ae7069c7a60ea86dc45"
+      ],
+      "repo": "https://github.com/radare/radare2"
+    },
+    "patch": "From 5783cf42c40aaed9b9180ae7069c7a60ea86dc45 Mon Sep 17 00:00:00 2001\nFrom: David CARLIER <devnexen@gmail.com>\nDate: Tue, 13 Nov 2018 10:56:57 +0000\nSubject: [PATCH] Use after fix due to task free on non positive counting\n (#12138)\n\n---\n libr/core/task.c | 5 +++--\n 1 file changed, 3 insertions(+), 2 deletions(-)\n\ndiff --git a/libr/core/task.c b/libr/core/task.c\nindex 326dfdc..f83dd7d 100644\n--- a/libr/core/task.c\n+++ b/libr/core/task.c\n@@ -242,12 +242,13 @@ R_API void r_core_task_decref (RCoreTask *task) {\n \t\treturn;\n \t}\n \tTASK_SIGSET_T old_sigset;\n-\ttasks_lock_enter (task->core, &old_sigset);\n+\tRCore *core = task->core;\n+\ttasks_lock_enter (core, &old_sigset);\n \ttask->refcount--;\n \tif (task->refcount <= 0) {\n \t\ttask_free (task);\n \t}\n-\ttasks_lock_leave (task->core, &old_sigset);\n+\ttasks_lock_leave (core, &old_sigset);\n }\n \n R_API void r_core_task_schedule(RCoreTask *current, RTaskState next_state) {\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42471500-vul",
+      "digest": "sha256:a6c81090c5d8f8ba3d73b8686e9e276135aecfd0c6bbb6fa7e54c114f3f2bf02"
+    },
+    "patched": {
+      "ref": "n132/arvo:42471500-fix",
+      "digest": "sha256:035cf5fa49fd903ac9d7b4e7d21eabc52244838d819431ae5fdcbb590482f1e9"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/radare2/libr/core/task.c:250",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/radare2/libr/core/task.c:250"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

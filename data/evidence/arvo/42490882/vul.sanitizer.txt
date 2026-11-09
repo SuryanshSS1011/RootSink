@@ -1,0 +1,64 @@
+======================= INFO =========================
+This binary is built for AFL-fuzz.
+To run the target function on individual input(s) execute this:
+  /out/aacDecoder_DecodeFrame < INPUT_FILE
+or
+  /out/aacDecoder_DecodeFrame INPUT_FILE1 [INPUT_FILE2 ... ]
+To fuzz with afl-fuzz execute this:
+  afl-fuzz [afl-flags] /out/aacDecoder_DecodeFrame [-N]
+afl-fuzz will run N iterations before re-spawning the process (default: 1000)
+======================================================
+Reading 39 bytes from /tmp/poc
+=================================================================
+==601308==ERROR: AddressSanitizer: global-buffer-overflow on address 0x000000815f10 at pc 0x00000050561d bp 0x7fffc7ccc470 sp 0x7fffc7ccc468
+READ of size 4 at 0x000000815f10 thread T0
+SCARINESS: 27 (4-byte-read-global-buffer-overflow-far-from-bounds)
+    #0 0x50561c in Hcr_State_BODY_SIGN_ESC__BODY(FDK_BITSTREAM*, void*) /src/aac/libAACdec/src/aacdec_hcrs.cpp:1070:18
+    #1 0x502294 in DecodeNonPCWs(FDK_BITSTREAM*, CErHcrInfo*) /src/aac/libAACdec/src/aacdec_hcrs.cpp:257:25
+    #2 0x4fc4b8 in HcrDecoder(CErHcrInfo*, CAacDecoderChannelInfo*, SamplingRateInfo const*, FDK_BITSTREAM*) /src/aac/libAACdec/src/aacdec_hcr.cpp:475:5
+    #3 0x56c5aa in CBlock_ReadSpectralData(FDK_BITSTREAM*, CAacDecoderChannelInfo*, SamplingRateInfo const*, unsigned int) /src/aac/libAACdec/src/block.cpp:741:11
+    #4 0x5743c1 in CChannelElement_Read(FDK_BITSTREAM*, CAacDecoderChannelInfo**, CAacDecoderStaticChannelInfo**, AUDIO_OBJECT_TYPE, SamplingRateInfo*, unsigned int, unsigned int, unsigned int, unsigned char, signed char, TRANSPORTDEC*) /src/aac/libAACdec/src/channel.cpp:746:17
+    #5 0x514717 in CAacDecoder_DecodeFrame(AAC_DECODER_INSTANCE*, unsigned int, int*, int, int) /src/aac/libAACdec/src/aacdecoder.cpp:2631:25
+    #6 0x52005f in aacDecoder_DecodeFrame /src/aac/libAACdec/src/aacdecoder_lib.cpp:1323:19
+    #7 0x4cc18b in LLVMFuzzerTestOneInput /src/aacDecoder_DecodeFrame.cpp:39:15
+    #8 0x772a4e in ExecuteFilesOnyByOne /src/libfuzzer/afl/afl_driver.cpp:207:5
+    #9 0x772a4e in main /src/libfuzzer/afl/afl_driver.cpp:244:12
+    #10 0x15440f9d283f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2083f)
+    #11 0x41e428 in _start (/out/aacDecoder_DecodeFrame+0x41e428)
+
+DEDUP_TOKEN: Hcr_State_BODY_SIGN_ESC__BODY(FDK_BITSTREAM*, void*)--DecodeNonPCWs(FDK_BITSTREAM*, CErHcrInfo*)--HcrDecoder(CErHcrInfo*, CAacDecoderChannelInfo*, SamplingRateInfo const*, FDK_BITSTREAM*)
+0x000000815f10 is located 16 bytes to the right of global variable 'aHuffTree27' defined in 'aac/libAACdec/src/aac_rom.cpp:1291:12' (0x815a80) of size 1152
+SUMMARY: AddressSanitizer: global-buffer-overflow /src/aac/libAACdec/src/aacdec_hcrs.cpp:1070:18 in Hcr_State_BODY_SIGN_ESC__BODY(FDK_BITSTREAM*, void*)
+Shadow bytes around the buggy address:
+  0x0000800fab90: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0000800faba0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0000800fabb0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0000800fabc0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0000800fabd0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x0000800fabe0: f9 f9[f9]f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9
+  0x0000800fabf0: f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9 f9
+  0x0000800fac00: f9 f9 f9 f9 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0000800fac10: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0000800fac20: 00 00 00 00 00 00 00 00 00 00 00 00 04 f9 f9 f9
+  0x0000800fac30: f9 f9 f9 f9 f9 f9 f9 f9 00 00 00 00 00 00 00 00
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+  Shadow gap:              cc
+==601308==ABORTING

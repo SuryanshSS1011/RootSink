@@ -1,0 +1,80 @@
+======================= INFO =========================
+This binary is built for AFL-fuzz.
+To run the target function on individual input(s) execute this:
+  /out/hevc_dec_fuzzer < INPUT_FILE
+or
+  /out/hevc_dec_fuzzer INPUT_FILE1 [INPUT_FILE2 ... ]
+To fuzz with afl-fuzz execute this:
+  afl-fuzz [afl-flags] /out/hevc_dec_fuzzer [-N]
+afl-fuzz will run N iterations before re-spawning the process (default: 1000)
+======================================================
+Reading 71 bytes from /tmp/poc
+=================================================================
+==602==ERROR: AddressSanitizer: stack-buffer-overflow on address 0x7f2836f1c8c0 at pc 0x00000051e0df bp 0x7ffe38283770 sp 0x7ffe38283768
+WRITE of size 4 at 0x7f2836f1c8c0 thread T0
+SCARINESS: 51 (4-byte-write-stack-buffer-overflow)
+    #0 0x51e0de in ihevcd_ref_list /src/libhevc/decoder/ihevcd_ref_list.c:179:45
+    #1 0x4f2fcb in ihevcd_parse_slice_header /src/libhevc/decoder/ihevcd_parse_slice_header.c:984:19
+    #2 0x4e0e22 in ihevcd_nal_unit /src/libhevc/decoder/ihevcd_nal.c:399:19
+    #3 0x4ddc9b in ihevcd_decode /src/libhevc/decoder/ihevcd_decode.c:650:15
+    #4 0x4cb9ad in Codec::decodeFrame(unsigned char const*, unsigned long, unsigned long*) /src/libhevc/fuzzer/hevc_dec_fuzzer.cpp:290:9
+    #5 0x4cc14b in LLVMFuzzerTestOneInput /src/libhevc/fuzzer/hevc_dec_fuzzer.cpp:334:18
+    #6 0x4c800e in ExecuteFilesOnyByOne /src/libfuzzer/afl/afl_driver.cpp:216:5
+    #7 0x4c800e in main /src/libfuzzer/afl/afl_driver.cpp:253:12
+    #8 0x7f2835e9582f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+    #9 0x41dc28 in _start (/out/hevc_dec_fuzzer+0x41dc28)
+
+DEDUP_TOKEN: ihevcd_ref_list--ihevcd_parse_slice_header--ihevcd_nal_unit
+Address 0x7f2836f1c8c0 is located in stack of thread T0 at offset 192 in frame
+    #0 0x51da6f in ihevcd_ref_list /src/libhevc/decoder/ihevcd_ref_list.c:94
+
+DEDUP_TOKEN: ihevcd_ref_list
+  This frame has 12 object(s):
+    [32, 96) 'ai4_poc_st_curr_before' (line 108)
+    [128, 192) 'ai4_poc_st_foll' (line 108) <== Memory access at offset 192 overflows this variable
+    [224, 288) 'ai4_poc_st_curr_after' (line 108)
+    [320, 384) 'ai4_poc_lt_curr' (line 109)
+    [416, 480) 'ai4_poc_lt_foll' (line 109)
+    [512, 528) 'ai1_curr_delta_poc_msb_present_flag' (line 113)
+    [544, 560) 'ai1_foll_delta_poc_msb_present_flag' (line 113)
+    [576, 704) 'as_ref_pic_lt_curr' (line 115)
+    [736, 864) 'as_ref_pic_st_curr_after' (line 117)
+    [896, 1024) 'as_ref_pic_st_curr_before' (line 118)
+    [1056, 1184) 'as_ref_pic_list_temp0' (line 121)
+    [1216, 1344) 'as_ref_pic_list_temp1' (line 121)
+HINT: this may be a false positive if your program uses some custom stack unwind mechanism, swapcontext or vfork
+      (longjmp and C++ exceptions *are* supported)
+SUMMARY: AddressSanitizer: stack-buffer-overflow /src/libhevc/decoder/ihevcd_ref_list.c:179:45 in ihevcd_ref_list
+Shadow bytes around the buggy address:
+  0x0fe586ddb8c0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0fe586ddb8d0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0fe586ddb8e0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0fe586ddb8f0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0fe586ddb900: f1 f1 f1 f1 00 00 00 00 00 00 00 00 f2 f2 f2 f2
+=>0x0fe586ddb910: 00 00 00 00 00 00 00 00[f2]f2 f2 f2 00 00 00 00
+  0x0fe586ddb920: 00 00 00 00 f2 f2 f2 f2 00 00 00 00 00 00 00 00
+  0x0fe586ddb930: f2 f2 f2 f2 00 00 00 00 00 00 00 00 f2 f2 f2 f2
+  0x0fe586ddb940: 00 00 f2 f2 00 00 f2 f2 00 00 00 00 00 00 00 00
+  0x0fe586ddb950: 00 00 00 00 00 00 00 00 f2 f2 f2 f2 00 00 00 00
+  0x0fe586ddb960: 00 00 00 00 00 00 00 00 00 00 00 00 f2 f2 f2 f2
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+  Shadow gap:              cc
+==602==ABORTING

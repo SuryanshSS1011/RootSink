@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042506037",
+  "chain": "CWE-1284->CWE-787",
+  "project": "ghostpdl",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42506037",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "9191f693bbfe5b70b91cb068d2fb38316aa0cc5e",
+      "fix_commits": [
+        "9191f693bbfe5b70b91cb068d2fb38316aa0cc5e"
+      ],
+      "repo": "https://cgit.ghostscript.com/ghostpdl.git"
+    },
+    "patch": "From 9191f693bbfe5b70b91cb068d2fb38316aa0cc5e Mon Sep 17 00:00:00 2001\nFrom: Ken Sharp <ken.sharp@artifex.com>\nDate: Sat, 18 Dec 2021 13:49:19 +0000\nSubject: [PATCH] Oss-fuzz #42454 - limit a warning message to fit string\n\n---\n pdf/pdf_image.c | 13 ++++++++++---\n 1 file changed, 10 insertions(+), 3 deletions(-)\n\ndiff --git a/pdf/pdf_image.c b/pdf/pdf_image.c\nindex 7ed9ae9..9af47a0 100644\n--- a/pdf/pdf_image.c\n+++ b/pdf/pdf_image.c\n@@ -1398,9 +1398,16 @@ pdfi_image_get_color(pdf_context *ctx, pdf_c_stream *source, pdfi_image_info_t *\n         if (ColorSpace->type == PDF_NAME) {\n             pdf_name *name = (pdf_name *)ColorSpace;\n             char str[100];\n-            memcpy(str, (const char *)name->data, name->length);\n-            str[name->length] = '\\0';\n-            dmprintf1(ctx->memory, \"NAME:%s\\n\", str);\n+            int length = name->length;\n+\n+            if (length > 0) {\n+                if (length > 100)\n+                    length = 99;\n+\n+                memcpy(str, (const char *)name->data, length);\n+                str[length] = '\\0';\n+                dmprintf1(ctx->memory, \"NAME:%s\\n\", str);\n+            }\n         } else {\n             dmprintf(ctx->memory, \"(not a name)\\n\");\n         }\n-- \n2.55.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42506037-vul",
+      "digest": "sha256:bb86e5c7cb649da0dd5eb3af99b73f4505936e3a9b925339c2535899b0814008"
+    },
+    "patched": {
+      "ref": "n132/arvo:42506037-fix",
+      "digest": "sha256:06c051caa92d23a14f2465210919b51ba9194f3937ba4275b13963ff75a933b4"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/ghostpdl/./pdf/pdf_image.c:1400",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/ghostpdl/./pdf/pdf_image.c:1400"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-968800501",
+  "chain": "CWE-456->CWE-457",
+  "project": "mruby",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42521651",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/mruby/mruby/commit/956d0c51271d453f2d66cbe8fc5626f00035d151",
+      "fix_commits": [
+        "956d0c51271d453f2d66cbe8fc5626f00035d151"
+      ],
+      "repo": "https://github.com/mruby/mruby"
+    },
+    "patch": "diff --git a/src/fmt_fp.c b/src/fmt_fp.c\nindex 7c5b01a992..e00b65b37b 100644\n--- a/src/fmt_fp.c\n+++ b/src/fmt_fp.c\n@@ -267,10 +267,9 @@ mrb_format_float(mrb_float f, char *buf, size_t buf_size, char fmt, int prec, ch\n \n   if (fmt == 'e') {\n     num_digits = prec + 1;\n-  } else if (fmt == 'g') {\n-    if (prec == 0) {\n-      prec = 1;\n-    }\n+    if (prec == 0) prec = 1;\n+  }\n+  else if (fmt == 'g') {\n     num_digits = prec;\n   }\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42521651-vul",
+      "digest": "sha256:e0b5e0bf4317f79cda76726d2fc357de438e6e312e636c7c9ef251b3559886b0"
+    },
+    "patched": {
+      "ref": "n132/arvo:42521651-fix",
+      "digest": "sha256:b4686360cc5212b925fdfe2f5a13aba8343934db778db152ac9058661d336fb7"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/mruby/src/fmt_fp.c:314",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/mruby/src/fmt_fp.c:314"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

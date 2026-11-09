@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-951247357",
+  "chain": "CWE-129->CWE-787",
+  "project": "opensc",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42484421",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/OpenSC/OpenSC/commit/180c57fd1578b13230499d608b41bf874f59d8d4",
+      "fix_commits": [
+        "180c57fd1578b13230499d608b41bf874f59d8d4"
+      ],
+      "repo": "https://github.com/OpenSC/OpenSC"
+    },
+    "patch": "diff --git a/src/libopensc/card-tcos.c b/src/libopensc/card-tcos.c\nindex 5fe18b6f26..ab37d4fe13 100644\n--- a/src/libopensc/card-tcos.c\n+++ b/src/libopensc/card-tcos.c\n@@ -556,7 +556,7 @@ static int tcos_compute_signature(sc_card_t *card, const u8 * data, size_t datal\n \t\tmemcpy(sbuf, data, datalen);\n \t\tdlen=datalen;\n \t} else {\n-\t\tint keylen= tcos3 ? 256 : 128;\n+\t\tsize_t keylen= tcos3 ? 256 : 128;\n \t\tsc_format_apdu(card, &apdu, keylen>255 ? SC_APDU_CASE_4_EXT : SC_APDU_CASE_4_SHORT, 0x2A,0x80,0x86);\n \t\tfor(i=0; i<sizeof(sbuf);++i) sbuf[i]=0xff;\n \t\tif (keylen < datalen)\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42484421-vul",
+      "digest": "sha256:db20598c9cc2f4287a3a30514104350e08ab25a806b0b988a9aaaa77f8ef9eb0"
+    },
+    "patched": {
+      "ref": "n132/arvo:42484421-fix",
+      "digest": "sha256:f6b2fb34b8ab9eab5b905cedbc966485b26ac8385361b6632a6fc0a7aa456d8f"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "crash_site": "/src/opensc/src/libopensc/card-tcos.c:562",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 129,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "site": "/src/opensc/src/libopensc/card-tcos.c:562"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

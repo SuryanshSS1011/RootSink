@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042476210",
+  "chain": "CWE-456->CWE-457",
+  "project": "mruby",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42476210",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "8294ce9fd458a0a1acf8fcdcb6161b4a020866ad",
+      "fix_commits": [
+        "8294ce9fd458a0a1acf8fcdcb6161b4a020866ad"
+      ],
+      "repo": "https://github.com/mruby/mruby"
+    },
+    "patch": "From 8294ce9fd458a0a1acf8fcdcb6161b4a020866ad Mon Sep 17 00:00:00 2001\nFrom: \"Yukihiro \\\"Matz\\\" Matsumoto\" <matz@ruby.or.jp>\nDate: Thu, 4 Jul 2019 23:11:57 +0900\nSubject: [PATCH] It was too early to check `key` for `undef`; ref #4534\n\n---\n src/hash.c | 2 +-\n 1 file changed, 1 insertion(+), 1 deletion(-)\n\ndiff --git a/src/hash.c b/src/hash.c\nindex ac6a7cd..2a0a193 100644\n--- a/src/hash.c\n+++ b/src/hash.c\n@@ -543,10 +543,10 @@ ht_copy(mrb_state *mrb, htable *t)\n       mrb_value key = seg->e[i].key;\n       mrb_value val = seg->e[i].val;\n \n-      if (mrb_undef_p(key)) continue; /* skip deleted key */\n       if ((seg->next == NULL) && (i >= t->last_len)) {\n         return t2;\n       }\n+      if (mrb_undef_p(key)) continue; /* skip deleted key */\n       ht_put(mrb, t2, key, val);\n     }\n     seg = seg->next;\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42476210-vul",
+      "digest": "sha256:eac1536a4988417b7852a43be3d60659310f1dba2474085c266a28727538fce9"
+    },
+    "patched": {
+      "ref": "n132/arvo:42476210-fix",
+      "digest": "sha256:31be758c093f220a7d8fd44a9e7c2d4e69295a8ef8a49da654eb13b3875fa2ea"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/mruby/src/hash.c:546",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/mruby/src/hash.c:546"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

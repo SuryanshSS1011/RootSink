@@ -1,0 +1,105 @@
+======================= INFO =========================
+This binary is built for AFL-fuzz.
+To run the target function on individual input(s) execute this:
+  /out/encoder_heic_fuzzer < INPUT_FILE
+or
+  /out/encoder_heic_fuzzer INPUT_FILE1 [INPUT_FILE2 ... ]
+To fuzz with afl-fuzz execute this:
+  afl-fuzz [afl-flags] /out/encoder_heic_fuzzer [-N]
+afl-fuzz will run N iterations before re-spawning the process (default: 1000)
+======================================================
+Reading 7358 bytes from /tmp/poc
+=================================================================
+==7==ERROR: AddressSanitizer: heap-use-after-free on address 0x622000001918 at pc 0x000000b4c5ec bp 0x7ffde0db26a0 sp 0x7ffde0db2698
+READ of size 1 at 0x622000001918 thread T0
+SCARINESS: 40 (1-byte-read-heap-use-after-free)
+    #0 0xb4c5eb in slice_segment_header::read(bitreader*, decoder_context*, bool*) /src/libde265/libde265/slice.cc:390:13
+    #1 0xb02771 in decoder_context::read_slice_NAL(bitreader&, NAL_unit*, nal_header&) /src/libde265/libde265/decctx.cc:623:27
+    #2 0xb07974 in decoder_context::decode_NAL(NAL_unit*) /src/libde265/libde265/decctx.cc:1227:11
+    #3 0xb07e2c in decoder_context::decode(int*) /src/libde265/libde265/decctx.cc:1315:16
+    #4 0x9f6709 in decodeH265Image /src/imagemagick/coders/heic.c:928:11
+    #5 0x9f48b0 in ReadHEICImage /src/imagemagick/coders/heic.c:1171:9
+    #6 0x635e16 in ReadImage /src/imagemagick/MagickCore/constitute.c:500:13
+    #7 0x5d784f in BlobToImage /src/imagemagick/MagickCore/blob.c:469:13
+    #8 0x52faa4 in Magick::Image::read(Magick::Blob const&) /src/imagemagick/Magick++/lib/Image.cpp:4015:12
+    #9 0x52629b in LLVMFuzzerTestOneInput /src/imagemagick/Magick++/fuzz/encoder_fuzzer.cc:43:11
+    #10 0x52698f in ExecuteFilesOnyByOne(int, char**) /src/libfuzzer/afl/afl_driver.cpp:279:5
+    #11 0x526f2f in main /src/libfuzzer/afl/afl_driver.cpp:316:12
+    #12 0x7fe192f3782f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+    #13 0x41dff8 in _start (/out/encoder_heic_fuzzer+0x41dff8)
+
+DEDUP_TOKEN: slice_segment_header::read(bitreader*, decoder_context*, bool*)--decoder_context::read_slice_NAL(bitreader&, NAL_unit*, nal_header&)--decoder_context::decode_NAL(NAL_unit*)
+0x622000001918 is located 24 bytes inside of 5208-byte region [0x622000001900,0x622000002d58)
+freed by thread T0 here:
+    #0 0x522ad0 in operator delete(void*) /src/llvm/projects/compiler-rt/lib/asan/asan_new_delete.cc:149
+    #1 0xb2c7d0 in operator= /usr/local/bin/../include/c++/v1/memory:4512:5
+    #2 0xb2c7d0 in de265_image::alloc_image(int, int, de265_chroma, std::__1::shared_ptr<seq_parameter_set const>, bool, decoder_context*, encoder_context*, long, void*, bool) /src/libde265/libde265/image.cc:242
+    #3 0xb27cf4 in decoded_picture_buffer::new_image(std::__1::shared_ptr<seq_parameter_set const>, decoder_context*, long, void*, bool) /src/libde265/libde265/dpb.cc:262:8
+    #4 0xb03b25 in decoder_context::process_slice_segment_header(slice_segment_header*, de265_error*, long, nal_header*, void*) /src/libde265/libde265/decctx.cc:2003:28
+    #5 0xb028ad in decoder_context::read_slice_NAL(bitreader&, NAL_unit*, nal_header&) /src/libde265/libde265/decctx.cc:636:7
+    #6 0xb07974 in decoder_context::decode_NAL(NAL_unit*) /src/libde265/libde265/decctx.cc:1227:11
+    #7 0xb07e2c in decoder_context::decode(int*) /src/libde265/libde265/decctx.cc:1315:16
+    #8 0x9f6709 in decodeH265Image /src/imagemagick/coders/heic.c:928:11
+    #9 0x9f48b0 in ReadHEICImage /src/imagemagick/coders/heic.c:1171:9
+    #10 0x635e16 in ReadImage /src/imagemagick/MagickCore/constitute.c:500:13
+    #11 0x5d784f in BlobToImage /src/imagemagick/MagickCore/blob.c:469:13
+    #12 0x52faa4 in Magick::Image::read(Magick::Blob const&) /src/imagemagick/Magick++/lib/Image.cpp:4015:12
+    #13 0x52629b in LLVMFuzzerTestOneInput /src/imagemagick/Magick++/fuzz/encoder_fuzzer.cc:43:11
+    #14 0x52698f in ExecuteFilesOnyByOne(int, char**) /src/libfuzzer/afl/afl_driver.cpp:279:5
+    #15 0x526f2f in main /src/libfuzzer/afl/afl_driver.cpp:316:12
+    #16 0x7fe192f3782f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+
+DEDUP_TOKEN: operator delete(void*)--operator=--de265_image::alloc_image(int, int, de265_chroma, std::__1::shared_ptr<seq_parameter_set const>, bool, decoder_context*, encoder_context*, long, void*, bool)
+previously allocated by thread T0 here:
+    #0 0x521d58 in operator new(unsigned long) /src/llvm/projects/compiler-rt/lib/asan/asan_new_delete.cc:92
+    #1 0xb12f10 in __libcpp_allocate /usr/local/bin/../include/c++/v1/new:259:10
+    #2 0xb12f10 in allocate /usr/local/bin/../include/c++/v1/memory:1799
+    #3 0xb12f10 in std::__1::shared_ptr<seq_parameter_set> std::__1::shared_ptr<seq_parameter_set>::make_shared<>() /usr/local/bin/../include/c++/v1/memory:4312
+    #4 0xb01771 in make_shared<seq_parameter_set> /usr/local/bin/../include/c++/v1/memory:4692:12
+    #5 0xb01771 in decoder_context::read_sps_NAL(bitreader&) /src/libde265/libde265/decctx.cc:549
+    #6 0xb079f6 in decoder_context::decode_NAL(NAL_unit*) /src/libde265/libde265/decctx.cc:1236:13
+    #7 0xb07e2c in decoder_context::decode(int*) /src/libde265/libde265/decctx.cc:1315:16
+    #8 0x9f6709 in decodeH265Image /src/imagemagick/coders/heic.c:928:11
+    #9 0x9f48b0 in ReadHEICImage /src/imagemagick/coders/heic.c:1171:9
+    #10 0x635e16 in ReadImage /src/imagemagick/MagickCore/constitute.c:500:13
+    #11 0x5d784f in BlobToImage /src/imagemagick/MagickCore/blob.c:469:13
+    #12 0x52faa4 in Magick::Image::read(Magick::Blob const&) /src/imagemagick/Magick++/lib/Image.cpp:4015:12
+    #13 0x52629b in LLVMFuzzerTestOneInput /src/imagemagick/Magick++/fuzz/encoder_fuzzer.cc:43:11
+    #14 0x52698f in ExecuteFilesOnyByOne(int, char**) /src/libfuzzer/afl/afl_driver.cpp:279:5
+    #15 0x526f2f in main /src/libfuzzer/afl/afl_driver.cpp:316:12
+    #16 0x7fe192f3782f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+
+DEDUP_TOKEN: operator new(unsigned long)--__libcpp_allocate--allocate
+SUMMARY: AddressSanitizer: heap-use-after-free /src/libde265/libde265/slice.cc:390:13 in slice_segment_header::read(bitreader*, decoder_context*, bool*)
+Shadow bytes around the buggy address:
+  0x0c447fff82d0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c447fff82e0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c447fff82f0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c447fff8300: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c447fff8310: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+=>0x0c447fff8320: fd fd fd[fd]fd fd fd fd fd fd fd fd fd fd fd fd
+  0x0c447fff8330: fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd
+  0x0c447fff8340: fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd
+  0x0c447fff8350: fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd
+  0x0c447fff8360: fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd
+  0x0c447fff8370: fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+==7==ABORTING

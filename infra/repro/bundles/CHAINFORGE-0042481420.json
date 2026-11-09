@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042481420",
+  "chain": "CWE-456->CWE-457",
+  "project": "php-src",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42481420",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "16f194c75e05381628ae2b9468fb8004dec9e176",
+      "fix_commits": [
+        "16f194c75e05381628ae2b9468fb8004dec9e176"
+      ],
+      "repo": "https://github.com/php/php-src"
+    },
+    "patch": "diff --git a/ext/standard/basic_functions.c b/ext/standard/basic_functions.c\nindex 860c94acfbcf..f6d513f53d22 100755\n--- a/ext/standard/basic_functions.c\n+++ b/ext/standard/basic_functions.c\n@@ -1856,7 +1856,7 @@ PHP_FUNCTION(getopt)\n \n \twhile ((o = php_getopt(argc, argv, opts, &php_optarg, &php_optind, 0, 1)) != -1) {\n \t\t/* Skip unknown arguments. */\n-\t\tif (o == '?') {\n+\t\tif (o == PHP_GETOPT_INVALID_ARG) {\n \t\t\tcontinue;\n \t\t}\n \ndiff --git a/main/getopt.c b/main/getopt.c\nindex fc96ad7e0895..2160a6f4fec5 100644\n--- a/main/getopt.c\n+++ b/main/getopt.c\n@@ -24,6 +24,7 @@\n #define OPTERRNF (2)\n #define OPTERRARG (3)\n \n+// Print error message to stderr and return -2 to distinguish it from '?' command line option.\n static int php_opt_error(int argc, char * const *argv, int oint, int optchr, int err, int show_err) /* {{{ */\n {\n \tif (show_err)\n@@ -45,7 +46,7 @@ static int php_opt_error(int argc, char * const *argv, int oint, int optchr, int\n \t\t\tbreak;\n \t\t}\n \t}\n-\treturn('?');\n+\treturn PHP_GETOPT_INVALID_ARG;\n }\n /* }}} */\n \ndiff --git a/main/php_getopt.h b/main/php_getopt.h\nindex 960def30b537..c68d3969c420 100644\n--- a/main/php_getopt.h\n+++ b/main/php_getopt.h\n@@ -33,4 +33,7 @@ extern PHPAPI int php_optidx;\n PHPAPI int php_getopt(int argc, char* const *argv, const opt_struct opts[], char **optarg, int *optind, int show_err, int arg_start);\n END_EXTERN_C()\n \n+/* php_getopt will return this value if there is an error in arguments */\n+#define PHP_GETOPT_INVALID_ARG (-2)\n+\n #endif\ndiff --git a/sapi/cgi/cgi_main.c b/sapi/cgi/cgi_main.c\nindex 10f92d9fd3d6..2cff48fc61dc 100644\n--- a/sapi/cgi/cgi_main.c\n+++ b/sapi/cgi/cgi_main.c\n@@ -2283,6 +2283,7 @@ consult the installation file that came with this distribution, or visit \\n\\\n \t\t\t\t\tbreak;\n \t\t\t\tcase 'h':\n \t\t\t\tcase '?':\n+\t\t\t\tcase PHP_GETOPT_INVALID_ARG:\n \t\t\t\t\tif (request) {\n \t\t\t\t\t\tfcgi_destroy_request(request);\n \t\t\t\t\t}\n@@ -2292,6 +2293,9 @@ consult the installation file that came with this distribution, or visit \\n\\\n \t\t\t\t\tphp_cgi_usage(argv[0]);\n \t\t\t\t\tphp_output_end_all();\n \t\t\t\t\texit_status = 0;\n+\t\t\t\t\tif (c == PHP_GETOPT_INVALID_ARG) {\n+\t\t\t\t\t\texit_status = 1;\n+\t\t\t\t\t}\n \t\t\t\t\tgoto out;\n \t\t\t}\n \t\t}\ndiff --git a/sapi/cgi/tests/bug78323.phpt b/sapi/cgi/tests/bug78323.phpt\nnew file mode 100644\nindex 000000000000..d89e51874a43\n--- /dev/null\n+++ b/sapi/cgi/tests/bug78323.phpt\n@@ -0,0 +1,41 @@\n+--TEST--\n+Bug #78323 Test exit code and error message for invalid parameters\n+--SKIPIF--\n+<?php include \"skipif.inc\"; ?>\n+--FILE--\n+<?php\n+include \"include.inc\";\n+$php = get_cgi_path();\n+reset_env_vars();\n+\n+\n+// no argument for option\n+ob_start();\n+passthru(\"$php --memory-limit=1G 2>&1\", $exitCode);\n+$output = ob_get_contents();\n+ob_end_clean();\n+\n+$lines = preg_split('/\\R/', $output);\n+echo $lines[0], \"\\n\",\n+     $lines[1], \"\\n\",\n+     \"Done: $exitCode\\n\\n\";\n+\n+\n+// Successful execution\n+ob_start();\n+passthru(\"$php -dmemory-limit=1G -v\", $exitCode);\n+$output = ob_get_contents();\n+ob_end_clean();\n+\n+$lines = preg_split('/\\R/', $output);\n+echo $lines[0], \"\\n\",\n+     \"Done: $exitCode\\n\";\n+\n+?>\n+--EXPECTF--\n+Error in argument 1, char 1: no argument for option -\n+Usage: %s\n+Done: 1\n+\n+PHP %s\n+Done: 0\ndiff --git a/sapi/cli/php_cli.c b/sapi/cli/php_cli.c\nindex d610c532c90b..8cc570f132e5 100644\n--- a/sapi/cli/php_cli.c\n+++ b/sapi/cli/php_cli.c\n@@ -1226,7 +1226,7 @@ int main(int argc, char *argv[])\n \tsetmode(_fileno(stderr), O_BINARY);\t\t/* make the stdio mode be binary */\n #endif\n \n-\twhile ((c = php_getopt(argc, argv, OPTIONS, &php_optarg, &php_optind, 0, 2))!=-1) {\n+\twhile ((c = php_getopt(argc, argv, OPTIONS, &php_optarg, &php_optind, 1, 2))!=-1) {\n \t\tswitch (c) {\n \t\t\tcase 'c':\n \t\t\t\tif (ini_path_override) {\n@@ -1278,6 +1278,10 @@ int main(int argc, char *argv[])\n \t\t\tcase '?':\n \t\t\t\tphp_cli_usage(argv[0]);\n \t\t\t\tgoto out;\n+\t\t\tcase PHP_GETOPT_INVALID_ARG: /* print usage on bad options, exit 1 */\n+\t\t\t\tphp_cli_usage(argv[0]);\n+\t\t\t\texit_status = 1;\n+\t\t\t\tgoto out;\n \t\t\tcase 'i': case 'v': case 'm':\n \t\t\t\tsapi_module = &cli_sapi_module;\n \t\t\t\tgoto exit_loop;\ndiff --git a/sapi/cli/tests/015.phpt b/sapi/cli/tests/015.phpt\nindex 01f5328e9924..5a5e6c5190d2 100644\n--- a/sapi/cli/tests/015.phpt\n+++ b/sapi/cli/tests/015.phpt\n@@ -16,7 +16,7 @@ $php = getenv('TEST_PHP_EXECUTABLE');\n echo `\"$php\" -n --version | grep built:`;\n echo `echo \"<?php print_r(\\\\\\$argv);\" | \"$php\" -n -- foo bar baz`, \"\\n\";\n echo `\"$php\" -n --version foo bar baz | grep built:`;\n-echo `\"$php\" -n --notexisting foo bar baz | grep Usage:`;\n+echo `\"$php\" -n --notexisting foo bar baz 2>&1 | grep Usage:`;\n \n echo \"Done\\n\";\n ?>\ndiff --git a/sapi/cli/tests/bug78323.phpt b/sapi/cli/tests/bug78323.phpt\nnew file mode 100644\nindex 000000000000..02b18e02a214\n--- /dev/null\n+++ b/sapi/cli/tests/bug78323.phpt\n@@ -0,0 +1,78 @@\n+--TEST--\n+Bug #78323 Test exit code and error message for invalid parameters\n+--SKIPIF--\n+<?php\n+include \"skipif.inc\";\n+?>\n+--FILE--\n+<?php\n+$php = getenv('TEST_PHP_EXECUTABLE');\n+\n+// There are 3 types of option errors:\n+// 1 : in flags\n+// 2 option not found\n+// 3 no argument for option\n+\n+\n+// colon in flags\n+ob_start();\n+passthru(\"$php -a:Z 2>&1\", $exitCode);\n+$output = ob_get_contents();\n+ob_end_clean();\n+\n+$lines = preg_split('/\\R/', $output);\n+echo $lines[0], \"\\n\",\n+     $lines[1], \"\\n\",\n+     \"Done: $exitCode\\n\\n\";\n+\n+\n+// option not found\n+ob_start();\n+passthru(\"$php -Z 2>&1\", $exitCode);\n+$output = ob_get_contents();\n+ob_end_clean();\n+\n+$lines = preg_split('/\\R/', $output);\n+echo $lines[0], \"\\n\",\n+     $lines[1], \"\\n\",\n+     \"Done: $exitCode\\n\\n\";\n+\n+\n+// no argument for option\n+ob_start();\n+passthru(\"$php --memory-limit=1G 2>&1\", $exitCode);\n+$output = ob_get_contents();\n+ob_end_clean();\n+\n+$lines = preg_split('/\\R/', $output);\n+echo $lines[0], \"\\n\",\n+     $lines[1], \"\\n\",\n+     \"Done: $exitCode\\n\\n\";\n+\n+\n+// Successful execution\n+ob_start();\n+passthru(\"$php -dmemory-limit=1G -v\", $exitCode);\n+$output = ob_get_contents();\n+ob_end_clean();\n+\n+$lines = preg_split('/\\R/', $output);\n+echo $lines[0], \"\\n\",\n+     \"Done: $exitCode\\n\";\n+\n+?>\n+--EXPECTF--\n+Error in argument %d, char %d: : in flags\n+Usage: %s [options] [-f] <file> [--] [args...]\n+Done: 1\n+\n+Error in argument %d, char %d: option not found %s\n+Usage: %s [options] [-f] <file> [--] [args...]\n+Done: 1\n+\n+Error in argument %d, char %d: no argument for option %s\n+Usage: %s [options] [-f] <file> [--] [args...]\n+Done: 1\n+\n+PHP %s\n+Done: 0\ndiff --git a/sapi/fpm/fpm/fpm_main.c b/sapi/fpm/fpm/fpm_main.c\nindex d00c0c279599..3f1981ada211 100644\n--- a/sapi/fpm/fpm/fpm_main.c\n+++ b/sapi/fpm/fpm/fpm_main.c\n@@ -1698,6 +1698,7 @@ int main(int argc, char *argv[])\n \t\t\tdefault:\n \t\t\tcase 'h':\n \t\t\tcase '?':\n+\t\t\tcase PHP_GETOPT_INVALID_ARG:\n \t\t\t\tcgi_sapi_module.startup(&cgi_sapi_module);\n \t\t\t\tphp_output_activate();\n \t\t\t\tSG(headers_sent) = 1;\n@@ -1705,7 +1706,7 @@ int main(int argc, char *argv[])\n \t\t\t\tphp_output_end_all();\n \t\t\t\tphp_output_deactivate();\n \t\t\t\tfcgi_shutdown();\n-\t\t\t\texit_status = (c == 'h') ? FPM_EXIT_OK : FPM_EXIT_USAGE;\n+\t\t\t\texit_status = (c != PHP_GETOPT_INVALID_ARG) ? FPM_EXIT_OK : FPM_EXIT_USAGE;\n \t\t\t\tgoto out;\n \n \t\t\tcase 'v': /* show php version & quit */\ndiff --git a/sapi/fpm/tests/bug78323.phpt b/sapi/fpm/tests/bug78323.phpt\nnew file mode 100644\nindex 000000000000..cf9102057314\n--- /dev/null\n+++ b/sapi/fpm/tests/bug78323.phpt\n@@ -0,0 +1,39 @@\n+--TEST--\n+FPM: Bug #78323 Test exit code for invalid parameters\n+--SKIPIF--\n+<?php include \"skipif.inc\"; ?>\n+--FILE--\n+<?php\n+\n+require_once \"tester.inc\";\n+\n+$php = \\FPM\\Tester::findExecutable();\n+\n+// no argument for option\n+ob_start();\n+passthru(\"$php --memory-limit=1G 2>&1\", $exitCode);\n+$output = ob_get_contents();\n+ob_end_clean();\n+\n+$lines = preg_split('/\\R/', $output);\n+echo $lines[0], \"\\n\",\n+     \"Done: $exitCode\\n\\n\";\n+\n+\n+// Successful execution\n+ob_start();\n+passthru(\"$php -dmemory-limit=1G -v\", $exitCode);\n+$output = ob_get_contents();\n+ob_end_clean();\n+\n+$lines = preg_split('/\\R/', $output);\n+echo $lines[0], \"\\n\",\n+     \"Done: $exitCode\\n\";\n+\n+?>\n+--EXPECTF--\n+Usage: %s\n+Done: 64\n+\n+PHP %s\n+Done: 0\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42481420-vul",
+      "digest": "sha256:8358879e8715ee6648a6efdc275666526fa8146796db92eba9aeb88bd21be212"
+    },
+    "patched": {
+      "ref": "n132/arvo:42481420-fix",
+      "digest": "sha256:caa2919b17b2550b28ecd28cbd0b4f54d214c49d91fe042f7dbe58be110d407e"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/php-src/oniguruma/src/regcomp.c:3411",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/php-src/oniguruma/src/regcomp.c:3411"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

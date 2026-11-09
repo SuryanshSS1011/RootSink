@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0395921924",
+  "chain": "CWE-1285->CWE-125",
+  "project": "tinysparql",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "395921924",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "7ae2523c90152d3e3ca2f86a3a470f436b208d7f",
+      "fix_commits": [
+        "7ae2523c90152d3e3ca2f86a3a470f436b208d7f"
+      ],
+      "repo": "https://gitlab.gnome.org/GNOME/tinysparql.git"
+    },
+    "patch": "diff --git a/src/libtinysparql/core/tracker-sparql-grammar.h b/src/libtinysparql/core/tracker-sparql-grammar.h\nindex 3c6db4b23e59e13e9acb4d1378cf86cf273dba48..7749f891b684091be644dffe2a2e32bd8fb3c0a3 100644\n--- a/src/libtinysparql/core/tracker-sparql-grammar.h\n+++ b/src/libtinysparql/core/tracker-sparql-grammar.h\n@@ -1561,19 +1561,19 @@ static const TrackerGrammarRule rule_Query[] = { R(Prologue), OR(helper_Query_or\n static const TrackerGrammarRule rule_QueryUnit[] = { R(Query), NIL };\n \n /* Inline funcs for terminal parsers */\n-#define READ_CHAR(set, _C_)\t\t\t\\\n-\tG_STMT_START {\t\t\t\t\\\n-\t\tgchar ch = *str;\t\t\\\n-\t\tif ((set)) {\t\t\t\\\n-\t\t\tstr++;\t\t\t\\\n-\t\t} else {\t\t\t\\\n-\t\t\t_C_;\t\t\t\\\n-\t\t}\t\t\t\t\\\n+#define READ_CHAR(set, _C_)\t\t\t\t\\\n+\tG_STMT_START {\t\t\t\t\t\\\n+\t\tgchar ch = (str < end) ? *str : 0;\t\\\n+\t\tif ((set)) {\t\t\t\t\\\n+\t\t\tstr++;\t\t\t\t\\\n+\t\t} else {\t\t\t\t\\\n+\t\t\t_C_;\t\t\t\t\\\n+\t\t}\t\t\t\t\t\\\n \t} G_STMT_END\n \n #define READ_UNICHAR(set, _C_)\t\t\t\t\\\n \tG_STMT_START {\t\t\t\t\t\\\n-\t\tgunichar ch = g_utf8_get_char (str);\t\\\n+\t\tgunichar ch = g_utf8_get_char_validated (str, end - str); \\\n \t\tif ((set)) {\t\t\t\t\\\n \t\t\tstr = g_utf8_next_char (str);\t\\\n \t\t} else {\t\t\t\t\\\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:395921924-vul",
+      "digest": "sha256:b196219a0aeff7201240611b24e2168141b6f9785d4264cc3d9b0e2ab055d9a9"
+    },
+    "patched": {
+      "ref": "n132/arvo:395921924-fix",
+      "digest": "sha256:b66d61ef98953010e5a3ff7925e0842c25f04782e9c9275646346d4dff088efa"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": null,
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": null
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

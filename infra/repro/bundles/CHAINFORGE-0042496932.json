@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042496932",
+  "chain": "CWE-1284->CWE-125",
+  "project": "duckdb",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42496932",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "f9703e7af9c5edb4d1eebeb1964cdcf78b3980ae",
+      "fix_commits": [
+        "f9703e7af9c5edb4d1eebeb1964cdcf78b3980ae"
+      ],
+      "repo": "https://github.com/duckdb/duckdb"
+    },
+    "patch": "diff --git a/third_party/utf8proc/utf8proc_wrapper.cpp b/third_party/utf8proc/utf8proc_wrapper.cpp\nindex 63382245dc12..e187a1708c90 100644\n--- a/third_party/utf8proc/utf8proc_wrapper.cpp\n+++ b/third_party/utf8proc/utf8proc_wrapper.cpp\n@@ -30,34 +30,36 @@ static void AssignInvalidUTF8Reason(UnicodeInvalidReason *invalid_reason, size_t\n \t}\n }\n \n-#define EXTRA_BYTE_LOOP(NEXTRA_BYTES) \\\n-\tdo { \\\n-\t\tif ((len - i) < (NEXTRA_BYTES + 1)) { \\\n-\t\t\t/* incomplete byte sequence */ \\\n-\t\t\tAssignInvalidUTF8Reason(invalid_reason, invalid_pos, first_pos_seq, UnicodeInvalidReason::BYTE_MISMATCH); \\\n-\t\t\treturn UnicodeType::INVALID; \\\n-\t\t} \\\n-\t\tfor (int j = 0 ; j < NEXTRA_BYTES; j++) { \\\n-\t\t\tc = (int) s[++i]; \\\n-\t\t\t/* now validate the extra bytes */ \\\n-\t\t\tif ((c & 0xC0) != 0x80) { \\\n-\t\t\t\t/* extra byte is not in the format 10xxxxxx */ \\\n-\t\t\t\tAssignInvalidUTF8Reason(invalid_reason, invalid_pos, i, UnicodeInvalidReason::BYTE_MISMATCH); \\\n-\t\t\t\treturn UnicodeType::INVALID; \\\n-\t\t\t} \\\n-\t\t\tutf8char = (utf8char << 6) | (c & 0x3F); \\\n-\t\t} \\\n-\t\tif (utf8char > 0x10FFFF) { \\\n-\t\t\t/* value not representable by Unicode */ \\\n-\t\t\tAssignInvalidUTF8Reason(invalid_reason, invalid_pos, first_pos_seq, UnicodeInvalidReason::INVALID_UNICODE); \\\n-\t\t\treturn UnicodeType::INVALID; \\\n-\t\t} \\\n-\t\tif ((utf8char & 0x1FFF800) == 0xD800) { \\\n-\t\t\t/* Unicode characters from U+D800 to U+DFFF are surrogate characters used by UTF-16 which are invalid in UTF-8 */ \\\n-\t\t\tAssignInvalidUTF8Reason(invalid_reason, invalid_pos, first_pos_seq, UnicodeInvalidReason::INVALID_UNICODE); \\\n-\t\t\treturn UnicodeType::INVALID; \\\n-\t\t} \\\n-\t} while(0)\n+static inline UnicodeType\n+UTF8ExtraByteLoop(const size_t nextra_bytes, const int first_pos_seq, int utf8char, size_t& i,\n+\t\t\t\t  const char *s, const size_t len, UnicodeInvalidReason *invalid_reason, size_t *invalid_pos) {\n+\tif ((len - i) < (nextra_bytes + 1)) {\n+\t\t/* incomplete byte sequence */\n+\t\tAssignInvalidUTF8Reason(invalid_reason, invalid_pos, first_pos_seq, UnicodeInvalidReason::BYTE_MISMATCH);\n+\t\treturn UnicodeType::INVALID;\n+\t}\n+\tfor (size_t j = 0 ; j < nextra_bytes; j++) {\n+\t\tint c = (int) s[++i];\n+\t\t/* now validate the extra bytes */\n+\t\tif ((c & 0xC0) != 0x80) {\n+\t\t\t/* extra byte is not in the format 10xxxxxx */\n+\t\t\tAssignInvalidUTF8Reason(invalid_reason, invalid_pos, i, UnicodeInvalidReason::BYTE_MISMATCH);\n+\t\t\treturn UnicodeType::INVALID;\n+\t\t}\n+\t\tutf8char = (utf8char << 6) | (c & 0x3F);\n+\t}\n+\tif (utf8char > 0x10FFFF) {\n+\t\t/* value not representable by Unicode */\n+\t\tAssignInvalidUTF8Reason(invalid_reason, invalid_pos, first_pos_seq, UnicodeInvalidReason::INVALID_UNICODE);\n+\t\treturn UnicodeType::INVALID;\n+\t}\n+\tif ((utf8char & 0x1FFF800) == 0xD800) {\n+\t\t/* Unicode characters from U+D800 to U+DFFF are surrogate characters used by UTF-16 which are invalid in UTF-8 */\n+\t\tAssignInvalidUTF8Reason(invalid_reason, invalid_pos, first_pos_seq, UnicodeInvalidReason::INVALID_UNICODE);\n+\t\treturn UnicodeType::INVALID;\n+\t}\n+\treturn UnicodeType::UNICODE;\n+}\n \n UnicodeType Utf8Proc::Analyze(const char *s, size_t len, UnicodeInvalidReason *invalid_reason, size_t *invalid_pos) {\n \tUnicodeType type = UnicodeType::ASCII;\n@@ -79,20 +81,23 @@ UnicodeType Utf8Proc::Analyze(const char *s, size_t len, UnicodeInvalidReason *i\n \t\t\tif ((c & 0xE0) == 0xC0) {\n \t\t\t\t/* 2 byte sequence */\n \t\t\t\tint utf8char = c & 0x1F;\n-\t\t\t\tEXTRA_BYTE_LOOP(1);\n+\t\t\t\ttype = UTF8ExtraByteLoop(1, first_pos_seq, utf8char, i, s, len, invalid_reason, invalid_pos);\n \t\t\t} else if ((c & 0xF0) == 0xE0) {\n \t\t\t\t/* 3 byte sequence */\n \t\t\t\tint utf8char = c & 0x0F;\n-\t\t\t\tEXTRA_BYTE_LOOP(2);\n+\t\t\t\ttype = UTF8ExtraByteLoop(2, first_pos_seq, utf8char, i, s, len, invalid_reason, invalid_pos);\n \t\t\t} else if ((c & 0xF8) == 0xF0) {\n \t\t\t\t/* 4 byte sequence */\n \t\t\t\tint utf8char = c & 0x07;\n-\t\t\t\tEXTRA_BYTE_LOOP(3);\n+\t\t\t\ttype = UTF8ExtraByteLoop(3, first_pos_seq, utf8char, i, s, len, invalid_reason, invalid_pos);\n \t\t\t} else {\n \t\t\t\t/* invalid UTF-8 start byte */\n \t\t\t\tAssignInvalidUTF8Reason(invalid_reason, invalid_pos, i, UnicodeInvalidReason::BYTE_MISMATCH);\n \t\t\t\treturn UnicodeType::INVALID;\n \t\t\t}\n+\t\t\tif (type != UnicodeType::UNICODE) {\n+\t\t\t\treturn type;\n+\t\t\t}\n \t\t}\n \t}\n \treturn type;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42496932-vul",
+      "digest": "sha256:a416c39ad58a0b27523f37ecc64b41e317614d7f7210a50406f669510648f82b"
+    },
+    "patched": {
+      "ref": "n132/arvo:42496932-fix",
+      "digest": "sha256:040c6eca5b70a96cbae48e54b827b30de5400adff99e4043ad245cde1499c3c1"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/duckdb/third_party/utf8proc/utf8proc.cpp:351",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/duckdb/third_party/utf8proc/utf8proc.cpp:351"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

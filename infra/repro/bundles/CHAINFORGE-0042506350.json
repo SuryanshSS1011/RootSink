@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042506350",
+  "chain": "CWE-1284->CWE-787",
+  "project": "ghostpdl",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42506350",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "7f5d467726db47da4102a6d6f1d49e63d3c0b77f",
+      "fix_commits": [
+        "7f5d467726db47da4102a6d6f1d49e63d3c0b77f"
+      ],
+      "repo": "https://cgit.ghostscript.com/ghostpdl.git"
+    },
+    "patch": "From 7f5d467726db47da4102a6d6f1d49e63d3c0b77f Mon Sep 17 00:00:00 2001\nFrom: Ken Sharp <ken.sharp@artifex.com>\nDate: Tue, 21 Dec 2021 15:34:42 +0000\nSubject: [PATCH] OSS-fuzz #42736 Error if CMap name exceeds maximum file name\n\n---\n pdf/pdf_cmap.c | 3 +++\n 1 file changed, 3 insertions(+)\n\ndiff --git a/pdf/pdf_cmap.c b/pdf/pdf_cmap.c\nindex 42ed795..0b1c93b 100644\n--- a/pdf/pdf_cmap.c\n+++ b/pdf/pdf_cmap.c\n@@ -646,6 +646,9 @@ pdf_cmap_open_file(pdf_context *ctx, gs_string *cmap_name, byte **buf, int64_t *\n     fname[0] = '\\0';\n \n     strncat(fname, path_pfx, strlen(path_pfx));\n+    if (strlen(fname) + cmap_name->size >= gp_file_name_sizeof)\n+        return_error(gs_error_rangecheck);\n+\n     strncat(fname, (char *)cmap_name->data, cmap_name->size);\n     code = pdfi_open_resource_file(ctx, (const char *)fname, (const int)strlen(fname), &s);\n     if (code >= 0) {\n-- \n2.55.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42506350-vul",
+      "digest": "sha256:c8996debd8fd0176f07888cd5d28d2628cfae92ac967803efe34ac6e45e6613c"
+    },
+    "patched": {
+      "ref": "n132/arvo:42506350-fix",
+      "digest": "sha256:fbde67efe9895478b35dd8991860c3eb5a6be9b4775f35ac64a33c1d1adfa89b"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/ghostpdl/./pdf/pdf_cmap.c:642",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/ghostpdl/./pdf/pdf_cmap.c:642"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

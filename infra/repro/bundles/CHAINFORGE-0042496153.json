@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042496153",
+  "chain": "CWE-476->CWE-787",
+  "project": "wasm3",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42496153",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "8f3986a66c390e1125493531648b828099fab982",
+      "fix_commits": [
+        "8f3986a66c390e1125493531648b828099fab982"
+      ],
+      "repo": "https://github.com/wasm3/wasm3"
+    },
+    "patch": "diff --git a/source/m3_code.c b/source/m3_code.c\nindex a5dd5d3f..b399b825 100644\n--- a/source/m3_code.c\n+++ b/source/m3_code.c\n@@ -5,6 +5,7 @@\n //  Copyright \u00a9 2019 Steven Massey. All rights reserved.\n //\n \n+#include <limits.h>\n #include \"m3_code.h\"\n #include \"m3_env.h\"\n \n@@ -15,9 +16,23 @@ IM3CodePage  NewCodePage  (IM3Runtime i_runtime, u32 i_minNumLines)\n {\n     IM3CodePage page;\n \n+    // check multiplication overflow\n+    if (i_minNumLines > UINT_MAX / sizeof (code_t)) {\n+        return NULL;\n+    }\n     u32 pageSize = sizeof (M3CodePageHeader) + sizeof (code_t) * i_minNumLines;\n \n+    // check addition overflow\n+    if (pageSize < sizeof (M3CodePageHeader)) {\n+        return NULL;\n+    }\n+\n     pageSize = (pageSize + (d_m3CodePageAlignSize-1)) & ~(d_m3CodePageAlignSize-1); // align\n+    // check alignment overflow\n+    if (pageSize == 0) {\n+        return NULL;\n+    }\n+\n     page = (IM3CodePage)m3_Malloc (\"M3CodePage\", pageSize);\n \n     if (page)\ndiff --git a/source/m3_compile.c b/source/m3_compile.c\nindex 2baf069c..3fa533a3 100644\n--- a/source/m3_compile.c\n+++ b/source/m3_compile.c\n@@ -322,11 +322,8 @@ u16  GetExtraSlotForStackIndex  (IM3Compilation o, u16 i_stackIndex)\n static inline\n void  TouchSlot  (IM3Compilation o, u16 i_slot)\n {\n-    if (o->function)\n-    {\n-        // op_Entry uses this value to track and detect stack overflow\n-        o->maxStackSlots = M3_MAX (o->maxStackSlots, i_slot + 1);\n-    }\n+    // op_Entry uses this value to track and detect stack overflow\n+    o->maxStackSlots = M3_MAX (o->maxStackSlots, i_slot + 1);\n }\n \n static inline\n@@ -1900,6 +1897,7 @@ _   (CompileBlock (o, blockType, i_opcode));\n static\n M3Result  CompileElseBlock  (IM3Compilation o, pc_t * o_startPC, IM3FuncType i_blockType)\n {\n+    IM3CodePage savedPage = o->page;\n _try {\n \n     IM3CodePage elsePage;\n@@ -1907,19 +1905,17 @@ _   (AcquireCompilationCodePage (o, & elsePage));\n \n     * o_startPC = GetPagePC (elsePage);\n \n-    IM3CodePage savedPage = o->page;\n     o->page = elsePage;\n \n _   (CompileBlock (o, i_blockType, c_waOp_else));\n \n _   (EmitOp (o, op_Branch));\n     EmitPointer (o, GetPagePC (savedPage));\n-\n-    ReleaseCompilationCodePage (o);\n-\n-    o->page = savedPage;\n-\n } _catch:\n+    if(o->page != savedPage) {\n+        ReleaseCompilationCodePage (o);\n+    }\n+    o->page = savedPage;\n     return result;\n }\n \n@@ -2702,7 +2698,13 @@ _try {\n _           (PopType (o, type));\n         }\n     }\n-    else o->stackIndex -= numParams;\n+    else {\n+        if (IsStackPolymorphic (o) && o->block.blockStackIndex + numParams > o->stackIndex) {\n+            o->stackIndex = o->block.blockStackIndex;\n+        } else {\n+            o->stackIndex -= numParams;\n+        }\n+    }\n \n     u16 paramIndex = o->stackIndex;\n     block->exitStackIndex = paramIndex; // consume the params at block exit\n@@ -2730,7 +2732,7 @@ _           (PopType (o, type));\n         u16 slot = GetSlotForStackIndex (o, paramIndex + i);\n         Push (o, type, slot);\n \n-        if (slot >= o->slotFirstDynamicIndex)\n+        if (slot >= o->slotFirstDynamicIndex && slot != c_slotUnused)\n             MarkSlotsAllocatedByType (o, slot, type);\n     }\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42496153-vul",
+      "digest": "sha256:4d7dda744e3031e5e80f66ec60c21f2b7310400d70ba68ce43c1de05f85dd906"
+    },
+    "patched": {
+      "ref": "n132/arvo:42496153-fix",
+      "digest": "sha256:9e19a33f9c41cbe37fdedcfd0d468215dd4d9a876d54e766bed01d0146af1b60"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/wasm3/source/./m3_exec.h:1169",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 476,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/wasm3/source/./m3_exec.h:1169"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

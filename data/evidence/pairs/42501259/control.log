@@ -1,0 +1,72 @@
+Accepting input from '/tmp/poc'
+Usage for fuzzing: honggfuzz -P [flags] -- /out/dav1d_fuzzer_mt
+=================================================================
+==371==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x62c000027a40 at pc 0x0000004ae65a bp 0x7fa6a723eab0 sp 0x7fa6a723e278
+WRITE of size 320 at 0x62c000027a40 thread T3 (dav1d-worker)
+SCARINESS: 45 (multi-byte-write-heap-buffer-overflow)
+    #0 0x4ae659 in __asan_memcpy /src/llvm-project/compiler-rt/lib/asan/asan_interceptors_memintrinsics.cpp:22:3
+    #1 0x6bf9be in backup_lpf /work/build/../../src/dav1d/src/lr_apply_tmpl.c:96:17
+    #2 0x6bf330 in dav1d_lr_copy_lpf_16bpc /work/build/../../src/dav1d/src/lr_apply_tmpl.c:148:13
+    #3 0x5f16f2 in dav1d_filter_sbrow_deblock_rows_16bpc /work/build/../../src/dav1d/src/recon_tmpl.c:2076:9
+    #4 0x4e9d1e in dav1d_worker_task /work/build/../../src/dav1d/src/thread_task.c:602:17
+    #5 0x7fa6aa8db608 in start_thread (/lib/x86_64-linux-gnu/libpthread.so.0+0x9608)
+    #6 0x7fa6aa7dc292 in clone (/lib/x86_64-linux-gnu/libc.so.6+0x122292)
+
+DEDUP_TOKEN: __asan_memcpy--backup_lpf--dav1d_lr_copy_lpf_16bpc
+0x62c000027a40 is located 0 bytes to the right of 30784-byte region [0x62c000020200,0x62c000027a40)
+allocated by thread T1 (dav1d-worker) here:
+    #0 0x4afc57 in posix_memalign /src/llvm-project/compiler-rt/lib/asan/asan_malloc_linux.cpp:226:3
+    #1 0x4fda61 in dav1d_alloc_aligned /work/build/../../src/dav1d/src/mem.h:66:9
+    #2 0x4fab27 in dav1d_decode_frame_init /work/build/../../src/dav1d/src/decode.c:3090:27
+    #3 0x4e9ede in dav1d_worker_task /work/build/../../src/dav1d/src/thread_task.c:496:23
+    #4 0x7fa6aa8db608 in start_thread (/lib/x86_64-linux-gnu/libpthread.so.0+0x9608)
+
+DEDUP_TOKEN: posix_memalign--dav1d_alloc_aligned--dav1d_decode_frame_init
+Thread T3 (dav1d-worker) created by T0 here:
+    #0 0x4994ea in pthread_create /src/llvm-project/compiler-rt/lib/asan/asan_interceptors.cpp:214:3
+    #1 0x41e472 in dav1d_open /work/build/../../src/dav1d/src/lib.c:214:17
+    #2 0x4e29e5 in LLVMFuzzerTestOneInput /work/build/../../src/dav1d/tests/libfuzzer/dav1d_fuzzer.c:131:11
+    #3 0x6c1f6b in main (/out/dav1d_fuzzer_mt+0x6c1f6b)
+
+DEDUP_TOKEN: pthread_create--dav1d_open--LLVMFuzzerTestOneInput
+Thread T1 (dav1d-worker) created by T0 here:
+    #0 0x4994ea in pthread_create /src/llvm-project/compiler-rt/lib/asan/asan_interceptors.cpp:214:3
+    #1 0x41e472 in dav1d_open /work/build/../../src/dav1d/src/lib.c:214:17
+    #2 0x4e29e5 in LLVMFuzzerTestOneInput /work/build/../../src/dav1d/tests/libfuzzer/dav1d_fuzzer.c:131:11
+    #3 0x6c1f6b in main (/out/dav1d_fuzzer_mt+0x6c1f6b)
+
+DEDUP_TOKEN: pthread_create--dav1d_open--LLVMFuzzerTestOneInput
+SUMMARY: AddressSanitizer: heap-buffer-overflow /src/llvm-project/compiler-rt/lib/asan/asan_interceptors_memintrinsics.cpp:22:3 in __asan_memcpy
+Shadow bytes around the buggy address:
+  0x0c587fffcef0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c587fffcf00: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c587fffcf10: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c587fffcf20: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c587fffcf30: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x0c587fffcf40: 00 00 00 00 00 00 00 00[fa]fa fa fa fa fa fa fa
+  0x0c587fffcf50: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c587fffcf60: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c587fffcf70: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c587fffcf80: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c587fffcf90: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+  Shadow gap:              cc
+==371==ABORTING

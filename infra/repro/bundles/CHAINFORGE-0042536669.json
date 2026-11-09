@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042536669",
+  "chain": "CWE-1284->CWE-787",
+  "project": "libjxl",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42536669",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "060080285a4fe81c9cb3a01381bbbd907c5dfea5",
+      "fix_commits": [
+        "060080285a4fe81c9cb3a01381bbbd907c5dfea5"
+      ],
+      "repo": "https://github.com/libjxl/libjxl"
+    },
+    "patch": "diff --git a/lib/jxl/image.cc b/lib/jxl/image.cc\nindex 8f70659c00c..f7a05c82745 100644\n--- a/lib/jxl/image.cc\n+++ b/lib/jxl/image.cc\n@@ -10,6 +10,7 @@\n #include <algorithm>  // fill, swap\n #include <cstddef>\n #include <cstdint>\n+#include <limits>\n \n #include \"lib/jxl/base/status.h\"\n #include \"lib/jxl/memory_manager_internal.h\"\n@@ -80,6 +81,11 @@ Status PlaneBase::Allocate(JxlMemoryManager* memory_manager,\n     return true;\n   }\n \n+  size_t max_y_size = std::numeric_limits<size_t>::max() / bytes_per_row_;\n+  if (ysize_ > max_y_size) {\n+    return JXL_FAILURE(\"Image dimensions are too large\");\n+  }\n+\n   JXL_ASSIGN_OR_RETURN(\n       bytes_, AlignedMemory::Create(memory_manager, bytes_per_row_ * ysize_,\n                                     pre_padding * sizeof_t_));\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42536669-vul",
+      "digest": "sha256:c4bca05300845df4f5b6692ba6ef4afc38ec73f1fd47930426e7343a7d2b1ceb"
+    },
+    "patched": {
+      "ref": "n132/arvo:42536669-fix",
+      "digest": "sha256:9713cc9e803c3b3c4171ea11d1164cd211162b113b74d0e5d8322f657af1b784"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/libjxl/tools/transforms_fuzzer.cc:49",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/libjxl/tools/transforms_fuzzer.cc:49"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

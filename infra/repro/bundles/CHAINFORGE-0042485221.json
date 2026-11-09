@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042485221",
+  "chain": "CWE-416->CWE-125",
+  "project": "haproxy",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42485221",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "07d47060e0d99d0884440c3fa55ef2a338987769",
+      "fix_commits": [
+        "07d47060e0d99d0884440c3fa55ef2a338987769"
+      ],
+      "repo": "https://github.com/haproxy/haproxy"
+    },
+    "patch": "diff --git a/src/cfgparse.c b/src/cfgparse.c\nindex 9f65d838941e..6525806e0392 100644\n--- a/src/cfgparse.c\n+++ b/src/cfgparse.c\n@@ -1976,14 +1976,6 @@ int readcfgfile(const char *file)\n \t\t\t\tgoto next_line;\n \t\t\t}\n \n-\t\t\tif (err & PARSE_ERR_TOOMANY) {\n-\t\t\t\tha_alert(\"parsing [%s:%d]: too many words, truncating after word %d, position %ld: <%s>.\\n\",\n-\t\t\t\t\t file, linenum, MAX_LINE_ARGS, (long)(args[MAX_LINE_ARGS-1] - outline + 1), args[MAX_LINE_ARGS-1]);\n-\t\t\t\terr_code |= ERR_ALERT | ERR_FATAL;\n-\t\t\t\tfatal++;\n-\t\t\t\tgoto next_line;\n-\t\t\t}\n-\n \t\t\tif (err & (PARSE_ERR_TOOLARGE|PARSE_ERR_OVERLAP)) {\n \t\t\t\toutlinesize = (outlen + 1023) & -1024;\n \t\t\t\toutline = realloc(outline, outlinesize);\n@@ -1997,6 +1989,16 @@ int readcfgfile(const char *file)\n \t\t\t\t/* try again */\n \t\t\t\tcontinue;\n \t\t\t}\n+\n+\t\t\tif (err & PARSE_ERR_TOOMANY) {\n+\t\t\t\t/* only check this *after* being sure the output is allocated */\n+\t\t\t\tha_alert(\"parsing [%s:%d]: too many words, truncating after word %d, position %ld: <%s>.\\n\",\n+\t\t\t\t\t file, linenum, MAX_LINE_ARGS, (long)(args[MAX_LINE_ARGS-1] - outline + 1), args[MAX_LINE_ARGS-1]);\n+\t\t\t\terr_code |= ERR_ALERT | ERR_FATAL;\n+\t\t\t\tfatal++;\n+\t\t\t\tgoto next_line;\n+\t\t\t}\n+\n \t\t\t/* everything's OK */\n \t\t\tbreak;\n \t\t}\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42485221-vul",
+      "digest": "sha256:9112aa1f8b8cbf6e2c1e9d1b55b3f0585551a237c36162280c52e907304096fa"
+    },
+    "patched": {
+      "ref": "n132/arvo:42485221-fix",
+      "digest": "sha256:97dc5c2b9663b1c95549d6b2f010d4505b44310ef6546799d856cbc8773d7b9a"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/haproxy/src/tools.c:3647",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/haproxy/src/tools.c:3647"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

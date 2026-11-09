@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042490329",
+  "chain": "CWE-1284->CWE-125",
+  "project": "readstat",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42490329",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "62a3f76020c96129edff3369614b704d8f6f9fa3",
+      "fix_commits": [
+        "62a3f76020c96129edff3369614b704d8f6f9fa3"
+      ],
+      "repo": "https://github.com/WizardMac/ReadStat"
+    },
+    "patch": "diff --git a/src/sas/readstat_sas7bdat_read.c b/src/sas/readstat_sas7bdat_read.c\nindex 259edd16..b7ff18cc 100644\n--- a/src/sas/readstat_sas7bdat_read.c\n+++ b/src/sas/readstat_sas7bdat_read.c\n@@ -973,7 +973,7 @@ static readstat_error_t sas7bdat_parse_page_pass2(const char *page, size_t page_\n              * some files created by Stat/Transfer don't. So verify that the\n              * padding is { 0, 0, 0, 0 } or { ' ', ' ', ' ', ' ' } (or that\n              * the file is not from Stat/Transfer) before skipping it */\n-            if ((shp-page)%8 == 4 && \n+            if ((shp-page)%8 == 4 && shp + 4 <= page + page_size &&\n                     (*(uint32_t *)shp == 0x00000000 ||\n                      *(uint32_t *)shp == 0x20202020 ||\n                      ctx->vendor != READSTAT_VENDOR_STAT_TRANSFER)) {\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42490329-vul",
+      "digest": "sha256:a363197dcb9053401fbc315448787db7c2bff907da98010a22b1dfb77d9c63f0"
+    },
+    "patched": {
+      "ref": "n132/arvo:42490329-fix",
+      "digest": "sha256:0560af20db191daf56073d384ec337b3647bd82fa3d3476b521986b150c53d03"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/readstat/src/sas/readstat_sas7bdat_read.c:967",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/readstat/src/sas/readstat_sas7bdat_read.c:967"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

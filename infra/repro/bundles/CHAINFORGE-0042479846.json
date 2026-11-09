@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042479846",
+  "chain": "CWE-456->CWE-457",
+  "project": "librawspeed",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42479846",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "3753c84ea46eeb86a0daf8da8c088342515b10dd",
+      "fix_commits": [
+        "3753c84ea46eeb86a0daf8da8c088342515b10dd"
+      ],
+      "repo": "https://github.com/darktable-org/rawspeed"
+    },
+    "patch": "From 3753c84ea46eeb86a0daf8da8c088342515b10dd Mon Sep 17 00:00:00 2001\nFrom: Roman Lebedev <lebedev.ri@gmail.com>\nDate: Mon, 11 Nov 2019 20:10:39 +0300\nSubject: [PATCH] PhaseOneDecompressor::prepareStrips(): fixup per-row slice\n validation\n\nUgh, not sure what i was thinking. That of course does not guarantee\nthat in the middle we will have monothonically increasing values.\n---\n src/librawspeed/decompressors/PhaseOneDecompressor.cpp | 10 +++++-----\n 1 file changed, 5 insertions(+), 5 deletions(-)\n\ndiff --git a/src/librawspeed/decompressors/PhaseOneDecompressor.cpp b/src/librawspeed/decompressors/PhaseOneDecompressor.cpp\nindex d0a530d..508cea2 100644\n--- a/src/librawspeed/decompressors/PhaseOneDecompressor.cpp\n+++ b/src/librawspeed/decompressors/PhaseOneDecompressor.cpp\n@@ -66,15 +66,15 @@ void PhaseOneDecompressor::prepareStrips() {\n   // Now, the strips in 'strips' vector aren't in order.\n   // The 'decltype(strips)::value_type::n' is the row number of a strip.\n   // We need to make sure that we have every row (0..mRaw->dim.y-1), once.\n-  // For that, let's sort them to have monothonically increasting `n`,\n-  // and then simply check that the edges are `0` and `mRaw->dim.y-1`.\n+  // For that, first let's sort them to have monothonically increasting `n`.\n   // This will also serialize the per-line outputting.\n   std::sort(\n       strips.begin(), strips.end(),\n       [](const PhaseOneStrip& a, const PhaseOneStrip& b) { return a.n < b.n; });\n-\n-  if (strips.front().n != 0 || strips.back().n != (mRaw->dim.y - 1))\n-    ThrowRDE(\"Strips validation issue.\");\n+  // And now ensure that slice number matches the slice's row.\n+  for (decltype(strips)::size_type i = 0; i < strips.size(); ++i)\n+    if (static_cast<decltype(strips)::size_type>(strips[i].n) != i)\n+      ThrowRDE(\"Strips validation issue.\");\n   // All good.\n }\n \n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42479846-vul",
+      "digest": "sha256:06b98da3f1a66cb8984722eb9fb23f58fa3f9a9e4cb4a96eac6d59bdd4950998"
+    },
+    "patched": {
+      "ref": "n132/arvo:42479846-fix",
+      "digest": "sha256:8118cd4323936a84df383ff3b1c3af4c5ef3fc2c73e26e4f527ab28d162acd40"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/librawspeed/src/librawspeed/common/RawImage.cpp:178",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/librawspeed/src/librawspeed/common/RawImage.cpp:178"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

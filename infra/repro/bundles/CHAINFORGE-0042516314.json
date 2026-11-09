@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042516314",
+  "chain": "CWE-1284->CWE-787",
+  "project": "exiv2",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42516314",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "0db460c9b0aad040ea1ab0335c3f07d18a0bc4cf",
+      "fix_commits": [
+        "0db460c9b0aad040ea1ab0335c3f07d18a0bc4cf"
+      ],
+      "repo": "https://github.com/Exiv2/exiv2"
+    },
+    "patch": "diff --git a/src/quicktimevideo.cpp b/src/quicktimevideo.cpp\nindex 5be3b0b0f3..d73ed108ba 100644\n--- a/src/quicktimevideo.cpp\n+++ b/src/quicktimevideo.cpp\n@@ -846,12 +846,13 @@ void QuickTimeVideo::userDataDecoder(size_t size_external) {\n \n     else if (tv) {\n       const size_t tv_size = size - 12;\n-      if (tv_size > buf.size()) {\n+      if (tv_size >= buf.size()) {\n         enforce(tv_size <= io_->size() - io_->tell(), Exiv2::ErrorCode::kerCorruptedMetadata);\n-        buf.resize(tv_size);\n+        buf.resize(tv_size + 1);\n       }\n       io_->readOrThrow(buf.data(), 4);\n       io_->readOrThrow(buf.data(), tv_size);\n+      buf.write_uint8(tv_size, 0); // nul-terminate string\n       xmpData_[exvGettext(tv->label_)] = Exiv2::toString(buf.data());\n     }\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42516314-vul",
+      "digest": "sha256:c0280fcc6f35f8cbf60354a030853772093b7b7bd306c484c133e6c75e28c098"
+    },
+    "patched": {
+      "ref": "n132/arvo:42516314-fix",
+      "digest": "sha256:43f738a1fa534b81112d896a00c8a0ab3e4d5149d2ded8c519b712eb2180fbac"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/exiv2/src/basicio.cpp:822",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/exiv2/src/basicio.cpp:822"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

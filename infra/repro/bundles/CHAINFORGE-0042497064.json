@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042497064",
+  "chain": "CWE-1284->CWE-787",
+  "project": "libredwg",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42497064",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "2305ab68ea2be5e2fcdee52b2929f21ebbc03059",
+      "fix_commits": [
+        "2305ab68ea2be5e2fcdee52b2929f21ebbc03059"
+      ],
+      "repo": "https://github.com/LibreDWG/libredwg"
+    },
+    "patch": "diff --git a/src/classes.c b/src/classes.c\nindex 652a7f63bf..303cc90d5b 100644\n--- a/src/classes.c\n+++ b/src/classes.c\n@@ -526,6 +526,27 @@ bool is_class_unhandled (const char* name)\n #endif\n }\n \n+// if all DXF groups are known\n+bool is_dxf_class_importable (const char* name)\n+{\n+  // hash lookup\n+  Dwg_Class_Stability stability;\n+  if (dwg_object_name (name, NULL, NULL, NULL, &stability)) {\n+    if (stability == DWG_CLASS_UNSTABLE)\n+      {\n+        return !strEQc (name, \"MATERIAL\") &&      // 72 missing\n+               !strEQc (name, \"ARC_DIMENSION\") && // 2 missing\n+               !strEQc (name, \"SUN\") &&           // 421 missing\n+               !strEQc (name, \"PROXY_ENTITY\") &&  // 90 missing\n+               !strEQc (name, \"PROXY_OBJECT\");    // 90 missing\n+      }\n+    else\n+      return stability == DWG_CLASS_STABLE;\n+  }\n+  else\n+    return false;\n+}\n+\n bool dwg_find_class (const Dwg_Data *restrict dwg, const char* dxfname, BITCODE_BS *numberp)\n {\n   assert(dwg);\ndiff --git a/src/classes.h b/src/classes.h\nindex 20fd9576c4..9b82324bdc 100644\n--- a/src/classes.h\n+++ b/src/classes.h\n@@ -37,6 +37,7 @@ bool is_class_stable (const char* name) __nonnull_all;\n bool is_class_unstable (const char* name) __nonnull_all;\n bool is_class_debugging (const char* name) __nonnull_all;\n bool is_class_unhandled (const char* name) __nonnull_all;\n+bool is_dxf_class_importable (const char* name) __nonnull_all;\n bool dwg_find_class (const Dwg_Data *restrict dwg, const char* dxfname,\n                      BITCODE_BS *numberp) __nonnull ((1,2));\n void object_alias (char *restrict name) __nonnull_all;\ndiff --git a/src/dwg.spec b/src/dwg.spec\nindex 700a1e0698..2757855abb 100644\n--- a/src/dwg.spec\n+++ b/src/dwg.spec\n@@ -7775,6 +7775,7 @@ DWG_OBJECT_END\n \n // hard-owned child of AcDbViewportTableRecord or AcDbViewport 361\n // DXF docs put that as Entity, wrong!\n+// Missing: 421\n DWG_OBJECT (SUN)\n   SUBCLASS (AcDbSun)\n   FIELD_BL (class_version, 90);\n@@ -8060,7 +8061,7 @@ DWG_ENTITY (ARC_DIMENSION)\n \n   COMMON_ENTITY_HANDLE_DATA;\n   FIELD_HANDLE (dimstyle, 5, 0);\n-  FIELD_HANDLE (block, 5, 0);\n+  FIELD_HANDLE (block, 5, 2);\n DWG_ENTITY_END\n \n // as ACAD_LAYERFILTERS in the NOD\ndiff --git a/src/in_dxf.c b/src/in_dxf.c\nindex 73505329ca..344e15e3ce 100644\n--- a/src/in_dxf.c\n+++ b/src/in_dxf.c\n@@ -10835,8 +10835,32 @@ new_object (char *restrict name, char *restrict dxfname,\n                       && strNE (f->name, \"parent\")) // parent set in NEW_OBJECT\n                     {\n                       const Dwg_DYNAPI_field *num_f;\n+\n                       // FIELD_2RD_VECTOR (clip_verts, num_clip_verts, 11|14);\n-                      if (pair->code >= 10 && pair->code <= 24\n+                      if ((pair->code == 91 || pair->code == 70) && strEQc (f->name, \"num_clip_verts\"))\n+                        {\n+                          BITCODE_2RD *clip_verts;\n+                          BITCODE_BL num_clip_verts = pair->value.u;\n+                          if (pair->code == 91)\n+                            dwg_dynapi_entity_set_value (_obj, obj->name, f->name, &num_clip_verts, 0);\n+                          else\n+                            {\n+                              BITCODE_BS num = pair->value.i; // 70\n+                              dwg_dynapi_entity_set_value (_obj, obj->name, f->name, &num, 0);\n+                            }\n+                          dwg_dynapi_entity_value (_obj, obj->name,\n+                                                   \"clip_verts\", &clip_verts,\n+                                                   NULL);\n+                          clip_verts = (BITCODE_2RD *)realloc (clip_verts,\n+                              num_clip_verts * sizeof (BITCODE_2RD));\n+                          if (!clip_verts)\n+                            goto invalid_dxf;\n+                          dwg_dynapi_entity_set_value (\n+                              _obj, obj->name, f->name, &clip_verts, 0);\n+                          LOG_TRACE (\"%s.num_clip_verts = %d [%s %d]\\n\", name,\n+                                     num_clip_verts, f->type, pair->code);\n+                        }\n+                      else if (pair->code >= 10 && pair->code <= 24\n                           && strEQc (f->name, \"clip_verts\")) // 11 or 14\n                         {\n                           BITCODE_BL num_clip_verts = 0;\n@@ -10908,10 +10932,11 @@ new_object (char *restrict name, char *restrict dxfname,\n                             }\n                           goto next_pair;\n                         }\n-                      // point vectors with known num_field\n+                      // point vectors with known num_field (not 210)\n                       else if ((*f->type == '2' || *f->type == '3')\n                                && (f->type[2] == 'D'\n                                    || strEQc (&f->type[1], \"DPOINT*\"))\n+                               && pair->code >= 10 && pair->code <= 34\n                                && (num_f = find_numfield (fields, f->name)))\n                         {\n                           // how many points\n@@ -11874,12 +11899,12 @@ new_object (char *restrict name, char *restrict dxfname,\n                              \"dim_rotation\", ang, pair->value.d, \"BD\", 50);\n                 }\n               // accept wrong colors\n-              else if (is_class_stable (obj->name) && (pair->code < 60 || pair->code > 68))\n+              else if (is_dxf_class_importable (obj->name) && (pair->code < 60 || pair->code > 68))\n                 {\n                   goto invalid_dxf;\n                 }\n               else\n-                LOG_WARN (\"Unknown DXF code %d for %s\", pair->code, name);\n+                LOG_WARN (\"Unknown DXF code %d for %s\", pair->code, name); // Debugging or Unhandled class\n             }\n         }\n     next_pair:\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42497064-vul",
+      "digest": "sha256:2734127e0093bf5a3c146691b85a86ecfcc883769154925691d157f2e19cb0b4"
+    },
+    "patched": {
+      "ref": "n132/arvo:42497064-fix",
+      "digest": "sha256:a6421d0556e156c25ff865c70cd253ce7e02bd39137d5cce3d8e951e50164393"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/libredwg/src/in_dxf.c:10839",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/libredwg/src/in_dxf.c:10839"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

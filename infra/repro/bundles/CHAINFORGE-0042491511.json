@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042491511",
+  "chain": "CWE-416->CWE-125",
+  "project": "igraph",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42491511",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "883bd139af3775d7f90f144c9038a6cb9a28f309",
+      "fix_commits": [
+        "883bd139af3775d7f90f144c9038a6cb9a28f309"
+      ],
+      "repo": "https://github.com/igraph/igraph"
+    },
+    "patch": "From 883bd139af3775d7f90f144c9038a6cb9a28f309 Mon Sep 17 00:00:00 2001\nFrom: Tamas Nepusz <ntamas@gmail.com>\nDate: Thu, 7 Jan 2021 15:41:08 +0100\nSubject: [PATCH] fix: fixed a use-after-free issue in igraph_read_graph_gml()\n\n---\n src/io/gml.c                                  |   9 +-\n .../igraph_read_graph_gml_invalid_inputs.c    |   1 +\n tests/regression/invalid3.gml                 | 231 ++++++++++++++++++\n 3 files changed, 237 insertions(+), 4 deletions(-)\n create mode 100644 tests/regression/invalid3.gml\n\ndiff --git a/src/io/gml.c b/src/io/gml.c\nindex 864e746..71e5248 100644\n--- a/src/io/gml.c\n+++ b/src/io/gml.c\n@@ -68,7 +68,7 @@ static void igraph_i_gml_destroy_attrs(igraph_vector_ptr_t **ptr) {\n     }\n }\n \n-static igraph_real_t igraph_i_gml_toreal(igraph_gml_tree_t *node, long int pos) {\n+static int igraph_i_gml_toreal(igraph_gml_tree_t *node, long int pos, igraph_real_t *result) {\n \n     igraph_real_t value = 0.0;\n     int type = igraph_gml_tree_type(node, pos);\n@@ -85,7 +85,8 @@ static igraph_real_t igraph_i_gml_toreal(igraph_gml_tree_t *node, long int pos)\n         break;\n     }\n \n-    return value;\n+    *result = value;\n+\treturn IGRAPH_SUCCESS;\n }\n \n static const char *igraph_i_gml_tostring(igraph_gml_tree_t *node, long int pos) {\n@@ -437,7 +438,7 @@ int igraph_read_graph_gml(igraph_t *graph, FILE *instream) {\n                 type = atrec->type;\n                 if (type == IGRAPH_ATTRIBUTE_NUMERIC) {\n                     igraph_vector_t *v = (igraph_vector_t *)atrec->value;\n-                    VECTOR(*v)[edgeid] = igraph_i_gml_toreal(edge, j);\n+                    IGRAPH_CHECK(igraph_i_gml_toreal(edge, j, VECTOR(*v) + edgeid));\n                 } else if (type == IGRAPH_ATTRIBUTE_STRING) {\n                     igraph_strvector_t *v = (igraph_strvector_t *)atrec->value;\n                     const char *value = igraph_i_gml_tostring(edge, j);\n@@ -479,7 +480,7 @@ int igraph_read_graph_gml(igraph_t *graph, FILE *instream) {\n                 type = atrec->type;\n                 if (type == IGRAPH_ATTRIBUTE_NUMERIC) {\n                     igraph_vector_t *v = (igraph_vector_t *)atrec->value;\n-                    VECTOR(*v)[id] = igraph_i_gml_toreal(node, j);\n+                    IGRAPH_CHECK(igraph_i_gml_toreal(node, j, VECTOR(*v) + id));\n                 } else if (type == IGRAPH_ATTRIBUTE_STRING) {\n                     igraph_strvector_t *v = (igraph_strvector_t *)atrec->value;\n                     const char *value = igraph_i_gml_tostring(node, j);\ndiff --git a/tests/regression/igraph_read_graph_gml_invalid_inputs.c b/tests/regression/igraph_read_graph_gml_invalid_inputs.c\nindex e8c143e..29bb1bc 100644\n--- a/tests/regression/igraph_read_graph_gml_invalid_inputs.c\n+++ b/tests/regression/igraph_read_graph_gml_invalid_inputs.c\n@@ -64,6 +64,7 @@ int main(int argc, char* argv[]) {\n \n     RUN_TEST(\"invalid1.gml\");\n     RUN_TEST(\"invalid2.gml\");\n+    RUN_TEST(\"invalid3.gml\");\n \n     return 0;\n }\ndiff --git a/tests/regression/invalid3.gml b/tests/regression/invalid3.gml\nnew file mode 100644\nindex 0000000..0551c23\n--- /dev/null\n+++ b/tests/regression/invalid3.gml\n@@ -0,0 +1,231 @@\n+Creator \"Mark Newman on Fri Jul 21 12:39:27 2006\"\n+graph\n+[\n+  node\n+  [\n+    id 1\n+  ]\n+  node\n+  [\n+    id 2\n+  ]\n+  node\n+  [\n+    id 3\n+  ]\n+  node\n+  [\n+    id 4\n+  ]\n+  node\n+  [\n+    id 5\n+  ]\n+  node\n+  [\n+    id 6\n+  ]\n+  node\n+  [\n+    id 7\n+  ]\n+  node\n+  [\n+    id 8\n+  ]\n+  node\n+  [\n+    id 9\n+  ]\n+  node\n+  [\n+    id 10\n+  ]\n+  node\n+  [\n+    id 11\n+  ]\n+  node\n+  [\n+    id 12\n+  ]\n+  node\n+  [\n+    id 13\n+  ]\n+  node\n+  [\n+    id 14\n+  ]\n+  node\n+  [\n+    id 15\n+  ]\n+  node\n+  [\n+    id 16\n+  ]\n+  node\n+  [\n+    id 17\n+  ]\n+  node\n+  [\n+    id 18\n+  ]\n+  node\n+  [\n+    id 19\n+  ]\n+  node\n+  [\n+    id 20\n+  ]\n+  node\n+  [\n+    id 21\n+  ]\n+  node\n+  [\n+    id 22\n+  ]\n+  node\n+  [\n+    id 23\n+  ]\n+  node\n+  [\n+    id 24\n+  ]\n+  node\n+  [\n+    id 25\n+  ]\n+  node\n+  [\n+    id 26\n+  ]\n+  node\n+  [\n+    id 27\n+  ]\n+  node\n+  [\n+    id 28\n+  ]\n+  node\n+  [\n+    id 29\n+  ]\n+  node\n+  [\n+    id 30\n+  ]\n+  node\n+  [\n+    id 31\n+  ]\n+  node\n+ \n+  [   id 32\n+  ]\n+  node\n+  [\n+    id 33\n+  ]\n+  node\n+  [\n+    id 34\n+  ]\n+  edge\n+  [\n+    source 2\n+    target 1\n+  ]\n+  edge\n+  [\n+    source 3\n+    target 1\n+  ]\n+  edge\n+  [\n+    source 3\n+    target 2\n+  ]\n+  eige\n+  [\n+    source 4\n+    target 1\n+  ]\n+  edge\n+  [\n+    source 4\n+    target 2\n+  ]\n+  edge\n+  [\n+    source 4\n+    target 3\n+  ]\n+  edge\n+  [\n+    source 5\n+    target 1\n+  ]\n+  edge\n+  [\n+    source 6\n+    target 1\n+  ]\n+  edce\n+  [\n+    source 7\n+    target 1\n+  ]\n+  edge\n+  [\n+    source 7\n+    target 5\n+  ]\n+  edge\n+  [\n+    source 7\n+    target 6\n+  ]\n+  edge\n+  [\n+    source 8\n+    target 1\n+  ]\n+  edge\n+   [\n+    source 8\n+    target 3\n+  ]\n+  edge\n+  [\n+    source 8\n+    t 3\n+    target 2\n+  ]\n+  eige\n+  [\n+    source 4\n+    target 1\n+  ]\n+  edge\n+  [\n+    source 4\n+    target 2\n+  ]\n+  edge\n+  [\n+    source 4\n+    t  [\n+    source 32\n+    target 29\n+  ]\n+ e 34\n+    target 33\n+  ]\n+]\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42491511-vul",
+      "digest": "sha256:19a9e620c80c562cc429f89de369e1f8c6ac86873d0689a2df695231ba480e8d"
+    },
+    "patched": {
+      "ref": "n132/arvo:42491511-fix",
+      "digest": "sha256:8169e837f8defcede1bde4bf3395f2186efd82c384a3f9c3596277c2fa1070f4"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/igraph/src/io/gml.c:462",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/igraph/src/io/gml.c:462"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

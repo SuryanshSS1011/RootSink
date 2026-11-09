@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042480411",
+  "chain": "CWE-1284->CWE-125",
+  "project": "samba",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42480411",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "f11e207e01c52566c47e350ff240fe95392de0c3",
+      "fix_commits": [
+        "f11e207e01c52566c47e350ff240fe95392de0c3"
+      ],
+      "repo": "https://gitlab.com/samba-team/samba"
+    },
+    "patch": "diff --git a/librpc/ndr/ndr_string.c b/librpc/ndr/ndr_string.c\nindex eb0af57a6ab22b68d82abd6641dbe98439f51b8a..25f211b2ad3a83bde1f6f9fc0fc0f95a4dfca8f3 100644\n--- a/librpc/ndr/ndr_string.c\n+++ b/librpc/ndr/ndr_string.c\n@@ -560,6 +560,47 @@ _PUBLIC_ uint32_t ndr_string_length(const void *_var, uint32_t element_size)\n \treturn i+1;\n }\n \n+/**\n+ * @brief Get the string length including the null terminator if available.\n+ *\n+ * This checks the string length based on the elements. The returned number\n+ * includes the terminating null byte(s) if found.\n+ *\n+ * @param[in]  _var    The string the calculate the length for.\n+ *\n+ * @param[in]  length  The length of the buffer passed by _var.\n+ *\n+ * @param[in]  element_size The element_size of a string char in bytes.\n+ *\n+ * @return The length of the strings or 0.\n+ */\n+static uint32_t ndr_string_n_length(const void *_var,\n+\t\t\t\t    size_t length,\n+\t\t\t\t    uint32_t element_size)\n+{\n+\tsize_t i = 0;\n+\tuint8_t zero[4] = {0,0,0,0};\n+\tconst char *var = (const char *)_var;\n+\tint cmp;\n+\n+\tif (element_size > 4) {\n+\t\treturn 0;\n+\t}\n+\n+\tfor (i = 0; i < length; i++, var += element_size) {\n+\t\tcmp = memcmp(var, zero, element_size);\n+\t\tif (cmp == 0) {\n+\t\t\tbreak;\n+\t\t}\n+\t}\n+\n+\tif (i == length) {\n+\t\treturn length;\n+\t}\n+\n+\treturn i + 1;\n+}\n+\n _PUBLIC_ enum ndr_err_code ndr_check_string_terminator(struct ndr_pull *ndr, uint32_t count, uint32_t element_size)\n {\n \tuint32_t i;\n@@ -629,8 +670,12 @@ _PUBLIC_ enum ndr_err_code ndr_pull_charset_to_null(struct ndr_pull *ndr, int nd\n \n \tNDR_PULL_NEED_BYTES(ndr, length*byte_mul);\n \n-\tstr_len = ndr_string_length(ndr->data+ndr->offset, byte_mul);\n-\tstr_len = MIN(str_len, length);\t/* overrun protection */\n+\tstr_len = ndr_string_n_length(ndr->data+ndr->offset, length, byte_mul);\n+\tif (str_len == 0) {\n+\t\treturn ndr_pull_error(ndr, NDR_ERR_LENGTH,\n+\t\t\t\t      \"Invalid length\");\n+\t}\n+\n \tif (!convert_string_talloc(ndr->current_mem_ctx, chset, CH_UNIX,\n \t\t\t\t   ndr->data+ndr->offset, str_len*byte_mul,\n \t\t\t\t   discard_const_p(void *, var),\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42480411-vul",
+      "digest": "sha256:d8d5821b6759570e00db6563d12330129714ae7339b2084e96b5bc96685b7f7b"
+    },
+    "patched": {
+      "ref": "n132/arvo:42480411-fix",
+      "digest": "sha256:8b80f28bc0c00e73ad0b680e170866998ef8a4f2bbdb09701d9a5f12f93542c9"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/samba/bin/default/../../librpc/ndr/ndr_string.c:558",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/samba/bin/default/../../librpc/ndr/ndr_string.c:558"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

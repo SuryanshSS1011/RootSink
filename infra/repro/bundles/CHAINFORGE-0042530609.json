@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042530609",
+  "chain": "CWE-416->CWE-125",
+  "project": "php-src",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42530609",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "1e55c9760178f9d5e1de8b251537b3e8ccf44feb",
+      "fix_commits": [
+        "1e55c9760178f9d5e1de8b251537b3e8ccf44feb"
+      ],
+      "repo": "https://github.com/php/php-src"
+    },
+    "patch": "From 1e55c9760178f9d5e1de8b251537b3e8ccf44feb Mon Sep 17 00:00:00 2001\nFrom: Dmitry Stogov <dmitry@zend.com>\nDate: Fri, 1 Dec 2023 17:08:16 +0300\nSubject: [PATCH] Fixed type inference\n\nFixes oss-fuzz #64577, #64579, #64589\n---\n Zend/Optimizer/zend_inference.c          |  3 ++-\n ext/opcache/tests/opt/inference_024.phpt | 23 +++++++++++++++++++++++\n 2 files changed, 25 insertions(+), 1 deletion(-)\n create mode 100644 ext/opcache/tests/opt/inference_024.phpt\n\ndiff --git a/Zend/Optimizer/zend_inference.c b/Zend/Optimizer/zend_inference.c\nindex 549287ef..16edb2cc 100644\n--- a/Zend/Optimizer/zend_inference.c\n+++ b/Zend/Optimizer/zend_inference.c\n@@ -3673,7 +3673,8 @@ static zend_always_inline zend_result _zend_update_type_info(\n \t\t\t\t\t\ttmp &= ~MAY_BE_ARRAY_EMPTY;\n \t\t\t\t\t}\n \t\t\t\t}\n-\t\t\t\tif (((tmp & MAY_BE_ARRAY) && (tmp & MAY_BE_ARRAY_KEY_ANY))\n+\t\t\t\tif (!(tmp & MAY_BE_ARRAY)\n+\t\t\t\t || (tmp & MAY_BE_ARRAY_KEY_ANY)\n \t\t\t\t || opline->opcode == ZEND_FETCH_DIM_FUNC_ARG\n \t\t\t\t || opline->opcode == ZEND_FETCH_DIM_R\n \t\t\t\t || opline->opcode == ZEND_FETCH_DIM_IS\ndiff --git a/ext/opcache/tests/opt/inference_024.phpt b/ext/opcache/tests/opt/inference_024.phpt\nnew file mode 100644\nindex 00000000..a34ac5c1\n--- /dev/null\n+++ b/ext/opcache/tests/opt/inference_024.phpt\n@@ -0,0 +1,23 @@\n+--TEST--\n+Type inference 024: FETCH_DIM_W\n+--INI--\n+opcache.enable=1\n+opcache.enable_cli=1\n+opcache.optimization_level=-1\n+--FILE--\n+<?php\n+function foo() {\n+    for ($cnt = 0; $cnt < 6; $cnt++) {\n+        $b = new SplFixedArray(1);\n+        $b[0] = $a;\n+        $g = &$b[0];\n+        $b = new SplFixedArray(1);\n+        $b[0] = $b;\n+        $g = &$b[0];\n+    }\n+}\n+@foo();\n+?>\n+DONE\n+--EXPECT--\n+DONE\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42530609-vul",
+      "digest": "sha256:b9ef86ae98bf23ec697575b102287a838bfe314ab124730fe6744f0809e8bf0e"
+    },
+    "patched": {
+      "ref": "n132/arvo:42530609-fix",
+      "digest": "sha256:dd5555ac0b4e66a0d739dad789d8e8b8209c2c1b0711bfd7e17935e336f1a13f"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/php-src/Zend/zend_types.h:1342",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/php-src/Zend/zend_types.h:1342"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

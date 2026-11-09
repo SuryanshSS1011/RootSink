@@ -1,0 +1,102 @@
+[    0.000000][    T0] Linux version 6.0.0-rc6-g4781185da411 (sss6371@e5-cse-135-19.cse.psu.edu) (x86_64-linux-gcc (GCC) 12.3.0, GNU ld (GNU Binutils) 2.40) #1 SMP PREEMPT_DYNAMIC Fri Oct 2 11:19:08 EDT 2026
+[init] environment up, running reproducer
+[   10.219084][ T2987] ==================================================================
+[   10.219872][ T2987] BUG: KASAN: use-after-free in io_sendrecv_fail+0x351/0x390
+[   10.220580][ T2987] Write of size 8 at addr ffff88810630cc80 by task repro/2987
+[   10.221278][ T2987] 
+[   10.221595][ T2987] CPU: 3 PID: 2987 Comm: repro Not tainted 6.0.0-rc6-g4781185da411 #1
+[   10.222372][ T2987] Hardware name: Red Hat KVM, BIOS 1.16.0-4.module+el8.9.0+19570+14a90618 04/01/2014
+[   10.223266][ T2987] Call Trace:
+[   10.223590][ T2987]  <TASK>
+[   10.223870][ T2987]  dump_stack_lvl+0x6a/0x9b
+[   10.224305][ T2987]  print_report.cold+0x2c3/0x752
+[   10.224776][ T2987]  ? io_sendrecv_fail+0x351/0x390
+[   10.225255][ T2987]  kasan_report+0xb1/0x1d0
+[   10.225685][ T2987]  ? io_sendrecv_fail+0x351/0x390
+[   10.226160][ T2987]  io_sendrecv_fail+0x351/0x390
+[   10.226626][ T2987]  io_req_complete_failed+0x120/0x170
+[   10.227134][ T2987]  io_submit_sqes+0xd9d/0x1bd0
+[   10.227589][ T2987]  __do_sys_io_uring_enter+0x877/0x1c90
+[   10.228113][ T2987]  ? __ct_user_exit+0xb1/0x100
+[   10.228567][ T2987]  ? io_submit_sqes+0x1bd0/0x1bd0
+[   10.229043][ T2987]  ? reacquire_held_locks+0x4a0/0x4a0
+[   10.229550][ T2987]  ? randomize_page+0x60/0x60
+[   10.229997][ T2987]  ? lockdep_hardirqs_on_prepare+0x17b/0x400
+[   10.230563][ T2987]  ? syscall_enter_from_user_mode+0x22/0xb0
+[   10.231126][ T2987]  do_syscall_64+0x34/0xb0
+[   10.231548][ T2987]  entry_SYSCALL_64_after_hwframe+0x63/0xcd
+[   10.232104][ T2987] RIP: 0033:0x7fcd0103949d
+[   10.232545][ T2987] Code: ff c3 66 2e 0f 1f 84 00 00 00 00 00 90 f3 0f 1e fa 48 89 f8 48 89 f7 48 89 d6 48 89 ca 4d 89 c2 4d 89 c8 4c 8b 4c 24 08 0f 05 <48> 3d 01 f0 ff ff 73 01 c3 48 8b 0d bb 69 39 00 f7 d8 64 89 01 48
+[   10.234365][ T2987] RSP: 002b:00007ffe6fdfb188 EFLAGS: 00000202 ORIG_RAX: 00000000000001aa
+[   10.235151][ T2987] RAX: ffffffffffffffda RBX: 0000000000000003 RCX: 00007fcd0103949d
+[   10.235899][ T2987] RDX: 0000000000000000 RSI: 0000000000002a6e RDI: 0000000000000003
+[   10.236649][ T2987] RBP: 00000000004009f0 R08: 0000000000000000 R09: 0000000000000000
+[   10.237388][ T2987] R10: 0000000000000000 R11: 0000000000000202 R12: 0000000000400500
+[   10.238131][ T2987] R13: 00007ffe6fdfb270 R14: 0000000000000000 R15: 0000000000000000
+[   10.238877][ T2987]  </TASK>
+[   10.239168][ T2987] 
+[   10.239391][ T2987] Allocated by task 2987:
+[   10.239799][ T2987]  kasan_save_stack+0x1c/0x40
+[   10.240240][ T2987]  __kasan_kmalloc+0xa7/0xd0
+[   10.240675][ T2987]  io_alloc_async_data+0x7f/0x130
+[   10.241148][ T2987]  io_sendmsg_prep_async+0x177/0x370
+[   10.241646][ T2987]  io_queue_sqe_fallback.cold+0x25d/0x669
+[   10.242192][ T2987]  io_submit_sqes+0xd9d/0x1bd0
+[   10.242644][ T2987]  __do_sys_io_uring_enter+0x877/0x1c90
+[   10.243164][ T2987]  do_syscall_64+0x34/0xb0
+[   10.243584][ T2987]  entry_SYSCALL_64_after_hwframe+0x63/0xcd
+[   10.244140][ T2987] 
+[   10.244364][ T2987] Freed by task 2987:
+[   10.244739][ T2987]  kasan_save_stack+0x1c/0x40
+[   10.245179][ T2987]  kasan_set_track+0x21/0x30
+[   10.245622][ T2987]  kasan_set_free_info+0x20/0x30
+[   10.246085][ T2987]  ____kasan_slab_free+0x160/0x1b0
+[   10.246566][ T2987]  slab_free_freelist_hook+0x10b/0x1e0
+[   10.247078][ T2987]  kfree+0xdf/0x580
+[   10.247438][ T2987]  io_sendrecv_fail+0x22a/0x390
+[   10.247897][ T2987]  io_req_complete_failed+0x120/0x170
+[   10.248401][ T2987]  io_submit_sqes+0xd9d/0x1bd0
+[   10.248850][ T2987]  __do_sys_io_uring_enter+0x877/0x1c90
+[   10.249369][ T2987]  do_syscall_64+0x34/0xb0
+[   10.249789][ T2987]  entry_SYSCALL_64_after_hwframe+0x63/0xcd
+[   10.250342][ T2987] 
+[   10.250566][ T2987] The buggy address belongs to the object at ffff88810630cc00
+[   10.250566][ T2987]  which belongs to the cache kmalloc-512 of size 512
+[   10.251861][ T2987] The buggy address is located 128 bytes inside of
+[   10.251861][ T2987]  512-byte region [ffff88810630cc00, ffff88810630ce00)
+[   10.253089][ T2987] 
+[   10.253313][ T2987] The buggy address belongs to the physical page:
+[   10.253913][ T2987] page:ffffea000418c300 refcount:1 mapcount:0 mapping:0000000000000000 index:0x0 pfn:0x10630c
+[   10.254863][ T2987] head:ffffea000418c300 order:2 compound_mapcount:0 compound_pincount:0
+[   10.255637][ T2987] flags: 0x57ff00000010200(slab|head|node=1|zone=2|lastcpupid=0x7ff)
+[   10.256391][ T2987] raw: 057ff00000010200 dead000000000100 dead000000000122 ffff888010842c80
+[   10.257190][ T2987] raw: 0000000000000000 0000000080100010 00000001ffffffff 0000000000000000
+[   10.257988][ T2987] page dumped because: kasan: bad access detected
+[   10.258587][ T2987] page_owner tracks the page as allocated
+[   10.259118][ T2987] page last allocated via order 2, migratetype Unmovable, gfp_mask 0xd20c0(__GFP_IO|__GFP_FS|__GFP_NOWARN|__GFP_NORETRY|__GFP_COMP|__GFP_NOMEMALLOC), pid 1, tgid 1 (swapper/0), ts 4272978369, free_ts 0
+[   10.260927][ T2987]  get_page_from_freelist+0x10e3/0x2d70
+[   10.261446][ T2987]  __alloc_pages+0x1c4/0x510
+[   10.261881][ T2987]  alloc_page_interleave+0xf/0x220
+[   10.262364][ T2987]  allocate_slab+0x26c/0x3c0
+[   10.262801][ T2987]  ___slab_alloc+0x76d/0xd70
+[   10.263233][ T2987]  __slab_alloc.constprop.0+0x4d/0xa0
+[   10.263740][ T2987]  kmem_cache_alloc_trace+0x319/0x3c0
+[   10.264242][ T2987]  wbt_init+0x46/0x800
+[   10.264627][ T2987]  blk_register_queue+0x25f/0x3c0
+[   10.265103][ T2987]  device_add_disk+0x62b/0xd90
+[   10.265566][ T2987]  nbd_dev_add+0x7b3/0xb40
+[   10.265985][ T2987]  nbd_init+0x18e/0x195
+[   10.266377][ T2987]  do_one_initcall+0xbe/0x440
+[   10.266821][ T2987]  kernel_init_freeable+0x5b9/0x611
+[   10.267307][ T2987]  kernel_init+0x13/0x120
+[   10.267715][ T2987]  ret_from_fork+0x1f/0x30
+[   10.268133][ T2987] page_owner free stack trace missing
+[   10.268635][ T2987] 
+[   10.268857][ T2987] Memory state around the buggy address:
+[   10.269382][ T2987]  ffff88810630cb80: fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc fc
+[   10.270137][ T2987]  ffff88810630cc00: fa fb fb fb fb fb fb fb fb fb fb fb fb fb fb fb
+[   10.270889][ T2987] >ffff88810630cc80: fb fb fb fb fb fb fb fb fb fb fb fb fb fb fb fb
+[   10.271640][ T2987]                    ^
+[   10.272021][ T2987]  ffff88810630cd00: fb fb fb fb fb fb fb fb fb fb fb fb fb fb fb fb
+[   10.272772][ T2987]  ffff88810630cd80: fb fb fb fb fb fb fb fb fb fb fb fb fb fb fb fb
+[   10.273530][ T2987] ==================================================================

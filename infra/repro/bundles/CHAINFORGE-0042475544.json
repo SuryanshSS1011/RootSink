@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042475544",
+  "chain": "CWE-1284->CWE-125",
+  "project": "radare2",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42475544",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "0e7b37601a2011c9b11112566e2d8f1b2611986d",
+      "fix_commits": [
+        "0e7b37601a2011c9b11112566e2d8f1b2611986d"
+      ],
+      "repo": "https://github.com/radare/radare2"
+    },
+    "patch": "diff --git a/libr/bin/p/bin_omf.c b/libr/bin/p/bin_omf.c\nindex 10e556c1b42e7..b965dcdc28920 100644\n--- a/libr/bin/p/bin_omf.c\n+++ b/libr/bin/p/bin_omf.c\n@@ -27,19 +27,22 @@ static bool check_buffer(RBuffer *b) {\n \tif (ch != 0x80 && ch != 0x82) {\n \t\treturn false;\n \t}\n-\tut64 length = 0;\n-\tconst ut8 *buf = r_buf_data (b, &length);\n-\tut16 rec_size = ut8p_bw (buf + 1);\n-\tut8 str_size = *(buf + 3);\n+\tut16 rec_size = r_buf_read_le16_at (b, 1);\n+\tut8 str_size; (void)r_buf_read_at (b, 3, &str_size, 1);\n+\tut64 length = r_buf_size (b);\n \tif (str_size + 2 != rec_size || length < rec_size + 3) {\n \t\treturn false;\n \t}\n \t// check that the string is ASCII\n-\tfor (i = 4; i < str_size + 4; ++i) {\n-\t\tif (buf[i] > 0x7f) {\n+\tfor (i = 4; i < str_size + 4; i++) {\n+\t\tif (r_buf_read_at (b, i, &ch, 1) != 1) {\n+\t\t\tbreak;\n+\t\t}\n+\t\tif (ch > 0x7f) {\n \t\t\treturn false;\n \t\t}\n \t}\n+\tconst ut8 *buf = r_buf_data (b, NULL);\n \treturn r_bin_checksum_omf_ok (buf, length);\n }\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42475544-vul",
+      "digest": "sha256:13694d46e93edd453d7ed48925e49e7735256305413f8dc64bfdffa11d7ee6e0"
+    },
+    "patched": {
+      "ref": "n132/arvo:42475544-fix",
+      "digest": "sha256:3bb441d20f52e204b044220c3307c649f5e033e68e825bdec5fd03007d4d2a48"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/radare2/libr/../libr/bin/p/bin_omf.c:37",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/radare2/libr/../libr/bin/p/bin_omf.c:37"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

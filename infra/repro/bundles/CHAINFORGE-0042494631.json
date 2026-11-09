@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042494631",
+  "chain": "CWE-20->CWE-125",
+  "project": "pcl",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42494631",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "7d52b107223ef8adec990608e8685392b48d79c6",
+      "fix_commits": [
+        "7d52b107223ef8adec990608e8685392b48d79c6"
+      ],
+      "repo": "https://github.com/PointCloudLibrary/pcl"
+    },
+    "patch": "diff --git a/io/src/ply_io.cpp b/io/src/ply_io.cpp\nindex 809b3f59353..fae231aa9a4 100644\n--- a/io/src/ply_io.cpp\n+++ b/io/src/ply_io.cpp\n@@ -121,7 +121,13 @@ pcl::PLYReader::amendProperty (const std::string& old_name, const std::string& n\n   for (; finder != cloud_->fields.rend (); ++finder)\n     if (finder->name == old_name)\n       break;\n-  assert (finder != cloud_->fields.rend ());\n+  if (finder == cloud_->fields.rend ())\n+  {\n+      PCL_ERROR(\"[pcl::PLYReader::amendProperty] old_name '%s' was not found in cloud_->fields!\\n\",\n+          old_name.c_str());\n+      assert (false);\n+      return;\n+  }\n   finder->name = new_name;\n   if (new_datatype > 0 && new_datatype != finder->datatype)\n     finder->datatype = new_datatype;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42494631-vul",
+      "digest": "sha256:db3a557af97a611907f2976a4aaa6062f607345be9743009344218bb37f80276"
+    },
+    "patched": {
+      "ref": "n132/arvo:42494631-fix",
+      "digest": "sha256:db693b2e829b59cfbdd339d34878ad9bebc805f8a374f76362c3466496d644a4"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/pcl/io/src/ply_io.cpp:126",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/pcl/io/src/ply_io.cpp:126"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

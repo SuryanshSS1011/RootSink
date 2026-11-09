@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042484795",
+  "chain": "CWE-20->CWE-125",
+  "project": "muparser",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42484795",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "86de758d6ebe9b84ae2f65bea640211dd8900ec4",
+      "fix_commits": [
+        "86de758d6ebe9b84ae2f65bea640211dd8900ec4"
+      ],
+      "repo": "https://github.com/beltoforion/muparser"
+    },
+    "patch": "diff --git a/src/muParserTest.cpp b/src/muParserTest.cpp\nindex 67e2b55..5efacf8 100644\n--- a/src/muParserTest.cpp\n+++ b/src/muParserTest.cpp\n@@ -622,6 +622,9 @@ namespace mu\n \t\t\tint iStat = 0;\n \t\t\tmu::console() << _T(\"testing multiarg functions...\");\n \n+\t\t\t// from oss-fzz.com: UNKNOWN READ; https://bugs.chromium.org/p/oss-fuzz/issues/detail?id=22922#c1\n+\t\t\tiStat += ThrowTest(_T(\"6, +, +, +, +, +, +, +, +, +, +, +, +, +, +, 1, +, +, +, +, +, +, +, +, +, +, +, +, +, +, +, +, +, +, +, +, +, +, +, +, +, +, +, +, +, +, +, +\"), ecUNEXPECTED_ARG_SEP, true);\n+\t\t\t\n \t\t\t// Compound expressions\n \t\t\tiStat += EqnTest(_T(\"1,2,3\"), 3, true);\n \t\t\tiStat += EqnTest(_T(\"a,b,c\"), 3, true);\n@@ -1169,7 +1172,7 @@ namespace mu\n \n \n \t\t//---------------------------------------------------------------------------\n-\t\tint ParserTester::ThrowTest(const string_type& a_str, int a_iErrc, bool a_bFail)\n+\t\tint ParserTester::ThrowTest(const string_type& a_str, int a_iErrc, bool a_expectedToFail)\n \t\t{\n \t\t\tParserTester::c_iCount++;\n \n@@ -1196,7 +1199,7 @@ namespace mu\n \t\t\tcatch (ParserError& e)\n \t\t\t{\n \t\t\t\t// output the formula in case of an failed test\n-\t\t\t\tif (a_bFail == false || (a_bFail == true && a_iErrc != e.GetCode()))\n+\t\t\t\tif (a_expectedToFail == false || (a_expectedToFail == true && a_iErrc != e.GetCode()))\n \t\t\t\t{\n \t\t\t\t\tmu::console() << _T(\"\\n  \")\n \t\t\t\t\t\t<< _T(\"Expression: \") << a_str\n@@ -1207,8 +1210,8 @@ namespace mu\n \t\t\t\treturn (a_iErrc == e.GetCode()) ? 0 : 1;\n \t\t\t}\n \n-\t\t\t// if a_bFail==false no exception is expected\n-\t\t\tbool bRet((a_bFail == false) ? 0 : 1);\n+\t\t\t// if a_expectedToFail == false no exception is expected\n+\t\t\tbool bRet((a_expectedToFail == false) ? 0 : 1);\n \t\t\tif (bRet == 1)\n \t\t\t{\n \t\t\t\tmu::console() << _T(\"\\n  \")\ndiff --git a/src/muParserTokenReader.cpp b/src/muParserTokenReader.cpp\nindex dc0502b..c8163dc 100644\n--- a/src/muParserTokenReader.cpp\n+++ b/src/muParserTokenReader.cpp\n@@ -587,7 +587,7 @@ namespace mu\n \t\t\tif (m_iSynFlags & noINFIXOP)\n \t\t\t\tError(ecUNEXPECTED_OPERATOR, m_iPos, a_Tok.GetAsString());\n \n-\t\t\tm_iSynFlags = noPOSTOP | noINFIXOP | noOPT | noBC | noSTR | noASSIGN;\n+\t\t\tm_iSynFlags = noPOSTOP | noINFIXOP | noOPT | noBC | noSTR | noASSIGN | noARG_SEP;\n \t\t\treturn true;\n \t\t}\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42484795-vul",
+      "digest": "sha256:cae2339cba8c3a50e26e1c4a02498addc19089962594a8d6c0517a3cac04d9a8"
+    },
+    "patched": {
+      "ref": "n132/arvo:42484795-fix",
+      "digest": "sha256:e4d8a55ee9222eda0f0cf4a59c70a11a62cbf573eeaf5ad7e251329a6743c5c4"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/muparser/src/muParserBase.cpp:1243",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/muparser/src/muParserBase.cpp:1243"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-962820497476",
+  "chain": "CWE-476->CWE-787",
+  "project": "cyclonedds",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42521653",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "090b62ee46e8af9c539b2881aa36787e1de08079",
+      "fix_commits": [
+        "090b62ee46e8af9c539b2881aa36787e1de08079"
+      ],
+      "repo": "https://github.com/eclipse-cyclonedds/cyclonedds"
+    },
+    "patch": "diff --git a/fuzz/fuzz_type_object/fuzz_type_object.c b/fuzz/fuzz_type_object/fuzz_type_object.c\nindex 082d793bb1..da95a035ec 100644\n--- a/fuzz/fuzz_type_object/fuzz_type_object.c\n+++ b/fuzz/fuzz_type_object/fuzz_type_object.c\n@@ -85,10 +85,13 @@ int LLVMFuzzerTestOneInput(\n         ddsi_typeid_copy_impl (&type_info.x.complete.typeid_with_size.type_id, &type_id_complete->x);\n \n         struct ddsi_type *type;\n-        ddsi_type_ref_proxy (&gv, &type, &type_info, DDSI_TYPEID_KIND_COMPLETE, NULL);\n-        if (type)\n+        dds_return_t ret = ddsi_type_ref_proxy (&gv, &type, &type_info, DDSI_TYPEID_KIND_COMPLETE, NULL);\n+        if (ret == DDS_RETCODE_OK)\n+        {\n+          assert (type != NULL);\n           ddsi_type_add_typeobj (&gv, type, &type_object_complete->x);\n-        ddsi_type_unref (&gv, type);\n+          ddsi_type_unref (&gv, type);\n+        }\n         ddsi_typeinfo_fini (&type_info);\n       }\n     }\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42521653-vul",
+      "digest": "sha256:d49f2705ddc58bfcf78daf865c2004ac608d05125a5e3ba30f6dd65393593ca3"
+    },
+    "patched": {
+      "ref": "n132/arvo:42521653-fix",
+      "digest": "sha256:028fc29e69185fa0cba35ce9806ad684bab6d0d8d0c886c435cc06c37a3c851b"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "undefined",
+        "bug_class": "SEGV",
+        "direction": "WRITE",
+        "crash_site": "/src/cyclonedds/src/core/ddsi/src/ddsi_typelib.c:479",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 476,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "undefined",
+        "bug_class": "SEGV",
+        "direction": "WRITE",
+        "site": "/src/cyclonedds/src/core/ddsi/src/ddsi_typelib.c:479"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

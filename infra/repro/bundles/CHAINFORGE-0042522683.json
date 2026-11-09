@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042522683",
+  "chain": "CWE-1285->CWE-125",
+  "project": "libdwarf",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42522683",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "271b9b8367a8151fcd98723d73382ec56f05c810",
+      "fix_commits": [
+        "271b9b8367a8151fcd98723d73382ec56f05c810"
+      ],
+      "repo": "https://github.com/davea42/libdwarf-code"
+    },
+    "patch": "diff --git a/src/lib/libdwarf/dwarf_rnglists.c b/src/lib/libdwarf/dwarf_rnglists.c\nindex b31b0d9c2..265b5538a 100644\n--- a/src/lib/libdwarf/dwarf_rnglists.c\n+++ b/src/lib/libdwarf/dwarf_rnglists.c\n@@ -33,6 +33,7 @@ EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.\n #include <config.h>\n \n #include <stdlib.h> /* free() malloc() */\n+#include <stdio.h> /* printf */\n #include <string.h> /* memset() */\n \n #if defined(_WIN32) && defined(HAVE_STDAFX_H)\n@@ -264,6 +265,7 @@ _dwarf_internal_read_rnglists_header(Dwarf_Debug dbg,\n          dwarfstring_destructor(&m);\n          return DW_DLV_ERROR;\n     }\n+    buildhere->rc_startaddr = data;\n     READ_AREA_LENGTH_CK(dbg,arealen,Dwarf_Unsigned,\n         data,offset_size,exten_size,\n         error,\n@@ -368,6 +370,7 @@ _dwarf_internal_read_rnglists_header(Dwarf_Debug dbg,\n     if (offset_entry_count ){\n         buildhere->rc_offsets_array = data;\n     }\n+\n     lists_len = offset_size *offset_entry_count;\n     if (offset_entry_count >= secsize_dbg ||\n         lists_len >= secsize_dbg) {\n@@ -402,6 +405,19 @@ _dwarf_internal_read_rnglists_header(Dwarf_Debug dbg,\n     buildhere->rc_first_rnglist_offset = offset+localoff;\n     buildhere->rc_rnglists_header = startdata;\n     buildhere->rc_endaddr = startdata +buildhere->rc_length;\n+    if (buildhere->rc_endaddr > end_data) {\n+        dwarfstring m;\n+        dwarfstring_constructor(&m);\n+        dwarfstring_append_printf_u(&m,\n+            \" DW_DLE_RNGLISTS_ERROR: .debug_rnglists\"\n+            \" length of rnglists header (%u) \"\n+            \"runs off end of section. Corrupt data\",\n+            buildhere->rc_length);\n+        _dwarf_error_string(dbg,error,DW_DLE_RNGLISTS_ERROR,\n+            dwarfstring_string(&m));\n+        dwarfstring_destructor(&m);\n+        return DW_DLV_ERROR;\n+    }\n     buildhere->rc_past_last_rnglist_offset =\n         buildhere->rc_header_offset +buildhere->rc_length;\n     *next_offset =  buildhere->rc_past_last_rnglist_offset;\n@@ -604,6 +620,7 @@ dwarf_get_rnglist_offset_index_value(\n     Dwarf_Small *offsetptr = 0;\n     Dwarf_Unsigned targetoffset = 0;\n     Dwarf_Unsigned localoffset = 0;\n+    Dwarf_Unsigned lastvalidlocaloffset = 0;\n \n     if (!dbg || dbg->de_magic != DBG_IS_VALID) { \n         _dwarf_error_string(NULL, error,DW_DLE_DBG_NULL,\n@@ -637,8 +654,8 @@ dwarf_get_rnglist_offset_index_value(\n     offset_len  = con->rc_offset_size;\n     localoffset = offsetentry_index*offset_len;\n     offsetptr   = con->rc_offsets_array + localoffset;\n-\n-    if ((con->rc_offsets_off_in_sect +offset_len) > \n+    if ((con->rc_offsets_off_in_sect +localoffset +\n+        offset_len) > \n         con->rc_past_last_rnglist_offset) {  \n         dwarfstring m;\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42522683-vul",
+      "digest": "sha256:8821f96770d903e3c925de6e2fcf342d5354bffad0d8be0051e3270c94b8addf"
+    },
+    "patched": {
+      "ref": "n132/arvo:42522683-fix",
+      "digest": "sha256:9a60d0f4ac48be064f83589f238f2404e1bae52792f52bd92a3ba2491935e045"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/libdwarf/src/lib/libdwarf/dwarf_memcpy_swap.c:49",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/libdwarf/src/lib/libdwarf/dwarf_memcpy_swap.c:49"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042484390",
+  "chain": "CWE-1284->CWE-787",
+  "project": "opensc",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42484390",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "9d294de90d1cc66956389856e60b6944b27b4817",
+      "fix_commits": [
+        "9d294de90d1cc66956389856e60b6944b27b4817"
+      ],
+      "repo": "https://github.com/OpenSC/OpenSC"
+    },
+    "patch": "diff --git a/src/libopensc/card-tcos.c b/src/libopensc/card-tcos.c\nindex 673c2493dd..e88c80bd79 100644\n--- a/src/libopensc/card-tcos.c\n+++ b/src/libopensc/card-tcos.c\n@@ -623,6 +623,8 @@ static int tcos_decipher(sc_card_t *card, const u8 * crgram, size_t crgram_len,\n \tapdu.data = sbuf;\n \tapdu.lc = apdu.datalen = crgram_len+1;\n \tsbuf[0] = tcos3 ? 0x00 : ((data->pad_flags & SC_ALGORITHM_RSA_PAD_PKCS1) ? 0x81 : 0x02);\n+\tif (sizeof sbuf - 1 < crgram_len)\n+\t\treturn SC_ERROR_INVALID_ARGUMENTS;\n \tmemcpy(sbuf+1, crgram, crgram_len);\n \n \tr = sc_transmit_apdu(card, &apdu);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42484390-vul",
+      "digest": "sha256:b7ff717ecc650929a078b01d162bedd56499ae13b5e7dfd90fe18e59fd8a50e7"
+    },
+    "patched": {
+      "ref": "n132/arvo:42484390-fix",
+      "digest": "sha256:5632e818cfe4d4f419b12e624446881112bb0bbb73e54e41282e562c60515c6f"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/opensc/src/libopensc/card-tcos.c:626",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/opensc/src/libopensc/card-tcos.c:626"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

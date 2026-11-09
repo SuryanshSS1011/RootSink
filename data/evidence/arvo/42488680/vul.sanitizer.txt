@@ -1,0 +1,96 @@
+======================= INFO =========================
+This binary is built for AFL-fuzz.
+To run the target function on individual input(s) execute this:
+  /out/parquet-arrow-fuzz < INPUT_FILE
+or
+  /out/parquet-arrow-fuzz INPUT_FILE1 [INPUT_FILE2 ... ]
+To fuzz with afl-fuzz execute this:
+  afl-fuzz [afl-flags] /out/parquet-arrow-fuzz [-N]
+afl-fuzz will run N iterations before re-spawning the process (default: 1000)
+======================================================
+Reading 3687 bytes from /tmp/poc
+=================================================================
+==426458==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x610000002fc0 at pc 0x000000aae5ed bp 0x7fffe5323610 sp 0x7fffe5323608
+WRITE of size 1 at 0x610000002fc0 thread T0
+SCARINESS: 31 (1-byte-write-heap-buffer-overflow)
+    #0 0xaae5ec in Finish /src/arrow/cpp/src/arrow/util/bitmap_writer.h:166:29
+    #1 0xaae5ec in void parquet::internal::(anonymous namespace)::DefRepLevelsToListInfo<int>(short const*, short const*, long, parquet::internal::LevelInfo, parquet::internal::ValidityBitmapInputOutput*, int*) /src/arrow/cpp/src/parquet/level_conversion.cc:144:24
+    #2 0xab150f in parquet::internal::DefRepLevelsToBitmap(short const*, short const*, long, parquet::internal::LevelInfo, parquet::internal::ValidityBitmapInputOutput*) /src/arrow/cpp/src/parquet/level_conversion.cc:217:3
+    #3 0x693c21 in parquet::arrow::StructReader::BuildArray(long, std::__1::shared_ptr<arrow::ChunkedArray>*) /src/arrow/cpp/src/parquet/arrow/reader.cc:659:5
+    #4 0x6e2021 in parquet::arrow::ListReader<int>::BuildArray(long, std::__1::shared_ptr<arrow::ChunkedArray>*) /src/arrow/cpp/src/parquet/arrow/reader.cc:526:5
+    #5 0x69209e in parquet::arrow::StructReader::BuildArray(long, std::__1::shared_ptr<arrow::ChunkedArray>*) /src/arrow/cpp/src/parquet/arrow/reader.cc:678:5
+    #6 0x6c2257 in parquet::arrow::ColumnReaderImpl::NextBatch(long, std::__1::shared_ptr<arrow::ChunkedArray>*) /src/arrow/cpp/src/parquet/arrow/reader.cc:106:5
+    #7 0x6d7e47 in parquet::arrow::FileReaderImpl::ReadColumn(int, std::__1::vector<int, std::__1::allocator<int> > const&, parquet::arrow::ColumnReader*, std::__1::shared_ptr<arrow::ChunkedArray>*) /src/arrow/cpp/src/parquet/arrow/reader.cc:264:20
+    #8 0x6aeb37 in operator() /src/arrow/cpp/src/parquet/arrow/reader.cc:864:12
+    #9 0x6aeb37 in parquet::arrow::FileReaderImpl::ReadRowGroups(std::__1::vector<int, std::__1::allocator<int> > const&, std::__1::vector<int, std::__1::allocator<int> > const&, std::__1::shared_ptr<arrow::Table>*) /src/arrow/cpp/src/parquet/arrow/reader.cc:881:7
+    #10 0x6bf38e in parquet::arrow::FileReaderImpl::ReadRowGroup(int, std::__1::vector<int, std::__1::allocator<int> > const&, std::__1::shared_ptr<arrow::Table>*) /src/arrow/cpp/src/parquet/arrow/reader.cc:294:12
+    #11 0x6bfac5 in parquet::arrow::FileReaderImpl::ReadRowGroup(int, std::__1::shared_ptr<arrow::Table>*) /src/arrow/cpp/src/parquet/arrow/reader.cc:298:12
+    #12 0x6b83c4 in parquet::arrow::internal::FuzzReader(std::__1::unique_ptr<parquet::arrow::FileReader, std::__1::default_delete<parquet::arrow::FileReader> >) /src/arrow/cpp/src/parquet/arrow/reader.cc:976:37
+    #13 0x6b9edb in parquet::arrow::internal::FuzzReader(unsigned char const*, long) /src/arrow/cpp/src/parquet/arrow/reader.cc:993:10
+    #14 0x68fa29 in LLVMFuzzerTestOneInput /src/arrow/cpp/src/parquet/arrow/fuzz.cc:22:17
+    #15 0x68e0be in ExecuteFilesOnyByOne /src/libfuzzer/afl/afl_driver.cpp:217:5
+    #16 0x68e0be in main /src/libfuzzer/afl/afl_driver.cpp:254:12
+    #17 0x14a3a5aa783f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2083f)
+    #18 0x5e01c8 in _start (/out/parquet-arrow-fuzz+0x5e01c8)
+
+DEDUP_TOKEN: Finish--void parquet::internal::(anonymous namespace)::DefRepLevelsToListInfo<int>(short const*, short const*, long, parquet::internal::LevelInfo, parquet::internal::ValidityBitmapInputOutput*, int*)--parquet::internal::DefRepLevelsToBitmap(short const*, short const*, long, parquet::internal::LevelInfo, parquet::internal::ValidityBitmapInputOutput*)
+0x610000002fc0 is located 0 bytes to the right of 128-byte region [0x610000002f40,0x610000002fc0)
+allocated by thread T0 here:
+    #0 0x65c197 in posix_memalign /src/llvm-project/compiler-rt/lib/asan/asan_malloc_linux.cpp:226:3
+    #1 0x10e8937 in AllocateAligned /src/arrow/cpp/src/arrow/memory_pool.cc:113:24
+    #2 0x10e8937 in arrow::BaseMemoryPoolImpl<arrow::(anonymous namespace)::SystemAllocator>::Allocate(long, unsigned char**) /src/arrow/cpp/src/arrow/memory_pool.cc:295:5
+    #3 0x1070ffb in arrow::PoolBuffer::Reserve(long) /src/arrow/cpp/src/arrow/buffer.cc:199:9
+    #4 0x10704cb in arrow::PoolBuffer::Resize(long, bool) /src/arrow/cpp/src/arrow/buffer.cc:223:7
+    #5 0x105f978 in ResizePoolBuffer<std::__1::unique_ptr<arrow::ResizableBuffer, std::__1::default_delete<arrow::ResizableBuffer> >, std::__1::unique_ptr<arrow::PoolBuffer, std::__1::default_delete<arrow::PoolBuffer> > > /src/arrow/cpp/src/arrow/buffer.cc:262:3
+    #6 0x105f978 in arrow::AllocateResizableBuffer(long, arrow::MemoryPool*) /src/arrow/cpp/src/arrow/buffer.cc:275:10
+    #7 0x6914e7 in parquet::arrow::StructReader::BuildArray(long, std::__1::shared_ptr<arrow::ChunkedArray>*) /src/arrow/cpp/src/parquet/arrow/reader.cc:653:5
+    #8 0x6e2021 in parquet::arrow::ListReader<int>::BuildArray(long, std::__1::shared_ptr<arrow::ChunkedArray>*) /src/arrow/cpp/src/parquet/arrow/reader.cc:526:5
+    #9 0x69209e in parquet::arrow::StructReader::BuildArray(long, std::__1::shared_ptr<arrow::ChunkedArray>*) /src/arrow/cpp/src/parquet/arrow/reader.cc:678:5
+    #10 0x6c2257 in parquet::arrow::ColumnReaderImpl::NextBatch(long, std::__1::shared_ptr<arrow::ChunkedArray>*) /src/arrow/cpp/src/parquet/arrow/reader.cc:106:5
+    #11 0x6d7e47 in parquet::arrow::FileReaderImpl::ReadColumn(int, std::__1::vector<int, std::__1::allocator<int> > const&, parquet::arrow::ColumnReader*, std::__1::shared_ptr<arrow::ChunkedArray>*) /src/arrow/cpp/src/parquet/arrow/reader.cc:264:20
+    #12 0x6aeb37 in operator() /src/arrow/cpp/src/parquet/arrow/reader.cc:864:12
+    #13 0x6aeb37 in parquet::arrow::FileReaderImpl::ReadRowGroups(std::__1::vector<int, std::__1::allocator<int> > const&, std::__1::vector<int, std::__1::allocator<int> > const&, std::__1::shared_ptr<arrow::Table>*) /src/arrow/cpp/src/parquet/arrow/reader.cc:881:7
+    #14 0x6bf38e in parquet::arrow::FileReaderImpl::ReadRowGroup(int, std::__1::vector<int, std::__1::allocator<int> > const&, std::__1::shared_ptr<arrow::Table>*) /src/arrow/cpp/src/parquet/arrow/reader.cc:294:12
+    #15 0x6bfac5 in parquet::arrow::FileReaderImpl::ReadRowGroup(int, std::__1::shared_ptr<arrow::Table>*) /src/arrow/cpp/src/parquet/arrow/reader.cc:298:12
+    #16 0x6b83c4 in parquet::arrow::internal::FuzzReader(std::__1::unique_ptr<parquet::arrow::FileReader, std::__1::default_delete<parquet::arrow::FileReader> >) /src/arrow/cpp/src/parquet/arrow/reader.cc:976:37
+    #17 0x6b9edb in parquet::arrow::internal::FuzzReader(unsigned char const*, long) /src/arrow/cpp/src/parquet/arrow/reader.cc:993:10
+    #18 0x68fa29 in LLVMFuzzerTestOneInput /src/arrow/cpp/src/parquet/arrow/fuzz.cc:22:17
+    #19 0x68e0be in ExecuteFilesOnyByOne /src/libfuzzer/afl/afl_driver.cpp:217:5
+    #20 0x68e0be in main /src/libfuzzer/afl/afl_driver.cpp:254:12
+    #21 0x14a3a5aa783f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2083f)
+
+DEDUP_TOKEN: posix_memalign--AllocateAligned--arrow::BaseMemoryPoolImpl<arrow::(anonymous namespace)::SystemAllocator>::Allocate(long, unsigned char**)
+SUMMARY: AddressSanitizer: heap-buffer-overflow /src/arrow/cpp/src/arrow/util/bitmap_writer.h:166:29 in Finish
+Shadow bytes around the buggy address:
+  0x0c207fff85a0: fa fa fa fa fa fa fa fa fd fd fd fd fd fd fd fd
+  0x0c207fff85b0: fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd
+  0x0c207fff85c0: fa fa fa fa fa fa fa fa fd fd fd fd fd fd fd fd
+  0x0c207fff85d0: fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd
+  0x0c207fff85e0: fa fa fa fa fa fa fa fa 00 00 00 00 00 00 00 00
+=>0x0c207fff85f0: 00 00 00 00 00 00 00 00[fa]fa fa fa fa fa fa fa
+  0x0c207fff8600: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c207fff8610: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c207fff8620: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c207fff8630: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c207fff8640: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+  Shadow gap:              cc
+==426458==ABORTING

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042535171",
+  "chain": "CWE-416->CWE-125",
+  "project": "imagemagick",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42535171",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "7b5cf98a62896386ba7a473f18ca0e0c94902236",
+      "fix_commits": [
+        "7b5cf98a62896386ba7a473f18ca0e0c94902236"
+      ],
+      "repo": "https://github.com/imagemagick/imagemagick"
+    },
+    "patch": "From 7b5cf98a62896386ba7a473f18ca0e0c94902236 Mon Sep 17 00:00:00 2001\nFrom: Dirk Lemstra <dirk@lemstra.org>\nDate: Sat, 4 May 2024 18:58:59 +0200\nSubject: [PATCH] Removed call to DestroyStringInfo that should not be done\n when using SetImageProfilePrivate.\n\n---\n coders/meta.c | 1 -\n 1 file changed, 1 deletion(-)\n\ndiff --git a/coders/meta.c b/coders/meta.c\nindex 7b00176..214d724 100644\n--- a/coders/meta.c\n+++ b/coders/meta.c\n@@ -1381,7 +1381,6 @@ static Image *ReadMETAImage(const ImageInfo *image_info,\n       profile=BlobToProfileStringInfo(\"xmp\",GetBlobStreamData(buff),(size_t)\n         GetBlobSize(buff),exception);\n       (void) SetImageProfilePrivate(image,profile,exception);\n-      profile=DestroyStringInfo(profile);\n       blob=(unsigned char *) DetachBlob(buff->blob);\n       blob=(unsigned char *) RelinquishMagickMemory(blob);\n       buff=DestroyImage(buff);\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42535171-vul",
+      "digest": "sha256:7f320bb1c35307c4090e9f3cf9df9eba0bf624d43a3cf476f0125b4392d3cbe7"
+    },
+    "patched": {
+      "ref": "n132/arvo:42535171-fix",
+      "digest": "sha256:7e8ef1ac0a8857aa24ad342ced8b8b9dceaf5d8ee502a37e745019367d325a48"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/imagemagick/MagickCore/string.c:819",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/imagemagick/MagickCore/string.c:819"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

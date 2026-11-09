@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-964992511",
+  "chain": "CWE-456->CWE-457",
+  "project": "libxml2",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42522648",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://gitlab.gnome.org/GNOME/libxml2/-/commit/3660229219c12d5a44f8539d25fb5c428480ce3f",
+      "fix_commits": [
+        "3660229219c12d5a44f8539d25fb5c428480ce3f"
+      ],
+      "repo": "https://gitlab.gnome.org/GNOME/libxml2"
+    },
+    "patch": "diff --git a/parserInternals.c b/parserInternals.c\nindex 52491505cb8ccf45d647704352d4b7923e5e29d8..8dc6005e64566c248fc026a9f2bd59a4c1d29a4b 100644\n--- a/parserInternals.c\n+++ b/parserInternals.c\n@@ -1003,11 +1003,12 @@ xmlDetectEBCDIC(xmlParserInputPtr input) {\n     handler = xmlGetCharEncodingHandler(XML_CHAR_ENCODING_EBCDIC);\n     if (handler == NULL)\n         return(NULL);\n-    outlen = sizeof(out);\n+    outlen = sizeof(out) - 1;\n     inlen = input->end - input->cur;\n     res = xmlEncInputChunk(handler, out, &outlen, input->cur, &inlen, 0);\n     if (res < 0)\n         return(handler);\n+    out[outlen] = 0;\n \n     for (i = 0; i < outlen; i++) {\n         if (out[i] == '>')\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42522648-vul",
+      "digest": "sha256:2aa056ca51ddcc8ff4fa570950c2e9babad9ff64ee9c0b77b85affda82aa3e2c"
+    },
+    "patched": {
+      "ref": "n132/arvo:42522648-fix",
+      "digest": "sha256:ceb1d2a7b7bff1b5a8c242e0ae7ffbe70858b2b9a1a8e63f7a40473c796ba14a"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/libxml2/parserInternals.c:1031",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/libxml2/parserInternals.c:1031"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

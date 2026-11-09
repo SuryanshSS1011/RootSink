@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042472923",
+  "chain": "CWE-1284->CWE-787",
+  "project": "openthread",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42472923",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "249bc598748ad08a98b08995698669613594e54b",
+      "fix_commits": [
+        "249bc598748ad08a98b08995698669613594e54b"
+      ],
+      "repo": "https://github.com/openthread/openthread"
+    },
+    "patch": "diff --git a/src/cli/cli.cpp b/src/cli/cli.cpp\nindex 7e816b2b1f7..6a54f80406b 100644\n--- a/src/cli/cli.cpp\n+++ b/src/cli/cli.cpp\n@@ -1630,19 +1630,26 @@ void Interpreter::ProcessService(int argc, char *argv[])\n     if (strcmp(argv[0], \"add\") == 0)\n     {\n         otServiceConfig cfg;\n-        long            enterpriseNumber = 0;\n+        long            enterpriseNumber;\n+        size_t          length;\n \n         VerifyOrExit(argc > 3, error = OT_ERROR_INVALID_ARGS);\n \n         SuccessOrExit(error = ParseLong(argv[1], enterpriseNumber));\n+        cfg.mEnterpriseNumber = static_cast<uint32_t>(enterpriseNumber);\n \n-        cfg.mServiceDataLength = static_cast<uint8_t>(strlen(argv[2]));\n+        length = strlen(argv[2]);\n+        VerifyOrExit(length <= sizeof(cfg.mServiceData), error = OT_ERROR_NO_BUFS);\n+        cfg.mServiceDataLength = static_cast<uint8_t>(length);\n         memcpy(cfg.mServiceData, argv[2], cfg.mServiceDataLength);\n-        cfg.mEnterpriseNumber               = static_cast<uint32_t>(enterpriseNumber);\n-        cfg.mServerConfig.mStable           = true;\n-        cfg.mServerConfig.mServerDataLength = static_cast<uint8_t>(strlen(argv[3]));\n+\n+        length = strlen(argv[3]);\n+        VerifyOrExit(length <= sizeof(cfg.mServerConfig.mServerData), error = OT_ERROR_NO_BUFS);\n+        cfg.mServerConfig.mServerDataLength = static_cast<uint8_t>(length);\n         memcpy(cfg.mServerConfig.mServerData, argv[3], cfg.mServerConfig.mServerDataLength);\n \n+        cfg.mServerConfig.mStable = true;\n+\n         SuccessOrExit(error = otServerAddService(mInstance, &cfg));\n     }\n     else if (strcmp(argv[0], \"remove\") == 0)\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42472923-vul",
+      "digest": "sha256:b57013edbe6af9bac77debe52cd656fbab1a655b7f9eb973e04fe73ecba98615"
+    },
+    "patched": {
+      "ref": "n132/arvo:42472923-fix",
+      "digest": "sha256:8a262235b3f9c25802e77a49d4e41b5f147ae8dc9d324c068987306c556a79a4"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/openthread/src/cli/cli.cpp:1642",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/openthread/src/cli/cli.cpp:1642"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

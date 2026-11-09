@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042519197",
+  "chain": "CWE-1285->CWE-125",
+  "project": "glib",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42519197",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "78da5faccb3e065116b75b3ff87ff55381da6c76",
+      "fix_commits": [
+        "78da5faccb3e065116b75b3ff87ff55381da6c76"
+      ],
+      "repo": "https://gitlab.gnome.org/GNOME/glib"
+    },
+    "patch": "From 78da5faccb3e065116b75b3ff87ff55381da6c76 Mon Sep 17 00:00:00 2001\nFrom: Philip Withnall <pwithnall@endlessos.org>\nDate: Thu, 15 Dec 2022 13:00:39 +0000\nSubject: [PATCH] =?UTF-8?q?gvariant:=20Check=20offset=20table=20doesn?=\n =?UTF-8?q?=E2=80=99t=20fall=20outside=20variant=20bounds?=\nMIME-Version: 1.0\nContent-Type: text/plain; charset=UTF-8\nContent-Transfer-Encoding: 8bit\n\nWhen dereferencing the first entry in the offset table for a tuple,\ncheck that it doesn\u2019t fall outside the bounds of the variant first.\n\nThis prevents an out-of-bounds read from some non-normal tuples.\n\nThis bug was introduced in commit 73d0aa81c2575a5c9ae77d.\n\nIncludes a unit test, although the test will likely only catch the\noriginal bug if run with asan enabled.\n\nSigned-off-by: Philip Withnall <pwithnall@endlessos.org>\n\nFixes: #2840\noss-fuzz#54302\n---\n glib/gvariant-serialiser.c | 12 ++++++--\n glib/tests/gvariant.c      | 63 ++++++++++++++++++++++++++++++++++++++\n 2 files changed, 72 insertions(+), 3 deletions(-)\n\ndiff --git a/glib/gvariant-serialiser.c b/glib/gvariant-serialiser.c\nindex f443c2e..4e4a73a 100644\n--- a/glib/gvariant-serialiser.c\n+++ b/glib/gvariant-serialiser.c\n@@ -984,7 +984,8 @@ gvs_tuple_get_member_bounds (GVariantSerialised  value,\n \n   member_info = g_variant_type_info_member_info (value.type_info, index_);\n \n-  if (member_info->i + 1)\n+  if (member_info->i + 1 &&\n+      offset_size * (member_info->i + 1) <= value.size)\n     member_start = gvs_read_unaligned_le (value.data + value.size -\n                                           offset_size * (member_info->i + 1),\n                                           offset_size);\n@@ -995,7 +996,8 @@ gvs_tuple_get_member_bounds (GVariantSerialised  value,\n   member_start &= member_info->b;\n   member_start |= member_info->c;\n \n-  if (member_info->ending_type == G_VARIANT_MEMBER_ENDING_LAST)\n+  if (member_info->ending_type == G_VARIANT_MEMBER_ENDING_LAST &&\n+      offset_size * (member_info->i + 1) <= value.size)\n     member_end = value.size - offset_size * (member_info->i + 1);\n \n   else if (member_info->ending_type == G_VARIANT_MEMBER_ENDING_FIXED)\n@@ -1006,11 +1008,15 @@ gvs_tuple_get_member_bounds (GVariantSerialised  value,\n       member_end = member_start + fixed_size;\n     }\n \n-  else /* G_VARIANT_MEMBER_ENDING_OFFSET */\n+  else if (member_info->ending_type == G_VARIANT_MEMBER_ENDING_OFFSET &&\n+           offset_size * (member_info->i + 2) <= value.size)\n     member_end = gvs_read_unaligned_le (value.data + value.size -\n                                         offset_size * (member_info->i + 2),\n                                         offset_size);\n \n+  else  /* invalid */\n+    member_end = G_MAXSIZE;\n+\n   if (out_member_start != NULL)\n     *out_member_start = member_start;\n   if (out_member_end != NULL)\ndiff --git a/glib/tests/gvariant.c b/glib/tests/gvariant.c\nindex b360888..98c51a1 100644\n--- a/glib/tests/gvariant.c\n+++ b/glib/tests/gvariant.c\n@@ -5576,6 +5576,67 @@ test_normal_checking_tuple_offsets4 (void)\n   g_variant_unref (variant);\n }\n \n+/* This is a regression test that dereferencing the first element in the offset\n+ * table doesn\u2019t dereference memory before the start of the GVariant. The first\n+ * element in the offset table gives the offset of the final member in the\n+ * tuple (the offset table is stored in reverse), and the position of this final\n+ * member is needed to check that none of the tuple members overlap with the\n+ * offset table\n+ *\n+ * See https://gitlab.gnome.org/GNOME/glib/-/issues/2840 */\n+static void\n+test_normal_checking_tuple_offsets5 (void)\n+{\n+  /* A tuple of type (sss) in normal form would have an offset table with two\n+   * entries:\n+   *  - The first entry (lowest index in the table) gives the offset of the\n+   *    third `s` in the tuple, as the offset table is reversed compared to the\n+   *    tuple members.\n+   *  - The second entry (highest index in the table) gives the offset of the\n+   *    second `s` in the tuple.\n+   *  - The offset of the first `s` in the tuple is always 0.\n+   *\n+   * See \u00a72.5.4 (Structures) of the GVariant specification for details, noting\n+   * that the table is only layed out this way because all three members of the\n+   * tuple have non-fixed sizes.\n+   *\n+   * It\u2019s not clear whether the 0xaa data of this variant is part of the strings\n+   * in the tuple, or part of the offset table. It doesn\u2019t really matter. This\n+   * is a regression test to check that the code to validate the offset table\n+   * doesn\u2019t unconditionally try to access the first entry in the offset table\n+   * by subtracting the table size from the end of the GVariant data.\n+   *\n+   * In this non-normal case, that would result in an address off the start of\n+   * the GVariant data, and an out-of-bounds read, because the GVariant is one\n+   * byte long, but the offset table is calculated as two bytes long (with 1B\n+   * sized entries) from the tuple\u2019s type.\n+   */\n+  const GVariantType *data_type = G_VARIANT_TYPE (\"(sss)\");\n+  const guint8 data[] = { 0xaa };\n+  gsize size = sizeof (data);\n+  GVariant *variant = NULL;\n+  GVariant *normal_variant = NULL;\n+  GVariant *expected = NULL;\n+\n+  g_test_bug (\"https://gitlab.gnome.org/GNOME/glib/-/issues/2840\");\n+\n+  variant = g_variant_new_from_data (data_type, data, size, FALSE, NULL, NULL);\n+  g_assert_nonnull (variant);\n+\n+  g_assert_false (g_variant_is_normal_form (variant));\n+\n+  normal_variant = g_variant_get_normal_form (variant);\n+  g_assert_nonnull (normal_variant);\n+\n+  expected = g_variant_new_parsed (\"('', '', '')\");\n+  g_assert_cmpvariant (expected, variant);\n+  g_assert_cmpvariant (expected, normal_variant);\n+\n+  g_variant_unref (expected);\n+  g_variant_unref (normal_variant);\n+  g_variant_unref (variant);\n+}\n+\n /* Test that an otherwise-valid serialised GVariant is considered non-normal if\n  * its offset table entries are too wide.\n  *\n@@ -5827,6 +5888,8 @@ main (int argc, char **argv)\n                    test_normal_checking_tuple_offsets3);\n   g_test_add_func (\"/gvariant/normal-checking/tuple-offsets4\",\n                    test_normal_checking_tuple_offsets4);\n+  g_test_add_func (\"/gvariant/normal-checking/tuple-offsets5\",\n+                   test_normal_checking_tuple_offsets5);\n   g_test_add_func (\"/gvariant/normal-checking/tuple-offsets/minimal-sized\",\n                    test_normal_checking_tuple_offsets_minimal_sized);\n   g_test_add_func (\"/gvariant/normal-checking/empty-object-path\",\n-- \n2.55.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42519197-vul",
+      "digest": "sha256:04bfefcd3748e1b302125bd622bd8afde0aa0d037d75a0f7315cf2b5d42fe88e"
+    },
+    "patched": {
+      "ref": "n132/arvo:42519197-fix",
+      "digest": "sha256:f2013bf978bf1416fcd26ca0955a795ebf0c411e98c4b3cd348fa6b600da2fab"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": null,
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": null
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

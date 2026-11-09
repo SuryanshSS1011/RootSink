@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042479042",
+  "chain": "CWE-416->CWE-125",
+  "project": "htslib",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42479042",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "d59c3645f798169f7fde53dbf5c6d3e095465e8c",
+      "fix_commits": [
+        "d59c3645f798169f7fde53dbf5c6d3e095465e8c"
+      ],
+      "repo": "https://github.com/samtools/htslib"
+    },
+    "patch": "diff --git a/sam.c b/sam.c\nindex 0fb4df766..ec8bd158a 100644\n--- a/sam.c\n+++ b/sam.c\n@@ -537,6 +537,24 @@ static void swap_data(const bam1_core_t *c, int l_data, uint8_t *data, int is_ho\n     for (i = 0; i < c->n_cigar; ++i) ed_swap_4p(&cigar[i]);\n }\n \n+// Fix bad records where qname is not terminated correctly.\n+static int fixup_missing_qname_nul(bam1_t *b) {\n+    bam1_core_t *c = &b->core;\n+\n+    // Note this is called before c->l_extranul is added to c->l_qname\n+    if (c->l_extranul > 0) {\n+        b->data[c->l_qname++] = '\\0';\n+        c->l_extranul--;\n+    } else {\n+        if (b->l_data > INT_MAX - 4) return -1;\n+        if (realloc_bam_data(b, b->l_data + 4) < 0) return -1;\n+        b->l_data += 4;\n+        b->data[c->l_qname++] = '\\0';\n+        c->l_extranul = 3;\n+    }\n+    return 0;\n+}\n+\n /*\n  * Note a second interface that returns a bam pointer instead would avoid bam_copy1\n  * in multi-threaded handling.  This may be worth considering for htslib2.\n@@ -576,6 +594,9 @@ int bam_read1(BGZF *fp, bam1_t *b)\n     b->l_data = new_l_data;\n \n     if (bgzf_read(fp, b->data, c->l_qname) != c->l_qname) return -4;\n+    if (b->data[c->l_qname - 1] != '\\0') { // Try to fix missing NUL termination\n+        if (fixup_missing_qname_nul(b) < 0) return -4;\n+    }\n     for (i = 0; i < c->l_extranul; ++i) b->data[c->l_qname+i] = '\\0';\n     c->l_qname += c->l_extranul;\n     if (b->l_data < c->l_qname ||\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42479042-vul",
+      "digest": "sha256:1a0b76089088d1eee47e5eed29bab12d63e22426ee4609f8990dd4ee2ee57fc5"
+    },
+    "patched": {
+      "ref": "n132/arvo:42479042-fix",
+      "digest": "sha256:5c7ea44976d19584e371974144ec374b7983933b5b2ad9c1b77e7ac8b03abc9c"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/htslib/hts.c:3861",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/htslib/hts.c:3861"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

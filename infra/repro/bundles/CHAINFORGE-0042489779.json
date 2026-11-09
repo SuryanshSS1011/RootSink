@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042489779",
+  "chain": "CWE-1285->CWE-125",
+  "project": "c-blosc2",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42489779",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "3724317f7bd698abb3b3d39a6d785088b9f8db0a",
+      "fix_commits": [
+        "3724317f7bd698abb3b3d39a6d785088b9f8db0a"
+      ],
+      "repo": "https://github.com/Blosc/c-blosc2"
+    },
+    "patch": "diff --git a/internal-complibs/lizard-1.0/lizard_decompress_liz.h b/internal-complibs/lizard-1.0/lizard_decompress_liz.h\nindex 38f33026d..0b132c553 100644\n--- a/internal-complibs/lizard-1.0/lizard_decompress_liz.h\n+++ b/internal-complibs/lizard-1.0/lizard_decompress_liz.h\n@@ -62,17 +62,19 @@ FORCE_INLINE int Lizard_decompress_LIZv1(\n             if ((length=(token & MAX_SHORT_LITLEN)) == MAX_SHORT_LITLEN) {\n                 if (unlikely(ctx->literalsPtr > iend - 1)) { LIZARD_LOG_DECOMPRESS_LIZv1(\"1\"); goto _output_error; } \n                 length = *ctx->literalsPtr;\n+                ctx->literalsPtr++;\n                 if unlikely(length >= 254) {\n                     if (length == 254) {\n-                        length = MEM_readLE16(ctx->literalsPtr+1);\n+                        if (unlikely(ctx->literalsPtr > iend - 2)) { LIZARD_LOG_DECOMPRESS_LIZv1(\"1\"); goto _output_error; }  /* overflow detection */\n+                        length = MEM_readLE16(ctx->literalsPtr);\n                         ctx->literalsPtr += 2;\n                     } else {\n-                        length = MEM_readLE24(ctx->literalsPtr+1);\n+                        if (unlikely(ctx->literalsPtr > iend - 3)) { LIZARD_LOG_DECOMPRESS_LIZv1(\"1\"); goto _output_error; }  /* overflow detection */\n+                        length = MEM_readLE24(ctx->literalsPtr);\n                         ctx->literalsPtr += 3;\n                     }\n                 }\n                 length += MAX_SHORT_LITLEN;\n-                ctx->literalsPtr++;\n                 if (unlikely((size_t)(op+length)<(size_t)(op))) { LIZARD_LOG_DECOMPRESS_LIZv1(\"2\"); goto _output_error; }  /* overflow detection */\n                 if (unlikely((size_t)(ctx->literalsPtr+length)<(size_t)(ctx->literalsPtr))) { LIZARD_LOG_DECOMPRESS_LIZv1(\"3\"); goto _output_error; }   /* overflow detection */\n             }\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42489779-vul",
+      "digest": "sha256:34c35462158726805cbf881225c97d2210b266baa1e32ea821b42dd974562fed"
+    },
+    "patched": {
+      "ref": "n132/arvo:42489779-fix",
+      "digest": "sha256:51cfcb10bc22549d447ea8f7ad3c1d83a828d6d7b36a7e6930c43a867fc272dc"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/c-blosc2/internal-complibs/lizard-1.0/lizard_decompress.c:241",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/c-blosc2/internal-complibs/lizard-1.0/lizard_decompress.c:241"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

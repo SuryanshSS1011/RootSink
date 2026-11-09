@@ -1,0 +1,75 @@
+======================= INFO =========================
+This binary is built for AFL-fuzz.
+To run the target function on individual input(s) execute this:
+  /out/mpeg2_dec_fuzzer < INPUT_FILE
+or
+  /out/mpeg2_dec_fuzzer INPUT_FILE1 [INPUT_FILE2 ... ]
+To fuzz with afl-fuzz execute this:
+  afl-fuzz [afl-flags] /out/mpeg2_dec_fuzzer [-N]
+afl-fuzz will run N iterations before re-spawning the process (default: 1000)
+======================================================
+Reading 68 bytes from /tmp/poc
+=================================================================
+==1583717==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x14dfdeb76ac0 at pc 0x00000050b84a bp 0x7fff8bf1eb80 sp 0x7fff8bf1eb78
+WRITE of size 1 at 0x14dfdeb76ac0 thread T0
+SCARINESS: 31 (1-byte-write-heap-buffer-overflow)
+    #0 0x50b849 in impeg2_fmt_conv_yuv420p_to_yuv420sp_uv /src/libmpeg2/common/impeg2_format_conv.c:391:24
+    #1 0x4da989 in impeg2d_format_convert /src/libmpeg2/decoder/impeg2d_pic_proc.c
+    #2 0x4fcea5 in impeg2d_dec_pic_data_thread /src/libmpeg2/decoder/impeg2d_dec_hdr.c:1109:17
+    #3 0x4fe255 in impeg2d_dec_pic_data /src/libmpeg2/decoder/impeg2d_dec_hdr.c:1438:5
+    #4 0x501862 in impeg2d_process_video_bit_stream /src/libmpeg2/decoder/impeg2d_dec_hdr.c:1889:17
+    #5 0x4d9b84 in impeg2d_dec_frm /src/libmpeg2/decoder/impeg2d_decoder.c:226:19
+    #6 0x4d7a24 in impeg2d_api_entity /src/libmpeg2/decoder/impeg2d_api_main.c:3488:17
+    #7 0x4cc1cd in Codec::decodeFrame(unsigned char const*, unsigned long, unsigned long*) /src/libmpeg2/fuzzer/mpeg2_dec_fuzzer.cpp:362:9
+    #8 0x4cc968 in LLVMFuzzerTestOneInput /src/libmpeg2/fuzzer/mpeg2_dec_fuzzer.cpp:408:18
+    #9 0x4c7f3a in ExecuteFilesOnyByOne /src/libfuzzer/afl/afl_driver.cpp:216:5
+    #10 0x4c7f3a in main /src/libfuzzer/afl/afl_driver.cpp:253
+    #11 0x14dfddbf082f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+    #12 0x41daf8 in _start (/out/mpeg2_dec_fuzzer+0x41daf8)
+
+DEDUP_TOKEN: impeg2_fmt_conv_yuv420p_to_yuv420sp_uv--impeg2d_format_convert--impeg2d_dec_pic_data_thread
+0x14dfdeb76ac0 is located 0 bytes to the right of 209600-byte region [0x14dfdeb43800,0x14dfdeb76ac0)
+allocated by thread T0 here:
+    #0 0x496172 in memalign /src/llvm/projects/compiler-rt/lib/asan/asan_malloc_linux.cc:178:3
+    #1 0x4cb4bc in Codec::allocFrame() /src/libmpeg2/fuzzer/mpeg2_dec_fuzzer.cpp:296:43
+    #2 0x4cc442 in Codec::decodeFrame(unsigned char const*, unsigned long, unsigned long*) /src/libmpeg2/fuzzer/mpeg2_dec_fuzzer.cpp:381:5
+    #3 0x4cc968 in LLVMFuzzerTestOneInput /src/libmpeg2/fuzzer/mpeg2_dec_fuzzer.cpp:408:18
+    #4 0x4c7f3a in ExecuteFilesOnyByOne /src/libfuzzer/afl/afl_driver.cpp:216:5
+    #5 0x4c7f3a in main /src/libfuzzer/afl/afl_driver.cpp:253
+    #6 0x14dfddbf082f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+
+DEDUP_TOKEN: memalign--Codec::allocFrame()--Codec::decodeFrame(unsigned char const*, unsigned long, unsigned long*)
+SUMMARY: AddressSanitizer: heap-buffer-overflow /src/libmpeg2/common/impeg2_format_conv.c:391:24 in impeg2_fmt_conv_yuv420p_to_yuv420sp_uv
+Shadow bytes around the buggy address:
+  0x029c7bd66d00: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x029c7bd66d10: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x029c7bd66d20: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x029c7bd66d30: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x029c7bd66d40: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x029c7bd66d50: 00 00 00 00 00 00 00 00[fa]fa fa fa fa fa fa fa
+  0x029c7bd66d60: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x029c7bd66d70: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x029c7bd66d80: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x029c7bd66d90: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x029c7bd66da0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+  Shadow gap:              cc
+==1583717==ABORTING

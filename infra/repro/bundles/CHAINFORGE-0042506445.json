@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042506445",
+  "chain": "CWE-1284->CWE-787",
+  "project": "ffmpeg",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42506445",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "d6b2357eddca392ee137cb2a92ff178a0a7d0cce",
+      "fix_commits": [
+        "d6b2357eddca392ee137cb2a92ff178a0a7d0cce"
+      ],
+      "repo": "https://git.ffmpeg.org/ffmpeg.git"
+    },
+    "patch": "From d6b2357eddca392ee137cb2a92ff178a0a7d0cce Mon Sep 17 00:00:00 2001\nFrom: Michael Niedermayer <michael@niedermayer.cc>\nDate: Sun, 26 Dec 2021 11:18:51 +0100\nSubject: [PATCH] avcodec/speexdec: Consider mode in frame size check\n\nNo speex samples with non default frame sizes are known (to me)\nthe official speexenc seems to only generate the 3 default ones.\nThus it may be that the fuzzer samples where the first non default\nvalues encountered by the decoder.\nPossibly the \"<\" should be \"!=\"\n\nFixes: out of array access\nFixes: 42821/clusterfuzz-testcase-minimized-ffmpeg_AV_CODEC_ID_SPEEX_fuzzer-5640695772217344\n\nFound-by: continuous fuzzing process https://github.com/google/oss-fuzz/tree/master/projects/ffmpeg\nSigned-off-by: Michael Niedermayer <michael@niedermayer.cc>\n---\n libavcodec/speexdec.c | 2 +-\n 1 file changed, 1 insertion(+), 1 deletion(-)\n\ndiff --git a/libavcodec/speexdec.c b/libavcodec/speexdec.c\nindex 1c33607..dcbdf5e 100644\n--- a/libavcodec/speexdec.c\n+++ b/libavcodec/speexdec.c\n@@ -1419,7 +1419,7 @@ static int parse_speex_extradata(AVCodecContext *avctx,\n         return AVERROR_INVALIDDATA;\n     s->bitrate = bytestream_get_le32(&buf);\n     s->frame_size = bytestream_get_le32(&buf);\n-    if (s->frame_size < NB_FRAME_SIZE)\n+    if (s->frame_size < NB_FRAME_SIZE << s->mode)\n         return AVERROR_INVALIDDATA;\n     s->vbr = bytestream_get_le32(&buf);\n     s->frames_per_packet = bytestream_get_le32(&buf);\n-- \n2.55.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42506445-vul",
+      "digest": "sha256:99bf1ed4952914c7fd2a3e5a5a1d53f8a269437a9a15c9d79a3a696e2503b1f5"
+    },
+    "patched": {
+      "ref": "n132/arvo:42506445-fix",
+      "digest": "sha256:98c0aa732fcadd1540deef0c8fc5a16a26923d1034bb40405eb0934be03c3687"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/ffmpeg/libavcodec/speexdec.c:1076",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/ffmpeg/libavcodec/speexdec.c:1076"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

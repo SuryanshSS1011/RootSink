@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042535986",
+  "chain": "CWE-1284->CWE-787",
+  "project": "FreeRDP",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42535986",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "f422ea2e56e96cadec4e1e53a9e9185e7dc871f6",
+      "fix_commits": [
+        "f422ea2e56e96cadec4e1e53a9e9185e7dc871f6"
+      ],
+      "repo": "https://github.com/FreeRDP/FreeRDP"
+    },
+    "patch": "diff --git a/libfreerdp/core/gcc.c b/libfreerdp/core/gcc.c\nindex 1e3b32632fe2..4bce4e2b649b 100644\n--- a/libfreerdp/core/gcc.c\n+++ b/libfreerdp/core/gcc.c\n@@ -1932,6 +1932,13 @@ BOOL gcc_read_server_network_data(wStream* s, rdpMcs* mcs)\n \tif (!Stream_CheckAndLogRequiredLengthOfSize(TAG, s, channelCount, 2ull))\n \t\treturn FALSE;\n \n+\tif (mcs->channelMaxCount < parsedChannelCount)\n+\t{\n+\t\tWLog_ERR(TAG, \"requested %\" PRIu32 \" channels > channelMaxCount %\" PRIu16,\n+\t\t         mcs->channelCount, mcs->channelMaxCount);\n+\t\treturn FALSE;\n+\t}\n+\n \tfor (UINT32 i = 0; i < parsedChannelCount; i++)\n \t{\n \t\trdpMcsChannel* channel = &mcs->channels[i];\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42535986-vul",
+      "digest": "sha256:919b600436d2b02a708253dabfdd8e1ba14f5c3e809863ed7f868a9c97aaf866"
+    },
+    "patched": {
+      "ref": "n132/arvo:42535986-fix",
+      "digest": "sha256:40d05e25a66223afffdd97165535cfdd1a35b332093769097af209d864f9cd4f"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/FreeRDP/libfreerdp/core/gcc.c:1927",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/FreeRDP/libfreerdp/core/gcc.c:1927"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

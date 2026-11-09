@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042506530",
+  "chain": "CWE-416->CWE-125",
+  "project": "assimp",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42506530",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "a4274930e496f8cc905329b49dfe29ff424cb175",
+      "fix_commits": [
+        "a4274930e496f8cc905329b49dfe29ff424cb175"
+      ],
+      "repo": "https://github.com/assimp/assimp"
+    },
+    "patch": "From a4274930e496f8cc905329b49dfe29ff424cb175 Mon Sep 17 00:00:00 2001\nFrom: sashashura <93376818+sashashura@users.noreply.github.com>\nDate: Sat, 16 Jul 2022 13:46:50 +0100\nSubject: [PATCH] Fixes Heap-use-after-free in\n Assimp::DXFImporter::ExpandBlockReferences\n\n---\n code/AssetLib/DXF/DXFLoader.cpp | 4 +++-\n 1 file changed, 3 insertions(+), 1 deletion(-)\n\ndiff --git a/code/AssetLib/DXF/DXFLoader.cpp b/code/AssetLib/DXF/DXFLoader.cpp\nindex 6b2dbbe..2f1ec35 100644\n--- a/code/AssetLib/DXF/DXFLoader.cpp\n+++ b/code/AssetLib/DXF/DXFLoader.cpp\n@@ -368,7 +368,9 @@ void DXFImporter::ExpandBlockReferences(DXF::Block& bl,const DXF::BlockMap& bloc\n         // XXX this would be the place to implement recursive expansion if needed.\n         const DXF::Block& bl_src = *(*it).second;\n \n-        for (std::shared_ptr<const DXF::PolyLine> pl_in : bl_src.lines) {\n+        const size_t size = bl_src.lines.size(); // the size may increase in the loop\n+        for (size_t i = 0; i < size; ++i) {\n+            std::shared_ptr<const DXF::PolyLine> pl_in = bl_src.lines[i];\n             if (!pl_in) {\n                 ASSIMP_LOG_ERROR(\"DXF: PolyLine instance is nullptr, skipping.\");\n                 continue;\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42506530-vul",
+      "digest": "sha256:ed28c810b7d513617741f934223e3a5b859fe3c4ec6c353ef29a86e186485ab4"
+    },
+    "patched": {
+      "ref": "n132/arvo:42506530-fix",
+      "digest": "sha256:d57bed91e717f8ddc6e6eaa7dc1ad979bce0ffb942881853c27410851c15daac"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/assimp/code/AssetLib/DXF/DXFLoader.cpp:380",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/assimp/code/AssetLib/DXF/DXFLoader.cpp:380"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

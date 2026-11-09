@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042473403",
+  "chain": "CWE-1285->CWE-125",
+  "project": "readstat",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42473403",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "4ca763561bcb69a2e736c8ad1e1794e85cec9084",
+      "fix_commits": [
+        "4ca763561bcb69a2e736c8ad1e1794e85cec9084"
+      ],
+      "repo": "https://github.com/WizardMac/ReadStat"
+    },
+    "patch": "diff --git a/src/spss/readstat_sav_read.c b/src/spss/readstat_sav_read.c\nindex 3a6e1a80..3d94b513 100644\n--- a/src/spss/readstat_sav_read.c\n+++ b/src/spss/readstat_sav_read.c\n@@ -1174,6 +1174,11 @@ static readstat_error_t sav_parse_long_string_missing_values_record(const void *\n         if (retval != READSTAT_OK)\n             goto cleanup;\n \n+        if (data_ptr == data_end) {\n+            retval = READSTAT_ERROR_PARSE;\n+            goto cleanup;\n+        }\n+\n         char n_missing_values = *data_ptr++;\n         if (n_missing_values < 1 || n_missing_values > 3) {\n             retval = READSTAT_ERROR_PARSE;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42473403-vul",
+      "digest": "sha256:9aac422a5e6a2b83ac14bb7559c5cadb0e6ee0ce2725df4f61e8fecdd817a62c"
+    },
+    "patched": {
+      "ref": "n132/arvo:42473403-fix",
+      "digest": "sha256:7ee6947e335dc2bdb95d5f4537656ebfd4eaaa3679e8d22efa6833457098f43a"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/readstat/src/spss/readstat_sav_read.c:1177",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/readstat/src/spss/readstat_sav_read.c:1177"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

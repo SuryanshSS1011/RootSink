@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-964507694",
+  "chain": "CWE-456->CWE-457",
+  "project": "ndpi",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42502936",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/ntop/nDPI/commit/6e649e0cb6d45d72600198c25f4069f4aeb1e121",
+      "fix_commits": [
+        "6e649e0cb6d45d72600198c25f4069f4aeb1e121"
+      ],
+      "repo": "https://github.com/ntop/nDPI"
+    },
+    "patch": "diff --git a/src/lib/ndpi_main.c b/src/lib/ndpi_main.c\nindex 06edfa28a12..68729e07174 100644\n--- a/src/lib/ndpi_main.c\n+++ b/src/lib/ndpi_main.c\n@@ -7517,10 +7517,9 @@ int ndpi_check_dga_name(struct ndpi_detection_module_struct *ndpi_str,\n \n     if(isdigit(name[0])) {\n       struct in_addr ip_addr;\n-      char buf[22];\n       \n-      ip_addr.s_addr = inet_addr(buf);\n-      if(strcmp(inet_ntoa(ip_addr), buf) == 0)\n+      ip_addr.s_addr = inet_addr(name);\n+      if(strcmp(inet_ntoa(ip_addr), name) == 0)\n \treturn(0); /* Ignore numeric IPs */\n     }\n     \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42502936-vul",
+      "digest": "sha256:ad105d202bf7c15443e427f4170695fbe81d02af7f965e07f4f78536ac608f52"
+    },
+    "patched": {
+      "ref": "n132/arvo:42502936-fix",
+      "digest": "sha256:92edca0687a49e3bf5943f3e150973723935fde7b6bd813e3e8b4faecdec604e"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/ndpi/src/lib/ndpi_main.c:7523",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/ndpi/src/lib/ndpi_main.c:7523"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

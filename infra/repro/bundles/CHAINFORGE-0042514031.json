@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042514031",
+  "chain": "CWE-416->CWE-787",
+  "project": "aom",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42514031",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "8cc8160a5cb1e2e79db9f010896d70656981f409",
+      "fix_commits": [
+        "8cc8160a5cb1e2e79db9f010896d70656981f409"
+      ],
+      "repo": "https://aomedia.googlesource.com/aom"
+    },
+    "patch": "diff --git a/av1/common/av1_common_int.h b/av1/common/av1_common_int.h\nindex a7c20f5..fd2ec06 100644\n--- a/av1/common/av1_common_int.h\n+++ b/av1/common/av1_common_int.h\n@@ -1219,26 +1219,21 @@\n   const int buf_cols = buf->mi_cols;\n   const CommonModeInfoParams *const mi_params = &cm->mi_params;\n \n-  if (buf->seg_map == NULL || buf_rows != mi_params->mi_rows ||\n+  if (buf->mvs == NULL || buf_rows != mi_params->mi_rows ||\n       buf_cols != mi_params->mi_cols) {\n+    aom_free(buf->mvs);\n     buf->mi_rows = mi_params->mi_rows;\n     buf->mi_cols = mi_params->mi_cols;\n+    CHECK_MEM_ERROR(cm, buf->mvs,\n+                    (MV_REF *)aom_calloc(((mi_params->mi_rows + 1) >> 1) *\n+                                             ((mi_params->mi_cols + 1) >> 1),\n+                                         sizeof(*buf->mvs)));\n     aom_free(buf->seg_map);\n     CHECK_MEM_ERROR(\n         cm, buf->seg_map,\n         (uint8_t *)aom_calloc(mi_params->mi_rows * mi_params->mi_cols,\n                               sizeof(*buf->seg_map)));\n   }\n-  if (buf->mvs == NULL || buf_rows != mi_params->mi_rows ||\n-      buf_cols != mi_params->mi_cols) {\n-    if (cm->seq_params->order_hint_info.enable_ref_frame_mvs) {\n-      aom_free(buf->mvs);\n-      CHECK_MEM_ERROR(cm, buf->mvs,\n-                      (MV_REF *)aom_calloc(((mi_params->mi_rows + 1) >> 1) *\n-                                               ((mi_params->mi_cols + 1) >> 1),\n-                                           sizeof(*buf->mvs)));\n-    }\n-  }\n \n   const int mem_size =\n       ((mi_params->mi_rows + MAX_MIB_SIZE) >> 1) * (mi_params->mi_stride >> 1);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42514031-vul",
+      "digest": "sha256:ace4fa0b012ca6fe4d233ba5aed1388c46c7fe0b5e87465bfefb913fdecba30c"
+    },
+    "patched": {
+      "ref": "n132/arvo:42514031-fix",
+      "digest": "sha256:35a70b962363e3d653fff5b70e9bdf80d3ba162613750a456b67916e457aea3b"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/aom/av1/decoder/decodemv.c:1558",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/aom/av1/decoder/decodemv.c:1558"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

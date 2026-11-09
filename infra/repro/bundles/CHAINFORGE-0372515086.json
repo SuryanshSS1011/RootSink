@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0372515086",
+  "chain": "CWE-416->CWE-787",
+  "project": "h3",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "372515086",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "a99f03e4d7b30169eb835db9844aba3a7c2e2827",
+      "fix_commits": [
+        "a99f03e4d7b30169eb835db9844aba3a7c2e2827"
+      ],
+      "repo": "https://github.com/uber/h3"
+    },
+    "patch": "diff --git a/src/h3lib/lib/polyfill.c b/src/h3lib/lib/polyfill.c\nindex 6269aaef3e..5b8220f899 100644\n--- a/src/h3lib/lib/polyfill.c\n+++ b/src/h3lib/lib/polyfill.c\n@@ -508,7 +508,8 @@ void iterStepPolygonCompact(IterCellsPolygonCompact *iter) {\n                 // For overlap, we've already checked for center point inclusion\n                 // above; if that failed, we only need to check for line\n                 // intersection\n-                else if (mode == CONTAINMENT_OVERLAPPING &&\n+                else if ((mode == CONTAINMENT_OVERLAPPING ||\n+                          mode == CONTAINMENT_OVERLAPPING_BBOX) &&\n                          cellBoundaryCrossesPolygon(\n                              iter->_polygon, iter->_bboxes, &boundary, &bbox)) {\n                     // Set to next output\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:372515086-vul",
+      "digest": "sha256:76db5f50de7fc5201ac2c2cd27229944fc076a9aaf9ca2a468390c5125613bf6"
+    },
+    "patched": {
+      "ref": "n132/arvo:372515086-fix",
+      "digest": "sha256:a4d49aadcf8c636d2a6e4843b0c534d764b8f81ed9f207461977ebbf62d1db87"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/h3/src/h3lib/lib/polyfill.c:720",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/h3/src/h3lib/lib/polyfill.c:720"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

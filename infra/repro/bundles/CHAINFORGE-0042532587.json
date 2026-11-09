@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042532587",
+  "chain": "CWE-1284->CWE-125",
+  "project": "gpac",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42532587",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "e95b4f1815c6e70a92953d464eab30c8457a9ad8",
+      "fix_commits": [
+        "e95b4f1815c6e70a92953d464eab30c8457a9ad8"
+      ],
+      "repo": "https://github.com/gpac/gpac"
+    },
+    "patch": "diff --git a/src/filters/reframe_mpgvid.c b/src/filters/reframe_mpgvid.c\nindex 246ca8abf8..59a8097cc7 100644\n--- a/src/filters/reframe_mpgvid.c\n+++ b/src/filters/reframe_mpgvid.c\n@@ -427,7 +427,7 @@ static void mpgviddmx_check_pid(GF_Filter *filter, GF_MPGVidDmxCtx *ctx, u32 vos\n \t\t\tchar *frame = dcfg;\n \t\t\twhile ((i+3<vosh_size)  && ((frame[i]!=0) || (frame[i+1]!=0) || (frame[i+2]!=1))) i++;\n \t\t\tif (i+4>=vosh_size) break;\n-\t\t\tif (strncmp(frame+i+4, \"DivX\", 4)) {\n+\t\t\tif (i+8 < vosh_size && strncmp(frame+i+4, \"DivX\", 4)) {\n \t\t\t\ti += 4;\n \t\t\t\tcontinue;\n \t\t\t}\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42532587-vul",
+      "digest": "sha256:34aad701e563078b7b66c7aebc37906c67aa1d544fa67a5c6cad8bf6c7309268"
+    },
+    "patched": {
+      "ref": "n132/arvo:42532587-fix",
+      "digest": "sha256:746a21fed64d2c49d9096eb9dba867358ab0a3f9af02de65873a340e24b16e14"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/gpac/src/filters/reframe_mpgvid.c:428",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/gpac/src/filters/reframe_mpgvid.c:428"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

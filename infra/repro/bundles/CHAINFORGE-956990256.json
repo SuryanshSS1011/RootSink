@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-956990256",
+  "chain": "CWE-129->CWE-787",
+  "project": "wireshark",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42538273",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/wireshark/wireshark/commit/8bf069c77402a840cae0cd63dfcd9da7264a9201",
+      "fix_commits": [
+        "8bf069c77402a840cae0cd63dfcd9da7264a9201"
+      ],
+      "repo": "https://github.com/wireshark/wireshark"
+    },
+    "patch": "diff --git a/epan/dissectors/packet-dof.c b/epan/dissectors/packet-dof.c\nindex 28ad0b76bf3..6421075aa6c 100644\n--- a/epan/dissectors/packet-dof.c\n+++ b/epan/dissectors/packet-dof.c\n@@ -3735,7 +3735,6 @@ static const uint8_t OALString_HexChar[] = { '0', '1', '2', '3', '4', '5', '6',\n #define ObjectID_DataToStringLength( data, dataSize ) ObjectID_DataToString( (data), (dataSize), NULL )\n #define OALString_HexDigitToChar(c)     (OALString_HexChar[(c)])\n #define DOFObjectIDAttribute_IsValid( attribute ) ((attribute).id < DOFOBJECTIDATTRIBUTE_INVALID)\n-#define DOFOBJECTID_HEADER_SIZE     (offsetof( DOFObjectID_t, oid ))\n #define DOFObjectIDAttribute_GetValueSize( attribute ) ((attribute).dataSize)\n #define DOFObjectIDAttribute_GetValue( attribute ) ((attribute).data)\n #define DOFObjectIDAttribute_GetType( attribute ) ((DOFObjectIDAttributeType)(attribute).id)\n@@ -3774,7 +3773,7 @@ typedef struct DOFObjectID_t\n {\n     uint32_t refCount;\n     uint16_t len;                /* Actual length of oid's wire representation. Max is 32707: 4 + 1 + 63 + (127 * 257). */\n-    uint8_t oid[1];             /* Extends beyond end of this defined structure, so oid MUST be last structure member! */\n+    uint8_t oid[];               /* Extends beyond end of this defined structure, so oid MUST be last structure member! */\n } DOFObjectID_t;\n \n typedef DOFObjectID_t *DOFObjectID;\n@@ -4047,7 +4046,7 @@ static DOFObjectID DOFObjectID_Create_Unmarshal(uint32_t *length, const uint8_t\n                     /* Legal OID described at buffer must have enough buffer bytes, final check. */\n                     if (len >= computedSize)\n                     {\n-                        DOFObjectID newObjID = (DOFObjectID)wmem_alloc0(wmem_packet_scope(), DOFOBJECTID_HEADER_SIZE + computedSize + 1);\n+                        DOFObjectID newObjID = (DOFObjectID)wmem_alloc0(wmem_packet_scope(), sizeof(DOFObjectID_t) + (sizeof(uint8_t) * (computedSize + 1)));\n                         /* Adds space for null-terminator, just in case. */\n \n                         *length = computedSize;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42538273-vul",
+      "digest": "sha256:da99ad47195e5277abf0b66c97d4b95f7b0ff0012f10a51500ede35267e1766d"
+    },
+    "patched": {
+      "ref": "n132/arvo:42538273-fix",
+      "digest": "sha256:bad8b4bba52c6757f27f1fb6e3e8ce3560bf96e6b144a055610b88e1e058c693"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "crash_site": "/src/wireshark/epan/dissectors/packet-dof.c:4058",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 129,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "site": "/src/wireshark/epan/dissectors/packet-dof.c:4058"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

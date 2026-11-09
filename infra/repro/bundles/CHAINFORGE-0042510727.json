@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042510727",
+  "chain": "CWE-20->CWE-125",
+  "project": "opensc",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42510727",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "fdf343bfcd80d8041f6d199492cf5508dec7b2f8",
+      "fix_commits": [
+        "fdf343bfcd80d8041f6d199492cf5508dec7b2f8"
+      ],
+      "repo": "https://github.com/OpenSC/OpenSC"
+    },
+    "patch": "diff --git a/src/libopensc/card-sc-hsm.c b/src/libopensc/card-sc-hsm.c\nindex ee3073dbea..b39e88b643 100644\n--- a/src/libopensc/card-sc-hsm.c\n+++ b/src/libopensc/card-sc-hsm.c\n@@ -924,7 +924,10 @@ static int sc_hsm_list_files(sc_card_t *card, u8 * buf, size_t buflen)\n \t}\n \tLOG_TEST_RET(card->ctx, r, \"ENUMERATE OBJECTS APDU transmit failed\");\n \n-\tmemcpy(buf, recvbuf, buflen);\n+\tif (buflen < apdu.resplen)\n+\t\tmemcpy(buf, recvbuf, buflen);\n+\telse\n+\t\tmemcpy(buf, recvbuf, apdu.resplen);\n \n \tLOG_FUNC_RETURN(card->ctx, apdu.resplen);\n }\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42510727-vul",
+      "digest": "sha256:151b94a3f92f29370091a61db9294ba2d2005d2d470045b7d1f14a7e75967f53"
+    },
+    "patched": {
+      "ref": "n132/arvo:42510727-fix",
+      "digest": "sha256:fe4169aaa19119ca0701018463ca3fbb272100050480e39b41d6f4d1979bb0d6"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/opensc/src/libopensc/card-sc-hsm.c:927",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/opensc/src/libopensc/card-sc-hsm.c:927"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

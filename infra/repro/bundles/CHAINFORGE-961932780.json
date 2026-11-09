@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-961932780",
+  "chain": "CWE-456->CWE-457",
+  "project": "curl",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42477426",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/curl/curl/commit/84ced9389e1a7f576812e0675b37056331c4dbcd",
+      "fix_commits": [
+        "84ced9389e1a7f576812e0675b37056331c4dbcd"
+      ],
+      "repo": "https://github.com/curl/curl"
+    },
+    "patch": "diff --git a/lib/connect.c b/lib/connect.c\nindex aec397296209..79b8094e726b 100644\n--- a/lib/connect.c\n+++ b/lib/connect.c\n@@ -628,7 +628,8 @@ void Curl_persistconninfo(struct connectdata *conn)\n \n /* retrieves ip address and port from a sockaddr structure.\n    note it calls Curl_inet_ntop which sets errno on fail, not SOCKERRNO. */\n-bool Curl_addr2string(struct sockaddr *sa, char *addr, long *port)\n+bool Curl_addr2string(struct sockaddr *sa, curl_socklen_t salen,\n+                      char *addr, long *port)\n {\n   struct sockaddr_in *si = NULL;\n #ifdef ENABLE_IPV6\n@@ -636,6 +637,8 @@ bool Curl_addr2string(struct sockaddr *sa, char *addr, long *port)\n #endif\n #if defined(HAVE_SYS_UN_H) && defined(AF_UNIX)\n   struct sockaddr_un *su = NULL;\n+#else\n+  (void)salen;\n #endif\n \n   switch(sa->sa_family) {\n@@ -661,8 +664,12 @@ bool Curl_addr2string(struct sockaddr *sa, char *addr, long *port)\n #endif\n #if defined(HAVE_SYS_UN_H) && defined(AF_UNIX)\n     case AF_UNIX:\n-      su = (struct sockaddr_un*)sa;\n-      msnprintf(addr, MAX_IPADR_LEN, \"%s\", su->sun_path);\n+      if(salen > sizeof(sa_family_t)) {\n+        su = (struct sockaddr_un*)sa;\n+        msnprintf(addr, MAX_IPADR_LEN, \"%s\", su->sun_path);\n+      }\n+      else\n+        addr[0] = 0; /* socket with no name */\n       *port = 0;\n       return TRUE;\n #endif\n@@ -690,10 +697,11 @@ void Curl_updateconninfo(struct connectdata *conn, curl_socket_t sockfd)\n     char buffer[STRERROR_LEN];\n     struct Curl_sockaddr_storage ssrem;\n     struct Curl_sockaddr_storage ssloc;\n-    curl_socklen_t len;\n+    curl_socklen_t plen;\n+    curl_socklen_t slen;\n #ifdef HAVE_GETPEERNAME\n-    len = sizeof(struct Curl_sockaddr_storage);\n-    if(getpeername(sockfd, (struct sockaddr*) &ssrem, &len)) {\n+    plen = sizeof(struct Curl_sockaddr_storage);\n+    if(getpeername(sockfd, (struct sockaddr*) &ssrem, &plen)) {\n       int error = SOCKERRNO;\n       failf(data, \"getpeername() failed with errno %d: %s\",\n             error, Curl_strerror(error, buffer, sizeof(buffer)));\n@@ -701,9 +709,9 @@ void Curl_updateconninfo(struct connectdata *conn, curl_socket_t sockfd)\n     }\n #endif\n #ifdef HAVE_GETSOCKNAME\n-    len = sizeof(struct Curl_sockaddr_storage);\n+    slen = sizeof(struct Curl_sockaddr_storage);\n     memset(&ssloc, 0, sizeof(ssloc));\n-    if(getsockname(sockfd, (struct sockaddr*) &ssloc, &len)) {\n+    if(getsockname(sockfd, (struct sockaddr*) &ssloc, &slen)) {\n       int error = SOCKERRNO;\n       failf(data, \"getsockname() failed with errno %d: %s\",\n             error, Curl_strerror(error, buffer, sizeof(buffer)));\n@@ -711,7 +719,7 @@ void Curl_updateconninfo(struct connectdata *conn, curl_socket_t sockfd)\n     }\n #endif\n #ifdef HAVE_GETPEERNAME\n-    if(!Curl_addr2string((struct sockaddr*)&ssrem,\n+    if(!Curl_addr2string((struct sockaddr*)&ssrem, plen,\n                          conn->primary_ip, &conn->primary_port)) {\n       failf(data, \"ssrem inet_ntop() failed with errno %d: %s\",\n             errno, Curl_strerror(errno, buffer, sizeof(buffer)));\n@@ -720,7 +728,7 @@ void Curl_updateconninfo(struct connectdata *conn, curl_socket_t sockfd)\n     memcpy(conn->ip_addr_str, conn->primary_ip, MAX_IPADR_LEN);\n #endif\n #ifdef HAVE_GETSOCKNAME\n-    if(!Curl_addr2string((struct sockaddr*)&ssloc,\n+    if(!Curl_addr2string((struct sockaddr*)&ssloc, slen,\n                          conn->local_ip, &conn->local_port)) {\n       failf(data, \"ssloc inet_ntop() failed with errno %d: %s\",\n             errno, Curl_strerror(errno, buffer, sizeof(buffer)));\n@@ -1049,7 +1057,7 @@ static CURLcode singleipconnect(struct connectdata *conn,\n     return CURLE_OK;\n \n   /* store remote address and port used in this connection attempt */\n-  if(!Curl_addr2string((struct sockaddr*)&addr.sa_addr,\n+  if(!Curl_addr2string((struct sockaddr*)&addr.sa_addr, addr.addrlen,\n                        ipaddress, &port)) {\n     /* malformed address or bug in inet_ntop, try next address */\n     failf(data, \"sa_addr inet_ntop() failed with errno %d: %s\",\ndiff --git a/lib/connect.h b/lib/connect.h\nindex e44c4a701dd3..b23085a98a86 100644\n--- a/lib/connect.h\n+++ b/lib/connect.h\n@@ -51,7 +51,8 @@ timediff_t Curl_timeleft(struct Curl_easy *data,\n curl_socket_t Curl_getconnectinfo(struct Curl_easy *data,\n                                   struct connectdata **connp);\n \n-bool Curl_addr2string(struct sockaddr *sa, char *addr, long *port);\n+bool Curl_addr2string(struct sockaddr *sa, curl_socklen_t salen,\n+                      char *addr, long *port);\n \n /*\n  * Check if a connection seems to be alive.\ndiff --git a/lib/vquic/ngtcp2.c b/lib/vquic/ngtcp2.c\nindex d98be181c594..6b3d53ee01a4 100644\n--- a/lib/vquic/ngtcp2.c\n+++ b/lib/vquic/ngtcp2.c\n@@ -541,12 +541,11 @@ CURLcode Curl_quic_connect(struct connectdata *conn,\n   uint8_t paramsbuf[64];\n   ngtcp2_transport_params params;\n   ssize_t nwrite;\n-  (void)addrlen;\n \n   qs->conn = conn;\n \n   /* extract the used address as a string */\n-  if(!Curl_addr2string((struct sockaddr*)addr, ipbuf, &port)) {\n+  if(!Curl_addr2string((struct sockaddr*)addr, addrlen, ipbuf, &port)) {\n     char buffer[STRERROR_LEN];\n     failf(data, \"ssrem inet_ntop() failed with errno %d: %s\",\n           errno, Curl_strerror(errno, buffer, sizeof(buffer)));\ndiff --git a/tests/unit/unit1607.c b/tests/unit/unit1607.c\nindex 45860422983f..a8b0331ce3af 100644\n--- a/tests/unit/unit1607.c\n+++ b/tests/unit/unit1607.c\n@@ -150,7 +150,7 @@ UNITTEST_START\n       if(tests[i].address[j] == &skip)\n         continue;\n \n-      if(addr && !Curl_addr2string(addr->ai_addr,\n+      if(addr && !Curl_addr2string(addr->ai_addr, addr->ai_addrlen,\n                                    ipaddress, &port)) {\n         fprintf(stderr, \"%s:%d tests[%d] failed. getaddressinfo failed.\\n\",\n                 __FILE__, __LINE__, i);\ndiff --git a/tests/unit/unit1609.c b/tests/unit/unit1609.c\nindex d919c9ea95dc..8223a147cd76 100644\n--- a/tests/unit/unit1609.c\n+++ b/tests/unit/unit1609.c\n@@ -150,7 +150,7 @@ UNITTEST_START\n       if(!addr && !tests[i].address[j])\n         break;\n \n-      if(addr && !Curl_addr2string(addr->ai_addr,\n+      if(addr && !Curl_addr2string(addr->ai_addr, addr->ai_addrlen,\n                                    ipaddress, &port)) {\n         fprintf(stderr, \"%s:%d tests[%d] failed. Curl_addr2string failed.\\n\",\n                 __FILE__, __LINE__, i);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42477426-vul",
+      "digest": "sha256:fd69cfe08251060648e0c776e159ac9f57b12b897ee90efc4ed94b233bd0b757"
+    },
+    "patched": {
+      "ref": "n132/arvo:42477426-fix",
+      "digest": "sha256:7c9795a3150c911aa030615392a10494b2b267213eb906590bd26824e93e779e"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/curl/lib/mprintf.c:827",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/curl/lib/mprintf.c:827"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,35 @@
+diff --git a/src/kcompressiondevice_p.h b/src/kcompressiondevice_p.h
+index 3048480fe308bff9a7cfa6b3e4c6e020e20dcdaa..2d7aa292b9898e41d91e9dea96d8359c3ed12a12 100644
+--- a/src/kcompressiondevice_p.h
++++ b/src/kcompressiondevice_p.h
+@@ -20,5 +20,6 @@
+ #define __kcompressiondevice_p_h
+ 
+ #define BUFFER_SIZE 8*1024
++#define SEEK_BUFFER_SIZE 3*BUFFER_SIZE
+ 
+ #endif
+diff --git a/src/kcompressiondevice.cpp b/src/kcompressiondevice.cpp
+index 2138fb822aa694a832345aa7d1798f178bf0cad2..0bc7590028d7cd558a393a228efec5f2042fe6c8 100644
+--- a/src/kcompressiondevice.cpp
++++ b/src/kcompressiondevice.cpp
+@@ -246,9 +246,16 @@ bool KCompressionDevice::seek(qint64 pos)
+     }
+ 
+     //qCDebug(KArchiveLog) << "reading " << bytesToRead << " dummy bytes";
+-    QByteArray dummy(qMin(bytesToRead, qint64(3 * BUFFER_SIZE)), 0);
+-    const bool result = (read(dummy.data(), bytesToRead) == bytesToRead);
+-    return result;
++    QByteArray dummy(qMin(bytesToRead, qint64(SEEK_BUFFER_SIZE)), 0);
++    while (bytesToRead > 0) {
++        const qint64 bytesToReadThisTime = qMin(bytesToRead, qint64(dummy.size()));
++        const bool result = (read(dummy.data(), bytesToReadThisTime) == bytesToReadThisTime);
++        if (!result) {
++            return false;
++        }
++        bytesToRead -= bytesToReadThisTime;
++    }
++    return true;
+ }
+ 
+ bool KCompressionDevice::atEnd() const

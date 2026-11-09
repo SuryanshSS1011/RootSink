@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042482223",
+  "chain": "CWE-416->CWE-125",
+  "project": "extra-cmake-modules",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42482223",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "c9ebd3917e59192a9b8655c3dd150064a4ae98b4",
+      "fix_commits": [
+        "c9ebd3917e59192a9b8655c3dd150064a4ae98b4"
+      ],
+      "repo": "https://invent.kde.org/frameworks/extra-cmake-modules.git"
+    },
+    "patch": "diff --git a/toolchain/Android.cmake b/toolchain/Android.cmake\nindex 5c27db2959140cfefb417bcc62c8f873923af4cc..63b40e70b91aaeafa890c2a5efa15f0b4206a0df 100644\n--- a/toolchain/Android.cmake\n+++ b/toolchain/Android.cmake\n@@ -167,18 +167,24 @@ if (NOT CMAKE_ANDROID_STL_TYPE)\n     set(CMAKE_ANDROID_STL_TYPE c++_shared)\n endif()\n \n-include(${CMAKE_ROOT}/Modules/Platform/Android-Clang.cmake REQUIRED)\n-include(${CMAKE_ROOT}/Modules/Platform/Android-Initialize.cmake REQUIRED)\n+# let the Android NDK toolchain file do the actual work\n+set(ANDROID_PLATFORM \"android-${CMAKE_ANDROID_API}\")\n+set(ANDROID_STL ${CMAKE_ANDROID_STL_TYPE})\n+include(${CMAKE_ANDROID_NDK}/build/cmake/android.toolchain.cmake REQUIRED)\n+\n+# these aren't set yet at this point by the Android toolchain, but without\n+# those the find_package() call in ECMAndroidDeployQt will fail\n+set(CMAKE_FIND_LIBRARY_PREFIXES \"lib\")\n+set(CMAKE_FIND_LIBRARY_SUFFIXES \".so\" \".a\")\n+\n+# determine STL architecture, which is using a different format than ANDROID_ARCH_ABI\n+string(REGEX REPLACE \"-(clang)?([0-9].[0-9])?$\" \"\" ECM_ANDROID_STL_ARCH ${ANDROID_TOOLCHAIN_NAME})\n \n if (NOT DEFINED ECM_ADDITIONAL_FIND_ROOT_PATH)\n     SET(ECM_ADDITIONAL_FIND_ROOT_PATH ${CMAKE_PREFIX_PATH})\n endif()\n \n-SET(CMAKE_FIND_ROOT_PATH ${CMAKE_ANDROID_NDK} ${CMAKE_ANDROID_NDK}/sysroot ${CMAKE_SYSROOT} ${ECM_ADDITIONAL_FIND_ROOT_PATH})\n-SET(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)\n-set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)\n-set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)\n-set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE ONLY)\n+LIST(APPEND CMAKE_FIND_ROOT_PATH ${ECM_ADDITIONAL_FIND_ROOT_PATH})\n \n #we want executables to be shared libraries, hooks will invoke the exported cmake function\n set(CMAKE_CXX_LINK_EXECUTABLE\ndiff --git a/toolchain/ECMAndroidDeployQt.cmake b/toolchain/ECMAndroidDeployQt.cmake\nindex e565fac441de33e5bc4003e4cbb08b72d652ded7..1121dbfd01aadef5bb74b01f771dedb10c3ec8e7 100644\n--- a/toolchain/ECMAndroidDeployQt.cmake\n+++ b/toolchain/ECMAndroidDeployQt.cmake\n@@ -3,7 +3,11 @@ find_package(Qt5Core REQUIRED)\n \n function(ecm_androiddeployqt QTANDROID_EXPORTED_TARGET ECM_ADDITIONAL_FIND_ROOT_PATH)\n     set(EXPORT_DIR \"${CMAKE_BINARY_DIR}/${QTANDROID_EXPORTED_TARGET}_build_apk/\")\n-    set(EXECUTABLE_DESTINATION_PATH \"${EXPORT_DIR}/libs/${CMAKE_ANDROID_ARCH_ABI}/lib${QTANDROID_EXPORTED_TARGET}.so\")\n+    if (Qt5Core_VERSION VERSION_LESS 5.14.0)\n+        set(EXECUTABLE_DESTINATION_PATH \"${EXPORT_DIR}/libs/${CMAKE_ANDROID_ARCH_ABI}/lib${QTANDROID_EXPORTED_TARGET}.so\")\n+    else()\n+        set(EXECUTABLE_DESTINATION_PATH \"${EXPORT_DIR}/libs/${CMAKE_ANDROID_ARCH_ABI}/lib${QTANDROID_EXPORTED_TARGET}_${CMAKE_ANDROID_ARCH_ABI}.so\")\n+    endif()\n     set(QML_IMPORT_PATHS \"\")\n     foreach(prefix ${ECM_ADDITIONAL_FIND_ROOT_PATH})\n         # qmlimportscanner chokes on symlinks, so we need to resolve those first\n@@ -28,8 +32,14 @@ function(ecm_androiddeployqt QTANDROID_EXPORTED_TARGET ECM_ADDITIONAL_FIND_ROOT_\n             set(EXTRA_PREFIX_DIRS \"\\\"${prefix}\\\"\")\n         endif()\n     endforeach()\n+\n+    if (Qt5Core_VERSION VERSION_LESS 5.14.0)\n+        set(_deployment_file_template \"${_CMAKE_ANDROID_DIR}/deployment-file.json.in\")\n+    else()\n+        set(_deployment_file_template \"${_CMAKE_ANDROID_DIR}/deployment-file-qt514.json.in\")\n+    endif()\n     string(TOLOWER \"${CMAKE_HOST_SYSTEM_NAME}\" _LOWER_CMAKE_HOST_SYSTEM_NAME)\n-    configure_file(\"${_CMAKE_ANDROID_DIR}/deployment-file.json.in\" \"${CMAKE_BINARY_DIR}/${QTANDROID_EXPORTED_TARGET}-deployment.json.in1\")\n+    configure_file(\"${_deployment_file_template}\" \"${CMAKE_BINARY_DIR}/${QTANDROID_EXPORTED_TARGET}-deployment.json.in1\")\n     file(GENERATE OUTPUT \"${CMAKE_BINARY_DIR}/${QTANDROID_EXPORTED_TARGET}-deployment.json.in2\"\n                   INPUT  \"${CMAKE_BINARY_DIR}/${QTANDROID_EXPORTED_TARGET}-deployment.json.in1\")\n \ndiff --git a/toolchain/deployment-file-qt514.json.in b/toolchain/deployment-file-qt514.json.in\nnew file mode 100644\nindex 0000000000000000000000000000000000000000..ac069c4ddaa4ecab92985d56969ad528133441d0\n--- /dev/null\n+++ b/toolchain/deployment-file-qt514.json.in\n@@ -0,0 +1,18 @@\n+{\n+   \"qt\": \"@_qt5Core_install_prefix@\",\n+   \"sdk\": \"@ANDROID_SDK_ROOT@\",\n+   \"ndk\": \"@CMAKE_ANDROID_NDK@\",\n+   \"toolchain-prefix\": \"llvm\",\n+   \"tool-prefix\": \"llvm\",\n+   \"ndk-host\": \"@_LOWER_CMAKE_HOST_SYSTEM_NAME@-@CMAKE_HOST_SYSTEM_PROCESSOR@\",\n+   \"application-binary\": \"@QTANDROID_EXPORTED_TARGET@\",\n+   \"qml-root-path\": \"@CMAKE_SOURCE_DIR@\",\n+   @DEFINE_QML_IMPORT_PATHS@\n+   ##EXTRALIBS##\n+   ##EXTRAPLUGINS##\n+   \"android-package-source-directory\": \"$<TARGET_PROPERTY:create-apk-${QTANDROID_EXPORTED_TARGET},ANDROID_APK_DIR>\",\n+   \"stdcpp-path\": \"@CMAKE_SYSROOT@/usr/lib\",\n+   \"sdkBuildToolsRevision\": \"@ANDROID_SDK_BUILD_TOOLS_REVISION@\",\n+   \"extraPrefixDirs\": [ @EXTRA_PREFIX_DIRS@ ],\n+   \"architectures\": { \"@CMAKE_ANDROID_ARCH_ABI@\": \"@ECM_ANDROID_STL_ARCH@\" }\n+}\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42482223-vul",
+      "digest": "sha256:da49819fe10ece4935af531e68cc0b0b9eced1865918e8a0e4af6a48eafb99cb"
+    },
+    "patched": {
+      "ref": "n132/arvo:42482223-fix",
+      "digest": "sha256:274d02b31605dbee8fe5171c261e22232202ae91957ff4404e84ba9eab62c71f"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/karchive/src/ktar.cpp:270",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/karchive/src/ktar.cpp:270"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

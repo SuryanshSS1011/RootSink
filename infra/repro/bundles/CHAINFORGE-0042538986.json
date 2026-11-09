@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042538986",
+  "chain": "CWE-1284->CWE-787",
+  "project": "imagemagick",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42538986",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "4c52a8adc4d9a0f03d501021b3f751f5f02fe62e",
+      "fix_commits": [
+        "4c52a8adc4d9a0f03d501021b3f751f5f02fe62e"
+      ],
+      "repo": "https://github.com/imagemagick/imagemagick"
+    },
+    "patch": "diff --git a/coders/heic.c b/coders/heic.c\nindex df48726ce5d..19c0fbdb4d2 100644\n--- a/coders/heic.c\n+++ b/coders/heic.c\n@@ -336,6 +336,8 @@ static MagickBooleanType ParseHvcCAtom(HEICItemProp *prop, ExceptionInfo *except\n   p = prop->data;\n \n   size = prop->size;\n+  if (size >= MAX_HVCC_ATOM_SIZE)\n+    ThrowAndReturn(\"hvcC atom is too long\");\n   memcpy(buffer, prop->data, size);\n \n   pos = 22;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42538986-vul",
+      "digest": "sha256:87aad6891324a03c1b0350a3d09053490b6268551937fad4950c7dbdcf0336d2"
+    },
+    "patched": {
+      "ref": "n132/arvo:42538986-fix",
+      "digest": "sha256:feda36203c8cca316679f9577b1dc2f6b7f41748a2bde56f9b232d87fcf8b3a9"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/imagemagick/coders/heic.c:339",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/imagemagick/coders/heic.c:339"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

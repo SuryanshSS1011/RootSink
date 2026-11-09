@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0394905840",
+  "chain": "CWE-456->CWE-457",
+  "project": "cryptsetup",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "394905840",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "a2b2c6a8aeb67b7d943eb54072762259c79edab2",
+      "fix_commits": [
+        "a2b2c6a8aeb67b7d943eb54072762259c79edab2"
+      ],
+      "repo": "https://gitlab.com/cryptsetup/cryptsetup.git"
+    },
+    "patch": "diff --git a/lib/crypto_backend/memutils.c b/lib/crypto_backend/memutils.c\nindex 382f7f930fe602d59dc069ff6411dae0c994e901..4e440136d5752d0675edd726a4abff5294b7209f 100644\n--- a/lib/crypto_backend/memutils.c\n+++ b/lib/crypto_backend/memutils.c\n@@ -16,6 +16,13 @@\n #  endif\n #endif\n \n+/* Workaround for https://github.com/google/sanitizers/issues/1507 */\n+#if defined __has_feature\n+# if __has_feature (memory_sanitizer)\n+#   undef HAVE_EXPLICIT_BZERO\n+# endif\n+#endif\n+\n /* Memzero helper (memset on stack can be optimized out) */\n ATTR_NOINLINE ATTR_ZERO_REGS\n void crypt_backend_memzero(void *s, size_t n)\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:394905840-vul",
+      "digest": "sha256:48087dcf37ad3bc4918d9e293e32d58b312e767146d18f44b17b69c8084e421d"
+    },
+    "patched": {
+      "ref": "n132/arvo:394905840-fix",
+      "digest": "sha256:7c3b1a94b551e2eb1540b4b80a145323ceb57226e9dad602406f8d094ca2213e"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/cryptsetup/lib/volumekey.c:122",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/cryptsetup/lib/volumekey.c:122"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

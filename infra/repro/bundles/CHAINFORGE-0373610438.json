@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0373610438",
+  "chain": "CWE-20->CWE-125",
+  "project": "libarchive",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "373610438",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "82912103214506316bd9990d73f33d743d55f570",
+      "fix_commits": [
+        "82912103214506316bd9990d73f33d743d55f570"
+      ],
+      "repo": "https://github.com/libarchive/libarchive"
+    },
+    "patch": "diff --git a/libarchive/archive_read_support_format_tar.c b/libarchive/archive_read_support_format_tar.c\nindex 4aaf1b90ce..b1344ae57d 100644\n--- a/libarchive/archive_read_support_format_tar.c\n+++ b/libarchive/archive_read_support_format_tar.c\n@@ -1146,7 +1146,9 @@ header_gnu_longlink(struct archive_read *a, struct tar *tar,\n \tstruct archive_string linkpath;\n \tarchive_string_init(&linkpath);\n \terr = read_body_to_string(a, tar, &linkpath, h, unconsumed);\n-\tarchive_entry_set_link(entry, linkpath.s);\n+\tif (err == ARCHIVE_OK) {\n+\t\tarchive_entry_set_link(entry, linkpath.s);\n+\t}\n \tarchive_string_free(&linkpath);\n \treturn (err);\n }\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:373610438-vul",
+      "digest": "sha256:cdf1eb9067aac7fa9430cff4f398cac327ae6e180ccc075251ed9099c4303ef7"
+    },
+    "patched": {
+      "ref": "n132/arvo:373610438-fix",
+      "digest": "sha256:9c28647aa7403a6c52d2d217ae72262498d7768a0406829457e163e86f170868"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/libarchive/libarchive/archive_string.c:4096",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/libarchive/libarchive/archive_string.c:4096"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

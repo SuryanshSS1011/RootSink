@@ -1,0 +1,77 @@
+======================= INFO =========================
+This binary is built for AFL-fuzz.
+To run the target function on individual input(s) execute this:
+  /out/fuzz_process_packet < INPUT_FILE
+or
+  /out/fuzz_process_packet INPUT_FILE1 [INPUT_FILE2 ... ]
+To fuzz with afl-fuzz execute this:
+  afl-fuzz [afl-flags] /out/fuzz_process_packet [-N]
+afl-fuzz will run N iterations before re-spawning the process (default: 1000)
+======================================================
+Reading 184 bytes from /tmp/poc
+=================================================================
+==2895888==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x6100000000f9 at pc 0x0000005a413d bp 0x7ffc6b21bc60 sp 0x7ffc6b21bc58
+READ of size 4 at 0x6100000000f9 thread T0
+SCARINESS: 17 (4-byte-read-heap-buffer-overflow)
+    #0 0x5a413c in SHA1Transform /src/ndpi/src/lib/third_party/src/ndpi_sha1.c:115:5
+    #1 0x5a451d in SHA1Update /src/ndpi/src/lib/third_party/src/ndpi_sha1.c:195:13
+    #2 0x517cc2 in getSSCertificateFingerprint /src/ndpi/src/lib/protocols/tls.c:789:5
+    #3 0x51939e in tlsDetectProtocolFromCertificate /src/ndpi/src/lib/protocols/tls.c:1110:7
+    #4 0x51a4df in ndpi_search_tls_tcp_udp /src/ndpi/src/lib/protocols/tls.c:1482:8
+    #5 0x4e41a6 in check_ndpi_tcp_flow_func /src/ndpi/src/lib/ndpi_main.c:4020:4
+    #6 0x4ef283 in ndpi_check_flow_func /src/ndpi/src/lib/ndpi_main.c:4066:5
+    #7 0x4ef283 in ndpi_detection_process_packet /src/ndpi/src/lib/ndpi_main.c:4763:3
+    #8 0x4c876f in LLVMFuzzerTestOneInput /src/ndpi/fuzz/fuzz_process_packet.c:25:5
+    #9 0x5b921e in ExecuteFilesOnyByOne /src/libfuzzer/afl/afl_driver.cpp:216:5
+    #10 0x5b921e in main /src/libfuzzer/afl/afl_driver.cpp:253:12
+    #11 0x15260c9e582f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+    #12 0x41dd38 in _start (/out/fuzz_process_packet+0x41dd38)
+
+DEDUP_TOKEN: SHA1Transform--SHA1Update--getSSCertificateFingerprint
+0x6100000000f9 is located 1 bytes to the right of 184-byte region [0x610000000040,0x6100000000f8)
+allocated by thread T0 here:
+    #0 0x4c5bcd in operator new(unsigned long) /src/llvm/projects/compiler-rt/lib/asan/asan_new_delete.cpp:99:3
+    #1 0x5b91b7 in __libcpp_allocate /usr/local/bin/../include/c++/v1/new:253:10
+    #2 0x5b91b7 in allocate /usr/local/bin/../include/c++/v1/memory:1853:37
+    #3 0x5b91b7 in allocate /usr/local/bin/../include/c++/v1/memory:1570:21
+    #4 0x5b91b7 in __vallocate /usr/local/bin/../include/c++/v1/vector:994:37
+    #5 0x5b91b7 in vector /usr/local/bin/../include/c++/v1/vector:1125:9
+    #6 0x5b91b7 in ExecuteFilesOnyByOne /src/libfuzzer/afl/afl_driver.cpp:213:23
+    #7 0x5b91b7 in main /src/libfuzzer/afl/afl_driver.cpp:253:12
+    #8 0x15260c9e582f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+
+DEDUP_TOKEN: operator new(unsigned long)--__libcpp_allocate--allocate
+SUMMARY: AddressSanitizer: heap-buffer-overflow /src/ndpi/src/lib/third_party/src/ndpi_sha1.c:115:5 in SHA1Transform
+Shadow bytes around the buggy address:
+  0x0c207fff7fc0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c207fff7fd0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c207fff7fe0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c207fff7ff0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c207fff8000: fa fa fa fa fa fa fa fa 00 00 00 00 00 00 00 00
+=>0x0c207fff8010: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00[fa]
+  0x0c207fff8020: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c207fff8030: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c207fff8040: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c207fff8050: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c207fff8060: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+  Shadow gap:              cc
+==2895888==ABORTING

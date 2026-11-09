@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042497412",
+  "chain": "CWE-416->CWE-125",
+  "project": "serenity",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42497412",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "1c906b07a4d3a3b70f255fda2348d507ec123df8",
+      "fix_commits": [
+        "1c906b07a4d3a3b70f255fda2348d507ec123df8"
+      ],
+      "repo": "https://github.com/SerenityOS/serenity"
+    },
+    "patch": "From 1c906b07a4d3a3b70f255fda2348d507ec123df8 Mon Sep 17 00:00:00 2001\nFrom: Linus Groh <mail@linusgroh.de>\nDate: Sun, 6 Jun 2021 23:25:33 +0100\nSubject: [PATCH] LibJS: Add length parameter to Array::create()\n\nThis is now a bit closer to the spec's 10.4.2.2 ArrayCreate - it will\nthrow a RangeError if the requested length exceeds 2^32 - 1, so anyone\npassing in a custom value (defaults to zero for same behaviour as\nbefore) will need an exception check at the call site.\n---\n Userland/Libraries/LibJS/Runtime/Array.cpp | 13 +++++++++++--\n Userland/Libraries/LibJS/Runtime/Array.h   |  2 +-\n 2 files changed, 12 insertions(+), 3 deletions(-)\n\ndiff --git a/Userland/Libraries/LibJS/Runtime/Array.cpp b/Userland/Libraries/LibJS/Runtime/Array.cpp\nindex 1fc8a89..d8ab3b4 100644\n--- a/Userland/Libraries/LibJS/Runtime/Array.cpp\n+++ b/Userland/Libraries/LibJS/Runtime/Array.cpp\n@@ -1,5 +1,6 @@\n /*\n  * Copyright (c) 2020, Andreas Kling <kling@serenityos.org>\n+ * Copyright (c) 2020-2021, Linus Groh <linusg@serenityos.org>\n  *\n  * SPDX-License-Identifier: BSD-2-Clause\n  */\n@@ -11,9 +12,17 @@\n \n namespace JS {\n \n-Array* Array::create(GlobalObject& global_object)\n+// 10.4.2.2 ArrayCreate, https://tc39.es/ecma262/#sec-arraycreate\n+Array* Array::create(GlobalObject& global_object, size_t length)\n {\n-    return global_object.heap().allocate<Array>(global_object, *global_object.array_prototype());\n+    if (length > NumericLimits<u32>::max()) {\n+        auto& vm = global_object.vm();\n+        vm.throw_exception<RangeError>(global_object, ErrorType::InvalidLength, \"array\");\n+        return nullptr;\n+    }\n+    auto* array = global_object.heap().allocate<Array>(global_object, *global_object.array_prototype());\n+    array->indexed_properties().set_array_like_size(length);\n+    return array;\n }\n \n // 7.3.17 CreateArrayFromList, https://tc39.es/ecma262/#sec-createarrayfromlist\ndiff --git a/Userland/Libraries/LibJS/Runtime/Array.h b/Userland/Libraries/LibJS/Runtime/Array.h\nindex 58b4b19..ea204a0 100644\n--- a/Userland/Libraries/LibJS/Runtime/Array.h\n+++ b/Userland/Libraries/LibJS/Runtime/Array.h\n@@ -14,7 +14,7 @@ class Array : public Object {\n     JS_OBJECT(Array, Object);\n \n public:\n-    static Array* create(GlobalObject&);\n+    static Array* create(GlobalObject&, size_t length = 0);\n     static Array* create_from(GlobalObject&, const Vector<Value>&);\n \n     explicit Array(Object& prototype);\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42497412-vul",
+      "digest": "sha256:4555e42195464203fc795e92eab463e557b2fe6d6bc3a5e7bcdd936b1910a183"
+    },
+    "patched": {
+      "ref": "n132/arvo:42497412-fix",
+      "digest": "sha256:755d969de8947b0031914252ad8dd4f755eb5a4c458a008a4d2003e41b0e73cb"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/serenity/Meta/Lagom/build/../../../AK/NonnullOwnPtr.h:125",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/serenity/Meta/Lagom/build/../../../AK/NonnullOwnPtr.h:125"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

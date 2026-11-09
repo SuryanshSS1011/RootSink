@@ -1,0 +1,82 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-30042470538",
+  "chain": "CWE-20->CWE-190->CWE-125",
+  "project": "radare2",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42470538",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "533da1306534ece22d67eaa3c32e46b717cd9199",
+      "fix_commits": [
+        "533da1306534ece22d67eaa3c32e46b717cd9199"
+      ],
+      "repo": "https://github.com/radare/radare2"
+    },
+    "patch": "diff --git a/libr/bin/format/mdmp/mdmp.c b/libr/bin/format/mdmp/mdmp.c\nindex e2af3e5d1553f..a399d00b53214 100644\n--- a/libr/bin/format/mdmp/mdmp.c\n+++ b/libr/bin/format/mdmp/mdmp.c\n@@ -700,7 +700,7 @@ static bool r_bin_mdmp_init_directory_entry(struct r_bin_mdmp_obj *obj, struct m\n \t\tbreak;\n \tdefault:\n \t\teprintf (\"[WARN] Invalid or unsupported enumeration encountered %i\\n\", entry->stream_type);\n-\t\treturn false;\n+\t\tbreak;\n \t}\n \treturn true;\n }\n@@ -721,7 +721,9 @@ static bool r_bin_mdmp_init_directory(struct r_bin_mdmp_obj *obj) {\n \t\tut32 delta = i * sizeof (struct minidump_directory);\n \t\tint r = r_buf_read_at (obj->b, rvadir + delta, (ut8*) &entry, sizeof (struct minidump_directory));\n \t\tif (r) {\n-\t\t\tr_bin_mdmp_init_directory_entry (obj, &entry);\n+\t\t\tif (!r_bin_mdmp_init_directory_entry (obj, &entry)) {\n+\t\t\t\treturn false;\n+\t\t\t}\n \t\t}\n \t}\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42470538-vul",
+      "digest": "sha256:509bab50899f00f1e9112f96e5da3c0139c51e16608144a28fc6e8e853476ca9"
+    },
+    "patched": {
+      "ref": "n132/arvo:42470538-fix",
+      "digest": "sha256:b259372aca1abe524b081120295d7e3dab52e4bffd81c2a5b1747b658d773378"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/radare2/libr/util/str.c:2128",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 190,
+      "role": "intermediate",
+      "witness": {
+        "method": "ubsan-rebuild",
+        "recipe": "SANITIZER=undefined compile && $ENTRYPOINT",
+        "ubsan_options": "print_stacktrace=1:halt_on_error=0:silence_unsigned_overflow=0:symbolize=1"
+      },
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/radare2/libr/util/str.c:2128"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

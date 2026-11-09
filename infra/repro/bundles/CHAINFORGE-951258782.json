@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-951258782",
+  "chain": "CWE-129->CWE-787",
+  "project": "libxml2",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42475106",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://gitlab.gnome.org/GNOME/libxml2/-/commit/474967241cdcce6d3a2fd356079571eee794ec12",
+      "fix_commits": [
+        "474967241cdcce6d3a2fd356079571eee794ec12"
+      ],
+      "repo": "https://gitlab.gnome.org/GNOME/libxml2"
+    },
+    "patch": "diff --git a/parser.c b/parser.c\nindex fd242aa0008c66bb13f5824b01c1cf13178501d3..7d8da4f4c4861bce4c2803c1d812493cd1048110 100644\n--- a/parser.c\n+++ b/parser.c\n@@ -1087,7 +1087,12 @@ typedef xmlDefAttrs *xmlDefAttrsPtr;\n struct _xmlDefAttrs {\n     int nbAttrs;\t/* number of defaulted attributes on that element */\n     int maxAttrs;       /* the size of the array */\n-    const xmlChar *values[5]; /* array of localname/prefix/values/external */\n+#if __STDC_VERSION__ >= 199901L\n+    /* Using a C99 flexible array member avoids UBSan errors. */\n+    const xmlChar *values[]; /* array of localname/prefix/values/external */\n+#else\n+    const xmlChar *values[5];\n+#endif\n };\n \n /**\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42475106-vul",
+      "digest": "sha256:0db1e7c82834414c975893a2c2980332131dacd9ef84477c5f38658752910429"
+    },
+    "patched": {
+      "ref": "n132/arvo:42475106-fix",
+      "digest": "sha256:6bd3f8efb2ec7b4a5203c83f7b58888144f3677fa4bcbf2a3ab6a738e9bc8142"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "crash_site": "/src/libxml2/parser.c:1282",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 129,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "site": "/src/libxml2/parser.c:1282"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042521026",
+  "chain": "CWE-1284->CWE-125",
+  "project": "mosquitto",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42521026",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "769c94a10373db28ff0d63f25e6d382f5db3ec3c",
+      "fix_commits": [
+        "769c94a10373db28ff0d63f25e6d382f5db3ec3c"
+      ],
+      "repo": "https://github.com/eclipse/mosquitto"
+    },
+    "patch": "diff --git a/lib/utf8_mosq.c b/lib/utf8_mosq.c\nindex c10c87ea42..35db876677 100644\n--- a/lib/utf8_mosq.c\n+++ b/lib/utf8_mosq.c\n@@ -64,7 +64,7 @@ BROKER_EXPORT int mosquitto_validate_utf8(const char *str, int len)\n \t\t}\n \n \t\t/* Reconstruct full code point */\n-\t\tif(i == len-codelen+1){\n+\t\tif(i >= len-codelen+1){\n \t\t\t/* Not enough data */\n \t\t\treturn MOSQ_ERR_MALFORMED_UTF8;\n \t\t}\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42521026-vul",
+      "digest": "sha256:476c103f69f910af1e899603a4ace4c8c216519d52c370e5db2899e6dc962d06"
+    },
+    "patched": {
+      "ref": "n132/arvo:42521026-fix",
+      "digest": "sha256:bc3c372dfdeaa41b5034e178f11d76339e1cc7022e76ae89b803b7f3a0f12157"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/mosquitto/lib/utf8_mosq.c:72",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/mosquitto/lib/utf8_mosq.c:72"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

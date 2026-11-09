@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042476579",
+  "chain": "CWE-1284->CWE-787",
+  "project": "wireshark",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42476579",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "ba54b896969930491645aa3ec4125b76480add9c",
+      "fix_commits": [
+        "ba54b896969930491645aa3ec4125b76480add9c"
+      ],
+      "repo": "https://github.com/wireshark/wireshark"
+    },
+    "patch": "diff --git a/epan/dissectors/packet-quic.c b/epan/dissectors/packet-quic.c\nindex dfa9d636be5..cab7fba0ac8 100644\n--- a/epan/dissectors/packet-quic.c\n+++ b/epan/dissectors/packet-quic.c\n@@ -1792,8 +1792,10 @@ dissect_quic_long_header_common(tvbuff_t *tvb, packet_info *pinfo, proto_tree *q\n     if (dcil) {\n         proto_tree_add_item(quic_tree, hf_quic_dcid, tvb, offset, dcil, ENC_NA);\n         // TODO expert info on CID mismatch with connection\n-        tvb_memcpy(tvb, dcid->cid, offset, dcil);\n-        dcid->len = dcil;\n+        if (dcil <= QUIC_MAX_CID_LENGTH) {\n+            tvb_memcpy(tvb, dcid->cid, offset, dcil);\n+            dcid->len = dcil;\n+        }\n         offset += dcil;\n     }\n \n@@ -1802,8 +1804,10 @@ dissect_quic_long_header_common(tvbuff_t *tvb, packet_info *pinfo, proto_tree *q\n     if (scil) {\n         proto_tree_add_item(quic_tree, hf_quic_scid, tvb, offset, scil, ENC_NA);\n         // TODO expert info on CID mismatch with connection\n-        tvb_memcpy(tvb, scid->cid, offset, scil);\n-        scid->len = scil;\n+        if (scil <= QUIC_MAX_CID_LENGTH) {\n+            tvb_memcpy(tvb, scid->cid, offset, scil);\n+            scid->len = scil;\n+        }\n         offset += scil;\n     }\n \n@@ -2164,15 +2168,15 @@ quic_extract_header(tvbuff_t *tvb, guint8 *long_packet_type, guint32 *version,\n         guint8 dcil = tvb_get_guint8(tvb, offset);\n         offset++;\n \n-        if (dcil) {\n+        if (dcil && dcil <= QUIC_MAX_CID_LENGTH) {\n             tvb_memcpy(tvb, dcid->cid, offset, dcil);\n             dcid->len = dcil;\n-            offset += dcil;\n         }\n+        offset += dcil;\n \n         guint8 scil = tvb_get_guint8(tvb, offset);\n         offset++;\n-        if (scil) {\n+        if (scil && scil <= QUIC_MAX_CID_LENGTH) {\n             tvb_memcpy(tvb, scid->cid, offset, scil);\n             scid->len = scil;\n         }\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42476579-vul",
+      "digest": "sha256:43059d7be70ad9ae55afe579836183430cb80c938de0dd98f16e68a1a17813f3"
+    },
+    "patched": {
+      "ref": "n132/arvo:42476579-fix",
+      "digest": "sha256:b631d0322272adb34f6b2837a150c8af6a9a1a99d155ea2a3469fee1b7a802be"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/wireshark/epan/tvbuff.c:859",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/wireshark/epan/tvbuff.c:859"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

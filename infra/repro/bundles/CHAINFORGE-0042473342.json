@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042473342",
+  "chain": "CWE-456->CWE-457",
+  "project": "skia",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42473342",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "4407636943edb8acca4717e1e08d1f529027a8a5",
+      "fix_commits": [
+        "4407636943edb8acca4717e1e08d1f529027a8a5"
+      ],
+      "repo": "https://skia.googlesource.com/skia.git"
+    },
+    "patch": "diff --git a/src/codec/SkWuffsCodec.cpp b/src/codec/SkWuffsCodec.cpp\nindex 80125e4..6828899 100644\n--- a/src/codec/SkWuffsCodec.cpp\n+++ b/src/codec/SkWuffsCodec.cpp\n@@ -471,7 +471,6 @@\n     size_t src_bytes_per_pixel = src_bits_per_pixel / 8;\n \n     wuffs_base__rect_ie_u32 frame_rect = fFrameConfig.bounds();\n-    wuffs_base__rect_ie_u32 dirty_rect = fDecoder->frame_dirty_rect();\n     if (!fSwizzler) {\n         auto bounds = SkIRect::MakeLTRB(frame_rect.min_incl_x, frame_rect.min_incl_y,\n                                         frame_rect.max_excl_x, frame_rect.max_excl_y);\n@@ -487,7 +486,7 @@\n \n         // If the frame rect does not fill the output, ensure that those pixels are not\n         // left uninitialized.\n-        if (independent && (bounds != this->bounds() || dirty_rect.is_empty())) {\n+        if (independent && (bounds != this->bounds() || result != kSuccess)) {\n             auto fillInfo = dstInfo().makeWH(fSwizzler->fillWidth(), fScaledHeight);\n             SkSampler::Fill(fillInfo, fIncrDecDst, fIncrDecRowBytes, options().fZeroInitialized);\n         }\n@@ -518,6 +517,7 @@\n     }\n \n     // If the frame's dirty rect is empty, no need to swizzle.\n+    wuffs_base__rect_ie_u32 dirty_rect = fDecoder->frame_dirty_rect();\n     if (!dirty_rect.is_empty()) {\n         std::unique_ptr<uint8_t[]> tmpBuffer;\n         if (!independent) {\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42473342-vul",
+      "digest": "sha256:11c7dd19b865a8c38634814947d9d391aaf799af691ac41aeaae3b8a724c9336"
+    },
+    "patched": {
+      "ref": "n132/arvo:42473342-fix",
+      "digest": "sha256:26c6ab378448a9105ca143498810016da9a75a3065b9de257daaa3499c6931ca"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/skia/out/Fuzz/../../src/opts/SkBlitRow_opts.h:85",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/skia/out/Fuzz/../../src/opts/SkBlitRow_opts.h:85"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

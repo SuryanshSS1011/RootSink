@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042504817",
+  "chain": "CWE-416->CWE-125",
+  "project": "geos",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42504817",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "ba3e2927065463a70c4c145137a24e2226316b76",
+      "fix_commits": [
+        "ba3e2927065463a70c4c145137a24e2226316b76"
+      ],
+      "repo": "https://git.osgeo.org/gitea/geos/geos.git"
+    },
+    "patch": "diff --git a/include/geos/geomgraph/NodeMap.h b/include/geos/geomgraph/NodeMap.h\nindex 1279a6375..a35ab52e3 100644\n--- a/include/geos/geomgraph/NodeMap.h\n+++ b/include/geos/geomgraph/NodeMap.h\n@@ -71,8 +71,17 @@ public:\n \n     Node* addNode(Node* n);\n \n+    /// \\brief\n+    /// Adds a node for the start point of this EdgeEnd\n+    /// (if one does not already exist in this map).\n+    /// Adds the EdgeEnd to the (possibly new) node.\n+    ///\n+    /// If ownership of the EdgeEnd should be transferred\n+    /// to the Node, use the unique_ptr overload instead.\n     void add(EdgeEnd* e);\n \n+    void add(std::unique_ptr<EdgeEnd>&& e);\n+\n     Node* find(const geom::Coordinate& coord) const;\n \n     const_iterator\ndiff --git a/include/geos/operation/relate/EdgeEndBuilder.h b/include/geos/operation/relate/EdgeEndBuilder.h\nindex 7e57d1a3a..a6c414338 100644\n--- a/include/geos/operation/relate/EdgeEndBuilder.h\n+++ b/include/geos/operation/relate/EdgeEndBuilder.h\n@@ -20,6 +20,7 @@\n \n #include <geos/export.h>\n \n+#include <memory>\n #include <vector>\n \n // Forward declarations\n@@ -48,18 +49,18 @@ class GEOS_DLL EdgeEndBuilder {\n public:\n     EdgeEndBuilder() {}\n \n-    std::vector<geomgraph::EdgeEnd*> computeEdgeEnds(std::vector<geomgraph::Edge*>* edges);\n-    void computeEdgeEnds(geomgraph::Edge* edge, std::vector<geomgraph::EdgeEnd*>* l);\n+    std::vector<std::unique_ptr<geomgraph::EdgeEnd>> computeEdgeEnds(std::vector<geomgraph::Edge*>* edges);\n+    void computeEdgeEnds(geomgraph::Edge* edge, std::vector<std::unique_ptr<geomgraph::EdgeEnd>>& l);\n \n protected:\n \n     void createEdgeEndForPrev(geomgraph::Edge* edge,\n-                              std::vector<geomgraph::EdgeEnd*>* l,\n+                              std::vector<std::unique_ptr<geomgraph::EdgeEnd>>& l,\n                               const geomgraph::EdgeIntersection* eiCurr,\n                               const geomgraph::EdgeIntersection* eiPrev);\n \n     void createEdgeEndForNext(geomgraph::Edge* edge,\n-                              std::vector<geomgraph::EdgeEnd*>* l,\n+                              std::vector<std::unique_ptr<geomgraph::EdgeEnd>>& l,\n                               const geomgraph::EdgeIntersection* eiCurr,\n                               const geomgraph::EdgeIntersection* eiNext);\n };\ndiff --git a/include/geos/operation/relate/RelateComputer.h b/include/geos/operation/relate/RelateComputer.h\nindex dfdcbd4b8..a232534d2 100644\n--- a/include/geos/operation/relate/RelateComputer.h\n+++ b/include/geos/operation/relate/RelateComputer.h\n@@ -99,7 +99,7 @@ private:\n     /// the intersection point found (if any)\n     geom::Coordinate invalidPoint;\n \n-    void insertEdgeEnds(std::vector<geomgraph::EdgeEnd*>* ee);\n+    void insertEdgeEnds(std::vector<std::unique_ptr<geomgraph::EdgeEnd>>& ee);\n \n     void computeProperIntersectionIM(\n         geomgraph::index::SegmentIntersector* intersector,\ndiff --git a/include/geos/operation/relate/RelateNodeGraph.h b/include/geos/operation/relate/RelateNodeGraph.h\nindex 257037ef4..d409d9712 100644\n--- a/include/geos/operation/relate/RelateNodeGraph.h\n+++ b/include/geos/operation/relate/RelateNodeGraph.h\n@@ -81,7 +81,7 @@ public:\n \n     void copyNodesAndLabels(geomgraph::GeometryGraph* geomGraph, uint8_t argIndex);\n \n-    void insertEdgeEnds(std::vector<geomgraph::EdgeEnd*>* ee);\n+    void insertEdgeEnds(std::vector<std::unique_ptr<geomgraph::EdgeEnd>>& ee);\n \n private:\n \ndiff --git a/src/geomgraph/Node.cpp b/src/geomgraph/Node.cpp\nindex cabb9b89c..211f7f96b 100644\n--- a/src/geomgraph/Node.cpp\n+++ b/src/geomgraph/Node.cpp\n@@ -133,9 +133,8 @@ Node::isIncidentEdgeInResult() const\n }\n \n void\n-Node::add(EdgeEnd* p_e)\n+Node::add(EdgeEnd* e)\n {\n-    std::unique_ptr<EdgeEnd> e(p_e);\n     assert(e);\n #if GEOS_DEBUG\n     std::cerr << \"[\" << this << \"] Node::add(\" << e->print() << \")\" << std::endl;\n@@ -154,10 +153,10 @@ Node::add(EdgeEnd* p_e)\n     assert(edges);\n     //if (edges==NULL) return;\n \n-    edges->insert(e.release());\n-    p_e->setNode(this);\n+    edges->insert(e);\n+    e->setNode(this);\n #if COMPUTE_Z\n-    addZ(p_e->getCoordinate().z);\n+    addZ(e->getCoordinate().z);\n #endif\n     testInvariant();\n }\ndiff --git a/src/geomgraph/NodeMap.cpp b/src/geomgraph/NodeMap.cpp\nindex c7a001268..331fbaa98 100644\n--- a/src/geomgraph/NodeMap.cpp\n+++ b/src/geomgraph/NodeMap.cpp\n@@ -115,6 +115,13 @@ NodeMap::add(EdgeEnd* e)\n     n->add(e);\n }\n \n+void\n+NodeMap::add(std::unique_ptr<EdgeEnd>&& e)\n+{\n+    add(e.get());\n+    e.release();\n+}\n+\n /*\n  * @return the node if found; null otherwise\n  */\ndiff --git a/src/operation/relate/EdgeEndBuilder.cpp b/src/operation/relate/EdgeEndBuilder.cpp\nindex 586109292..d952dc103 100644\n--- a/src/operation/relate/EdgeEndBuilder.cpp\n+++ b/src/operation/relate/EdgeEndBuilder.cpp\n@@ -23,6 +23,7 @@\n #include <geos/geomgraph/EdgeEnd.h>\n #include <geos/geomgraph/EdgeIntersectionList.h>\n #include <geos/geomgraph/Label.h>\n+#include <geos/util.h>\n \n #include <vector>\n \n@@ -33,12 +34,12 @@ namespace geos {\n namespace operation { // geos.operation\n namespace relate { // geos.operation.relate\n \n-std::vector<EdgeEnd*>\n+std::vector<std::unique_ptr<EdgeEnd>>\n EdgeEndBuilder::computeEdgeEnds(std::vector<Edge*>* edges)\n {\n-    std::vector<EdgeEnd*> l;\n+    std::vector<std::unique_ptr<EdgeEnd>> l;\n     for(Edge* e : *edges) {\n-        computeEdgeEnds(e, &l);\n+        computeEdgeEnds(e, l);\n     }\n     return l;\n }\n@@ -48,7 +49,7 @@ EdgeEndBuilder::computeEdgeEnds(std::vector<Edge*>* edges)\n  * Edge (if any) and inserts them into the graph.\n  */\n void\n-EdgeEndBuilder::computeEdgeEnds(Edge* edge, std::vector<EdgeEnd*>* l)\n+EdgeEndBuilder::computeEdgeEnds(Edge* edge, std::vector<std::unique_ptr<EdgeEnd>>& l)\n {\n     EdgeIntersectionList& eiList = edge->getEdgeIntersectionList();\n     //Debug.print(eiList);\n@@ -91,7 +92,7 @@ EdgeEndBuilder::computeEdgeEnds(Edge* edge, std::vector<EdgeEnd*>* l)\n  * eiCurr will always be an EdgeIntersection, but eiPrev may be null.\n  */\n void\n-EdgeEndBuilder::createEdgeEndForPrev(Edge* edge, std::vector<EdgeEnd*>* l,\n+EdgeEndBuilder::createEdgeEndForPrev(Edge* edge, std::vector<std::unique_ptr<EdgeEnd>>& l,\n                                      const EdgeIntersection* eiCurr, const EdgeIntersection* eiPrev)\n {\n     auto iPrev = eiCurr->segmentIndex;\n@@ -110,9 +111,9 @@ EdgeEndBuilder::createEdgeEndForPrev(Edge* edge, std::vector<EdgeEnd*>* l,\n     Label label(edge->getLabel());\n     // since edgeStub is oriented opposite to it's parent edge, have to flip sides for edge label\n     label.flip();\n-    EdgeEnd* e = new EdgeEnd(edge, eiCurr->coord, pPrev, label);\n+    auto e = detail::make_unique<EdgeEnd>(edge, eiCurr->coord, pPrev, label);\n     //e.print(System.out);  System.out.println();\n-    l->push_back(e);\n+    l.push_back(std::move(e));\n }\n \n /**\n@@ -124,7 +125,7 @@ EdgeEndBuilder::createEdgeEndForPrev(Edge* edge, std::vector<EdgeEnd*>* l,\n  * eiCurr will always be an EdgeIntersection, but eiNext may be null.\n  */\n void\n-EdgeEndBuilder::createEdgeEndForNext(Edge* edge, std::vector<EdgeEnd*>* l,\n+EdgeEndBuilder::createEdgeEndForNext(Edge* edge, std::vector<std::unique_ptr<EdgeEnd>>& l,\n                                      const EdgeIntersection* eiCurr, const EdgeIntersection* eiNext)\n {\n     std::size_t iNext = eiCurr->segmentIndex + 1;\n@@ -137,9 +138,10 @@ EdgeEndBuilder::createEdgeEndForNext(Edge* edge, std::vector<EdgeEnd*>* l,\n     if(eiNext != nullptr && eiNext->segmentIndex == eiCurr->segmentIndex) {\n         pNext = eiNext->coord;\n     }\n-    EdgeEnd* e = new EdgeEnd(edge, eiCurr->coord, pNext, edge->getLabel());\n+\n+    auto e = detail::make_unique<EdgeEnd>(edge, eiCurr->coord, pNext, edge->getLabel());\n     //Debug.println(e);\n-    l->push_back(e);\n+    l.push_back(std::move(e));\n }\n \n } // namespace geos.operation.relate\ndiff --git a/src/operation/relate/RelateComputer.cpp b/src/operation/relate/RelateComputer.cpp\nindex 7885c3a68..bbdd255fe 100644\n--- a/src/operation/relate/RelateComputer.cpp\n+++ b/src/operation/relate/RelateComputer.cpp\n@@ -188,9 +188,9 @@ RelateComputer::computeIM()\n      */\n     // build EdgeEnds for all intersections\n     EdgeEndBuilder eeBuilder;\n-    std::vector<EdgeEnd*> ee0 = eeBuilder.computeEdgeEnds((*arg)[0]->getEdges());\n-    insertEdgeEnds(&ee0);\n-    std::vector<EdgeEnd*> ee1 = eeBuilder.computeEdgeEnds((*arg)[1]->getEdges());\n+    auto&& ee0 = eeBuilder.computeEdgeEnds((*arg)[0]->getEdges());\n+    insertEdgeEnds(ee0);\n+    auto&& ee1 = eeBuilder.computeEdgeEnds((*arg)[1]->getEdges());\n \n #if GEOS_DEBUG\n     std::cerr << \"RelateComputer::computeIM: \"\n@@ -198,7 +198,7 @@ RelateComputer::computeIM()\n               << std::endl;\n #endif\n \n-    insertEdgeEnds(&ee1);\n+    insertEdgeEnds(ee1);\n \n #if GEOS_DEBUG\n     std::cerr << \"RelateComputer::computeIM: \"\n@@ -234,10 +234,10 @@ RelateComputer::computeIM()\n }\n \n void\n-RelateComputer::insertEdgeEnds(std::vector<EdgeEnd*>* ee)\n+RelateComputer::insertEdgeEnds(std::vector<std::unique_ptr<EdgeEnd>>& ee)\n {\n-    for(EdgeEnd* e: *ee) {\n-        nodes.add(e);\n+    for(auto& e : ee) {\n+        nodes.add(std::move(e));\n     }\n }\n \ndiff --git a/src/operation/relate/RelateNodeGraph.cpp b/src/operation/relate/RelateNodeGraph.cpp\nindex 78a6e2ce4..1ae35929c 100644\n--- a/src/operation/relate/RelateNodeGraph.cpp\n+++ b/src/operation/relate/RelateNodeGraph.cpp\n@@ -72,8 +72,8 @@ RelateNodeGraph::build(GeometryGraph* geomGraph)\n      * Build EdgeEnds for all intersections.\n      */\n     EdgeEndBuilder eeBuilder;\n-    std::vector<EdgeEnd*> eeList = eeBuilder.computeEdgeEnds(geomGraph->getEdges());\n-    insertEdgeEnds(&eeList);\n+    auto&& eeList = eeBuilder.computeEdgeEnds(geomGraph->getEdges());\n+    insertEdgeEnds(eeList);\n }\n \n /**\n@@ -131,10 +131,10 @@ RelateNodeGraph::copyNodesAndLabels(GeometryGraph *geomGraph, uint8_t argIndex)\n }\n \n void\n-RelateNodeGraph::insertEdgeEnds(std::vector<EdgeEnd*>* ee)\n+RelateNodeGraph::insertEdgeEnds(std::vector<std::unique_ptr<EdgeEnd>>& ee)\n {\n-    for(EdgeEnd* e: *ee) {\n-        nodes->add(e);\n+    for(auto& e : ee) {\n+        nodes->add(std::move(e));\n     }\n }\n \ndiff --git a/tests/unit/capi/GEOSUnionTest.cpp b/tests/unit/capi/GEOSUnionTest.cpp\nindex 2efceb22d..fa52a7d94 100644\n--- a/tests/unit/capi/GEOSUnionTest.cpp\n+++ b/tests/unit/capi/GEOSUnionTest.cpp\n@@ -43,5 +43,24 @@ void object::test<1>()\n     GEOSGeom_destroy(expected);\n }\n \n+// Verify that no crash occurs in overlay with NaN coordinates\n+// https://github.com/libgeos/geos/issues/606\n+template<>\n+template<>\n+void object::test<2>()\n+{\n+    std::string wkb1 = \"010100000000000000000000000000000000000840\";\n+    std::string wkb2 = \"01020000000300000049544C553736090000FFFF544E494F500000000000000000FFFFFF2B2B2B2B2BFFFFFFFFFFFFFFFF00FFFFFFFFFFFFFF\";\n+\n+    geom1_ = GEOSGeomFromHEX_buf((unsigned char*) wkb1.c_str(), wkb1.size());\n+    geom2_ = GEOSGeomFromHEX_buf((unsigned char*) wkb2.c_str(), wkb2.size());\n+\n+    ensure(geom1_);\n+    ensure(geom2_);\n+\n+    GEOSGeometry* result = GEOSUnion(geom1_, geom2_);\n+    (void) result; // no crash\n+}\n+\n } // namespace tut\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42504817-vul",
+      "digest": "sha256:56478d6caad221949e0e338931d1f80e2519d79fb7bca900582a264fbd50341c"
+    },
+    "patched": {
+      "ref": "n132/arvo:42504817-fix",
+      "digest": "sha256:4fcad7285772aa6b52c83eea8b54b946c928f3932b9cb5fa5c57e6ffaf27b692"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/geos/src/geomgraph/PlanarGraph.cpp:88",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/geos/src/geomgraph/PlanarGraph.cpp:88"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

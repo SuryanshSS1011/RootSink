@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042531837",
+  "chain": "CWE-416->CWE-125",
+  "project": "opensc",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42531837",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "c3545018d059b4debde33b9f34de719dd41e5531",
+      "fix_commits": [
+        "c3545018d059b4debde33b9f34de719dd41e5531"
+      ],
+      "repo": "https://github.com/OpenSC/OpenSC"
+    },
+    "patch": "From c3545018d059b4debde33b9f34de719dd41e5531 Mon Sep 17 00:00:00 2001\nFrom: Peter Popovec <popovec.peter@gmail.com>\nDate: Fri, 12 Jan 2024 07:11:39 +0100\nSubject: [PATCH] Fix Heap-use-after-free in iasecc_delete_file\n\nPatch 773fcc6bd0d047aa629dd297e87244ca3add5b16 unfortunately introduced a\nnew bug.  Here is a fix for both the old and the new bug.\n\nThanks oss-fuzz\n\nhttps://bugs.chromium.org/p/oss-fuzz/issues/detail?id=65562\nhttps://bugs.chromium.org/p/oss-fuzz/issues/detail?id=65684\n---\n src/libopensc/card-iasecc.c | 9 +++------\n 1 file changed, 3 insertions(+), 6 deletions(-)\n\ndiff --git a/src/libopensc/card-iasecc.c b/src/libopensc/card-iasecc.c\nindex b20123d..95e41c7 100644\n--- a/src/libopensc/card-iasecc.c\n+++ b/src/libopensc/card-iasecc.c\n@@ -1544,7 +1544,6 @@ iasecc_delete_file(struct sc_card *card, const struct sc_path *path)\n \tstruct sc_apdu apdu;\n \tstruct sc_file *file = NULL;\n \tint rv;\n-\tunsigned int file_id;\n \n \tLOG_FUNC_CALLED(ctx);\n \tsc_print_cache(card);\n@@ -1555,19 +1554,17 @@ iasecc_delete_file(struct sc_card *card, const struct sc_path *path)\n \tLOG_TEST_RET(ctx, rv, \"Cannot select file to delete\");\n \n \tentry = sc_file_get_acl_entry(file, SC_AC_OP_DELETE);\n-\n-\tfile_id = file->id;\n-\tsc_file_free(file);\n-\n \tif (!entry)\n \t\tLOG_TEST_RET(ctx, SC_ERROR_OBJECT_NOT_FOUND, \"Cannot delete file: no 'DELETE' acl\");\n \n \tsc_log(ctx, \"DELETE method/reference %X/%X\", entry->method, entry->key_ref);\n \tif (entry->method == SC_AC_SCB && (entry->key_ref & IASECC_SCB_METHOD_SM))   {\n \t\tunsigned char se_num = entry->key_ref & IASECC_SCB_METHOD_MASK_REF;\n-\t\trv = iasecc_sm_delete_file(card, se_num, file_id);\n+\t\trv = iasecc_sm_delete_file(card, se_num, file->id);\n+\t\tsc_file_free(file);\n \t}\n \telse   {\n+\t\tsc_file_free(file);\n \t\tsc_format_apdu(card, &apdu, SC_APDU_CASE_1, 0xE4, 0x00, 0x00);\n \n \t\trv = sc_transmit_apdu(card, &apdu);\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42531837-vul",
+      "digest": "sha256:0893618e3cc0e0e6f4ac03650d2798af157701410cf865431111831458c59579"
+    },
+    "patched": {
+      "ref": "n132/arvo:42531837-fix",
+      "digest": "sha256:c74beaca634ee83f3198952cc32fef30bf9356bdcafd7baeb771a44655cce935"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/opensc/src/libopensc/card-iasecc.c:1565",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/opensc/src/libopensc/card-iasecc.c:1565"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042475297",
+  "chain": "CWE-20->CWE-787",
+  "project": "gdal",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42475297",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "8ce8a08e0922fa0214e4945182f13be111db9fd6",
+      "fix_commits": [
+        "8ce8a08e0922fa0214e4945182f13be111db9fd6"
+      ],
+      "repo": "https://github.com/OSGeo/gdal"
+    },
+    "patch": "diff --git a/gdal/frmts/mrf/Tif_band.cpp b/gdal/frmts/mrf/Tif_band.cpp\nindex 2368662afd0e..ad4a71947604 100644\n--- a/gdal/frmts/mrf/Tif_band.cpp\n+++ b/gdal/frmts/mrf/Tif_band.cpp\n@@ -82,7 +82,7 @@ static CPLErr CompressTIF(buf_mgr &dst, buf_mgr &src, const ILImage &img, char *\n     GDALDataset *poTiff = poTiffDriver->Create(fname, img.pagesize.x, img.pagesize.y,\n                                                img.pagesize.c, img.dt, papszOptions );\n \n-    // Read directly to avoid double caching in GDAL\n+    // Write directly to avoid double caching in GDAL\n     // Unfortunately not possible for multiple bands\n     if (img.pagesize.c == 1) {\n         ret = poTiff->GetRasterBand(1)->WriteBlock(0,0,src.buffer);\n@@ -157,10 +157,18 @@ static CPLErr DecompressTIF(buf_mgr &dst, buf_mgr &src, const ILImage &img)\n \n     const GDALDataType eGTiffDT = poTiff->GetRasterBand(1)->GetRasterDataType();\n     const int nDTSize = GDALGetDataTypeSizeBytes(eGTiffDT);\n+    int nBlockXSize = 0;\n+    int nBlockYSize = 0;\n+    if( poTiff->GetRasterCount() )\n+    {\n+        poTiff->GetRasterBand(1)->GetBlockSize(&nBlockXSize, &nBlockYSize);\n+    }\n     if( poTiff->GetRasterXSize() != img.pagesize.x ||\n         poTiff->GetRasterYSize() != img.pagesize.y ||\n         poTiff->GetRasterCount() != img.pagesize.c ||\n         img.dt != eGTiffDT ||\n+        nBlockXSize != poTiff->GetRasterXSize() ||\n+        nBlockYSize != poTiff->GetRasterYSize() ||\n         static_cast<size_t>(img.pagesize.x) * img.pagesize.y * nDTSize * img.pagesize.c != dst.size )\n     {\n         CPLError(CE_Failure,CPLE_AppDefined,\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42475297-vul",
+      "digest": "sha256:7a82ac18b93cff7195692bfa9c93f5bbfb1e483a91162a09dcf34fe0e04afca6"
+    },
+    "patched": {
+      "ref": "n132/arvo:42475297-fix",
+      "digest": "sha256:54f0aa2e614e26f10733895611c90acd41dcd7b8cedbf12a3e7f025e5875e16f"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/gdal/gdal/frmts/gtiff/geotiff.cpp:6647",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/gdal/gdal/frmts/gtiff/geotiff.cpp:6647"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

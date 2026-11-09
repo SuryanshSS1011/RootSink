@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042535043",
+  "chain": "CWE-416->CWE-125",
+  "project": "gdal",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42535043",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "94181354ea10da372cf78ca086be5acdc6fc90dc",
+      "fix_commits": [
+        "94181354ea10da372cf78ca086be5acdc6fc90dc"
+      ],
+      "repo": "https://github.com/OSGeo/gdal"
+    },
+    "patch": "From 94181354ea10da372cf78ca086be5acdc6fc90dc Mon Sep 17 00:00:00 2001\nFrom: Even Rouault <even.rouault@mines-paris.org>\nDate: Mon, 12 Mar 2018 11:57:46 +0000\nSubject: [PATCH] ISCE: fix null pointer dereference. Fixes\n https://bugs.chromium.org/p/oss-fuzz/issues/detail?id=6854. Credit to OSS\n Fuzz\n\ngit-svn-id: https://svn.osgeo.org/gdal/trunk@41740 f0d54148-0727-0410-94bb-9a71ac55c965\n---\n gdal/frmts/raw/iscedataset.cpp | 22 +++++++++++-----------\n 1 file changed, 11 insertions(+), 11 deletions(-)\n\ndiff --git a/gdal/frmts/raw/iscedataset.cpp b/gdal/frmts/raw/iscedataset.cpp\nindex d5bda94..40c1c83 100644\n--- a/gdal/frmts/raw/iscedataset.cpp\n+++ b/gdal/frmts/raw/iscedataset.cpp\n@@ -227,10 +227,10 @@ void ISCEDataset::FlushCache( void )\n             const_cast<char **>(apszGDAL2ISCEDatatypes),\n             sType ) );\n \n-    const char *sScheme = apszSchemeNames[eScheme];\n+    const char *pszScheme = apszSchemeNames[eScheme];\n     psTmpNode = CPLCreateXMLNode( psDocNode, CXT_Element, \"property\" );\n     CPLAddXMLAttributeAndValue( psTmpNode, \"name\", \"SCHEME\" );\n-    CPLCreateXMLElementAndValue( psTmpNode, \"value\", sScheme );\n+    CPLCreateXMLElementAndValue( psTmpNode, \"value\", pszScheme );\n \n     psTmpNode = CPLCreateXMLNode( psDocNode, CXT_Element, \"property\" );\n     CPLAddXMLAttributeAndValue( psTmpNode, \"name\", \"BYTE_ORDER\" );\n@@ -635,12 +635,12 @@ GDALDataset *ISCEDataset::Open( GDALOpenInfo *poOpenInfo )\n     }\n     const GDALDataType eDataType = GDALGetDataTypeByName( pszDataType );\n     const int nDTSize = GDALGetDataTypeSizeBytes(eDataType);\n-    const char *sScheme = CSLFetchNameValue( papszXmlProps, \"SCHEME\" );\n+    const char *pszScheme = CSLFetchNameValue( papszXmlProps, \"SCHEME\" );\n     int nPixelOffset = 0;\n     int nLineOffset = 0;\n     vsi_l_offset nBandOffset = 0;\n     bool bIntOverflow = false;\n-    if( EQUAL( sScheme, \"BIL\" ) )\n+    if( EQUAL( pszScheme, \"BIL\" ) )\n     {\n         poDS->eScheme = BIL;\n         nPixelOffset = nDTSize;\n@@ -652,7 +652,7 @@ GDALDataset *ISCEDataset::Open( GDALOpenInfo *poOpenInfo )\n             nBandOffset = nDTSize * static_cast<vsi_l_offset>(nWidth);\n         }\n     }\n-    else if( EQUAL( sScheme, \"BIP\" ) )\n+    else if( EQUAL( pszScheme, \"BIP\" ) )\n     {\n         poDS->eScheme = BIP;\n         nPixelOffset = nDTSize * nBands;\n@@ -681,7 +681,7 @@ GDALDataset *ISCEDataset::Open( GDALOpenInfo *poOpenInfo )\n             nBandOffset = nDTSize;\n         }\n     }\n-    else if ( EQUAL( sScheme, \"BSQ\" ) )\n+    else if ( EQUAL( pszScheme, \"BSQ\" ) )\n     {\n         poDS->eScheme = BSQ;\n         nPixelOffset = nDTSize;\n@@ -695,11 +695,11 @@ GDALDataset *ISCEDataset::Open( GDALOpenInfo *poOpenInfo )\n     }\n     else\n     {\n-        CSLDestroy( papszXmlProps );\n-        delete poDS;\n         CPLError( CE_Failure, CPLE_OpenFailed,\n                   \"Unknown scheme \\\"%s\\\" within ISCE raster.\",\n-                  CSLFetchNameValue( papszXmlProps, \"SCHEME\" ) );\n+                  pszScheme );\n+        CSLDestroy( papszXmlProps );\n+        delete poDS;\n         return nullptr;\n     }\n \n@@ -806,7 +806,7 @@ GDALDataset *ISCEDataset::Create( const char *pszFilename,\n                                   char **papszOptions )\n {\n     const char *sType = GDALGetDataTypeName( eType );\n-    const char *sScheme = CSLFetchNameValueDef( papszOptions,\n+    const char *pszScheme = CSLFetchNameValueDef( papszOptions,\n                                                 \"SCHEME\",\n                                                 \"BIP\" );\n \n@@ -861,7 +861,7 @@ GDALDataset *ISCEDataset::Create( const char *pszFilename,\n \n     psTmpNode = CPLCreateXMLNode( psDocNode, CXT_Element, \"property\" );\n     CPLAddXMLAttributeAndValue( psTmpNode, \"name\", \"SCHEME\" );\n-    CPLCreateXMLElementAndValue( psTmpNode, \"value\", sScheme );\n+    CPLCreateXMLElementAndValue( psTmpNode, \"value\", pszScheme );\n \n     psTmpNode = CPLCreateXMLNode( psDocNode, CXT_Element, \"property\" );\n     CPLAddXMLAttributeAndValue( psTmpNode, \"name\", \"BYTE_ORDER\" );\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42535043-vul",
+      "digest": "sha256:cd79ddb4872bc756c60ab724fdeb91f73f62c04b9621a24547da4c0d3f3ee220"
+    },
+    "patched": {
+      "ref": "n132/arvo:42535043-fix",
+      "digest": "sha256:6cd465ddc63f5b596aa01ead12788ff21afaafdbdcabbdb393ae75c3e3c674dc"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/gdal/gdal/port/cpl_string.cpp:1679",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/gdal/gdal/port/cpl_string.cpp:1679"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

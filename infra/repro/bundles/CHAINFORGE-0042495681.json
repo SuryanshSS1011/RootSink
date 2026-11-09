@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042495681",
+  "chain": "CWE-20->CWE-125",
+  "project": "gpac",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42495681",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "74e53280dad7b29f85386c6a1286fb92643465da",
+      "fix_commits": [
+        "74e53280dad7b29f85386c6a1286fb92643465da"
+      ],
+      "repo": "https://github.com/gpac/gpac"
+    },
+    "patch": "diff --git a/src/isomedia/box_code_3gpp.c b/src/isomedia/box_code_3gpp.c\nindex d75eae60a1..cee178fcf0 100644\n--- a/src/isomedia/box_code_3gpp.c\n+++ b/src/isomedia/box_code_3gpp.c\n@@ -1046,8 +1046,7 @@ void dimC_box_del(GF_Box *s)\n \n GF_Err dimC_box_read(GF_Box *s, GF_BitStream *bs)\n {\n-\tchar str[1024];\n-\tu32 i;\n+\tu32 i, msize;\n \tGF_DIMSSceneConfigBox *p = (GF_DIMSSceneConfigBox *)s;\n \n \tISOM_DECREASE_SIZE(p, 3);\n@@ -1058,27 +1057,42 @@ GF_Err dimC_box_read(GF_Box *s, GF_BitStream *bs)\n \tp->streamType = gf_bs_read_int(bs, 1);\n \tp->containsRedundant = gf_bs_read_int(bs, 2);\n \n+\tchar *str = gf_malloc(sizeof(char)*(p->size+1));\n+\tif (!str) return GF_OUT_OF_MEM;\n+\tmsize = p->size;\n+\tstr[msize] = 0;\n \ti=0;\n \tstr[0]=0;\n-\twhile (i < GF_ARRAY_LENGTH(str)) {\n+\twhile (i < msize) {\n \t\tstr[i] = gf_bs_read_u8(bs);\n \t\tif (!str[i]) break;\n \t\ti++;\n \t}\n \tISOM_DECREASE_SIZE(p, i);\n+\tif (i == msize) {\n+\t\tgf_free(str);\n+\t\treturn GF_ISOM_INVALID_FILE;\n+\t}\n \n \tp->textEncoding = gf_strdup(str);\n \n \ti=0;\n \tstr[0]=0;\n-\twhile (i < GF_ARRAY_LENGTH(str)) {\n+\twhile (i < msize) {\n \t\tstr[i] = gf_bs_read_u8(bs);\n \t\tif (!str[i]) break;\n \t\ti++;\n \t}\n \tISOM_DECREASE_SIZE(p, i);\n+\tif (i == msize) {\n+\t\tgf_free(str);\n+\t\treturn GF_ISOM_INVALID_FILE;\n+\t}\n \n \tp->contentEncoding = gf_strdup(str);\n+\tgf_free(str);\n+\tif (p->textEncoding || !p->contentEncoding)\n+\t\treturn GF_OUT_OF_MEM;\n \treturn GF_OK;\n }\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42495681-vul",
+      "digest": "sha256:33c7c1a8b1ce73f4e9e51dae58a2fd50b241a3e00cbd340a0c57e2050e322c2f"
+    },
+    "patched": {
+      "ref": "n132/arvo:42495681-fix",
+      "digest": "sha256:a4ab37eb3772339e6bb75fee8cc5dc4b6720ec056768af6a0d8db8473cf42e3f"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/gpac/src/utils/alloc.c:170",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/gpac/src/utils/alloc.c:170"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

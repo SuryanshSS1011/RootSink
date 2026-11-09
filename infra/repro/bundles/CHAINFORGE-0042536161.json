@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042536161",
+  "chain": "CWE-1284->CWE-125",
+  "project": "wamr",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42536161",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "40c41d5110a706396c38b690e57fcf6724743800",
+      "fix_commits": [
+        "40c41d5110a706396c38b690e57fcf6724743800"
+      ],
+      "repo": "https://github.com/bytecodealliance/wasm-micro-runtime"
+    },
+    "patch": "diff --git a/core/config.h b/core/config.h\nindex 2f3e401dde..b4d8d19659 100644\n--- a/core/config.h\n+++ b/core/config.h\n@@ -667,13 +667,11 @@\n #define WASM_ENABLE_FUZZ_TEST 0\n #endif\n \n-#ifndef WASM_MEM_ALLOC_MAX_SIZE\n #if WASM_ENABLE_FUZZ_TEST != 0\n+#ifndef WASM_MEM_ALLOC_MAX_SIZE\n /* In oss-fuzz, the maximum RAM is ~2.5G */\n #define WASM_MEM_ALLOC_MAX_SIZE (2U * 1024 * 1024 * 1024)\n-#else\n-#define WASM_MEM_ALLOC_MAX_SIZE UINT32_MAX\n-#endif\n #endif\n+#endif /* WASM_ENABLE_FUZZ_TEST != 0 */\n \n #endif /* end of _CONFIG_H_ */\ndiff --git a/core/iwasm/aot/aot_loader.c b/core/iwasm/aot/aot_loader.c\nindex 8d705248c5..c54871e1e8 100644\n--- a/core/iwasm/aot/aot_loader.c\n+++ b/core/iwasm/aot/aot_loader.c\n@@ -367,6 +367,8 @@ get_aot_file_target(AOTTargetInfo *target_info, char *target_buf,\n             break;\n         case E_MACHINE_ARM:\n         case E_MACHINE_AARCH64:\n+            /* TODO: this will make following `strncmp()` ~L392 unnecessary.\n+             * Use const strings here */\n             machine_type = target_info->arch;\n             break;\n         case E_MACHINE_MIPS:\n@@ -501,6 +503,11 @@ load_target_info_section(const uint8 *buf, const uint8 *buf_end,\n     read_uint64(p, p_end, target_info.reserved);\n     read_byte_array(p, p_end, target_info.arch, sizeof(target_info.arch));\n \n+    if (target_info.arch[sizeof(target_info.arch) - 1] != '\\0') {\n+        set_error_buf(error_buf, error_buf_size, \"invalid arch string\");\n+        return false;\n+    }\n+\n     if (p != buf_end) {\n         set_error_buf(error_buf, error_buf_size, \"invalid section size\");\n         return false;\n@@ -1033,7 +1040,8 @@ load_memory_info(const uint8 **p_buf, const uint8 *buf_end, AOTModule *module,\n \n     read_uint32(buf, buf_end, module->import_memory_count);\n     /* We don't support import_memory_count > 0 currently */\n-    bh_assert(module->import_memory_count == 0);\n+    if (module->import_memory_count > 0)\n+        return false;\n \n     read_uint32(buf, buf_end, module->memory_count);\n     total_size = sizeof(AOTMemory) * (uint64)module->memory_count;\ndiff --git a/core/iwasm/common/wasm_memory.c b/core/iwasm/common/wasm_memory.c\nindex f47215f256..3aeb64ce67 100644\n--- a/core/iwasm/common/wasm_memory.c\n+++ b/core/iwasm/common/wasm_memory.c\n@@ -284,6 +284,13 @@ wasm_runtime_malloc(unsigned int size)\n #endif\n     }\n \n+#if WASM_ENABLE_FUZZ_TEST != 0\n+    if (size >= WASM_MEM_ALLOC_MAX_SIZE) {\n+        LOG_WARNING(\"warning: wasm_runtime_malloc with too large size\\n\");\n+        return NULL;\n+    }\n+#endif\n+\n     return wasm_runtime_malloc_internal(size);\n }\n \ndiff --git a/core/iwasm/interpreter/wasm_loader.c b/core/iwasm/interpreter/wasm_loader.c\nindex bf117dd828..129ca5221a 100644\n--- a/core/iwasm/interpreter/wasm_loader.c\n+++ b/core/iwasm/interpreter/wasm_loader.c\n@@ -380,8 +380,7 @@ loader_malloc(uint64 size, char *error_buf, uint32 error_buf_size)\n {\n     void *mem;\n \n-    if (size >= WASM_MEM_ALLOC_MAX_SIZE\n-        || !(mem = wasm_runtime_malloc((uint32)size))) {\n+    if (size >= UINT32_MAX || !(mem = wasm_runtime_malloc((uint32)size))) {\n         set_error_buf(error_buf, error_buf_size, \"allocate memory failed\");\n         return NULL;\n     }\n@@ -2255,9 +2254,15 @@ load_type_section(const uint8 *buf, const uint8 *buf_end, WASMModule *module,\n static void\n adjust_table_max_size(uint32 init_size, uint32 max_size_flag, uint32 *max_size)\n {\n-    uint32 default_max_size = init_size * 2 > WASM_TABLE_MAX_SIZE\n-                                  ? init_size * 2\n-                                  : WASM_TABLE_MAX_SIZE;\n+    uint32 default_max_size;\n+\n+    if (UINT32_MAX / 2 > init_size)\n+        default_max_size = init_size * 2;\n+    else\n+        default_max_size = UINT32_MAX;\n+\n+    if (default_max_size < WASM_TABLE_MAX_SIZE)\n+        default_max_size = WASM_TABLE_MAX_SIZE;\n \n     if (max_size_flag) {\n         /* module defines the table limitation */\ndiff --git a/tests/fuzz/wasm-mutator-fuzz/CMakeLists.txt b/tests/fuzz/wasm-mutator-fuzz/CMakeLists.txt\nindex ec993a76d2..6bb7fc75a6 100644\n--- a/tests/fuzz/wasm-mutator-fuzz/CMakeLists.txt\n+++ b/tests/fuzz/wasm-mutator-fuzz/CMakeLists.txt\n@@ -131,9 +131,20 @@ string(FIND \"${CFLAGS_ENV}\" \"-DFUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION\" IN_OSS_\n if (IN_OSS_FUZZ EQUAL -1)\n   message(\"[ceith]:Enable ASan and UBSan in non-oss-fuzz environment\")\n   add_compile_options(\n-    -fsanitize=signed-integer-overflow\n     -fprofile-instr-generate -fcoverage-mapping\n+    -fno-sanitize-recover=all\n     -fsanitize=address,undefined\n+    # reference: https://clang.llvm.org/docs/UndefinedBehaviorSanitizer.html\n+    # -fsanitize=undefined: All of the checks listed above other than float-divide-by-zero,\n+    #     unsigned-integer-overflow, implicit-conversion, local-bounds and\n+    #     the nullability-* group of checks.\n+    #\n+    # for now, we disable below from UBSan\n+    # -alignment\n+    # -implicit-conversion\n+    #\n+    -fsanitize=float-divide-by-zero,unsigned-integer-overflow,local-bounds,nullability\n+    -fno-sanitize=alignment\n   )\n   add_link_options(-fsanitize=address -fprofile-instr-generate)\n endif ()\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42536161-vul",
+      "digest": "sha256:927462090fc685efc80d17d4c0b35d3c930999fc320676ae63e8046c979ae925"
+    },
+    "patched": {
+      "ref": "n132/arvo:42536161-fix",
+      "digest": "sha256:2c4d532fb5f26dd98b6f57adce3a8930e5bb8a02aaa0aaa7cc03a684fc72702f"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/wamr/core/iwasm/aot/aot_loader.c:397",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/wamr/core/iwasm/aot/aot_loader.c:397"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

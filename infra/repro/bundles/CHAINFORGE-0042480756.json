@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042480756",
+  "chain": "CWE-456->CWE-457",
+  "project": "php-src",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42480756",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "24ccbb00573445b0df5e940a77e7363ace3c31f3",
+      "fix_commits": [
+        "24ccbb00573445b0df5e940a77e7363ace3c31f3"
+      ],
+      "repo": "https://github.com/php/php-src"
+    },
+    "patch": "diff --git a/ext/libxml/libxml.c b/ext/libxml/libxml.c\nindex 9c6a51f5f842..f64089aa7e83 100644\n--- a/ext/libxml/libxml.c\n+++ b/ext/libxml/libxml.c\n@@ -327,6 +327,8 @@ static void *php_libxml_streams_IO_open_wrapper(const char *filename, const char\n \tcontext = php_stream_context_from_zval(Z_ISUNDEF(LIBXML(stream_context))? NULL : &LIBXML(stream_context), 0);\n \n \tret_val = php_stream_open_wrapper_ex(path_to_open, (char *)mode, REPORT_ERRORS, NULL, context);\n+\t/* Prevent from closing this by fclose() */\n+\t((php_stream*)ret_val)->flags |= PHP_STREAM_FLAG_NO_FCLOSE;\n \tif (isescaped) {\n \t\txmlFree(resolved_path);\n \t}\ndiff --git a/ext/xmlwriter/tests/bug79029.phpt b/ext/xmlwriter/tests/bug79029.phpt\nnew file mode 100644\nindex 000000000000..f329b627567d\n--- /dev/null\n+++ b/ext/xmlwriter/tests/bug79029.phpt\n@@ -0,0 +1,32 @@\n+--TEST--\n+#79029 (Use After Free's in XMLReader / XMLWriter)\n+--SKIPIF--\n+<?php if (!extension_loaded(\"xmlwriter\")) print \"skip\"; ?>\n+--FILE--\n+<?php\n+$x = array( new XMLWriter() );\n+$x[0]->openUri(\"bug79029.txt\");\n+$x[0]->startComment();\n+@unlink(\"bug79029.txt\");\n+\n+$x = new XMLWriter();\n+$x->openUri(\"bug79029.txt\");\n+fclose(@end(get_resources()));\n+@unlink(\"bug79029.txt\");\n+\n+file_put_contents(\"bug79029.txt\", \"a\");\n+$x = new XMLReader();\n+$x->open(\"bug79029.txt\");\n+fclose(@end(get_resources()));\n+@unlink(\"bug79029.txt\");\n+?>\n+okey\n+--CLEAN--\n+<?php\n+@unlink(\"bug79029.txt\");\n+?>\n+--EXPECTF--\n+Warning: fclose(): %d is not a valid stream resource in %sbug79029.php on line %d\n+\n+Warning: fclose(): %d is not a valid stream resource in %sbug79029.php on line %d\n+okey\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42480756-vul",
+      "digest": "sha256:cbafec2ab4c26f326c8614c2c3b3107928433701c0e0a5471d9328b5aa2e4a6e"
+    },
+    "patched": {
+      "ref": "n132/arvo:42480756-fix",
+      "digest": "sha256:14806a7abbb7179fd672253a999c631b621f199df7fcce304f71f68f92a60b35"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/php-src/oniguruma/src/regcomp.c:3998",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/php-src/oniguruma/src/regcomp.c:3998"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

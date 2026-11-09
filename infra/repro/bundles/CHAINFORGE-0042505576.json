@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042505576",
+  "chain": "CWE-416->CWE-125",
+  "project": "binutils-gdb",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42505576",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "7ebf6ed02bde3a488bb588316e47b4df68796076",
+      "fix_commits": [
+        "7ebf6ed02bde3a488bb588316e47b4df68796076"
+      ],
+      "repo": "git://sourceware.org/git/binutils-gdb.git"
+    },
+    "patch": "diff --git a/bfd/elfxx-mips.c b/bfd/elfxx-mips.c\nindex 4aaa3ea1fc3..34005c6aee0 100644\n--- a/bfd/elfxx-mips.c\n+++ b/bfd/elfxx-mips.c\n@@ -13242,7 +13242,26 @@ _bfd_elf_mips_get_relocated_section_contents\n \n   reloc_vector = (arelent **) bfd_malloc (reloc_size);\n   if (reloc_vector == NULL)\n-    return NULL;\n+    {\n+      struct mips_hi16 **hip, *hi;\n+    error_return:\n+      /* If we are going to return an error, remove entries on\n+\t mips_hi16_list that point into this section's data.  Data\n+\t will typically be freed on return from this function.  */\n+      hip = &mips_hi16_list;\n+      while ((hi = *hip) != NULL)\n+\t{\n+\t  if (hi->input_section == input_section)\n+\t    {\n+\t      *hip = hi->next;\n+\t      free (hi);\n+\t    }\n+\t  else\n+\t    hip = &hi->next;\n+\t}\n+      data = NULL;\n+      goto out;\n+    }\n \n   reloc_count = bfd_canonicalize_reloc (input_bfd,\n \t\t\t\t\tinput_section,\n@@ -13432,12 +13451,9 @@ _bfd_elf_mips_get_relocated_section_contents\n \t}\n     }\n \n+ out:\n   free (reloc_vector);\n   return data;\n-\n- error_return:\n-  free (reloc_vector);\n-  return NULL;\n }\n \f\n static bool\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42505576-vul",
+      "digest": "sha256:7bf95eef426c0b46164e37268a5b21cf647451bebb4523eed5d00119f241a45b"
+    },
+    "patched": {
+      "ref": "n132/arvo:42505576-fix",
+      "digest": "sha256:0f421adc60287481c68a1af5270e75a42d4052913cc4447d1a7aca69db3449d8"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/binutils-gdb/bfd/libbfd.c:633",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/binutils-gdb/bfd/libbfd.c:633"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

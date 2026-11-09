@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042528266",
+  "chain": "CWE-456->CWE-457",
+  "project": "mupdf",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42528266",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "7570d162477dc8efe67f4c31e93ed21bf8a3fd80",
+      "fix_commits": [
+        "7570d162477dc8efe67f4c31e93ed21bf8a3fd80"
+      ],
+      "repo": "git://git.ghostscript.com/mupdf.git"
+    },
+    "patch": "From 7570d162477dc8efe67f4c31e93ed21bf8a3fd80 Mon Sep 17 00:00:00 2001\nFrom: Sebastian Rasmussen <sebras@gmail.com>\nDate: Tue, 13 Feb 2018 02:33:32 +0100\nSubject: [PATCH] Bug 699018: Null terminate buffer in fz_snprintf() even if\n too short.\n\nPreviously the trailing null terminator would not be written if the\nformatted string ended up longer than the buffer.\n---\n source/fitz/printf.c | 15 +++++++++------\n 1 file changed, 9 insertions(+), 6 deletions(-)\n\ndiff --git a/source/fitz/printf.c b/source/fitz/printf.c\nindex bbdda93..95131ed 100644\n--- a/source/fitz/printf.c\n+++ b/source/fitz/printf.c\n@@ -474,13 +474,15 @@ fz_vsnprintf(char *buffer, size_t space, const char *fmt, va_list args)\n {\n \tstruct snprintf_buffer out;\n \tout.p = buffer;\n-\tout.s = space;\n+\tout.s = space > 0 ? space - 1 : 0;\n \tout.n = 0;\n \n \t/* Note: using a NULL context is safe here */\n \tfz_format_string(NULL, &out, snprintf_emit, fmt, args);\n-\tsnprintf_emit(NULL, &out, 0);\n-\treturn out.n - 1;\n+\tif (space > 0)\n+\t\tout.p[out.n < space ? out.n : space - 1] = '\\0';\n+\n+\treturn out.n;\n }\n \n size_t\n@@ -489,16 +491,17 @@ fz_snprintf(char *buffer, size_t space, const char *fmt, ...)\n \tva_list ap;\n \tstruct snprintf_buffer out;\n \tout.p = buffer;\n-\tout.s = space;\n+\tout.s = space > 0 ? space - 1 : 0;\n \tout.n = 0;\n \n \tva_start(ap, fmt);\n \t/* Note: using a NULL context is safe here */\n \tfz_format_string(NULL, &out, snprintf_emit, fmt, ap);\n-\tsnprintf_emit(NULL, &out, 0);\n+\tif (space > 0)\n+\t\tout.p[out.n < space ? out.n : space - 1] = '\\0';\n \tva_end(ap);\n \n-\treturn out.n - 1;\n+\treturn out.n;\n }\n \n char *\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42528266-vul",
+      "digest": "sha256:d2184d2d221116fa9378c2af1968b1d2860542f8793c7bd4197d97599eb52e43"
+    },
+    "patched": {
+      "ref": "n132/arvo:42528266-fix",
+      "digest": "sha256:78f3c6c835f8e29d23f50e09155add4f9009025759fda68d53ae37534cea8098"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/mupdf/source/pdf/pdf-annot.c:165",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/mupdf/source/pdf/pdf-annot.c:165"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

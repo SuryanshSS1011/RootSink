@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042497552",
+  "chain": "CWE-416->CWE-787",
+  "project": "libvips",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42497552",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "3870baef334fc957f51e1df97af412366dd8e386",
+      "fix_commits": [
+        "3870baef334fc957f51e1df97af412366dd8e386"
+      ],
+      "repo": "https://github.com/libvips/libvips"
+    },
+    "patch": "From 3870baef334fc957f51e1df97af412366dd8e386 Mon Sep 17 00:00:00 2001\nFrom: John Cupitt <jcupitt@gmail.com>\nDate: Tue, 1 Jun 2021 19:02:41 +0100\nSubject: [PATCH] free argv0 a little later\n\n---\n libvips/iofuncs/init.c | 8 ++++----\n 1 file changed, 4 insertions(+), 4 deletions(-)\n\ndiff --git a/libvips/iofuncs/init.c b/libvips/iofuncs/init.c\nindex 35b4850..74f9cdd 100644\n--- a/libvips/iofuncs/init.c\n+++ b/libvips/iofuncs/init.c\n@@ -739,8 +739,6 @@ vips_shutdown( void )\n \tgsf_shutdown(); \n #endif /*HAVE_GSF*/\n \n-       VIPS_FREE(vips__argv0);\n-\n \t/* In dev releases, always show leaks. But not more than once, it's\n \t * annoying.\n \t */\n@@ -757,8 +755,10 @@ vips_shutdown( void )\n \t\tdone = TRUE;\n \t}\n \n-       VIPS_FREEF( vips_g_mutex_free, vips__global_lock );\n-       VIPS_FREEF( g_timer_destroy, vips__global_timer );\n+\tVIPS_FREE( vips__argv0 );\n+\tVIPS_FREE( vips__prgname );\n+\tVIPS_FREEF( vips_g_mutex_free, vips__global_lock );\n+\tVIPS_FREEF( g_timer_destroy, vips__global_timer );\n }\n \n const char *\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42497552-vul",
+      "digest": "sha256:e15831067f0aa8c4059153892ebde44d3f04ee9a94e818fb1cc23fb4ab626655"
+    },
+    "patched": {
+      "ref": "n132/arvo:42497552-fix",
+      "digest": "sha256:8f46cb46da402895fa184a1f8c30f64c6f8dd389f44c7541968be4240059c5f7"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "WRITE",
+        "crash_site": "/src/libjxl/lib/jxl/dec_upsample.cc:106",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "WRITE",
+        "site": "/src/libjxl/lib/jxl/dec_upsample.cc:106"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

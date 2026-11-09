@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042488123",
+  "chain": "CWE-1284->CWE-125",
+  "project": "fluent-bit",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42488123",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "f6a8de0a8ca7caf4d857d20e35420e4f0ade96f9",
+      "fix_commits": [
+        "f6a8de0a8ca7caf4d857d20e35420e4f0ade96f9"
+      ],
+      "repo": "https://github.com/fluent/fluent-bit"
+    },
+    "patch": "diff --git a/src/flb_parser.c b/src/flb_parser.c\nindex 0a756f27c09..f0089e4ab3b 100644\n--- a/src/flb_parser.c\n+++ b/src/flb_parser.c\n@@ -765,6 +765,19 @@ int flb_parser_time_lookup(const char *time_str, size_t tsize,\n         p = flb_strptime(time_ptr, parser->time_fmt_year, tm);\n     }\n     else {\n+        /*\n+         * We must ensure string passed to flb_strptime is\n+         * null-terminated, which time_ptr is not guaranteed\n+         * to be. So we use tmp to hold our string.\n+         */\n+        if (time_len >= sizeof(tmp)) {\n+            return -1;\n+        }\n+        memcpy(tmp, time_ptr, time_len);\n+        tmp[time_len] = '\\0';\n+        time_ptr = tmp;\n+        time_len = strlen(tmp);\n+\n         p = flb_strptime(time_ptr, parser->time_fmt, tm);\n     }\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42488123-vul",
+      "digest": "sha256:1014cabbfc85cc1d88881e53ccef4865902f6ab9847e8e2e66416f1abcda85a4"
+    },
+    "patched": {
+      "ref": "n132/arvo:42488123-fix",
+      "digest": "sha256:853fa3c1e6cd0dd48f063570a0e46a23a8a284ff15e743e78b859ae76154a011"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/fluent-bit/src/flb_strptime.c:674",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/fluent-bit/src/flb_strptime.c:674"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

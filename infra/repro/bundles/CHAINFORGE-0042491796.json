@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042491796",
+  "chain": "CWE-416->CWE-787",
+  "project": "fio",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42491796",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "465767437da1bcf99a375295799d33948d9fc5f0",
+      "fix_commits": [
+        "465767437da1bcf99a375295799d33948d9fc5f0"
+      ],
+      "repo": "https://github.com/axboe/fio"
+    },
+    "patch": "diff --git a/options.c b/options.c\nindex 0b4c48d618..955bf959e4 100644\n--- a/options.c\n+++ b/options.c\n@@ -1672,6 +1672,7 @@ struct fio_option fio_options[FIO_MAX_OPTS] = {\n \t\t.lname\t= \"Filename(s)\",\n \t\t.type\t= FIO_OPT_STR_STORE,\n \t\t.off1\t= offsetof(struct thread_options, filename),\n+\t\t.maxlen\t= PATH_MAX,\n \t\t.cb\t= str_filename_cb,\n \t\t.prio\t= -1, /* must come after \"directory\" */\n \t\t.help\t= \"File(s) to use for the workload\",\ndiff --git a/parse.c b/parse.c\nindex c28d82efb0..44bf950768 100644\n--- a/parse.c\n+++ b/parse.c\n@@ -786,6 +786,11 @@ static int __handle_option(const struct fio_option *o, const char *ptr,\n \t\tif (o->off1) {\n \t\t\tcp = td_var(data, o, o->off1);\n \t\t\t*cp = strdup(ptr);\n+\t\t\tif (strlen(ptr) > o->maxlen - 1) {\n+\t\t\t\tlog_err(\"value exceeds max length of %d\\n\",\n+\t\t\t\t\to->maxlen);\n+\t\t\t\treturn 1;\n+\t\t\t}\n \t\t}\n \n \t\tif (fn)\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42491796-vul",
+      "digest": "sha256:a12581911237759ef78438c1b5336e1984beb50216c95508f7f97105222944a6"
+    },
+    "patched": {
+      "ref": "n132/arvo:42491796-fix",
+      "digest": "sha256:1d203dc18efb1e2c8a4ff480c6a811c32fabda7b25e25030b4ad5326e493e980"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/fio/filesetup.c:1656",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/fio/filesetup.c:1656"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

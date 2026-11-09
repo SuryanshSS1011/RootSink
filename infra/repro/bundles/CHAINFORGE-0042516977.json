@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042516977",
+  "chain": "CWE-20->CWE-125",
+  "project": "ntpsec",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42516977",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "b8900bfc21cb3df44a3d17df4acb2a533dfd36a3",
+      "fix_commits": [
+        "b8900bfc21cb3df44a3d17df4acb2a533dfd36a3"
+      ],
+      "repo": "https://gitlab.com/NTPsec/ntpsec"
+    },
+    "patch": "diff --git a/include/nts.h b/include/nts.h\nindex d01c48d158dd1211a3c8a3b0e23c76ec7567a2f2..41b03ed81dd10a6f932bea5701174ec8d73b3477 100644\n--- a/include/nts.h\n+++ b/include/nts.h\n@@ -65,6 +65,10 @@ bool nts_ke_setup_send(struct BufCtl_t *buf, int aead,\n  */\n \n \n+/* 2 byte type, 2 byte length */\n+#define NTS_KE_HDR_LNG 4\n+#define NTS_KE_U16_LNG 2\n+\n /* xxx_append_record_foo makes whole record with one foo */\n /* append_foo appends foo to existing partial record */\n void ke_append_record_null(BufCtl* buf, uint16_t type);\ndiff --git a/ntpd/nts.c b/ntpd/nts.c\nindex 107d08ca751200e3b0d1822a6edc2c770609da9e..c42dbbb7e581b17d4322651eeafd24460ea830a0 100644\n--- a/ntpd/nts.c\n+++ b/ntpd/nts.c\n@@ -296,10 +296,6 @@ void nts_log_ssl_error(void) {\n \n /* NB: KE length is body length, Extension length includes header. */\n \n-/* 2 byte type, 2 byte length */\n-#define NTS_KE_HDR_LNG 4\n-#define NTS_KE_U16_LNG 2\n-\n /* Troubles with signed/unsigned compares when using sizeof() */\n \n void ke_append_record_null(BufCtl* buf, uint16_t type) {\ndiff --git a/ntpd/nts_client.c b/ntpd/nts_client.c\nindex c76d48598263b112c3c7b42016fb63033609cf32..0f174caa2fbafd990fb0b6ad8dafd653e760e634 100644\n--- a/ntpd/nts_client.c\n+++ b/ntpd/nts_client.c\n@@ -616,7 +616,7 @@ bool nts_client_process_response_core(uint8_t *buff, int transferred, struct pee\n \n \tbuf.next = buff;\n \tbuf.left = transferred;\n-\twhile (buf.left > 0) {\n+\twhile (buf.left >= NTS_KE_HDR_LNG) {\n \t\tuint16_t type, data, port;\n \t\tbool critical = false;\n \t\tint length, keylength;\n@@ -729,6 +729,9 @@ bool nts_client_process_response_core(uint8_t *buff, int transferred, struct pee\n \t\t} /* case */\n \t}   /* while */\n \n+\tif (buf.left > 0)\n+\t\treturn false;\n+\n \tif (NO_AEAD == peer->nts_state.aead) {\n \t\tmsyslog(LOG_ERR, \"NTSc: No AEAD algorithim.\");\n \t\treturn false;\ndiff --git a/ntpd/nts_extens.c b/ntpd/nts_extens.c\nindex b893c7a68ff4ed6591c80ecda68dd8453626b61e..553b61b251cf8fa35809242c2096dc3f387fb5a0 100644\n--- a/ntpd/nts_extens.c\n+++ b/ntpd/nts_extens.c\n@@ -142,7 +142,7 @@ bool extens_server_recv(struct ntspacket_t *ntspacket, uint8_t *pkt, int lng) {\n \tntspacket->uidlen = 0;\n \tntspacket->needed = 0;\n \n-\twhile (buf.left > 0) {\n+\twhile (buf.left >= NTS_KE_HDR_LNG) {\n \t\tuint16_t type;\n \t\tbool critical = false;\n \t\tint length, adlength;\n@@ -259,6 +259,9 @@ bool extens_server_recv(struct ntspacket_t *ntspacket, uint8_t *pkt, int lng) {\n \tif (!sawAEEF) {\n \t\treturn false;\n \t}\n+\tif (buf.left > 0)\n+\t\treturn false;\n+\n \t//  printf(\"ESRx: %d, %d, %d\\n\",\n \t//      lng-LEN_PKT_NOMAC, ntspacket->needed, ntspacket->keylen);\n \tntspacket->valid = true;\n@@ -361,7 +364,7 @@ bool extens_client_recv(struct peer *peer, uint8_t *pkt, int lng) {\n \tbuf.next = pkt+LEN_PKT_NOMAC;\n \tbuf.left = lng-LEN_PKT_NOMAC;\n \n-\twhile (buf.left > 0) {\n+\twhile (buf.left >= NTS_KE_HDR_LNG) {\n \t\tuint16_t type;\n \t\tbool critical = false;\n \t\tint length, adlength, noncelen;\n@@ -442,6 +445,8 @@ bool extens_client_recv(struct peer *peer, uint8_t *pkt, int lng) {\n \tif (!sawAEEF) {\n \t\treturn false;\n \t}\n+\tif (buf.left > 0)\n+\t\treturn false;\n \tnts_client_recv_good++;\n \tnts_client_recv_bad--;\n \treturn true;\ndiff --git a/ntpd/nts_server.c b/ntpd/nts_server.c\nindex d6081db5a84f115df40cea939778ff5374050449..c1d1f073e6b10c487380d0e4f1d5a5a36a910509 100644\n--- a/ntpd/nts_server.c\n+++ b/ntpd/nts_server.c\n@@ -491,7 +491,7 @@ bool create_listener6(int port) {\n }\n \n bool nts_ke_process_receive(struct BufCtl_t *buf, int *aead) {\n-\twhile (buf->left > 0) {\n+\twhile (buf->left >= NTS_KE_HDR_LNG) {\n \t\tuint16_t type, data;\n \t\tint length;\n \t\tbool critical = false;\n@@ -554,6 +554,9 @@ bool nts_ke_process_receive(struct BufCtl_t *buf, int *aead) {\n \t\t} /* case */\n \t}   /* while */\n \n+\tif (buf->left > 0)\n+\t\treturn false;\n+\n \treturn true;\n \n }\ndiff --git a/tests/ntpd/nts_client.c b/tests/ntpd/nts_client.c\nindex d870b553514c2591fb7a95da63320e9beb880fe5..da899e573dc4e16165156a08cfa7341119b971e9 100644\n--- a/tests/ntpd/nts_client.c\n+++ b/tests/ntpd/nts_client.c\n@@ -117,11 +117,15 @@ TEST(nts_client, nts_client_process_response_core) {\n \t/* ===== Test: all correct ===== */\n \t/* data */\n \tuint8_t buf0[] = {\n-\t\t0x80, nts_next_protocol_negotiation, 0, 2, 0, nts_protocol_NTP,\n-\t\t0x80, nts_algorithm_negotiation, 0, 2, 0, AEAD_AES_SIV_CMAC_256,\n-\t\t0x80, nts_new_cookie, 0, 8, 1, 2, 3, 4, 5, 6, 7, 8,\n+\t\t0x80, nts_next_protocol_negotiation, 0, 2,\n+\t\t\t0, nts_protocol_NTP,\n+\t\t0x80, nts_algorithm_negotiation, 0, 2,\n+\t\t\t0, AEAD_AES_SIV_CMAC_256,\n+\t\t0x80, nts_new_cookie, 0, 8,\n+\t\t\t1, 2, 3, 4, 5, 6, 7, 8,\n \t\t/* server_negotiation skipped due to getaddrinfo() containment breach */\n-\t\t0x80, nts_port_negotiation, 0, 2, 0, 3,\n+\t\t0x80, nts_port_negotiation, 0, 2,\n+\t\t\t0, 123,\n \t\t0x80, nts_end_of_message, 0, 0\n \t};\n \t/* run */\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42516977-vul",
+      "digest": "sha256:d9e09ed30a6e5609b1afb3a41544a92cb4cd3753fe418a586f6ceb183371cb95"
+    },
+    "patched": {
+      "ref": "n132/arvo:42516977-fix",
+      "digest": "sha256:1f707c6e5e1261094ebb617581684f6bbe5a6b22fb27389e08514d9fd13517f5"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "use-after-poison",
+        "direction": "READ",
+        "crash_site": "/src/ntpsec/build/main/../../ntpd/nts.c:377",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "use-after-poison",
+        "direction": "READ",
+        "site": "/src/ntpsec/build/main/../../ntpd/nts.c:377"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

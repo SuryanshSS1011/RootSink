@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042533725",
+  "chain": "CWE-1284->CWE-787",
+  "project": "p11-kit",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42533725",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "f53bdc2c941aae47d592b0376de9a4bc442ec3d2",
+      "fix_commits": [
+        "f53bdc2c941aae47d592b0376de9a4bc442ec3d2"
+      ],
+      "repo": "https://github.com/p11-glue/p11-kit"
+    },
+    "patch": "diff --git a/p11-kit/rpc-message.c b/p11-kit/rpc-message.c\nindex 769c7d82..ea902553 100644\n--- a/p11-kit/rpc-message.c\n+++ b/p11-kit/rpc-message.c\n@@ -1333,6 +1333,7 @@ p11_rpc_message_get_attribute (p11_rpc_message *msg,\n {\n \tuint32_t type, length;\n \tCK_ULONG decode_length;\n+\tsize_t saved_offset;\n \tunsigned char validity;\n \tp11_rpc_attribute_serializer *serializer;\n \tp11_rpc_value_type value_type;\n@@ -1364,15 +1365,26 @@ p11_rpc_message_get_attribute (p11_rpc_message *msg,\n \t\t\treturn false;\n \t}\n \n-\t/* Decode the attribute value */\n \tvalue_type = map_attribute_to_value_type (type);\n \tassert (value_type < ELEMS (p11_rpc_attribute_serializers));\n \tserializer = &p11_rpc_attribute_serializers[value_type];\n \tassert (serializer != NULL);\n-\tif (!serializer->decode (msg, buffer, offset, attr->pValue, &decode_length))\n-\t\treturn false;\n-\tif (attr->pValue == NULL && length != 0 && decode_length > length)\n+\n+\t/* Get the attribute value length */\n+\tsaved_offset = *offset;\n+\tif (!serializer->decode (NULL, buffer, offset, NULL, &decode_length))\n \t\treturn false;\n+\n+\t/* Decode the attribute value */\n+\tif (attr->pValue != NULL) {\n+\t\tif (length < decode_length)\n+\t\t\treturn false;\n+\n+\t\t*offset = saved_offset;\n+\t\tif (!serializer->decode (msg, buffer, offset, attr->pValue, NULL))\n+\t\t\treturn false;\n+\t}\n+\n \tattr->type = type;\n \tattr->ulValueLen = length;\n \treturn true;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42533725-vul",
+      "digest": "sha256:8852108fa01c0a7a924db62fc8898d23dd51bab774c09af0519fc4aae73ebede"
+    },
+    "patched": {
+      "ref": "n132/arvo:42533725-fix",
+      "digest": "sha256:823b51ae12cd76248a05efdbc0e7be7002d4ec4104ea0cd282a455b79c2e6af4"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/p11-kit/p11-kit/rpc-message.c:1298",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/p11-kit/p11-kit/rpc-message.c:1298"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

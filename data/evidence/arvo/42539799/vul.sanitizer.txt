@@ -1,0 +1,96 @@
+======================= INFO =========================
+This binary is built for AFL-fuzz.
+To run the target function on individual input(s) execute this:
+  /out/server < INPUT_FILE
+or
+  /out/server INPUT_FILE1 [INPUT_FILE2 ... ]
+To fuzz with afl-fuzz execute this:
+  afl-fuzz [afl-flags] /out/server [-N]
+afl-fuzz will run N iterations before re-spawning the process (default: 1000)
+======================================================
+Reading 369 bytes from /tmp/poc
+=================================================================
+==7==ERROR: AddressSanitizer: heap-use-after-free on address 0x616000001b80 at pc 0x00000057fc90 bp 0x7ffc31ad3f10 sp 0x7ffc31ad3f08
+READ of size 4 at 0x616000001b80 thread T0
+SCARINESS: 45 (4-byte-read-heap-use-after-free)
+    #0 0x57fc8f in ssl_get_prev_session /src/openssl/ssl/ssl_sess.c:593:14
+    #1 0x5d9e73 in tls_early_post_process_client_hello /src/openssl/ssl/statem/statem_srvr.c:1755:13
+    #2 0x5d6ddf in tls_post_process_client_hello /src/openssl/ssl/statem/statem_srvr.c:2173:18
+    #3 0x5a3ae3 in read_state_machine /src/openssl/ssl/statem/statem.c:658:35
+    #4 0x5a29f7 in state_machine /src/openssl/ssl/statem/statem.c:428:21
+    #5 0x566811 in SSL_do_handshake /src/openssl/ssl/ssl_lib.c:3539:19
+    #6 0x52b0e3 in FuzzerTestOneInput /src/openssl/fuzz/server.c:629:9
+    #7 0x52b84f in ExecuteFilesOnyByOne(int, char**) /src/libfuzzer/afl/afl_driver.cpp:301:5
+    #8 0x52bdfe in main /src/libfuzzer/afl/afl_driver.cpp:339:12
+    #9 0x7f5fd17cc82f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+    #10 0x41e218 in _start (/out/server+0x41e218)
+
+DEDUP_TOKEN: ssl_get_prev_session--tls_early_post_process_client_hello--tls_post_process_client_hello
+0x616000001b80 is located 0 bytes inside of 520-byte region [0x616000001b80,0x616000001d88)
+freed by thread T0 here:
+    #0 0x4eb068 in __interceptor_cfree.localalias.1 /src/llvm/projects/compiler-rt/lib/asan/asan_malloc_linux.cc:86
+    #1 0x57dd62 in SSL_SESSION_free /src/openssl/ssl/ssl_sess.c:829:5
+    #2 0x5e513e in tls_decrypt_ticket /src/openssl/ssl/t1_lib.c:1386:13
+    #3 0x57ef52 in ssl_get_prev_session /src/openssl/ssl/ssl_sess.c:506:13
+    #4 0x5d9e73 in tls_early_post_process_client_hello /src/openssl/ssl/statem/statem_srvr.c:1755:13
+    #5 0x5d6ddf in tls_post_process_client_hello /src/openssl/ssl/statem/statem_srvr.c:2173:18
+    #6 0x5a3ae3 in read_state_machine /src/openssl/ssl/statem/statem.c:658:35
+    #7 0x5a29f7 in state_machine /src/openssl/ssl/statem/statem.c:428:21
+    #8 0x566811 in SSL_do_handshake /src/openssl/ssl/ssl_lib.c:3539:19
+    #9 0x52b0e3 in FuzzerTestOneInput /src/openssl/fuzz/server.c:629:9
+    #10 0x52b84f in ExecuteFilesOnyByOne(int, char**) /src/libfuzzer/afl/afl_driver.cpp:301:5
+    #11 0x52bdfe in main /src/libfuzzer/afl/afl_driver.cpp:339:12
+    #12 0x7f5fd17cc82f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+
+DEDUP_TOKEN: __interceptor_cfree.localalias.1--SSL_SESSION_free--tls_decrypt_ticket
+previously allocated by thread T0 here:
+    #0 0x4eb237 in malloc /src/llvm/projects/compiler-rt/lib/asan/asan_malloc_linux.cc:98
+    #1 0x6eac6c in CRYPTO_zalloc /src/openssl/crypto/mem.c:230:17
+    #2 0x57cb1f in SSL_SESSION_new /src/openssl/ssl/ssl_sess.c:71:10
+    #3 0x5ff08e in d2i_SSL_SESSION /src/openssl/ssl/ssl_asn1.c:263:15
+    #4 0x5e50b5 in tls_decrypt_ticket /src/openssl/ssl/t1_lib.c:1380:12
+    #5 0x57ef52 in ssl_get_prev_session /src/openssl/ssl/ssl_sess.c:506:13
+    #6 0x5d9e73 in tls_early_post_process_client_hello /src/openssl/ssl/statem/statem_srvr.c:1755:13
+    #7 0x5d6ddf in tls_post_process_client_hello /src/openssl/ssl/statem/statem_srvr.c:2173:18
+    #8 0x5a3ae3 in read_state_machine /src/openssl/ssl/statem/statem.c:658:35
+    #9 0x5a29f7 in state_machine /src/openssl/ssl/statem/statem.c:428:21
+    #10 0x566811 in SSL_do_handshake /src/openssl/ssl/ssl_lib.c:3539:19
+    #11 0x52b0e3 in FuzzerTestOneInput /src/openssl/fuzz/server.c:629:9
+    #12 0x52b84f in ExecuteFilesOnyByOne(int, char**) /src/libfuzzer/afl/afl_driver.cpp:301:5
+    #13 0x52bdfe in main /src/libfuzzer/afl/afl_driver.cpp:339:12
+    #14 0x7f5fd17cc82f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+
+DEDUP_TOKEN: malloc--CRYPTO_zalloc--SSL_SESSION_new
+SUMMARY: AddressSanitizer: heap-use-after-free /src/openssl/ssl/ssl_sess.c:593:14 in ssl_get_prev_session
+Shadow bytes around the buggy address:
+  0x0c2c7fff8320: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c2c7fff8330: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c2c7fff8340: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c2c7fff8350: 00 00 00 00 00 fa fa fa fa fa fa fa fa fa fa fa
+  0x0c2c7fff8360: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+=>0x0c2c7fff8370:[fd]fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd
+  0x0c2c7fff8380: fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd
+  0x0c2c7fff8390: fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd
+  0x0c2c7fff83a0: fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd
+  0x0c2c7fff83b0: fd fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c2c7fff83c0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+==7==ABORTING

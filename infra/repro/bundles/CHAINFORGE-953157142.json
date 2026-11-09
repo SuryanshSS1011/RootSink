@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-953157142",
+  "chain": "CWE-129->CWE-787",
+  "project": "opensc",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42512197",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/OpenSC/OpenSC/commit/367c3ad2ef2c10cb29602f72163e7fb23c3f5827",
+      "fix_commits": [
+        "367c3ad2ef2c10cb29602f72163e7fb23c3f5827"
+      ],
+      "repo": "https://github.com/OpenSC/OpenSC"
+    },
+    "patch": "diff --git a/src/pkcs15init/pkcs15-myeid.c b/src/pkcs15init/pkcs15-myeid.c\nindex 75652f6e9f..6105c8b850 100644\n--- a/src/pkcs15init/pkcs15-myeid.c\n+++ b/src/pkcs15init/pkcs15-myeid.c\n@@ -417,6 +417,10 @@ myeid_new_file(sc_profile_t *profile, sc_card_t *card,\n \tfile->id += num;\n \tp = &file->path;\n \t*p = profile->df_info->file->path;\n+\tif (p->len >= SC_MAX_PATH_SIZE) {\n+\t\tsc_log(card->ctx, \"Wrong path length\");\n+\t\treturn SC_ERROR_INTERNAL;\n+\t}\n \tp->value[p->len++] = (u8) (file->id / 256);\n \tp->value[p->len++] = (u8) (file->id % 256);\n \n@@ -598,8 +602,10 @@ myeid_create_key(struct sc_profile *profile, struct sc_pkcs15_card *p15card,\n \tr = myeid_new_file(profile, card, object->type, *key_reference, &file);\n \tLOG_TEST_RET(ctx, r, \"Cannot get new MyEID key file\");\n \n-\tif (!file || !file->path.len)\n+\tif (!file || !file->path.len || file->path.len > SC_MAX_PATH_SIZE) {\n+\t\tsc_file_free(file);\n \t\tLOG_TEST_RET(ctx, SC_ERROR_INVALID_ARGUMENTS, \"Cannot determine key file\");\n+\t}\n \n \tsc_log(ctx, \"Key file size %d\", keybits);\n \tfile->size = keybits;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42512197-vul",
+      "digest": "sha256:40678c89c40d78de461c9cdd5c4941df7051006635ca24878b39d5fa197099d0"
+    },
+    "patched": {
+      "ref": "n132/arvo:42512197-fix",
+      "digest": "sha256:1dbe6376a5de1ed9d010ae3333fa65625ef4a970b77245011b9a53d808716e0f"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "crash_site": "/src/opensc/src/pkcs15init/pkcs15-myeid.c:420",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 129,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "site": "/src/opensc/src/pkcs15init/pkcs15-myeid.c:420"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

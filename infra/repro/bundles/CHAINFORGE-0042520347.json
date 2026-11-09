@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042520347",
+  "chain": "CWE-456->CWE-457",
+  "project": "imagemagick",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42520347",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "010bbd2068f7d9da1c980f3393e2f5ecdc688ff4",
+      "fix_commits": [
+        "010bbd2068f7d9da1c980f3393e2f5ecdc688ff4"
+      ],
+      "repo": "https://github.com/imagemagick/imagemagick"
+    },
+    "patch": "From 010bbd2068f7d9da1c980f3393e2f5ecdc688ff4 Mon Sep 17 00:00:00 2001\nFrom: Cristy <urban-warrior@imagemagick.org>\nDate: Mon, 23 Jan 2023 18:59:43 -0500\nSubject: [PATCH] wrong byte order\n\n---\n coders/wpg.c | 44 +++++++++++++++-----------------------------\n 1 file changed, 15 insertions(+), 29 deletions(-)\n\ndiff --git a/coders/wpg.c b/coders/wpg.c\nindex f9ef6f8..f3f593b 100644\n--- a/coders/wpg.c\n+++ b/coders/wpg.c\n@@ -280,9 +280,7 @@ static MagickBooleanType InsertRow(Image *image,unsigned char *p,ssize_t y,\n     bit;\n \n   Quantum\n-    index;\n-\n-  Quantum\n+    index,\n     *q;\n \n   ssize_t\n@@ -470,9 +468,8 @@ static int UnpackWPGRaster(Image *image,int bpp,ExceptionInfo *exception)\n     8*sizeof(*BImgBuff));\n   if(BImgBuff==NULL) return(-2);\n   (void) memset(BImgBuff,0,(size_t) ldblk*8*sizeof(*BImgBuff));\n-\n-  while(y<(ssize_t) image->rows)\n-    {\n+  while (y < (ssize_t) image->rows)\n+  {\n       int\n         c;\n \n@@ -586,7 +583,7 @@ static int UnpackWPG2Raster(Image *image,int bpp,ExceptionInfo *exception)\n   unsigned char\n     bbuf,\n     *BImgBuff,\n-    SampleBuffer[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };\n+    SampleBuffer[] = { 0, 0, 0, 0, 0, 0, 0, 0 };\n \n   x=0;\n   y=0;\n@@ -598,7 +595,7 @@ static int UnpackWPG2Raster(Image *image,int bpp,ExceptionInfo *exception)\n   (void) memset(BImgBuff,0,ldblk*sizeof(*BImgBuff));\n \n   while( y< image->rows)\n-    {\n+  {\n       bbuf=ReadBlobByte(image);\n \n       switch(bbuf)\n@@ -854,7 +851,6 @@ static Image *ExtractPostscript(Image *image,const ImageInfo *image_info,\n     /* Detect file format - Check magic.mgk configuration file. */\n   magic_info=GetMagicInfo(magick,count,exception);\n   if(magic_info == (const MagicInfo *) NULL) goto FINISH_UNL;\n-  /*     printf(\"Detected:%s  \\n\",magic_info->name); */\n   if(exception->severity != UndefinedException) goto FINISH_UNL;\n   (void) CopyMagickString(clone_info->magick,GetMagicName(magic_info),\n     MagickPathExtent);\n@@ -1115,22 +1111,21 @@ static Image *ReadWPGImage(const ImageInfo *image_info,ExceptionInfo *exception)\n   Header.EncryptKey=ReadBlobLSBShort(image);\n   Header.Reserved=ReadBlobLSBShort(image);\n \n-  if ((Header.FileId != 0x435057FF) || (Header.ProductType != 0x16))\n+  if ((Header.FileId != 0x435057FF) || (Header.FileType != 0x16))\n     ThrowReaderException(CorruptImageError,\"ImproperImageHeader\");\n   if (Header.EncryptKey!=0)\n     ThrowReaderException(CoderError,\"EncryptedWPGImageFileNotSupported\");\n \n-  image->columns = 1;\n-  image->rows = 1;\n-  image->colors = 0;\n+  image->columns=1;\n+  image->rows=1;\n+  image->colors=0;\n   image->storage_class=DirectClass;\n   (void) ResetImagePixels(image,exception);\n   bpp=0;\n   BitmapHeader2.RotAngle=0;\n   Rec2.RecordLength=0;\n-\n   switch(Header.MajorVersion)\n-    {\n+  {\n     case 1:     /* WPG level 1 */\n       while(!EOFBlob(image)) /* object parser loop */\n         {\n@@ -1257,7 +1252,6 @@ static Image *ReadWPGImage(const ImageInfo *image_info,ExceptionInfo *exception)\n                       ThrowReaderException(ResourceLimitError,\n                         \"MemoryAllocationFailed\");\n                     }\n-                  /* printf(\"Load default colormap \\n\"); */\n                   for (i=0; (i < (int) image->colors) && (i < 256); i++)\n                     {\n                       image->colormap[i].red=ScaleCharToQuantum(WPG1_Palette[i].Red);\n@@ -1752,7 +1746,7 @@ static void WPGFlushRLE(WPGRLEInfo *rle_info,Image *image,unsigned char n)\n       (void) WriteBlob(image,n,rle_info->pixels);\n       rle_info->offset-=n;\n       if (rle_info->offset > 0)\n-        (void) memcpy(rle_info->pixels,rle_info->pixels+n,n);\n+        (void) memmove(rle_info->pixels,rle_info->pixels+n,n);\n       else\n         rle_info->count=0;\n     }\n@@ -1773,7 +1767,7 @@ static void WPGAddRLEByte(WPGRLEInfo *rle_info,Image *image,\n               WPGFlushRLE(rle_info,image,(unsigned char) (rle_info->offset-\n                 rle_info->count-1));\n               (void) WriteBlobByte(image,(const unsigned char)\n-                 rle_info->count|0x80);\n+                rle_info->count | 0x80);\n               (void) WriteBlobByte(image,rle_info->pixels[0]);\n               rle_info->offset=1;\n               rle_info->pixels[0]=byte;\n@@ -1841,9 +1835,6 @@ static MagickBooleanType WriteWPGImage(const ImageInfo *image_info,Image *image,\n   QuantumInfo\n     *quantum_info;\n \n-  size_t\n-    extent;\n-\n   ssize_t\n     y;\n \n@@ -1877,8 +1868,8 @@ static MagickBooleanType WriteWPGImage(const ImageInfo *image_info,Image *image,\n   */\n   (void) WriteBlobLSBLong(image,0x435057FF);  /* FileId */\n   (void) WriteBlobLSBLong(image,16);  /* data offset */\n-  (void) WriteBlobByte(image,0x16);  /* product type */\n-  (void) WriteBlobByte(image,1);  /* file type */\n+  (void) WriteBlobByte(image,1);  /* product type */\n+  (void) WriteBlobByte(image,0x16);  /* file type */\n   (void) WriteBlobByte(image,1);  /* major version */\n   (void) WriteBlobByte(image,0);  /* minor version */\n   (void) WriteBlobLSBShort(image,0);  /* encypt key */\n@@ -1952,11 +1943,6 @@ static MagickBooleanType WriteWPGImage(const ImageInfo *image_info,Image *image,\n   if (quantum_info == (QuantumInfo *) NULL)\n     ThrowWriterException(ImageError,\"MemoryAllocationFailed\");\n   pixels=(unsigned char *) GetQuantumPixels(quantum_info);\n-  extent=image->columns;\n-  if (image->colors <= 16)\n-    extent=(image->columns+1)/2;\n-  if (image->colors <= 2)\n-    extent=(image->columns+7)/8;\n   WPGInitializeRLE(&rle_info);\n   for (y=0; y < (ssize_t) image->rows; y++)\n   {\n@@ -1973,7 +1959,7 @@ static MagickBooleanType WriteWPGImage(const ImageInfo *image_info,Image *image,\n       image->depth == 1 ? GrayQuantum : IndexQuantum,pixels,exception);\n     if (length == 0)\n       break;\n-    WPGAddRLEBlock(&rle_info,image,pixels,(unsigned short) extent);\n+    WPGAddRLEBlock(&rle_info,image,pixels,(unsigned short) length);\n     WPGFlush(&rle_info,image);\n     status=SetImageProgress(image,SaveImageTag,(MagickOffsetType) y,\n       image->rows);\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42520347-vul",
+      "digest": "sha256:6a9d25cad37c80100ccb52cce298fe4475ef5d7d6e43822f6368b13136344af5"
+    },
+    "patched": {
+      "ref": "n132/arvo:42520347-fix",
+      "digest": "sha256:9f4c4840783fd437341a79b2d28b0a41d82b33422ed274b0b1056a90f94e6f7c"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/imagemagick/coders/wpg.c:1767",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/imagemagick/coders/wpg.c:1767"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

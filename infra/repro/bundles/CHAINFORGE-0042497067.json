@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042497067",
+  "chain": "CWE-416->CWE-125",
+  "project": "libredwg",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42497067",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "8bd75b4e2dfcb229e5121c3e45e5d284bf0d0477",
+      "fix_commits": [
+        "8bd75b4e2dfcb229e5121c3e45e5d284bf0d0477"
+      ],
+      "repo": "https://github.com/LibreDWG/libredwg"
+    },
+    "patch": "From 8bd75b4e2dfcb229e5121c3e45e5d284bf0d0477 Mon Sep 17 00:00:00 2001\nFrom: Reini Urban <rurban@cpan.org>\nDate: Sat, 16 Apr 2022 11:56:00 +0200\nSubject: [PATCH] preR13: fix TV BS, special-case free by fixedtype\n\nnot type\n---\n src/bits.c |  10 ++-\n src/free.c | 176 +++++++++++++++++++++++++++++++++++++++++++++++++++++\n 2 files changed, 184 insertions(+), 2 deletions(-)\n\ndiff --git a/src/bits.c b/src/bits.c\nindex 6aae4b4..bff15b8 100644\n--- a/src/bits.c\n+++ b/src/bits.c\n@@ -1548,7 +1548,10 @@ bit_read_TV (Bit_Chain *restrict dat)\n   unsigned char *chain;\n \n   CHK_OVERFLOW_PLUS (1,__FUNCTION__,NULL)\n-  length = bit_read_BS (dat);\n+  if (dat->from_version < R_13)\n+    length = bit_read_RS (dat);\n+  else\n+    length = bit_read_BS (dat);\n   CHK_OVERFLOW_PLUS (length,__FUNCTION__,NULL)\n   chain = (unsigned char *)malloc (length + 1);\n   if (!chain)\n@@ -1836,7 +1839,10 @@ bit_write_TV (Bit_Chain *restrict dat, BITCODE_TV restrict chain)\n   int length = (chain && *chain) ? strlen ((const char *)chain) : 0;\n   if (dat->version <= R_2000 && length)\n     length++;\n-  bit_write_BS (dat, length);\n+  if (dat->from_version < R_13)\n+    bit_write_RS (dat, length);\n+  else\n+    bit_write_BS (dat, length);\n   for (i = 0; i < length; i++)\n     bit_write_RC (dat, (unsigned char)chain[i]);\n }\ndiff --git a/src/free.c b/src/free.c\nindex 61d7b99..38720ad 100644\n--- a/src/free.c\n+++ b/src/free.c\n@@ -590,6 +590,177 @@ int dwg_free_variable_type_private (Dwg_Object *restrict obj)\n   return DWG_ERR_UNHANDLEDCLASS;\n }\n \n+static void\n+free_preR13_object (Dwg_Object *obj)\n+{\n+  int error = 0;\n+  long unsigned int j;\n+  Dwg_Data *dwg;\n+  Bit_Chain *dat = &pdat;\n+\n+  if (obj && obj->parent)\n+    {\n+      dwg = obj->parent;\n+      dat->version = dwg->header.version;\n+      dat->from_version = dwg->header.from_version;\n+    }\n+  else\n+    return;\n+  if (obj->type == DWG_TYPE_FREED || obj->tio.object == NULL)\n+    return;\n+\n+  switch (obj->fixedtype)\n+    {\n+    case DWG_TYPE_TEXT:\n+      dwg_free_TEXT_private (dat, dat, dat, obj);\n+      break;\n+    case DWG_TYPE_ATTRIB:\n+      dwg_free_ATTRIB_private (dat, dat, dat, obj);\n+      break;\n+    case DWG_TYPE_ATTDEF:\n+      dwg_free_ATTDEF_private (dat, dat, dat, obj);\n+      break;\n+    case DWG_TYPE_BLOCK:\n+      dwg_free_BLOCK_private (dat, dat, dat, obj);\n+      break;\n+    case DWG_TYPE_ENDBLK:\n+      dwg_free_ENDBLK_private (dat, dat, dat, obj);\n+      break;\n+    case DWG_TYPE_SEQEND:\n+      dwg_free_SEQEND_private (dat, dat, dat, obj);\n+      break;\n+    case DWG_TYPE_REPEAT:\n+      dwg_free_REPEAT_private (dat, dat, dat, obj);\n+      break;\n+    case DWG_TYPE_ENDREP:\n+      dwg_free_ENDREP_private (dat, dat, dat, obj);\n+      break;\n+    case DWG_TYPE_INSERT:\n+      dwg_free_INSERT_private (dat, dat, dat, obj);\n+      break;\n+    case DWG_TYPE_VERTEX_2D:\n+      dwg_free_VERTEX_2D_private (dat, dat, dat, obj);\n+      break;\n+    case DWG_TYPE_POLYLINE_2D:\n+      dwg_free_POLYLINE_2D_private (dat, dat, dat, obj);\n+      break;\n+    case DWG_TYPE_ARC:\n+      dwg_free_ARC_private (dat, dat, dat, obj);\n+      break;\n+    case DWG_TYPE_CIRCLE:\n+      dwg_free_CIRCLE_private (dat, dat, dat, obj);\n+      break;\n+    case DWG_TYPE_LINE:\n+      dwg_free_LINE_private (dat, dat, dat, obj);\n+      break;\n+    case DWG_TYPE_DIMENSION_ORDINATE:\n+      dwg_free_DIMENSION_ORDINATE_private (dat, dat, dat, obj);\n+      break;\n+    case DWG_TYPE_DIMENSION_LINEAR:\n+      dwg_free_DIMENSION_LINEAR_private (dat, dat, dat, obj);\n+      break;\n+    case DWG_TYPE_DIMENSION_ALIGNED:\n+      dwg_free_DIMENSION_ALIGNED_private (dat, dat, dat, obj);\n+      break;\n+    case DWG_TYPE_DIMENSION_ANG3PT:\n+      dwg_free_DIMENSION_ANG3PT_private (dat, dat, dat, obj);\n+      break;\n+    case DWG_TYPE_DIMENSION_ANG2LN:\n+      dwg_free_DIMENSION_ANG2LN_private (dat, dat, dat, obj);\n+      break;\n+    case DWG_TYPE_DIMENSION_RADIUS:\n+      dwg_free_DIMENSION_RADIUS_private (dat, dat, dat, obj);\n+      break;\n+    case DWG_TYPE_DIMENSION_DIAMETER:\n+      dwg_free_DIMENSION_DIAMETER_private (dat, dat, dat, obj);\n+      break;\n+    case DWG_TYPE_POINT:\n+      dwg_free_POINT_private (dat, dat, dat, obj);\n+      break;\n+    case DWG_TYPE__3DFACE:\n+      dwg_free__3DFACE_private (dat, dat, dat, obj);\n+      break;\n+    case DWG_TYPE__3DLINE:\n+      dwg_free__3DLINE_private (dat, dat, dat, obj);\n+      break;\n+    case DWG_TYPE_SOLID:\n+      dwg_free_SOLID_private (dat, dat, dat, obj);\n+      break;\n+    case DWG_TYPE_TRACE:\n+      dwg_free_TRACE_private (dat, dat, dat, obj);\n+      break;\n+    case DWG_TYPE_SHAPE:\n+      dwg_free_SHAPE_private (dat, dat, dat, obj);\n+      break;\n+    case DWG_TYPE_VIEWPORT:\n+      dwg_free_VIEWPORT_private (dat, dat, dat, obj);\n+      break;\n+    case DWG_TYPE_BLOCK_CONTROL:\n+      dwg_free_BLOCK_CONTROL_private (dat, dat, dat, obj);\n+      break;\n+    case DWG_TYPE_BLOCK_HEADER:\n+      dwg_free_BLOCK_HEADER_private (dat, dat, dat, obj);\n+      break;\n+    case DWG_TYPE_LAYER_CONTROL:\n+      dwg_free_LAYER_CONTROL_private (dat, dat, dat, obj);\n+      break;\n+    case DWG_TYPE_LAYER:\n+      dwg_free_LAYER_private (dat, dat, dat, obj);\n+      break;\n+    case DWG_TYPE_STYLE_CONTROL:\n+      dwg_free_STYLE_CONTROL_private (dat, dat, dat, obj);\n+      break;\n+    case DWG_TYPE_STYLE:\n+      dwg_free_STYLE_private (dat, dat, dat, obj);\n+      break;\n+    case DWG_TYPE_LTYPE_CONTROL:\n+      dwg_free_LTYPE_CONTROL_private (dat, dat, dat, obj);\n+      break;\n+    case DWG_TYPE_LTYPE:\n+      dwg_free_LTYPE_private (dat, dat, dat, obj);\n+      break;\n+    case DWG_TYPE_VIEW_CONTROL:\n+      dwg_free_VIEW_CONTROL_private (dat, dat, dat, obj);\n+      break;\n+    case DWG_TYPE_VIEW:\n+      dwg_free_VIEW_private (dat, dat, dat, obj);\n+      break;\n+    case DWG_TYPE_UCS_CONTROL:\n+      dwg_free_UCS_CONTROL_private (dat, dat, dat, obj);\n+      break;\n+    case DWG_TYPE_UCS:\n+      dwg_free_UCS_private (dat, dat, dat, obj);\n+      break;\n+    case DWG_TYPE_VPORT_CONTROL:\n+      dwg_free_VPORT_CONTROL_private (dat, dat, dat, obj);\n+      break;\n+    case DWG_TYPE_VPORT:\n+      dwg_free_VPORT_private (dat, dat, dat, obj);\n+      break;\n+    case DWG_TYPE_APPID_CONTROL:\n+      dwg_free_APPID_CONTROL_private (dat, dat, dat, obj);\n+      break;\n+    case DWG_TYPE_APPID:\n+      dwg_free_APPID_private (dat, dat, dat, obj);\n+      break;\n+    case DWG_TYPE_DIMSTYLE_CONTROL:\n+      dwg_free_DIMSTYLE_CONTROL_private (dat, dat, dat, obj);\n+      break;\n+    case DWG_TYPE_DIMSTYLE:\n+      dwg_free_DIMSTYLE_private (dat, dat, dat, obj);\n+      break;\n+    case DWG_TYPE_VX_CONTROL:\n+      dwg_free_VX_CONTROL_private (dat, dat, dat, obj);\n+      break;\n+    case DWG_TYPE_VX_TABLE_RECORD:\n+      dwg_free_VX_TABLE_RECORD_private (dat, dat, dat, obj);\n+      break;\n+    default:\n+      LOG_ERROR (\"Unhandled preR13 class %s, fixedtype %d in free_preR13_object()\",\n+                 dwg_type_name (obj->fixedtype), (int)obj->fixedtype);\n+    }\n+}\n+\n // using the global dat\n EXPORT void\n dwg_free_object (Dwg_Object *obj)\n@@ -610,6 +781,11 @@ dwg_free_object (Dwg_Object *obj)\n   if (obj->type == DWG_TYPE_FREED || obj->tio.object == NULL)\n     return;\n \n+  PRE (R_13) {\n+    free_preR13_object (obj);\n+    return;\n+  }\n+\n   switch (obj->type)\n     {\n     case DWG_TYPE_TEXT:\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42497067-vul",
+      "digest": "sha256:57993e79ea5320726d4b40e135b19ce75739d44e16fb11fccae59f54f1065951"
+    },
+    "patched": {
+      "ref": "n132/arvo:42497067-fix",
+      "digest": "sha256:dcae9dd41826efa10e59c22d066887fb487a45e0caabf2337d0ec32bd9101875"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/libredwg/src/./dwg.spec:6317",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/libredwg/src/./dwg.spec:6317"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

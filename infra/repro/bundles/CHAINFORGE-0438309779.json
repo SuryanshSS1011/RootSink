@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0438309779",
+  "chain": "CWE-416->CWE-125",
+  "project": "gpac",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "438309779",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "91f5e9735703008a5b83052d3ea93fbb643acd95",
+      "fix_commits": [
+        "91f5e9735703008a5b83052d3ea93fbb643acd95"
+      ],
+      "repo": "https://github.com/gpac/gpac"
+    },
+    "patch": "From 91f5e9735703008a5b83052d3ea93fbb643acd95 Mon Sep 17 00:00:00 2001\nFrom: Aurelien David <aurelien.david@telecom-paristech.fr>\nDate: Tue, 12 Aug 2025 12:10:35 +0200\nSubject: [PATCH] fix 0d6b0c2: prevent double frees in AC4 clean list (#3311)\n\nautofuzz bug yD-KR3uv3kbD2Q, KmxtX7BLBAYM-g, qA8onAkaqU_GdA\n---\n src/odf/descriptors.c | 40 ++++++++++++++++++++++------------------\n 1 file changed, 22 insertions(+), 18 deletions(-)\n\ndiff --git a/src/odf/descriptors.c b/src/odf/descriptors.c\nindex d0bc551..69bb053 100644\n--- a/src/odf/descriptors.c\n+++ b/src/odf/descriptors.c\n@@ -2426,41 +2426,45 @@ void gf_odf_ac4_cfg_clean_list(GF_AC4Config *cfg)\n \tif (!cfg)\n \t\treturn;\n \n+\n \tif (cfg->stream.presentations) {\n \n+\t\tGF_List* groups_to_del = gf_list_new();\n+\n \t\twhile ( (pres = gf_list_pop_back(cfg->stream.presentations)) ) {\n \n \t\t\tif (pres->substream_groups) {\n \n \t\t\t\twhile ( (group = gf_list_pop_back(pres->substream_groups)) ) {\n \n-\t\t\t\t\tif (group->substreams) {\n+\t\t\t\t\tif (group && gf_list_find(groups_to_del, group) < 0)\n+\t\t\t\t\t\tgf_list_add(groups_to_del, group);\n+\n+\t\t\t\t}\n+\t\t\t\tgf_list_del(pres->substream_groups);\n \n-\t\t\t\t\t\tfor (s = 0; s < gf_list_count(group->substreams); s++) {\n-\t\t\t\t\t\t\tsubs = gf_list_get(group->substreams, s);\n-\t\t\t\t\t\t\tif (!subs) {\n-\t\t\t\t\t\t\t\tcontinue;\n-\t\t\t\t\t\t\t}\n+\t\t\t}\n+\t\t\tgf_free(pres);\n+\t\t}\n \n-\t\t\t\t\t\t\tgf_free(subs);\n-\t\t\t\t\t\t}\n-\t\t\t\t\t\tgf_list_del(group->substreams);\n+\t\twhile ( (group = gf_list_pop_back(groups_to_del)) ) {\n+\t\t\tif (group->substreams) {\n \n+\t\t\t\tfor (s = 0; s < gf_list_count(group->substreams); s++) {\n+\t\t\t\t\tsubs = gf_list_get(group->substreams, s);\n+\t\t\t\t\tif (!subs) {\n+\t\t\t\t\t\tcontinue;\n \t\t\t\t\t}\n-\t\t\t\t\tgf_free(group);\n \n-\t\t\t\t\t// remove potential duplicates of group\n-\t\t\t\t\ts32 idx = 1;\n-\t\t\t\t\twhile (idx>=0) {\n-\t\t\t\t\t\tidx = gf_list_find(pres->substream_groups, group);\n-\t\t\t\t\t\tif (idx>=0) gf_list_rem(pres->substream_groups, idx);\n-\t\t\t\t\t}\n+\t\t\t\t\tgf_free(subs);\n \t\t\t\t}\n-\t\t\t\tgf_list_del(pres->substream_groups);\n+\t\t\t\tgf_list_del(group->substreams);\n \n \t\t\t}\n-\t\t\tgf_free(pres);\n+\t\t\tgf_free(group);\n+\n \t\t}\n+\t\tgf_list_del(groups_to_del);\n \n \t\tgf_list_del(cfg->stream.presentations);\n \t\tcfg->stream.presentations = NULL;\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:438309779-vul",
+      "digest": "sha256:a8db4d8b757f7ec11c51e5585b54adc30e3f7b86061a17530f6573083c7feaed"
+    },
+    "patched": {
+      "ref": "n132/arvo:438309779-fix",
+      "digest": "sha256:7bc98c141c06b553422a44d63e7be16aba573446d5c2e8993ac070441eca1fa2"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/gpac/src/odf/descriptors.c:2437",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/gpac/src/odf/descriptors.c:2437"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

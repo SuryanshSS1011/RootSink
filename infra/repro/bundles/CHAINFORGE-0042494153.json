@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042494153",
+  "chain": "CWE-416->CWE-125",
+  "project": "skia",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42494153",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "3fa0cdada707c15d5035e75e10cf522cc2656e17",
+      "fix_commits": [
+        "3fa0cdada707c15d5035e75e10cf522cc2656e17"
+      ],
+      "repo": "https://skia.googlesource.com/skia.git"
+    },
+    "patch": "diff --git a/src/shaders/SkPictureShader.cpp b/src/shaders/SkPictureShader.cpp\nindex 2908a1d..408738c 100644\n--- a/src/shaders/SkPictureShader.cpp\n+++ b/src/shaders/SkPictureShader.cpp\n@@ -441,7 +441,7 @@ std::unique_ptr<GrFragmentProcessor> SkPictureShader::asFragmentProcessor(\n \n     GrProxyProvider* provider = ctx->priv().proxyProvider();\n     GrSurfaceProxyView view;\n-    if (auto proxy = provider->findProxyByUniqueKey(key)) {\n+    if (auto proxy = provider->findOrCreateProxyByUniqueKey(key)) {\n         view = GrSurfaceProxyView(proxy, kTopLeft_GrSurfaceOrigin, GrSwizzle());\n     } else {\n         const int msaaSampleCount = 0;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42494153-vul",
+      "digest": "sha256:5f86f94d5d12c2501e72a41aa4bfeec21f67a1424c1b2a88653643ffe7e89ae2"
+    },
+    "patched": {
+      "ref": "n132/arvo:42494153-fix",
+      "digest": "sha256:a4fc5c763eac6ee1827fb56538f975c5ccdc5e97eaede8b88dd2423429869815"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/skia/out/Fuzz/../../src/gpu/GrGpuResource.cpp:52",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/skia/out/Fuzz/../../src/gpu/GrGpuResource.cpp:52"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

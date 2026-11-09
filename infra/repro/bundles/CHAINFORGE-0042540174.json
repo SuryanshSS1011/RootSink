@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042540174",
+  "chain": "CWE-1284->CWE-125",
+  "project": "wireshark",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42540174",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "635cad93737ea7f8ebd6047baf54548212ede7c7",
+      "fix_commits": [
+        "635cad93737ea7f8ebd6047baf54548212ede7c7"
+      ],
+      "repo": "https://github.com/wireshark/wireshark"
+    },
+    "patch": "diff --git a/epan/dissectors/packet-mstp.c b/epan/dissectors/packet-mstp.c\nindex 9b1d1865643..9a7d1e21e01 100644\n--- a/epan/dissectors/packet-mstp.c\n+++ b/epan/dissectors/packet-mstp.c\n@@ -202,6 +202,7 @@ static guint32 calc_data_crc32(guint8 dataValue, guint32 crc32kValue)\n * writes the original client data at 'to', restoring any\n * 'mask' octets that may present in the encoded data.\n * Returns the length of the encoded data or zero if error.\n+* The length of the encoded value is always smaller or equal to 'length'.\n */\n static gsize cobs_decode(guint8 *to, const guint8 *from, gsize length, guint8 mask)\n {\n@@ -215,13 +216,17 @@ static gsize cobs_decode(guint8 *to, const guint8 *from, gsize length, guint8 ma\n     code = from[read_index] ^ mask;\n     last_code = code;\n     /*\n-    * Sanity check the encoding to prevent the while() loop below\n-    * from overrunning the output buffer.\n-    */\n-    if (read_index + code > length)\n+     * A code octet equal to zero or greater than the length is illegal.\n+     */\n+    if (code == 0 || read_index + code > length)\n       return 0;\n \n     read_index++;\n+    /*\n+     * Decode data octets. The code octet is included in the length, but the\n+     * terminating zero octet is not. (Note that a data octet of zero should not\n+     * occur here since the whole point of COBS encoding is to remove zeroes.)\n+     */\n     while (--code > 0)\n       to[write_index++] = from[read_index++] ^ mask;\n \n@@ -237,17 +242,14 @@ static gsize cobs_decode(guint8 *to, const guint8 *from, gsize length, guint8 ma\n   return write_index;\n }\n \n-#define ADJ_FOR_ENC_CRC 3\n #define SIZEOF_ENC_CRC 5\n #define CRC32K_INITIAL_VALUE 0xFFFFFFFF\n #define CRC32K_RESIDUE 0x0843323B\n #define MSTP_PREAMBLE_X55 0x55\n \n /*\n-* Decodes Encoded Data and Encoded CRC-32K fields at 'from' and\n-* writes the decoded client data at 'to'. Assumes 'length' contains\n-* the actual combined length of these fields in octets (that is, the\n-* MS/TP header Length field plus two).\n+* Decodes Encoded Data and Encoded CRC-32K fields at 'from' (of length 'length')\n+* and writes the decoded client data at 'to'.\n * Returns length of decoded Data in octets or zero if error.\n * NOTE: Safe to call with 'output' <= 'input' (decodes in place).\n */\n@@ -258,11 +260,15 @@ static gsize cobs_frame_decode(guint8 *to, const guint8 *from, gsize length)\n   guint32 crc32K;\n   guint32 i;\n \n+  /* Must have enough room for the encoded CRC-32K value. */\n+  if (length < SIZEOF_ENC_CRC)\n+    return 0;\n+\n   /*\n   * Calculate the CRC32K over the Encoded Data octets before decoding.\n   * NOTE: Adjust 'length' by removing size of Encoded CRC-32K field.\n   */\n-  data_len = length - ADJ_FOR_ENC_CRC;\n+  data_len = length - SIZEOF_ENC_CRC;\n   crc32K = CRC32K_INITIAL_VALUE;\n   for (i = 0; i < data_len; i++)\n     crc32K = calc_data_crc32(from[i], crc32K);\n@@ -272,7 +278,7 @@ static gsize cobs_frame_decode(guint8 *to, const guint8 *from, gsize length)\n   * Decode the Encoded CRC-32K field and append to data.\n   */\n   crc_len = cobs_decode((guint8 *)(to + data_len),\n-    (guint8 *)(from + length - ADJ_FOR_ENC_CRC),\n+    (guint8 *)(from + length - SIZEOF_ENC_CRC),\n     SIZEOF_ENC_CRC, MSTP_PREAMBLE_X55);\n \n   /*\n@@ -363,7 +369,7 @@ dissect_mstp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,\n     guint16 decoded_len = mstp_frame_pdu_len;\n \n     decode_base = (guint8 *)tvb_memdup(pinfo->pool, tvb, offset, mstp_frame_pdu_len + 2);\n-    decoded_len = (guint16)cobs_frame_decode(decode_base, decode_base, decoded_len);\n+    decoded_len = (guint16)cobs_frame_decode(decode_base, decode_base, decoded_len + 2);\n     if (decoded_len > 0) {\n       decoded_tvb = tvb_new_real_data(decode_base, decoded_len, decoded_len);\n       tvb_set_child_real_data_tvbuff(tvb, decoded_tvb);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42540174-vul",
+      "digest": "sha256:2325ab785ef6e8ec7e6585ae24e0fec06909d4a33a64a11dcd4514d76832e142"
+    },
+    "patched": {
+      "ref": "n132/arvo:42540174-fix",
+      "digest": "sha256:a0f9b602b0c2c72b21f306df98a768d7a255c78012a17a1a09fdb3a3ec107d56"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/wireshark/epan/dissectors/packet-mstp.c:268",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/wireshark/epan/dissectors/packet-mstp.c:268"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

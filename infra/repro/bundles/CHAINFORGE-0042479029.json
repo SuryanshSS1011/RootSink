@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042479029",
+  "chain": "CWE-416->CWE-125",
+  "project": "jsoncpp",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42479029",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "2e33c218cbd53b8d016e9230c2f600411b6146b8",
+      "fix_commits": [
+        "2e33c218cbd53b8d016e9230c2f600411b6146b8"
+      ],
+      "repo": "https://github.com/open-source-parsers/jsoncpp"
+    },
+    "patch": "diff --git a/example/readFromString/readFromString.cpp b/example/readFromString/readFromString.cpp\nindex 753f9c94b..ce3223692 100644\n--- a/example/readFromString/readFromString.cpp\n+++ b/example/readFromString/readFromString.cpp\n@@ -2,8 +2,8 @@\n #include <iostream>\n /**\n  * \\brief Parse a raw string into Value object using the CharReaderBuilder\n- * class, or the legacy Reader class. \n- * Example Usage: \n+ * class, or the legacy Reader class.\n+ * Example Usage:\n  * $g++ readFromString.cpp -ljsoncpp -std=c++11 -o readFromString\n  * $./readFromString\n  * colin\ndiff --git a/src/lib_json/json_value.cpp b/src/lib_json/json_value.cpp\nindex 30d9ad8ab..e13678359 100644\n--- a/src/lib_json/json_value.cpp\n+++ b/src/lib_json/json_value.cpp\n@@ -210,7 +210,9 @@ LogicError::LogicError(String const& msg) : Exception(msg) {}\n JSONCPP_NORETURN void throwRuntimeError(String const& msg) {\n   throw RuntimeError(msg);\n }\n-JSONCPP_NORETURN void throwLogicError(String const& msg) { throw LogicError(msg); }\n+JSONCPP_NORETURN void throwLogicError(String const& msg) {\n+  throw LogicError(msg);\n+}\n #else // !JSON_USE_EXCEPTION\n JSONCPP_NORETURN void throwRuntimeError(String const& msg) { abort(); }\n JSONCPP_NORETURN void throwLogicError(String const& msg) { abort(); }\ndiff --git a/src/test_lib_json/fuzz.cpp b/src/test_lib_json/fuzz.cpp\nindex f79f19ffe..d6e3815ad 100644\n--- a/src/test_lib_json/fuzz.cpp\n+++ b/src/test_lib_json/fuzz.cpp\n@@ -25,6 +25,7 @@ extern \"C\" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {\n \n   uint32_t hash_settings = *(const uint32_t*)data;\n   data += sizeof(uint32_t);\n+  size -= sizeof(uint32_t);\n \n   builder.settings_[\"failIfExtra\"] = hash_settings & (1 << 0);\n   builder.settings_[\"allowComments_\"] = hash_settings & (1 << 1);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42479029-vul",
+      "digest": "sha256:9ba0f930cdb532a6110abc2544e1ecb8a9254f75a974f07814424d16fbd3d54e"
+    },
+    "patched": {
+      "ref": "n132/arvo:42479029-fix",
+      "digest": "sha256:8fc6d063778ea27928c36b9a73088246b0d454feb76edb0bd2b5e56932d0c61e"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/jsoncpp/src/lib_json/json_reader.cpp:1791",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/jsoncpp/src/lib_json/json_reader.cpp:1791"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

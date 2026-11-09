@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042541135",
+  "chain": "CWE-1284->CWE-125",
+  "project": "openvswitch",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42541135",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "7333c3b1ce02148c7e6c584edeeb505277fe1b7f",
+      "fix_commits": [
+        "7333c3b1ce02148c7e6c584edeeb505277fe1b7f"
+      ],
+      "repo": "https://github.com/openvswitch/ovs"
+    },
+    "patch": "diff --git a/lib/ofp-port.c b/lib/ofp-port.c\nindex eb5b910293b..1d864c3a3dc 100644\n--- a/lib/ofp-port.c\n+++ b/lib/ofp-port.c\n@@ -1597,57 +1597,47 @@ parse_intel_port_stats_rfc2819_property(const struct ofpbuf *payload,\n }\n \n static enum ofperr\n-parse_intel_port_custom_property(const struct ofpbuf *payload,\n+parse_intel_port_custom_property(struct ofpbuf *payload,\n                                  struct ofputil_port_stats *ops)\n {\n-    const struct intel_port_custom_stats *custom_stats = payload->data;\n+    const struct intel_port_custom_stats *custom_stats\n+        = ofpbuf_try_pull(payload, sizeof *custom_stats);\n+    if (!custom_stats) {\n+        return OFPERR_OFPBPC_BAD_LEN;\n+    }\n \n     ops->custom_stats.size = ntohs(custom_stats->stats_array_size);\n \n     ops->custom_stats.counters = xcalloc(ops->custom_stats.size,\n                                          sizeof *ops->custom_stats.counters);\n \n-    uint16_t msg_size = ntohs(custom_stats->length);\n-    uint16_t current_len = sizeof *custom_stats;\n-    uint8_t *current = (uint8_t *)payload->data + current_len;\n-    uint8_t string_size = 0;\n-    uint8_t value_size = 0;\n-    ovs_be64 counter_value = 0;\n-\n     for (int i = 0; i < ops->custom_stats.size; i++) {\n-        current_len += string_size + value_size;\n-        current += string_size + value_size;\n-\n-        value_size = sizeof(uint64_t);\n-        /* Counter name size */\n-        string_size = *current;\n+        struct netdev_custom_counter *c = &ops->custom_stats.counters[i];\n \n-        /* Buffer overrun check */\n-        if (current_len + string_size + value_size > msg_size) {\n-            VLOG_WARN_RL(&rl, \"Custom statistics buffer overrun! \"\n-                         \"Further message parsing is aborted.\");\n-            break;\n+        /* Counter name. */\n+        uint8_t *name_len = ofpbuf_try_pull(payload, sizeof *name_len);\n+        char *name = ofpbuf_try_pull(payload, *name_len);\n+        if (!name_len || !name) {\n+            return OFPERR_OFPBPC_BAD_LEN;\n         }\n \n-        current++;\n-        current_len++;\n-\n-        /* Counter name. */\n-        struct netdev_custom_counter *c = &ops->custom_stats.counters[i];\n-        size_t len = MIN(string_size, sizeof c->name - 1);\n-        memcpy(c->name, current, len);\n+        size_t len = MIN(*name_len, sizeof c->name - 1);\n+        memcpy(c->name, name, len);\n         c->name[len] = '\\0';\n-        memcpy(&counter_value, current + string_size, value_size);\n \n         /* Counter value. */\n-        c->value = ntohll(counter_value);\n+        ovs_be64 *value = ofpbuf_try_pull(payload, sizeof *value);\n+        if (!value) {\n+            return OFPERR_OFPBPC_BAD_LEN;\n+        }\n+        c->value = ntohll(get_unaligned_be64(value));\n     }\n \n     return 0;\n }\n \n static enum ofperr\n-parse_intel_port_stats_property(const struct ofpbuf *payload,\n+parse_intel_port_stats_property(struct ofpbuf *payload,\n                                 uint32_t exp_type,\n                                 struct ofputil_port_stats *ops)\n {\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42541135-vul",
+      "digest": "sha256:25440657998c91a1110307e17381205dc292e9039df3b4709be1f4c992c0bb02"
+    },
+    "patched": {
+      "ref": "n132/arvo:42541135-fix",
+      "digest": "sha256:7e63267aef047bab151556489edaaedf4546681c75e5d482787e75758b8b76fe"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/openvswitch/lib/ofp-port.c:1623",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/openvswitch/lib/ofp-port.c:1623"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

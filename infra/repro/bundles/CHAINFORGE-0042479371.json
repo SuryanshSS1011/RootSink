@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042479371",
+  "chain": "CWE-456->CWE-457",
+  "project": "karchive",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42479371",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "87fe61a8e118aa932e8876d6eb49372c615cec88",
+      "fix_commits": [
+        "87fe61a8e118aa932e8876d6eb49372c615cec88"
+      ],
+      "repo": "https://invent.kde.org/frameworks/karchive.git"
+    },
+    "patch": "From 87fe61a8e118aa932e8876d6eb49372c615cec88 Mon Sep 17 00:00:00 2001\nFrom: Albert Astals Cid <aacid@kde.org>\nDate: Thu, 24 Oct 2019 19:58:33 +0200\nSubject: [PATCH] K7Zip: Fix memory use in readAndDecodePackedStreams\n\nSummary:\noss-fuzz has created a file in which inflated size was smaller than unpackSize and thus crc32 was using wrong memory\noss-fuzz warns about uninitialized because QByteArray probably allocates a bit more than asked, but this could very well be a out of bounds memory read\n\nReviewers: vkrause\n\nReviewed By: vkrause\n\nSubscribers: kde-frameworks-devel, apol, dfaure\n\nTags: #frameworks\n\nDifferential Revision: https://phabricator.kde.org/D24902\n---\n src/k7zip.cpp | 4 ++++\n 1 file changed, 4 insertions(+)\n\ndiff --git a/src/k7zip.cpp b/src/k7zip.cpp\nindex f583804..c7e633a 100644\n--- a/src/k7zip.cpp\n+++ b/src/k7zip.cpp\n@@ -1683,6 +1683,10 @@ QByteArray K7Zip::K7ZipPrivate::readAndDecodePackedStreams(bool readMainStreamIn\n         inflatedDatas.clear();\n \n         if (folder->unpackCRCDefined) {\n+            if ((size_t)inflated.size() < unpackSize) {\n+                qCDebug(KArchiveLog) << \"wrong crc size data\";\n+                return QByteArray();\n+            }\n             quint32 crc = crc32(0, (Bytef *)(inflated.data()), unpackSize);\n             if (crc != folder->unpackCRC) {\n                 qCDebug(KArchiveLog) << \"wrong crc\";\n-- \n2.55.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42479371-vul",
+      "digest": "sha256:ab021da56e07c4bbbccf5618cbd15135f968661159c395a1da765f8b35c3e1ad"
+    },
+    "patched": {
+      "ref": "n132/arvo:42479371-fix",
+      "digest": "sha256:4f3d676299a6c0ba72f162d3160998c8d7e9ff9f3091c7bca0b3c6e1bfce50c5"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/zlib/crc32.c:293",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/zlib/crc32.c:293"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042490495",
+  "chain": "CWE-20->CWE-125",
+  "project": "selinux",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42490495",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "228c06d97a8a33b60b89ded17acbd0e92cca9cfe",
+      "fix_commits": [
+        "228c06d97a8a33b60b89ded17acbd0e92cca9cfe"
+      ],
+      "repo": "https://github.com/SELinuxProject/selinux"
+    },
+    "patch": "diff --git a/libsepol/cil/src/cil_resolve_ast.c b/libsepol/cil/src/cil_resolve_ast.c\nindex affa7657b9..68b590bcc3 100644\n--- a/libsepol/cil/src/cil_resolve_ast.c\n+++ b/libsepol/cil/src/cil_resolve_ast.c\n@@ -2347,11 +2347,13 @@ void cil_print_recursive_blockinherit(struct cil_tree_node *bi_node, struct cil_\n \tfor (curr = bi_node; curr != terminating_node; curr = curr->parent) {\n \t\tif (curr->flavor == CIL_BLOCK) {\n \t\t\tcil_list_prepend(trace, CIL_NODE, curr);\n-\t\t} else {\n+\t\t} else if (curr->flavor == CIL_BLOCKINHERIT) {\n \t\t\tif (curr != bi_node) {\n \t\t\t\tcil_list_prepend(trace, CIL_NODE, NODE(((struct cil_blockinherit *)curr->data)->block));\n \t\t\t}\n \t\t\tcil_list_prepend(trace, CIL_NODE, curr);\n+\t\t} else {\n+\t\t\tcil_list_prepend(trace, CIL_NODE, curr);\n \t\t}\n \t}\n \tcil_list_prepend(trace, CIL_NODE, terminating_node);\n@@ -2360,8 +2362,12 @@ void cil_print_recursive_blockinherit(struct cil_tree_node *bi_node, struct cil_\n \t\tcurr = item->data;\n \t\tif (curr->flavor == CIL_BLOCK) {\n \t\t\tcil_tree_log(curr, CIL_ERR, \"block %s\", DATUM(curr->data)->name);\n-\t\t} else {\n+\t\t} else if (curr->flavor == CIL_BLOCKINHERIT) {\n \t\t\tcil_tree_log(curr, CIL_ERR, \"blockinherit %s\", ((struct cil_blockinherit *)curr->data)->block_str);\n+\t\t} else if (curr->flavor == CIL_OPTIONAL) {\n+\t\t\tcil_tree_log(curr, CIL_ERR, \"optional %s\", DATUM(curr->data)->name);\n+\t\t} else {\n+\t\t\tcil_tree_log(curr, CIL_ERR, \"%s\", cil_node_to_string(curr));\n \t\t}\n \t}\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42490495-vul",
+      "digest": "sha256:75a429ecc42e96f1f5ba29395eee96c28fbdaa6aed3cf3d9b521013597b40b16"
+    },
+    "patched": {
+      "ref": "n132/arvo:42490495-fix",
+      "digest": "sha256:58927fec5ae4cd1fdccf1e8bfebad2ac80ed771663eba3567f4f71ce6f12afb5"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/selinux/libsepol/src/../cil/src/cil_resolve_ast.c:2348",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/selinux/libsepol/src/../cil/src/cil_resolve_ast.c:2348"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

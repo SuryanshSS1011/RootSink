@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042508563",
+  "chain": "CWE-1284->CWE-125",
+  "project": "gdal",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42508563",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "0fd5bb77cbab9ed05abcc9994c30c56b459b0cff",
+      "fix_commits": [
+        "0fd5bb77cbab9ed05abcc9994c30c56b459b0cff"
+      ],
+      "repo": "https://github.com/OSGeo/gdal"
+    },
+    "patch": "diff --git a/gdal/frmts/grib/degrib/degrib/inventory.cpp b/gdal/frmts/grib/degrib/degrib/inventory.cpp\nindex e91cbff022ad..eaed054ac9b8 100644\n--- a/gdal/frmts/grib/degrib/degrib/inventory.cpp\n+++ b/gdal/frmts/grib/degrib/degrib/inventory.cpp\n@@ -614,6 +614,8 @@ enum { GS4_ANALYSIS, GS4_ENSEMBLE, GS4_DERIVED, GS4_PROBABIL_PNT = 5,\n             break;\n \n          case GS4_PERCENT_PNT: /* 4.6 */\n+            if( *buffLen < 35 - 5 + 1)\n+                return -8;\n             percentile = (*buffer)[35 - 5];\n             break;\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42508563-vul",
+      "digest": "sha256:7da7c845b114544e0b02744878e99efa2282fbfbb830fc5adfc369fdf41ddf58"
+    },
+    "patched": {
+      "ref": "n132/arvo:42508563-fix",
+      "digest": "sha256:ac8eeee78b95033bedd407fb1588aca9f74f7529c8f9073574c28c2876a35134"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/gdal/gdal/frmts/grib/degrib/degrib/inventory.cpp:575",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/gdal/gdal/frmts/grib/degrib/degrib/inventory.cpp:575"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

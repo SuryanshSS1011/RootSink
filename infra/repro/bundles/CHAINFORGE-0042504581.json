@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042504581",
+  "chain": "CWE-20->CWE-125",
+  "project": "arrow",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42504581",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "a36dd8cd208582316322b0dd6e7569785c8f2780",
+      "fix_commits": [
+        "a36dd8cd208582316322b0dd6e7569785c8f2780"
+      ],
+      "repo": "https://github.com/apache/arrow"
+    },
+    "patch": "diff --git a/cpp/src/arrow/array/validate.cc b/cpp/src/arrow/array/validate.cc\nindex 44889e4f36d6..52fcad5e7eb2 100644\n--- a/cpp/src/arrow/array/validate.cc\n+++ b/cpp/src/arrow/array/validate.cc\n@@ -564,7 +564,7 @@ struct ValidateArrayImpl {\n                              \" and offset: \", data.offset);\n     }\n \n-    if (full_validation && offsets_byte_size != 0) {\n+    if (full_validation && required_offsets > 0) {\n       // Validate all offset values\n       const offset_type* offsets = data.GetValues<offset_type>(1);\n \ndiff --git a/testing b/testing\nindex 1d8525e109a1..93ef4a7bbf8c 160000\n--- a/testing\n+++ b/testing\n@@ -1 +1 @@\n-Subproject commit 1d8525e109a12a8c67c489eba48715a199609153\n+Subproject commit 93ef4a7bbf8cc629fa1f82bf38bb6e89cda91d40\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42504581-vul",
+      "digest": "sha256:1d2fe42e1ca6262c64d265b309f7bea7a7f60a111f574759090f2d2b8cc5eb32"
+    },
+    "patched": {
+      "ref": "n132/arvo:42504581-fix",
+      "digest": "sha256:a51033156e6697f6e8fc159412484cd27245958e9a10a7cdf8bd21abc73616aa"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/arrow/cpp/src/arrow/array/validate.cc:571",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/arrow/cpp/src/arrow/array/validate.cc:571"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

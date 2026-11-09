@@ -1,0 +1,69 @@
+Accepting input from '/tmp/poc'
+Usage for fuzzing: honggfuzz -P [flags] -- /out/draco_pc_decoder_fuzzer
+=================================================================
+==1633338==ERROR: AddressSanitizer: stack-buffer-overflow on address 0x151b139bbb3c at pc 0x0000004959e7 bp 0x7ffe646ecbd0 sp 0x7ffe646ec398
+READ of size 113 at 0x151b139bbb3c thread T0
+SCARINESS: 41 (multi-byte-read-stack-buffer-overflow)
+    #0 0x4959e6 in __asan_memcpy /src/llvm-project/compiler-rt/lib/asan/asan_interceptors_memintrinsics.cpp:22:3
+    #1 0x5df9d6 in Write /src/draco/src/draco/core/data_buffer.h:54:5
+    #2 0x5df9d6 in SetAttributeValue /src/draco/src/draco/attributes/geometry_attribute.h:126:14
+    #3 0x5df9d6 in operator= /src/draco/src/draco/compression/attributes/kd_tree_attributes_decoder.cc:83:16
+    #4 0x5df9d6 in DequantizePoints3<std::__1::__wrap_iter<draco::VectorD<unsigned int, 3> *>, draco::PointAttributeVectorOutputIterator<float> > /src/draco/src/draco/compression/point_cloud/algorithms/quantize_points_3.h:77:10
+    #5 0x5df9d6 in bool draco::FloatPointsTreeDecoder::DecodePointCloud<draco::PointAttributeVectorOutputIterator<float> >(draco::DecoderBuffer*, draco::PointAttributeVectorOutputIterator<float>&) /src/draco/src/draco/compression/point_cloud/algorithms/float_points_tree_decoder.h:135:3
+    #6 0x5dd021 in draco::KdTreeAttributesDecoder::DecodeDataNeededByPortableTransforms(draco::DecoderBuffer*) /src/draco/src/draco/compression/attributes/kd_tree_attributes_decoder.cc:347:18
+    #7 0x5e6263 in draco::AttributesDecoder::DecodeAttributes(draco::DecoderBuffer*) /src/draco/src/draco/compression/attributes/attributes_decoder.h:59:10
+    #8 0x54b332 in draco::PointCloudDecoder::DecodeAllAttributes() /src/draco/src/draco/compression/point_cloud/point_cloud_decoder.cc:171:19
+    #9 0x54b09c in draco::PointCloudDecoder::DecodePointAttributes() /src/draco/src/draco/compression/point_cloud/point_cloud_decoder.cc:159:8
+    #10 0x549c51 in draco::PointCloudDecoder::Decode(draco::DracoOptions<draco::GeometryAttribute::Type> const&, draco::DecoderBuffer*, draco::PointCloud*) /src/draco/src/draco/compression/point_cloud/point_cloud_decoder.cc:112:8
+    #11 0x4d67a2 in draco::Decoder::DecodeBufferToGeometry(draco::DecoderBuffer*, draco::PointCloud*) /src/draco/src/draco/compression/decode.cc:102:3
+    #12 0x4d540d in draco::Decoder::DecodePointCloudFromBuffer(draco::DecoderBuffer*) /src/draco/src/draco/compression/decode.cc:70:5
+    #13 0x4d2773 in LLVMFuzzerTestOneInput /src/draco/src/draco/tools/fuzz/draco_pc_decoder_fuzzer.cc:26:11
+    #14 0x4c8f6b in main (/out/draco_pc_decoder_fuzzer+0x4c8f6b)
+    #15 0x151b1296383f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2083f)
+    #16 0x41e278 in _start (/out/draco_pc_decoder_fuzzer+0x41e278)
+
+DEDUP_TOKEN: __asan_memcpy--Write--SetAttributeValue
+Address 0x151b139bbb3c is located in stack of thread T0 at offset 60 in frame
+    #0 0x5df41f in bool draco::FloatPointsTreeDecoder::DecodePointCloud<draco::PointAttributeVectorOutputIterator<float> >(draco::DecoderBuffer*, draco::PointAttributeVectorOutputIterator<float>&) /src/draco/src/draco/compression/point_cloud/algorithms/float_points_tree_decoder.h:102
+
+DEDUP_TOKEN: bool draco::FloatPointsTreeDecoder::DecodePointCloud<draco::PointAttributeVectorOutputIterator<float> >(draco::DecoderBuffer*, draco::PointAttributeVectorOutputIterator<float>&)
+  This frame has 3 object(s):
+    [32, 36) 'dequantize.i'
+    [48, 60) 'ref.tmp.i'
+    [80, 104) 'qpoints' (line 103) <== Memory access at offset 60 partially underflows this variable
+HINT: this may be a false positive if your program uses some custom stack unwind mechanism, swapcontext or vfork
+      (longjmp and C++ exceptions *are* supported)
+SUMMARY: AddressSanitizer: stack-buffer-overflow /src/llvm-project/compiler-rt/lib/asan/asan_interceptors_memintrinsics.cpp:22:3 in __asan_memcpy
+Shadow bytes around the buggy address:
+  0x02a3e272f710: f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5
+  0x02a3e272f720: f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5
+  0x02a3e272f730: f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5
+  0x02a3e272f740: f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5
+  0x02a3e272f750: f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5
+=>0x02a3e272f760: f1 f1 f1 f1 04 f2 00[04]f2 f2 00 00 00 f3 f3 f3
+  0x02a3e272f770: f3 f3 f3 f3 00 00 00 00 00 00 00 00 00 00 00 00
+  0x02a3e272f780: f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5
+  0x02a3e272f790: f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5
+  0x02a3e272f7a0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x02a3e272f7b0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+  Shadow gap:              cc
+==1633338==ABORTING

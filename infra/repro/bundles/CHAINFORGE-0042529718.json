@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042529718",
+  "chain": "CWE-1285->CWE-125",
+  "project": "serenity",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42529718",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "a6f9ad60124c4dd355084240019abc1e7d62baba",
+      "fix_commits": [
+        "a6f9ad60124c4dd355084240019abc1e7d62baba"
+      ],
+      "repo": "https://github.com/SerenityOS/serenity"
+    },
+    "patch": "diff --git a/Userland/Libraries/LibGfx/Font/OpenType/Font.cpp b/Userland/Libraries/LibGfx/Font/OpenType/Font.cpp\nindex 50b4662615d5f5..a090b31b946c12 100644\n--- a/Userland/Libraries/LibGfx/Font/OpenType/Font.cpp\n+++ b/Userland/Libraries/LibGfx/Font/OpenType/Font.cpp\n@@ -387,7 +387,7 @@ ErrorOr<NonnullRefPtr<Font>> Font::try_load_from_offset(ReadonlyBytes buffer, u3\n     if (Checked<u32>::addition_would_overflow(offset, (u32)Sizes::OffsetTable))\n         return Error::from_string_literal(\"Invalid offset in font header\");\n \n-    if (buffer.size() < offset + (u32)Sizes::OffsetTable)\n+    if (buffer.size() <= offset + (u32)Sizes::OffsetTable)\n         return Error::from_string_literal(\"Font file too small\");\n \n     Optional<ReadonlyBytes> opt_head_slice = {};\n@@ -418,7 +418,7 @@ ErrorOr<NonnullRefPtr<Font>> Font::try_load_from_offset(ReadonlyBytes buffer, u3\n     Optional<GPOS> gpos;\n \n     auto num_tables = be_u16(buffer.offset(offset + (u32)Offsets::NumTables));\n-    if (buffer.size() < offset + (u32)Sizes::OffsetTable + num_tables * (u32)Sizes::TableRecord)\n+    if (buffer.size() <= offset + (u32)Sizes::OffsetTable + num_tables * (u32)Sizes::TableRecord)\n         return Error::from_string_literal(\"Font file too small\");\n \n     for (auto i = 0; i < num_tables; i++) {\n@@ -427,7 +427,7 @@ ErrorOr<NonnullRefPtr<Font>> Font::try_load_from_offset(ReadonlyBytes buffer, u3\n         u32 table_offset = be_u32(buffer.offset(record_offset + (u32)Offsets::TableRecord_Offset));\n         u32 table_length = be_u32(buffer.offset(record_offset + (u32)Offsets::TableRecord_Length));\n \n-        if (Checked<u32>::addition_would_overflow(table_offset, table_length))\n+        if (table_length == 0 || Checked<u32>::addition_would_overflow(table_offset, table_length))\n             return Error::from_string_literal(\"Invalid table offset or length in font\");\n \n         if (buffer.size() < table_offset + table_length)\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42529718-vul",
+      "digest": "sha256:5acdfc1f36f13596250601f49de7e0bfd4131e46cf24dfc16a4cf8419cf085a1"
+    },
+    "patched": {
+      "ref": "n132/arvo:42529718-fix",
+      "digest": "sha256:a1a456c68a71306d4358abfc3bc63dbff460f5e5c653652ab63098db4580a9a1"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/serenity/Userland/Libraries/LibGfx/Font/OpenType/Font.cpp:37",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/serenity/Userland/Libraries/LibGfx/Font/OpenType/Font.cpp:37"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

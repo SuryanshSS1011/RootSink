@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042541404",
+  "chain": "CWE-456->CWE-457",
+  "project": "mupdf",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42541404",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "e8f1a6cc38bac9b1b132a0641fa858965b39af28",
+      "fix_commits": [
+        "e8f1a6cc38bac9b1b132a0641fa858965b39af28"
+      ],
+      "repo": "git://git.ghostscript.com/jbig2dec.git"
+    },
+    "patch": "From e8f1a6cc38bac9b1b132a0641fa858965b39af28 Mon Sep 17 00:00:00 2001\nFrom: Sebastian Rasmussen <sebras@gmail.com>\nDate: Fri, 3 Aug 2018 19:11:02 +0800\nSubject: [PATCH] jbig2dec: Prevent underflow when checking if enough data for\n bitmap.\n\nWhen decoding the symbol dictionary the bitmap size field\ndetermines the size of the bitmap. The bitmap size is however\nrestricted to the size of the segment's data region. This was\nchecked previously, but the check itself may underflow, so\nanother check was introduced to prevent this from happening.\n---\n jbig2_symbol_dict.c | 6 +++---\n 1 file changed, 3 insertions(+), 3 deletions(-)\n\ndiff --git a/jbig2_symbol_dict.c b/jbig2_symbol_dict.c\nindex 26ccbe8..5b2e119 100644\n--- a/jbig2_symbol_dict.c\n+++ b/jbig2_symbol_dict.c\n@@ -532,7 +532,7 @@ jbig2_decode_symbol_dict(Jbig2Ctx *ctx,\n                             BMSIZE = jbig2_huffman_get(hs, tparams.SBHUFFRSIZE, &code4);\n                             code5 = jbig2_huffman_skip(hs);\n                         } else {\n-                            code1 = jbig2_arith_iaid_decode(ctx, tparams.IAID, as, (int32_t *) & ID);\n+                            code1 = jbig2_arith_iaid_decode(ctx, tparams.IAID, as, (int32_t *) &ID);\n                             code2 = jbig2_arith_int_decode(ctx, tparams.IARDX, as, &RDX);\n                             code3 = jbig2_arith_int_decode(ctx, tparams.IARDY, as, &RDY);\n                         }\n@@ -663,7 +663,7 @@ jbig2_decode_symbol_dict(Jbig2Ctx *ctx,\n                 byte *dst = image->data;\n \n                 /* SumatraPDF: prevent read access violation */\n-                if ((size - jbig2_huffman_offset(hs) < (size_t) image->height * stride) || (size < jbig2_huffman_offset(hs))) {\n+                if (size < jbig2_huffman_offset(hs) || (size - jbig2_huffman_offset(hs) < (size_t) image->height * stride) || (size < jbig2_huffman_offset(hs))) {\n                     jbig2_error(ctx, JBIG2_SEVERITY_FATAL, segment->number, \"not enough data for decoding uncompressed (%d/%d)\", image->height * stride,\n                                 size - jbig2_huffman_offset(hs));\n                     goto cleanup;\n@@ -682,7 +682,7 @@ jbig2_decode_symbol_dict(Jbig2Ctx *ctx,\n                 Jbig2GenericRegionParams rparams;\n \n                 /* SumatraPDF: prevent read access violation */\n-                if (size - jbig2_huffman_offset(hs) < BMSIZE) {\n+                if (size < jbig2_huffman_offset(hs) || size < BMSIZE || size - jbig2_huffman_offset(hs) < BMSIZE) {\n                     jbig2_error(ctx, JBIG2_SEVERITY_FATAL, segment->number, \"not enough data for decoding (%d/%d)\", BMSIZE, size - jbig2_huffman_offset(hs));\n                     goto cleanup;\n                 }\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42541404-vul",
+      "digest": "sha256:fc9f69071d7843988eb87dd18ae76c82d356355f74f32b32980376524673dada"
+    },
+    "patched": {
+      "ref": "n132/arvo:42541404-fix",
+      "digest": "sha256:87d62d7637ab9a982c28e620d80bdf6d74515a1cce36e6158b9c75652ad87dff"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/mupdf/thirdparty/jbig2dec/jbig2_symbol_dict.c:685",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/mupdf/thirdparty/jbig2dec/jbig2_symbol_dict.c:685"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

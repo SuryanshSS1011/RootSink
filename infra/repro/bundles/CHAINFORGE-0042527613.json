@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042527613",
+  "chain": "CWE-1284->CWE-125",
+  "project": "ndpi",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42527613",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "19381f330ae735d361d9e765148be5e14478256d",
+      "fix_commits": [
+        "19381f330ae735d361d9e765148be5e14478256d"
+      ],
+      "repo": "https://github.com/ntop/nDPI"
+    },
+    "patch": "diff --git a/src/lib/ndpi_main.c b/src/lib/ndpi_main.c\nindex 41e4fb53979..f629e041174 100644\n--- a/src/lib/ndpi_main.c\n+++ b/src/lib/ndpi_main.c\n@@ -2982,7 +2982,7 @@ struct ndpi_detection_module_struct *ndpi_init_detection_module(ndpi_init_prefs\n     ndpi_exit_detection_module(ndpi_str);\n     return(NULL);\n   }\n-  \n+\n   ndpi_str->custom_categories.hostnames_shadow.ac_automa = ac_automata_init(ac_domain_match_handler);\n   if(!ndpi_str->custom_categories.hostnames_shadow.ac_automa) {\n     ndpi_exit_detection_module(ndpi_str);\n@@ -3004,7 +3004,7 @@ struct ndpi_detection_module_struct *ndpi_init_detection_module(ndpi_init_prefs\n   ndpi_str->custom_categories.sc_hostnames        = ndpi_domain_classify_alloc();\n   ndpi_str->custom_categories.sc_hostnames_shadow = ndpi_domain_classify_alloc();\n #endif\n-  \n+\n   ndpi_str->custom_categories.ipAddresses = ndpi_patricia_new(32 /* IPv4 */);\n   ndpi_str->custom_categories.ipAddresses_shadow = ndpi_patricia_new(32 /* IPv4 */);\n \n@@ -3401,8 +3401,16 @@ int ndpi_match_custom_category(struct ndpi_detection_module_struct *ndpi_str,\n \t\t\t\t    name, name_len, &id, category, NULL);\n   if(rc < 0) return rc;\n   return(id != NDPI_PROTOCOL_UNKNOWN ? 0 : -1);\n-#else  \n-  u_int16_t rc = ndpi_domain_classify_contains(ndpi_str->custom_categories.sc_hostnames, name);\n+#else\n+  char buf[128];\n+  u_int16_t rc;\n+  u_int max_len = sizeof(buf)-1;\n+    \n+  if(name_len > max_len) name_len = max_len;\n+  strncpy(buf, name, name_len);\n+  buf[name_len] = '\\0';\n+  \n+  rc = ndpi_domain_classify_contains(ndpi_str->custom_categories.sc_hostnames, buf);\n \n   if(rc == 0)\n     return(-1); /* Not found */\n@@ -3558,7 +3566,7 @@ void ndpi_exit_detection_module(struct ndpi_detection_module_struct *ndpi_str) {\n     ndpi_domain_classify_free(ndpi_str->custom_categories.sc_hostnames_shadow);\n     ndpi_domain_classify_free(ndpi_str->custom_categories.sc_hostnames);\n #endif\n-    \n+\n     if(ndpi_str->custom_categories.ipAddresses != NULL)\n       ndpi_patricia_destroy((ndpi_patricia_tree_t *) ndpi_str->custom_categories.ipAddresses, free_ptree_data);\n \n@@ -4017,10 +4025,10 @@ int ndpi_handle_rule(struct ndpi_detection_module_struct *ndpi_str,\n \n       if(value[0] != '\\0') {\n \tu_int i, max_len = strlen(value) - 1;\n-\t\n+\n \tif(value[max_len] == '\"')\n \t  value[max_len] = '\\0'; /* remove trailing \" */\n-\t\n+\n \tfor(i=0; i<max_len; i++)\n \t  value[i] = tolower(value[i]);\n       }\n@@ -4167,14 +4175,14 @@ int ndpi_load_category_file(struct ndpi_detection_module_struct *ndpi_str,\n   char buffer[256], *line;\n   FILE *fd;\n   u_int num_loaded = 0;\n- \n+\n   if(!ndpi_str || !path || !ndpi_str->protocols_ptree)\n     return(-1);\n \n #ifdef NDPI_ENABLE_DEBUG_MESSAGES\n   printf(\"Loading %s [proto %d]\\n\", path, category_id);\n #endif\n-  \n+\n   fd = fopen(path, \"r\");\n \n   if(fd == NULL) {\n@@ -4184,7 +4192,7 @@ int ndpi_load_category_file(struct ndpi_detection_module_struct *ndpi_str,\n \n   while(1) {\n     int len;\n-    \n+\n     line = fgets(buffer, sizeof(buffer), fd);\n \n     if(line == NULL)\n@@ -4196,13 +4204,13 @@ int ndpi_load_category_file(struct ndpi_detection_module_struct *ndpi_str,\n       continue;\n \n     if(ndpi_load_category(ndpi_str, line, category_id, NULL) > 0)\n-      num_loaded++;    \n+      num_loaded++;\n   }\n \n   fclose(fd);\n   return(num_loaded);\n }\n- \n+\n /* ******************************************************************** */\n \n /*\n@@ -4218,23 +4226,23 @@ int ndpi_load_categories_dir(struct ndpi_detection_module_struct *ndpi_str,\n   DIR *dirp = opendir(dir_path);\n   struct dirent *dp;\n   int rc = 0;\n-  \n+\n   if (dirp == NULL)\n     return(-1);\n-  \n+\n   while((dp = readdir(dirp)) != NULL) {\n     char *underscore, *extn;\n-    \n+\n     if(dp->d_name[0] == '.') continue;\n     extn = strrchr(dp->d_name, '.');\n \n     if((extn == NULL) || strcmp(extn, \".list\"))\n       continue;\n-    \n+\n     /* Check if the format is <proto it>_<string>.<extension> */\n     if((underscore = strchr(dp->d_name, '_')) != NULL) {\n       ndpi_protocol_category_t proto_id;\n-      \n+\n       underscore[0] = '\\0';\n       proto_id = (ndpi_protocol_category_t)atoi(dp->d_name);\n \n@@ -4247,10 +4255,10 @@ int ndpi_load_categories_dir(struct ndpi_detection_module_struct *ndpi_str,\n \n \tndpi_load_category_file(ndpi_str, path, proto_id);\n \trc++;\n-      }\t\n+      }\n     }\n   }\n-  \n+\n   (void)closedir(dirp);\n \n   return(rc);\n@@ -6405,7 +6413,7 @@ static void ndpi_reconcile_protocols(struct ndpi_detection_module_struct *ndpi_s\n     ndpi_handle_risk_exceptions(ndpi_str, flow);\n     flow->risk_shadow = flow->risk;\n   }\n-  \n+\n   switch(ret->app_protocol) {\n   case NDPI_PROTOCOL_MICROSOFT_AZURE:\n     ndpi_reconcile_msteams_udp(ndpi_str, flow, flow->detected_protocol_stack[1]);\n@@ -6936,7 +6944,7 @@ int ndpi_enable_loaded_categories(struct ndpi_detection_module_struct *ndpi_str)\n   ndpi_str->custom_categories.sc_hostnames        = ndpi_str->custom_categories.sc_hostnames_shadow;\n   ndpi_str->custom_categories.sc_hostnames_shadow = ndpi_domain_classify_alloc();\n #endif\n-  \n+\n   if(ndpi_str->custom_categories.ipAddresses != NULL)\n     ndpi_patricia_destroy((ndpi_patricia_tree_t *) ndpi_str->custom_categories.ipAddresses, free_ptree_data);\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42527613-vul",
+      "digest": "sha256:b060cbd912fe7aa1cc0c8a9124ad2eb33f3e42e6c220bb175890df0d346b1da1"
+    },
+    "patched": {
+      "ref": "n132/arvo:42527613-fix",
+      "digest": "sha256:109bf9cdbbc390c393a7ee96154114627c1159a918804da5103860d4310195f1"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/ndpi/src/lib/ndpi_domain_classify.c:394",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/ndpi/src/lib/ndpi_domain_classify.c:394"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,99 @@
+======================= INFO =========================
+This binary is built for AFL-fuzz.
+To run the target function on individual input(s) execute this:
+  /out/decoder_fuzzer < INPUT_FILE
+or
+  /out/decoder_fuzzer INPUT_FILE1 [INPUT_FILE2 ... ]
+To fuzz with afl-fuzz execute this:
+  afl-fuzz [afl-flags] /out/decoder_fuzzer [-N]
+afl-fuzz will run N iterations before re-spawning the process (default: 1000)
+======================================================
+Reading 70 bytes from /tmp/poc
+=================================================================
+==7==ERROR: AddressSanitizer: heap-use-after-free on address 0x6150000008d8 at pc 0x000000548c5b bp 0x7ffcf3fb0840 sp 0x7ffcf3fb0838
+READ of size 8 at 0x6150000008d8 thread T0
+SCARINESS: 51 (8-byte-read-heap-use-after-free)
+    #0 0x548c5a in WelsDec::ResetRefPicReferences(WelsDec::TagWelsDecoderContext* const&, WelsDec::SPicture* const&) /src/openh264/codec/decoder/core/src/decoder.cpp:176:37
+    #1 0x543140 in WelsDec::DecreasePicBuff(WelsDec::TagWelsDecoderContext*, WelsDec::TagPicBuff**, int, int, int, int) /src/openh264/codec/decoder/core/src/decoder.cpp:233:9
+    #2 0x54208d in WelsRequestMem /src/openh264/codec/decoder/core/src/decoder.cpp:421:14
+    #3 0x5467b5 in SyncPictureResolutionExt /src/openh264/codec/decoder/core/src/decoder.cpp:854:10
+    #4 0x5585b1 in WelsDec::ConstructAccessUnit(WelsDec::TagWelsDecoderContext*, unsigned char**, TagBufferInfo*) /src/openh264/codec/decoder/core/src/decoder_core.cpp:2249:12
+    #5 0x5451fe in WelsDecodeBs /src/openh264/codec/decoder/core/src/decoder.cpp:817:7
+    #6 0x53afea in WelsDec::CWelsDecoder::DecodeFrame2(unsigned char const*, int, unsigned char**, TagBufferInfo*) /src/openh264/codec/decoder/plus/src/welsDecoderExt.cpp:575:3
+    #7 0x53aaf7 in WelsDec::CWelsDecoder::DecodeFrameNoDelay(unsigned char const*, int, unsigned char**, TagBufferInfo*) /src/openh264/codec/decoder/plus/src/welsDecoderExt.cpp:500:11
+    #8 0x537e16 in LLVMFuzzerTestOneInput /src/decoder_fuzzer.cpp:75:15
+    #9 0x535e4f in ExecuteFilesOnyByOne(int, char**) /src/libfuzzer/afl/afl_driver.cpp:156:5
+    #10 0x5360b1 in main /src/libfuzzer/afl/afl_driver.cpp:193:12
+    #11 0x7f14d2ccf82f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+    #12 0x41d718 in _start (/out/decoder_fuzzer+0x41d718)
+
+DEDUP_TOKEN: WelsDec::ResetRefPicReferences(WelsDec::TagWelsDecoderContext* const&, WelsDec::SPicture* const&)--WelsDec::DecreasePicBuff(WelsDec::TagWelsDecoderContext*, WelsDec::TagPicBuff**, int, int, int, int)--WelsRequestMem
+0x6150000008d8 is located 216 bytes inside of 499-byte region [0x615000000800,0x6150000009f3)
+freed by thread T0 here:
+    #0 0x4f0220 in __interceptor_free /src/llvm/projects/compiler-rt/lib/asan/asan_malloc_linux.cc:123
+    #1 0x54317c in WelsDec::DecreasePicBuff(WelsDec::TagWelsDecoderContext*, WelsDec::TagPicBuff**, int, int, int, int) /src/openh264/codec/decoder/core/src/decoder.cpp:234:9
+    #2 0x54208d in WelsRequestMem /src/openh264/codec/decoder/core/src/decoder.cpp:421:14
+    #3 0x5467b5 in SyncPictureResolutionExt /src/openh264/codec/decoder/core/src/decoder.cpp:854:10
+    #4 0x5585b1 in WelsDec::ConstructAccessUnit(WelsDec::TagWelsDecoderContext*, unsigned char**, TagBufferInfo*) /src/openh264/codec/decoder/core/src/decoder_core.cpp:2249:12
+    #5 0x5451fe in WelsDecodeBs /src/openh264/codec/decoder/core/src/decoder.cpp:817:7
+    #6 0x53afea in WelsDec::CWelsDecoder::DecodeFrame2(unsigned char const*, int, unsigned char**, TagBufferInfo*) /src/openh264/codec/decoder/plus/src/welsDecoderExt.cpp:575:3
+    #7 0x53aaf7 in WelsDec::CWelsDecoder::DecodeFrameNoDelay(unsigned char const*, int, unsigned char**, TagBufferInfo*) /src/openh264/codec/decoder/plus/src/welsDecoderExt.cpp:500:11
+    #8 0x537e16 in LLVMFuzzerTestOneInput /src/decoder_fuzzer.cpp:75:15
+    #9 0x535e4f in ExecuteFilesOnyByOne(int, char**) /src/libfuzzer/afl/afl_driver.cpp:156:5
+    #10 0x5360b1 in main /src/libfuzzer/afl/afl_driver.cpp:193:12
+    #11 0x7f14d2ccf82f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+
+DEDUP_TOKEN: __interceptor_free--WelsDec::DecreasePicBuff(WelsDec::TagWelsDecoderContext*, WelsDec::TagPicBuff**, int, int, int, int)--WelsRequestMem
+previously allocated by thread T0 here:
+    #0 0x4f05ef in malloc /src/llvm/projects/compiler-rt/lib/asan/asan_malloc_linux.cc:145
+    #1 0x540019 in WelsCommon::WelsMalloc(unsigned int, char const*, unsigned int) /src/openh264/codec/common/src/memory_align.cpp:72:30
+    #2 0x5401c1 in WelsCommon::CMemoryAlign::WelsMalloc(unsigned int, char const*) /src/openh264/codec/common/src/memory_align.cpp:129:20
+    #3 0x540143 in WelsCommon::CMemoryAlign::WelsMallocz(unsigned int, char const*) /src/openh264/codec/common/src/memory_align.cpp:118:20
+    #4 0x57b3f7 in WelsDec::AllocPicture(WelsDec::TagWelsDecoderContext*, int, int) /src/openh264/codec/decoder/core/src/pic_queue.cpp:73:26
+    #5 0x542586 in WelsDec::IncreasePicBuff(WelsDec::TagWelsDecoderContext*, WelsDec::TagPicBuff**, int, int, int, int) /src/openh264/codec/decoder/core/src/decoder.cpp:131:21
+    #6 0x542065 in WelsRequestMem /src/openh264/codec/decoder/core/src/decoder.cpp:418:14
+    #7 0x5467b5 in SyncPictureResolutionExt /src/openh264/codec/decoder/core/src/decoder.cpp:854:10
+    #8 0x5585b1 in WelsDec::ConstructAccessUnit(WelsDec::TagWelsDecoderContext*, unsigned char**, TagBufferInfo*) /src/openh264/codec/decoder/core/src/decoder_core.cpp:2249:12
+    #9 0x5451fe in WelsDecodeBs /src/openh264/codec/decoder/core/src/decoder.cpp:817:7
+    #10 0x53afea in WelsDec::CWelsDecoder::DecodeFrame2(unsigned char const*, int, unsigned char**, TagBufferInfo*) /src/openh264/codec/decoder/plus/src/welsDecoderExt.cpp:575:3
+    #11 0x53aaf7 in WelsDec::CWelsDecoder::DecodeFrameNoDelay(unsigned char const*, int, unsigned char**, TagBufferInfo*) /src/openh264/codec/decoder/plus/src/welsDecoderExt.cpp:500:11
+    #12 0x537e16 in LLVMFuzzerTestOneInput /src/decoder_fuzzer.cpp:75:15
+    #13 0x535e4f in ExecuteFilesOnyByOne(int, char**) /src/libfuzzer/afl/afl_driver.cpp:156:5
+    #14 0x5360b1 in main /src/libfuzzer/afl/afl_driver.cpp:193:12
+    #15 0x7f14d2ccf82f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+
+DEDUP_TOKEN: malloc--WelsCommon::WelsMalloc(unsigned int, char const*, unsigned int)--WelsCommon::CMemoryAlign::WelsMalloc(unsigned int, char const*)
+SUMMARY: AddressSanitizer: heap-use-after-free /src/openh264/codec/decoder/core/src/decoder.cpp:176:37 in WelsDec::ResetRefPicReferences(WelsDec::TagWelsDecoderContext* const&, WelsDec::SPicture* const&)
+Shadow bytes around the buggy address:
+  0x0c2a7fff80c0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c2a7fff80d0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c2a7fff80e0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 03 fa
+  0x0c2a7fff80f0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c2a7fff8100: fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd
+=>0x0c2a7fff8110: fd fd fd fd fd fd fd fd fd fd fd[fd]fd fd fd fd
+  0x0c2a7fff8120: fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd
+  0x0c2a7fff8130: fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd fa
+  0x0c2a7fff8140: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c2a7fff8150: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c2a7fff8160: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+  Shadow gap:              cc
+==7==ABORTING

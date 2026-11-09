@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042502098",
+  "chain": "CWE-1285->CWE-125",
+  "project": "kamailio",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42502098",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "bf6bd11a9b969c02a106f94ebf40cefbe8028456",
+      "fix_commits": [
+        "bf6bd11a9b969c02a106f94ebf40cefbe8028456"
+      ],
+      "repo": "https://github.com/kamailio/kamailio"
+    },
+    "patch": "diff --git a/src/core/parser/parse_content.c b/src/core/parser/parse_content.c\nindex cda4b8177dd..aff70f86609 100644\n--- a/src/core/parser/parse_content.c\n+++ b/src/core/parser/parse_content.c\n@@ -224,8 +224,8 @@ char* parse_content_length(char* const buffer, const char* const end,\n \t\tgoto error;\n \t}\n \t/* search the begining of the number */\n-\twhile ( p<end && (*p==' ' || *p=='\\t' ||\n-\t(*p=='\\n' && (*(p+1)==' '||*(p+1)=='\\t')) ))\n+\twhile ( p<end && (*p==' ' || *p=='\\t'\n+\t\t\t\t|| (*p=='\\n' && p+1<end && (*(p+1)==' ' || *(p+1)=='\\t')) ) )\n \t\tp++;\n \tif (p==end)\n \t\tgoto error;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42502098-vul",
+      "digest": "sha256:95bb00abbdfb8420a9d7e0dcfd299e7b934574f12ea2910e3a21ed7fb37753e3"
+    },
+    "patched": {
+      "ref": "n132/arvo:42502098-fix",
+      "digest": "sha256:d171846be5f1efb0cb6e4d3b20a20ba36125fa58d01c768d5d7e1d4e34deeb03"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/kamailio/src/core/parser/parse_content.c:224",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/kamailio/src/core/parser/parse_content.c:224"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

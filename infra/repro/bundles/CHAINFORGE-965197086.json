@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-965197086",
+  "chain": "CWE-456->CWE-457",
+  "project": "qpdf",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42479686",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/qpdf/qpdf/commit/232f5fc9f3bed8e1b02bca5d10b2eca444e30f95",
+      "fix_commits": [
+        "232f5fc9f3bed8e1b02bca5d10b2eca444e30f95"
+      ],
+      "repo": "https://github.com/qpdf/qpdf"
+    },
+    "patch": "diff --git a/fuzz/dct_fuzzer.cc b/fuzz/dct_fuzzer.cc\nindex 450b4df26..b051819a7 100644\n--- a/fuzz/dct_fuzzer.cc\n+++ b/fuzz/dct_fuzzer.cc\n@@ -2,6 +2,7 @@\n #include <qpdf/Pl_DCT.hh>\n #include <iostream>\n #include <stdexcept>\n+#include <cstdlib>\n \n class FuzzHelper\n {\n@@ -46,6 +47,11 @@ FuzzHelper::run()\n \n extern \"C\" int LLVMFuzzerTestOneInput(unsigned char const* data, size_t size)\n {\n+#ifndef _WIN32\n+    // Used by jpeg library to work around false positives in memory\n+    // sanitizer.\n+    setenv(\"JSIMD_FORCENONE\", \"1\", 1);\n+#endif\n     FuzzHelper f(data, size);\n     f.run();\n     return 0;\ndiff --git a/fuzz/qpdf_fuzzer.cc b/fuzz/qpdf_fuzzer.cc\nindex 32b9a0fb5..eb6791a43 100644\n--- a/fuzz/qpdf_fuzzer.cc\n+++ b/fuzz/qpdf_fuzzer.cc\n@@ -9,6 +9,7 @@\n #include <qpdf/QPDFPageLabelDocumentHelper.hh>\n #include <qpdf/QPDFOutlineDocumentHelper.hh>\n #include <qpdf/QPDFAcroFormDocumentHelper.hh>\n+#include <cstdlib>\n \n class DiscardContents: public QPDFObjectHandle::ParserCallbacks\n {\n@@ -223,6 +224,11 @@ FuzzHelper::run()\n \n extern \"C\" int LLVMFuzzerTestOneInput(unsigned char const* data, size_t size)\n {\n+#ifndef _WIN32\n+    // Used by jpeg library to work around false positives in memory\n+    // sanitizer.\n+    setenv(\"JSIMD_FORCENONE\", \"1\", 1);\n+#endif\n     FuzzHelper f(data, size);\n     f.run();\n     return 0;\ndiff --git a/libqpdf/Pl_DCT.cc b/libqpdf/Pl_DCT.cc\nindex 7231486d8..2ddafecba 100644\n--- a/libqpdf/Pl_DCT.cc\n+++ b/libqpdf/Pl_DCT.cc\n@@ -8,6 +8,7 @@\n #include <stdexcept>\n #include <stdlib.h>\n #include <string>\n+#include <cstring>\n \n #if BITS_IN_JSAMPLE != 8\n # error \"qpdf does not support libjpeg built with BITS_IN_JSAMPLE != 8\"\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42479686-vul",
+      "digest": "sha256:f3900e96ace4fb6ee13333e393a847a18d01fde3471d76b623877e7e6b73e741"
+    },
+    "patched": {
+      "ref": "n132/arvo:42479686-fix",
+      "digest": "sha256:3ecfdd8b9ce5cc075654be33af8385d6cdc526f9ea2418e021660d4256fa5c89"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/libjpeg-turbo/jdcolor.c:557",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/libjpeg-turbo/jdcolor.c:557"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

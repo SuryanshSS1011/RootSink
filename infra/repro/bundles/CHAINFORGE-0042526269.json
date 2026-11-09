@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042526269",
+  "chain": "CWE-416->CWE-125",
+  "project": "selinux",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42526269",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "903e8cf26e2ab874618e0fdaef537bc3d9a8b69d",
+      "fix_commits": [
+        "903e8cf26e2ab874618e0fdaef537bc3d9a8b69d"
+      ],
+      "repo": "https://github.com/SELinuxProject/selinux"
+    },
+    "patch": "From 903e8cf26e2ab874618e0fdaef537bc3d9a8b69d Mon Sep 17 00:00:00 2001\nFrom: James Carter <jwcart2@gmail.com>\nDate: Fri, 13 Oct 2023 09:26:50 -0400\nSubject: [PATCH] libsepol/cil: Do not allow classpermissionset to use\n anonymous classpermission\n\nMacros can use classpermission arguments. These are used in two\ndifferent ways. Either a named classpermission is passed (which is\ndeclared using a classpermisison rule) or an anonymous classpermission\nis passed (something like \"(CLASS (PERM))\").\n\nUsually this will look like either of the following:\nEx1/\n(classpermission cp1)\n(classpermisisonset cp1 (CLASS (PERM)))\n(macro m1 ((classpermisison ARG1))\n  (allow t1 self ARG1)\n)\n(call m1 (cp1))\nor\nEx2/\n(macro m2 ((classpermission ARG2))\n  (allow t2 self ARG2)\n)\n(call m2 ((CLASS (PERM))))\n\nThe following would also be valid:\nEx3/\n(classpermission cp3)\n(macro m3 ((classpermission ARG3))\n  (classpermissionset ARG3 (CLASS (PERM)))\n  (allow t3 self ARG3)\n)\n(call m3 (cp3))\n\nThe oss-fuzzer did the equivalent of the following:\n\n(classpermission cp4)\n(macro m4 ((classpermission ARG4))\n  (classpermissionset ARG4 (CLASS (PERM1)))\n  (allow t4 self ARG4)\n)\n(call m4 (CLASS (PERM2)))\n\nIt passed an anonymous classpermission into a macro where there\nwas a classpermissionset rule. Suprisingly, everything worked well\nuntil it was time to destroy the AST. There is no way to distinguish\nbetween the anonymous classpermission being passed in which needs\nto be destroyed and the classpermission in the classpermissionset\nrule which is destroyed when the classpermissionset rule is\ndestroyed. This led to CIL trying to destroy the classpermission\nin the classpermissionset rule twice.\n\nTo fix this, when resolving the classpermission name in the\nclasspermissionset rule, check if the datum returned is for\nan anonymous classpermission (it has no name) and return an\nerror if it is.\n\nThis fixes oss-fuzz issue 60670.\n\nSigned-off-by: James Carter <jwcart2@gmail.com>\n---\n libsepol/cil/src/cil_resolve_ast.c | 6 ++++++\n 1 file changed, 6 insertions(+)\n\ndiff --git a/libsepol/cil/src/cil_resolve_ast.c b/libsepol/cil/src/cil_resolve_ast.c\nindex 4e8a375..427a320 100644\n--- a/libsepol/cil/src/cil_resolve_ast.c\n+++ b/libsepol/cil/src/cil_resolve_ast.c\n@@ -210,6 +210,12 @@ int cil_resolve_classpermissionset(struct cil_tree_node *current, struct cil_cla\n \t\tgoto exit;\n \t}\n \n+\tif (!datum->fqn) {\n+\t\tcil_tree_log(current, CIL_ERR, \"Anonymous classpermission used in a classpermissionset\");\n+\t\trc = SEPOL_ERR;\n+\t\tgoto exit;\n+\t}\n+\n \trc = cil_resolve_classperms_list(current, cps->classperms, db);\n \tif (rc != SEPOL_OK) {\n \t\tgoto exit;\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42526269-vul",
+      "digest": "sha256:0b33a41df59ec329b927f86562b2b663e2dd59c8eae72d177d91fc191e20ffe4"
+    },
+    "patched": {
+      "ref": "n132/arvo:42526269-fix",
+      "digest": "sha256:00ac985f9d90c4de478d4a8acdb32f882886e513ff5a9466adec0b9329c2f33d"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/selinux/libsepol/src/../cil/src/cil_list.c:60",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/selinux/libsepol/src/../cil/src/cil_list.c:60"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

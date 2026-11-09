@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042481574",
+  "chain": "CWE-456->CWE-457",
+  "project": "imagemagick",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42481574",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "594069b8aacfb1b121cb7dc2d576e2053648da1d",
+      "fix_commits": [
+        "594069b8aacfb1b121cb7dc2d576e2053648da1d"
+      ],
+      "repo": "https://github.com/imagemagick/imagemagick"
+    },
+    "patch": "From 594069b8aacfb1b121cb7dc2d576e2053648da1d Mon Sep 17 00:00:00 2001\nFrom: Cristy <mikayla-grace@urban-warrior.org>\nDate: Wed, 29 Jan 2020 20:00:47 -0500\nSubject: [PATCH] ...\n\n---\n MagickCore/channel.c | 34 +++++++++++++++++++++++++++++++++-\n MagickCore/image.c   |  3 +--\n 2 files changed, 34 insertions(+), 3 deletions(-)\n\ndiff --git a/MagickCore/channel.c b/MagickCore/channel.c\nindex deb19da..c79e607 100644\n--- a/MagickCore/channel.c\n+++ b/MagickCore/channel.c\n@@ -1311,7 +1311,39 @@ MagickExport MagickBooleanType SetImageAlphaChannel(Image *image,\n     }\n     case TransparentAlphaChannel:\n     {\n-      status=SetImageAlpha(image,TransparentAlpha,exception);\n+      image->alpha_trait=BlendPixelTrait;\n+      image_view=AcquireAuthenticCacheView(image,exception);\n+#if defined(MAGICKCORE_OPENMP_SUPPORT)\n+      #pragma omp parallel for schedule(static) shared(status) \\\n+        magick_number_threads(image,image,image->rows,1)\n+#endif\n+      for (y=0; y < (ssize_t) image->rows; y++)\n+      {\n+        register Quantum\n+          *magick_restrict q;\n+    \n+        register ssize_t\n+          x;\n+    \n+        if (status == MagickFalse)\n+          continue;\n+        q=GetCacheViewAuthenticPixels(image_view,0,y,image->columns,1,\n+          exception);\n+        if (q == (Quantum *) NULL)\n+          {\n+            status=MagickFalse;\n+            continue;\n+          }\n+        for (x=0; x < (ssize_t) image->columns; x++)\n+        {\n+          if (GetPixelWriteMask(image,q) <= (QuantumRange/2))\n+            SetPixelAlpha(image,TransparentAlpha,q);\n+          q+=GetPixelChannels(image);\n+        }\n+        if (SyncCacheViewAuthenticPixels(image_view,exception) == MagickFalse)\n+          status=MagickFalse;\n+      }\n+      image_view=DestroyCacheView(image_view);\n       break;\n     }\n     case UndefinedAlphaChannel:\ndiff --git a/MagickCore/image.c b/MagickCore/image.c\nindex 8309642..df05aba 100644\n--- a/MagickCore/image.c\n+++ b/MagickCore/image.c\n@@ -2375,8 +2375,7 @@ MagickExport MagickBooleanType SetImageAlpha(Image *image,const Quantum alpha,\n       }\n     for (x=0; x < (ssize_t) image->columns; x++)\n     {\n-      if (GetPixelWriteMask(image,q) <= (QuantumRange/2))\n-        SetPixelAlpha(image,alpha,q);\n+      SetPixelAlpha(image,alpha,q);\n       q+=GetPixelChannels(image);\n     }\n     if (SyncCacheViewAuthenticPixels(image_view,exception) == MagickFalse)\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42481574-vul",
+      "digest": "sha256:b9252867b03d426a26ab2932c884ac8dd76c57f6f9653fc467ae4d6af323d057"
+    },
+    "patched": {
+      "ref": "n132/arvo:42481574-fix",
+      "digest": "sha256:8ae096c68f171f515de3337c58f53090d2458d37e294abd1797f10890ad6be96"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/imagemagick/MagickCore/pixel.c:6088",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/imagemagick/MagickCore/pixel.c:6088"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

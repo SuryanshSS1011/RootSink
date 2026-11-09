@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042504059",
+  "chain": "CWE-1284->CWE-125",
+  "project": "libdwarf",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42504059",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "cd021a1311572d4f9bb37b0b808685a5ed84bcc3",
+      "fix_commits": [
+        "cd021a1311572d4f9bb37b0b808685a5ed84bcc3"
+      ],
+      "repo": "https://github.com/davea42/libdwarf-code"
+    },
+    "patch": "diff --git a/bugxml/data.txt b/bugxml/data.txt\nindex 82d7412a..71b8d7b3 100644\n--- a/bugxml/data.txt\n+++ b/bugxml/data.txt\n@@ -1,3 +1,18 @@\n+id: DW202111-010\n+cve:\n+fuzzer: oss-fuzz-40627\n+datereported: 2021-11-02\n+reportedby: David Korczynski\n+vulnerability: Abrt in _dwarf_error_string\n+product: libdwarf\n+description: The Elf object file has some corruption. The\n+  read now stops with an error.\n+datefixed: 2021-11-07\n+references: regressiontests/ossfuzz40627/clusterfuzz-testcase-fuzz_init_path-5186858573758464\n+  regressiontests/ossfuzz40627/clusterfuzz-testcase-minimized-fuzz_init_path-5186858573758464\n+gitfixid: 94dece3ce0f030d06da442a103bd6a5301410b25\n+tarrelease:\n+endrec: DW202111-010\n \n id: DW202111-009\n cve:\n@@ -40,11 +55,10 @@ reportedby: David Korczynski\n vulnerability:  Null-dereference READ in dwarf_object_init_b\n product: libdwarf\n description: Verified as fixed by oss-fuzz\n-  The testcase has illegal libdwarf call\n-  and improper include statements.\n-datefixed:\n+  The Macho headers are corrupted and that is now reported.\n+datefixed: 2021-11-07\n references:\n-gitfixid:\n+gitfixid: 94dece3ce0f030d06da442a103bd6a5301410b25\n tarrelease:\n endrec: DW202111-007\n \n@@ -55,11 +69,10 @@ datereported: 2021-11-03\n reportedby: David Korczynski\n vulnerability: Heap-buffer-overflow in _dwarf_elf_setup_all_section_groups\n product: libdwarf\n-description: The testcase has illegal libdwarf call\n-  and improper include statements.\n-datefixed: \n-references: \n-gitfixid: \n+description:  Object file has corrupt section group information.\n+datefixed: 2021-11-07\n+references: regressiontests/ossfuzz40674/clusterfuzz-testcase-minimized-fuzz_init_path-6557751518560256\n+gitfixid: 94dece3ce0f030d06da442a103bd6a5301410b25\n tarrelease:\n endrec: DW202111-005\n \n@@ -70,13 +83,12 @@ datereported: 2021-11-03\n reportedby: David Korczynski\n vulnerability: Null-dereference READ in dwarf_object_init_b \n product: libdwarf\n-description: \n+description: The macho object has corrupted headers\n+  and now mentions that and stops.\n   Verified as fixed by oss-fuzz 2021-11-03\n-  The testcase has illegal libdwarf call\n-  and improper include statements.\n datefixed: 2021-11-05\n-references: \n-gitfixid: \n+references: regressiontests/ossfuzz40673/clusterfuzz-testcase-minimized-fuzz_init_path-6240961391362048.fuzz \n+gitfixid: 94dece3ce0f030d06da442a103bd6a5301410b25\n tarrelease:\n endrec: DW202111-004\n \ndiff --git a/src/lib/libdwarf/dwarf_elf_load_headers.c b/src/lib/libdwarf/dwarf_elf_load_headers.c\nindex 7b24881d..a68a9ac3 100644\n--- a/src/lib/libdwarf/dwarf_elf_load_headers.c\n+++ b/src/lib/libdwarf/dwarf_elf_load_headers.c\n@@ -1684,7 +1684,11 @@ elf_flagmatches(Dwarf_Unsigned flagsword,Dwarf_Unsigned flag)\n     return FALSE;\n }\n \n-/*  For SHT_GROUP sections. */\n+/*  For SHT_GROUP sections. \n+    A group section starts with a 32bit flag\n+    word with value 1. \n+    32bit section numbers of the sections\n+    in the group follow the flag field. */\n static int\n read_gs_section_group(\n     dwarf_elf_object_access_internals_t *ep,\n@@ -1725,7 +1729,7 @@ read_gs_section_group(\n             return DW_DLV_ERROR;\n         }\n         count = seclen/psh->gh_entsize;\n-        if (count > ep->f_loc_shdr.g_count) {\n+        if (count >= ep->f_loc_shdr.g_count) {\n             /* Impossible */\n             free(data);\n             *errcode = DW_DLE_ELF_SECTION_GROUP_ERROR;\n@@ -1771,12 +1775,12 @@ read_gs_section_group(\n                 return DW_DLV_ERROR;\n             }\n             grouparray[i] = gseca;\n-            if (gseca > ep->f_loc_shdr.g_count) {\n+            if (gseca >= ep->f_loc_shdr.g_count) {\n                 /*  Might be confused endianness by\n                     the compiler generating the SHT_GROUP.\n                     This is pretty horrible. */\n \n-                if (gsecb > ep->f_loc_shdr.g_count) {\n+                if (gsecb >= ep->f_loc_shdr.g_count) {\n                     *errcode = DW_DLE_ELF_SECTION_GROUP_ERROR;\n                     free(data);\n                     free(grouparray);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42504059-vul",
+      "digest": "sha256:b535ff646eef812430e0835ab3b0b346603c15afa25c6c363e42cfe54e16f5d0"
+    },
+    "patched": {
+      "ref": "n132/arvo:42504059-fix",
+      "digest": "sha256:dba41c177c2b43add805ed39f8d2a953165cfdb6344cbe3e96ef135dd3806049"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/libdwarf/src/lib/libdwarf/dwarf_elf_load_headers.c:1790",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/libdwarf/src/lib/libdwarf/dwarf_elf_load_headers.c:1790"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

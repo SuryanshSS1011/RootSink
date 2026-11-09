@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-960205067",
+  "chain": "CWE-456->CWE-457",
+  "project": "libjxl",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42497894",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/libjxl/libjxl/commit/97e10070e25d414c68bbb25d0a2e7bfed7bc2c2c",
+      "fix_commits": [
+        "97e10070e25d414c68bbb25d0a2e7bfed7bc2c2c"
+      ],
+      "repo": "https://github.com/libjxl/libjxl"
+    },
+    "patch": "diff --git a/lib/jxl/dec_upsample.cc b/lib/jxl/dec_upsample.cc\nindex 76c5000f9cb..4a6f64e52c4 100644\n--- a/lib/jxl/dec_upsample.cc\n+++ b/lib/jxl/dec_upsample.cc\n@@ -68,7 +68,8 @@ void Upsample(const ImageF& src, const Rect& src_rect, ImageF* dst,\n   constexpr const size_t M = 2 * Upsampler::filter_radius() + 1;\n   constexpr const size_t M2 = M / 2;\n   JXL_DASSERT(src_rect.x0() >= M2);\n-  JXL_DASSERT(src_rect.x0() + src_rect.xsize() + M2 <= src.xsize());\n+  const size_t src_x_limit = src_rect.x0() + src_rect.xsize() + M2;\n+  JXL_DASSERT(src_x_limit <= src.xsize());\n   JXL_ASSERT(DivCeil(dst_rect.xsize(), N) <= src_rect.xsize());\n   // TODO(eustas): add proper (src|dst) ysize check that accounts for mirroring.\n \n@@ -188,6 +189,17 @@ void Upsample(const ImageF& src, const Rect& src_rect, ImageF* dst,\n       for (size_t iy = 0; iy < M; iy++) {\n         memcpy(in + MX * iy, src_rows[iy] + xbase, MX * sizeof(float));\n       }\n+      if (x_repeat > 1) {\n+        // Even if filter coeffs contain 0 at \"undefined\" values, the result\n+        // might be undefined, because NaN will poison the sum.\n+        if (JXL_UNLIKELY(xbase + MX > src_x_limit)) {\n+          for (size_t iy = 0; iy < M; iy++) {\n+            for (size_t ix = src_x_limit - xbase; ix < MX; ++ix) {\n+              in[MX * iy + ix] = 0.0f;\n+            }\n+          }\n+        }\n+      }\n       constexpr size_t U = 4;  // Unroll factor.\n       constexpr size_t tail = num_coeffs & ~(U - 1);\n       constexpr size_t tail_length = num_coeffs - tail;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42497894-vul",
+      "digest": "sha256:51e3170cc28ae60fc7c79bea5308e5c48f131c9684e8532b1f01b57dc69bfb62"
+    },
+    "patched": {
+      "ref": "n132/arvo:42497894-fix",
+      "digest": "sha256:74b9cad7e2697e86c20d243d087673ab85a624dc6d8ac3bee295eefd885c504b"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/libjxl/third_party/highway/hwy/ops/x86_128-inl.h:3075",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/libjxl/third_party/highway/hwy/ops/x86_128-inl.h:3075"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

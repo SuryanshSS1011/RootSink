@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042522874",
+  "chain": "CWE-20->CWE-125",
+  "project": "cyclonedds",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42522874",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "708b9211ca8aeb3312b358df81d259c3d3c9fc70",
+      "fix_commits": [
+        "708b9211ca8aeb3312b358df81d259c3d3c9fc70"
+      ],
+      "repo": "https://github.com/eclipse-cyclonedds/cyclonedds"
+    },
+    "patch": "diff --git a/src/core/ddsi/src/ddsi_typewrap.c b/src/core/ddsi/src/ddsi_typewrap.c\nindex f606cccdd6..282e041723 100644\n--- a/src/core/ddsi/src/ddsi_typewrap.c\n+++ b/src/core/ddsi/src/ddsi_typewrap.c\n@@ -1001,7 +1001,7 @@ static dds_return_t add_minimal_typeobj (struct ddsi_domaingv *gv, struct xt_typ\n         xt->_u.structure.members.seq[n].flags = mto->_u.struct_type.member_seq._buffer[n].common.member_flags;\n         if ((ret = ddsi_type_register_dep (gv, &xt->id, &xt->_u.structure.members.seq[n].type, &mto->_u.struct_type.member_seq._buffer[n].common.member_type_id)) != DDS_RETCODE_OK)\n         {\n-          for (uint32_t m = 0; m < n - 1; m++)\n+          for (uint32_t m = 0; m < n; m++)\n             ddsi_type_unref_locked (gv, xt->_u.structure.members.seq[m].type);\n           if (xt->_u.structure.base_type)\n             ddsi_type_unref_locked (gv, xt->_u.structure.base_type);\n@@ -1025,7 +1025,7 @@ static dds_return_t add_minimal_typeobj (struct ddsi_domaingv *gv, struct xt_typ\n         xt->_u.union_type.members.seq[n].flags = mto->_u.union_type.member_seq._buffer[n].common.member_flags;\n         if ((ret = ddsi_type_register_dep (gv, &xt->id, &xt->_u.union_type.members.seq[n].type, &mto->_u.union_type.member_seq._buffer[n].common.type_id)) != DDS_RETCODE_OK)\n         {\n-          for (uint32_t m = 0; m < n - 1; m++)\n+          for (uint32_t m = 0; m < n; m++)\n           {\n             ddsi_type_unref_locked (gv, xt->_u.union_type.members.seq[m].type);\n             ddsrt_free (xt->_u.union_type.members.seq[m].label_seq._buffer);\n@@ -1170,7 +1170,7 @@ static dds_return_t add_complete_typeobj (struct ddsi_domaingv *gv, struct xt_ty\n         xt->_u.structure.members.seq[n].flags = cto->_u.struct_type.member_seq._buffer[n].common.member_flags;\n         if ((ret = ddsi_type_register_dep (gv, &xt->id, &xt->_u.structure.members.seq[n].type, &cto->_u.struct_type.member_seq._buffer[n].common.member_type_id)) != DDS_RETCODE_OK)\n         {\n-          for (uint32_t m = 0; m < n - 1; m++)\n+          for (uint32_t m = 0; m < n; m++)\n           {\n             ddsi_type_unref_locked (gv, xt->_u.structure.members.seq[m].type);\n             xt_applied_member_annotations_fini (&xt->_u.structure.members.seq[m].detail.annotations);\n@@ -1197,7 +1197,7 @@ static dds_return_t add_complete_typeobj (struct ddsi_domaingv *gv, struct xt_ty\n         xt->_u.union_type.members.seq[n].flags = cto->_u.union_type.member_seq._buffer[n].common.member_flags;\n         if ((ret = ddsi_type_register_dep (gv, &xt->id, &xt->_u.union_type.members.seq[n].type, &cto->_u.union_type.member_seq._buffer[n].common.type_id)) != DDS_RETCODE_OK)\n         {\n-          for (uint32_t m = 0; m < n - 1; m++)\n+          for (uint32_t m = 0; m < n; m++)\n           {\n             ddsi_type_unref_locked (gv, xt->_u.union_type.members.seq[m].type);\n             ddsrt_free (xt->_u.union_type.members.seq[m].label_seq._buffer);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42522874-vul",
+      "digest": "sha256:bc45853ca48fba2d58ac06761061d694d953c1c369ff7c3f6435b441752d4473"
+    },
+    "patched": {
+      "ref": "n132/arvo:42522874-fix",
+      "digest": "sha256:a0430a7f11c42232e21605599af6f7866ee2b3971d7d305ffbfd9322fdb35653"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/cyclonedds/src/core/ddsi/src/ddsi_typewrap.c:1168",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/cyclonedds/src/core/ddsi/src/ddsi_typewrap.c:1168"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

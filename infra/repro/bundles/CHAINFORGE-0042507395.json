@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042507395",
+  "chain": "CWE-456->CWE-457",
+  "project": "ndpi",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42507395",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "e46b508a36415b0fc76dbaaf6e65a5d9e425598f",
+      "fix_commits": [
+        "e46b508a36415b0fc76dbaaf6e65a5d9e425598f"
+      ],
+      "repo": "https://github.com/ntop/nDPI"
+    },
+    "patch": "From e46b508a36415b0fc76dbaaf6e65a5d9e425598f Mon Sep 17 00:00:00 2001\nFrom: Ivan Nardi <12729895+IvanNardi@users.noreply.github.com>\nDate: Sat, 15 Jan 2022 20:53:36 +0100\nSubject: [PATCH] Kerberos: fix use-of-uninitialized-value error (#1409)\n\nDetected by oss-fuzz:\nhttps://bugs.chromium.org/p/oss-fuzz/issues/detail?id=43677\n---\n src/lib/protocols/kerberos.c | 2 +-\n 1 file changed, 1 insertion(+), 1 deletion(-)\n\ndiff --git a/src/lib/protocols/kerberos.c b/src/lib/protocols/kerberos.c\nindex c89923f..98d9193 100644\n--- a/src/lib/protocols/kerberos.c\n+++ b/src/lib/protocols/kerberos.c\n@@ -260,7 +260,7 @@ void ndpi_search_kerberos(struct ndpi_detection_module_struct *ndpi_struct,\n \t\t      printf(\"[AS-REQ][s/dport: %u/%u][Kerberos Cname][len: %u][%s]\\n\", sport, dport, cname_len, cname_str);\n #endif\n \n-\t\t      if(((strcmp(cname_str, \"host\") == 0) || (strcmp(cname_str, \"ldap\") == 0)) && (packet->payload[name_offset+1+cname_len] == 0x1b)) {\n+\t\t      if(((strcmp(cname_str, \"host\") == 0) || (strcmp(cname_str, \"ldap\") == 0)) && (packet->payload[name_offset+1+cname_len] == 0x1b) && num_cname == 1) {\n \t\t        name_offset += cname_len + 2;\n \t\t        if (name_offset < packet->payload_packet_len)\n \t\t          cname_len = packet->payload[name_offset];\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42507395-vul",
+      "digest": "sha256:3b41d744b8f0c3dce2d3f5d89e90cc857416beaba63c63a98161284ff52ffa6b"
+    },
+    "patched": {
+      "ref": "n132/arvo:42507395-fix",
+      "digest": "sha256:9f36e5646ee2ad38dae9cb5121ae134c705f03c60ac70c8b87882220b1f59c43"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/ndpi/src/lib/protocols/kerberos.c:268",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/ndpi/src/lib/protocols/kerberos.c:268"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

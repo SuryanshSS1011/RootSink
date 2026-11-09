@@ -1,0 +1,89 @@
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 3706394884
+INFO: Loaded 1 modules   (193721 inline 8-bit counters): 193721 [0x1b52770, 0x1b81c29), 
+INFO: Loaded 1 PC tables (193721 PCs): 193721 [0x1b81c30,0x1e767c0), 
+/out/client_fuzzer: Running 1 inputs 1 time(s) each.
+Running: /tmp/poc
+=================================================================
+==7==ERROR: AddressSanitizer: heap-use-after-free on address 0x61f000001d10 at pc 0x00000128fbc9 bp 0x7ffd7ef87d90 sp 0x7ffd7ef87d88
+READ of size 1 at 0x61f000001d10 thread T0
+SCARINESS: 40 (1-byte-read-heap-use-after-free)
+    #0 0x128fbc8 in inflate /proc/self/cwd/external/zlib/inflate.c:663:13
+    #1 0x1192c61 in zlib_body(z_stream_s*, grpc_slice_buffer*, grpc_slice_buffer*, int (*)(z_stream_s*, int)) /proc/self/cwd/src/core/lib/compression/message_compress.cc:60:11
+    #2 0x1191c38 in zlib_decompress(grpc_slice_buffer*, grpc_slice_buffer*, int) /proc/self/cwd/src/core/lib/compression/message_compress.cc:131:7
+    #3 0x11919a0 in grpc_msg_decompress(grpc_compression_algorithm, grpc_slice_buffer*, grpc_slice_buffer*) /proc/self/cwd/src/core/lib/compression/message_compress.cc
+    #4 0xb6c8f8 in grpc_core::(anonymous namespace)::CallData::OnRecvMessageReady(void*, grpc_error*) /proc/self/cwd/src/core/ext/filters/http/message_compress/message_decompress_filter.cc:187:11
+    #5 0x12cad82 in exec_ctx_run /proc/self/cwd/src/core/lib/iomgr/exec_ctx.cc:49:3
+    #6 0x12cad82 in grpc_core::ExecCtx::Flush() /proc/self/cwd/src/core/lib/iomgr/exec_ctx.cc:79:9
+    #7 0x562f97 in LLVMFuzzerTestOneInput /proc/self/cwd/test/core/end2end/fuzzers/client_fuzzer.cc:123:34
+    #8 0x45c923 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:611:15
+    #9 0x4485a2 in fuzzer::RunOneTest(fuzzer::Fuzzer*, char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:324:6
+    #10 0x44ddec in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:860:9
+    #11 0x4769f2 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #12 0x7fca8b4e0082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082)
+    #13 0x426dcd in _start (/out/client_fuzzer+0x426dcd)
+
+DEDUP_TOKEN: inflate--zlib_body(z_stream_s*, grpc_slice_buffer*, grpc_slice_buffer*, int (*)(z_stream_s*, int))--zlib_decompress(grpc_slice_buffer*, grpc_slice_buffer*, int)
+0x61f000001d10 is located 144 bytes inside of 3408-byte region [0x61f000001c80,0x61f0000029d0)
+freed by thread T0 here:
+    #0 0x52afa2 in __interceptor_free /src/llvm-project/compiler-rt/lib/asan/asan_malloc_linux.cpp:111:3
+    #1 0x13007ec in operator() /proc/self/cwd/src/core/lib/slice/slice.cc:221:36
+    #2 0x13007ec in grpc_slice_malloc_large::$_0::__invoke(grpc_slice_refcount*) /proc/self/cwd/src/core/lib/slice/slice.cc:221:7
+    #3 0x12ab50d in Unref /proc/self/cwd/./src/core/lib/slice/slice_refcount_base.h:46:7
+    #4 0x12ab50d in grpc_slice_unref_internal /proc/self/cwd/./src/core/lib/slice/slice_refcount.h:41:21
+    #5 0x12ab50d in grpc_slice_buffer_reset_and_unref_internal(grpc_slice_buffer*) /proc/self/cwd/src/core/lib/slice/slice_buffer.cc:241:5
+    #6 0xae2773 in read_action_locked(void*, grpc_error*) /proc/self/cwd/src/core/ext/transport/chttp2/transport/chttp2_transport.cc:2546:3
+    #7 0x12c54b1 in grpc_combiner_continue_exec_ctx() /proc/self/cwd/src/core/lib/iomgr/combiner.cc:240:5
+    #8 0x12cab9d in grpc_core::ExecCtx::Flush() /proc/self/cwd/src/core/lib/iomgr/exec_ctx.cc:82:17
+    #9 0x562f97 in LLVMFuzzerTestOneInput /proc/self/cwd/test/core/end2end/fuzzers/client_fuzzer.cc:123:34
+    #10 0x45c923 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:611:15
+    #11 0x4485a2 in fuzzer::RunOneTest(fuzzer::Fuzzer*, char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:324:6
+    #12 0x44ddec in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:860:9
+    #13 0x4769f2 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #14 0x7fca8b4e0082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082)
+
+DEDUP_TOKEN: __interceptor_free--operator()--grpc_slice_malloc_large::$_0::__invoke(grpc_slice_refcount*)
+previously allocated by thread T0 here:
+    #0 0x52b20d in __interceptor_malloc /src/llvm-project/compiler-rt/lib/asan/asan_malloc_linux.cpp:129:3
+    #1 0x14f70c4 in operator new(unsigned long) (/out/client_fuzzer+0x14f70c4)
+    #2 0x562f31 in LLVMFuzzerTestOneInput /proc/self/cwd/test/core/end2end/fuzzers/client_fuzzer.cc:119:24
+    #3 0x45c923 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:611:15
+    #4 0x4485a2 in fuzzer::RunOneTest(fuzzer::Fuzzer*, char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:324:6
+    #5 0x44ddec in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:860:9
+    #6 0x4769f2 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #7 0x7fca8b4e0082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082)
+
+DEDUP_TOKEN: __interceptor_malloc--operator new(unsigned long)--LLVMFuzzerTestOneInput
+SUMMARY: AddressSanitizer: heap-use-after-free /proc/self/cwd/external/zlib/inflate.c:663:13 in inflate
+Shadow bytes around the buggy address:
+  0x0c3e7fff8350: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c3e7fff8360: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c3e7fff8370: 00 00 00 00 00 00 00 00 fa fa fa fa fa fa fa fa
+  0x0c3e7fff8380: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c3e7fff8390: fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd
+=>0x0c3e7fff83a0: fd fd[fd]fd fd fd fd fd fd fd fd fd fd fd fd fd
+  0x0c3e7fff83b0: fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd
+  0x0c3e7fff83c0: fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd
+  0x0c3e7fff83d0: fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd
+  0x0c3e7fff83e0: fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd
+  0x0c3e7fff83f0: fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+==7==ABORTING

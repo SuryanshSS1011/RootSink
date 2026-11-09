@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042480826",
+  "chain": "CWE-456->CWE-457",
+  "project": "libxml2",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42480826",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "92b9e8c8b3787068565a1820ba575d042f9eec66",
+      "fix_commits": [
+        "92b9e8c8b3787068565a1820ba575d042f9eec66"
+      ],
+      "repo": "https://gitlab.gnome.org/GNOME/libxml2.git"
+    },
+    "patch": "From 92b9e8c8b3787068565a1820ba575d042f9eec66 Mon Sep 17 00:00:00 2001\nFrom: Nick Wellnhofer <wellnhofer@aevum.de>\nDate: Tue, 6 Jun 2017 12:56:28 +0200\nSubject: [PATCH] Fix type confusion in xmlValidateOneNamespace\n\nComment out code that casts xmlNsPtr to xmlAttrPtr. ID types on\nnamespace declarations make no practical sense anyway.\n\nFixes bug 780228.\n\nFound with libFuzzer and ASan.\n---\n valid.c | 7 +++++++\n 1 file changed, 7 insertions(+)\n\ndiff --git a/valid.c b/valid.c\nindex 8075d3a..c51ea29 100644\n--- a/valid.c\n+++ b/valid.c\n@@ -4627,6 +4627,12 @@ xmlNodePtr elem, const xmlChar *prefix, xmlNsPtr ns, const xmlChar *value) {\n \t}\n     }\n \n+    /*\n+     * Casting ns to xmlAttrPtr is wrong. We'd need separate functions\n+     * xmlAddID and xmlAddRef for namespace declarations, but it makes\n+     * no practical sense to use ID types anyway.\n+     */\n+#if 0\n     /* Validity Constraint: ID uniqueness */\n     if (attrDecl->atype == XML_ATTRIBUTE_ID) {\n         if (xmlAddID(ctxt, doc, value, (xmlAttrPtr) ns) == NULL)\n@@ -4638,6 +4644,7 @@ xmlNodePtr elem, const xmlChar *prefix, xmlNsPtr ns, const xmlChar *value) {\n         if (xmlAddRef(ctxt, doc, value, (xmlAttrPtr) ns) == NULL)\n \t    ret = 0;\n     }\n+#endif\n \n     /* Validity Constraint: Notation Attributes */\n     if (attrDecl->atype == XML_ATTRIBUTE_NOTATION) {\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42480826-vul",
+      "digest": "sha256:240288756601b0b7a0cc78c9e88495b160c9725589dfcd686e95caf0c79ca1d8"
+    },
+    "patched": {
+      "ref": "n132/arvo:42480826-fix",
+      "digest": "sha256:f853a0056e7bd3d0b13c2e9210bffa0beac1513d376f5043fd4c7ce0f0187f55"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/libxml2/valid.c:6472",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/libxml2/valid.c:6472"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

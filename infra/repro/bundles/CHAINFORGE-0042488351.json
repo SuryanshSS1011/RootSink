@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042488351",
+  "chain": "CWE-20->CWE-787",
+  "project": "ffmpeg",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42488351",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "3e5959b3457f7f1856d997261e6ac672bba49e8b",
+      "fix_commits": [
+        "3e5959b3457f7f1856d997261e6ac672bba49e8b"
+      ],
+      "repo": "https://git.ffmpeg.org/ffmpeg.git"
+    },
+    "patch": "From 3e5959b3457f7f1856d997261e6ac672bba49e8b Mon Sep 17 00:00:00 2001\nFrom: Michael Niedermayer <michael@niedermayer.cc>\nDate: Sat, 24 Oct 2020 22:21:48 +0200\nSubject: [PATCH] avcodec/exr: Check ymin vs. h\n\nFixes: out of array access\nFixes: 26532/clusterfuzz-testcase-minimized-ffmpeg_AV_CODEC_ID_EXR_fuzzer-5613925708857344\nFixes: 27443/clusterfuzz-testcase-minimized-ffmpeg_AV_CODEC_ID_EXR_fuzzer-5631239813595136\n\nFound-by: continuous fuzzing process https://github.com/google/oss-fuzz/tree/master/projects/ffmpeg\nSigned-off-by: Michael Niedermayer <michael@niedermayer.cc>\n---\n libavcodec/exr.c | 2 +-\n 1 file changed, 1 insertion(+), 1 deletion(-)\n\ndiff --git a/libavcodec/exr.c b/libavcodec/exr.c\nindex e907c5c..8b701d1 100644\n--- a/libavcodec/exr.c\n+++ b/libavcodec/exr.c\n@@ -1830,7 +1830,7 @@ static int decode_frame(AVCodecContext *avctx, void *data,\n     // Zero out the start if ymin is not 0\n     for (i = 0; i < planes; i++) {\n         ptr = picture->data[i];\n-        for (y = 0; y < s->ymin; y++) {\n+        for (y = 0; y < FFMIN(s->ymin, s->h); y++) {\n             memset(ptr, 0, out_line_size);\n             ptr += picture->linesize[i];\n         }\n-- \n2.55.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42488351-vul",
+      "digest": "sha256:be094fcb50055e890c066f8b070f2f65bde98cf0e4152d367f98055a6f7be166"
+    },
+    "patched": {
+      "ref": "n132/arvo:42488351-fix",
+      "digest": "sha256:0325b5aff8f9f63370dd9ce007edefb3c3cef7bfef0538edfa6459f2b70aaf4e"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/ffmpeg/libavcodec/exr.c:1815",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/ffmpeg/libavcodec/exr.c:1815"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

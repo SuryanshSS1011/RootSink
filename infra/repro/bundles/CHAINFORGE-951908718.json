@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-951908718",
+  "chain": "CWE-843->CWE-119",
+  "project": "gdal",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42541038",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/OSGeo/gdal/commit/aa6a7c2b18d9d679a349bb7d5683347d0caa9566",
+      "fix_commits": [
+        "aa6a7c2b18d9d679a349bb7d5683347d0caa9566"
+      ],
+      "repo": "https://github.com/OSGeo/gdal"
+    },
+    "patch": "diff --git a/gdal/gcore/gdalpamdataset.cpp b/gdal/gcore/gdalpamdataset.cpp\nindex 082d55a833da..9592d524bbc1 100644\n--- a/gdal/gcore/gdalpamdataset.cpp\n+++ b/gdal/gcore/gdalpamdataset.cpp\n@@ -247,14 +247,13 @@ CPLXMLNode *GDALPamDataset::SerializeToXML( const char *pszUnused )\n \n     for( int iBand = 0; iBand < GetRasterCount(); iBand++ )\n     {\n-        GDALPamRasterBand * const poBand =\n-            cpl::down_cast<GDALPamRasterBand *>(\n-                GetRasterBand(iBand+1) );\n+        GDALRasterBand * const poBand = GetRasterBand(iBand+1);\n \n         if( poBand == nullptr || !(poBand->GetMOFlags() & GMO_PAM_CLASS) )\n             continue;\n \n-        CPLXMLNode * const psBandTree = poBand->SerializeToXML( pszUnused );\n+        CPLXMLNode * const psBandTree =\n+            cpl::down_cast<GDALPamRasterBand *>(poBand)->SerializeToXML( pszUnused );\n \n         if( psBandTree != nullptr )\n         {\n@@ -489,13 +488,15 @@ CPLErr GDALPamDataset::XMLInit( CPLXMLNode *psTree, const char *pszUnused )\n         if( nBand < 1 || nBand > GetRasterCount() )\n             continue;\n \n-        GDALPamRasterBand *poBand = cpl::down_cast<GDALPamRasterBand *>(\n-            GetRasterBand(nBand) );\n+        GDALRasterBand *poBand = GetRasterBand(nBand);\n \n         if( poBand == nullptr || !(poBand->GetMOFlags() & GMO_PAM_CLASS) )\n             continue;\n \n-        poBand->XMLInit( psBandTree, pszUnused );\n+        GDALPamRasterBand *poPamBand = cpl::down_cast<GDALPamRasterBand *>(\n+            GetRasterBand(nBand) );\n+\n+        poPamBand->XMLInit( psBandTree, pszUnused );\n     }\n \n /* -------------------------------------------------------------------- */\n@@ -981,15 +982,16 @@ CPLErr GDALPamDataset::CloneInfo( GDALDataset *poSrcDS, int nCloneFlags )\n     {\n         for( int iBand = 0; iBand < GetRasterCount(); iBand++ )\n         {\n-            GDALPamRasterBand *poBand = cpl::down_cast<GDALPamRasterBand *>(\n-                GetRasterBand(iBand+1) );\n+            GDALRasterBand *poBand = GetRasterBand(iBand+1);\n \n             if( poBand == nullptr || !(poBand->GetMOFlags() & GMO_PAM_CLASS) )\n                 continue;\n \n             if( poSrcDS->GetRasterCount() >= iBand+1 )\n-                poBand->CloneInfo( poSrcDS->GetRasterBand(iBand+1),\n-                                   nCloneFlags );\n+            {\n+                cpl::down_cast<GDALPamRasterBand *>(poBand)->\n+                    CloneInfo( poSrcDS->GetRasterBand(iBand+1), nCloneFlags );\n+            }\n             else\n                 CPLDebug(\n                     \"GDALPamDataset\",\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42541038-vul",
+      "digest": "sha256:6b44162098bcefd478a721ce4369b004f2b54dc925192e95f84344622e3ee109"
+    },
+    "patched": {
+      "ref": "n132/arvo:42541038-fix",
+      "digest": "sha256:80b19d55b31eff5ca9b6fdb153ae6a6e4788f86a5f82ac51134df5142b2ba6cb"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "crash_site": "/src/gdal/gdal/port/cpl_conv.h:385",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 843,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 119,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "site": "/src/gdal/gdal/port/cpl_conv.h:385"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-963991949",
+  "chain": "CWE-456->CWE-457",
+  "project": "librawspeed",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42497070",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/darktable-org/rawspeed/commit/ea2ce48df48c754e0e1fd459101085b344c70eaf",
+      "fix_commits": [
+        "ea2ce48df48c754e0e1fd459101085b344c70eaf"
+      ],
+      "repo": "https://github.com/darktable-org/rawspeed"
+    },
+    "patch": "diff --git a/src/librawspeed/decompressors/UncompressedDecompressor.cpp b/src/librawspeed/decompressors/UncompressedDecompressor.cpp\nindex 2303274e2..744a26971 100644\n--- a/src/librawspeed/decompressors/UncompressedDecompressor.cpp\n+++ b/src/librawspeed/decompressors/UncompressedDecompressor.cpp\n@@ -38,7 +38,7 @@ using std::min;\n \n namespace rawspeed {\n \n-void UncompressedDecompressor::sanityCheck(uint32* h, int bpl) {\n+void UncompressedDecompressor::sanityCheck(const uint32* h, int bpl) {\n   assert(h != nullptr);\n   assert(*h > 0);\n   assert(bpl > 0);\n@@ -59,10 +59,13 @@ void UncompressedDecompressor::sanityCheck(uint32* h, int bpl) {\n   assert(min_h < *h);\n   assert(input.getRemainSize() >= bpl * min_h);\n \n-  *h = min_h;\n+  ThrowIOE(\"Image truncated, only %u of %u lines found\", min_h, *h);\n+  // FIXME: need to come up with some common variable to allow proceeding here\n+\n+  // *h = min_h;\n }\n \n-void UncompressedDecompressor::sanityCheck(uint32 w, uint32* h, int bpp) {\n+void UncompressedDecompressor::sanityCheck(uint32 w, const uint32* h, int bpp) {\n   assert(w > 0);\n   assert(bpp > 0);\n \ndiff --git a/src/librawspeed/decompressors/UncompressedDecompressor.h b/src/librawspeed/decompressors/UncompressedDecompressor.h\nindex fada8c8d8..8d4a524b1 100644\n--- a/src/librawspeed/decompressors/UncompressedDecompressor.h\n+++ b/src/librawspeed/decompressors/UncompressedDecompressor.h\n@@ -39,10 +39,10 @@ class UncompressedDecompressor final : public AbstractDecompressor {\n   RawImage mRaw;\n \n   // check buffer size, throw, or compute minimal height that can be decoded\n-  void sanityCheck(uint32* h, int bpl);\n+  void sanityCheck(const uint32* h, int bpl);\n \n   // check buffer size, throw, or compute minimal height that can be decoded\n-  void sanityCheck(uint32 w, uint32* h, int bpp);\n+  void sanityCheck(uint32 w, const uint32* h, int bpp);\n \n   // for special packed formats\n   int bytesPerLine(int w, bool skips);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42497070-vul",
+      "digest": "sha256:f52405d9f834b380bb0cdaa3ba81f54152a9b076f7da61f5d14468e05f85f3e0"
+    },
+    "patched": {
+      "ref": "n132/arvo:42497070-fix",
+      "digest": "sha256:3944eaaff758efad2720529a5ef8c845baaefa7fb456bab49bf917a01e45c347"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/librawspeed/src/librawspeed/common/RawImage.cpp:168",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/librawspeed/src/librawspeed/common/RawImage.cpp:168"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

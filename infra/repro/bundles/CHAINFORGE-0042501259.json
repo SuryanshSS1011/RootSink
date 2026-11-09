@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042501259",
+  "chain": "CWE-416->CWE-787",
+  "project": "dav1d",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42501259",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://code.videolan.org/videolan/dav1d.git159215a82da88ca6c511194c8188e9df7a193998",
+      "fix_commits": [
+        "159215a82da88ca6c511194c8188e9df7a193998"
+      ],
+      "repo": "https://code.videolan.org/videolan/dav1d.git"
+    },
+    "patch": "From 159215a82da88ca6c511194c8188e9df7a193998 Mon Sep 17 00:00:00 2001\nFrom: Victorien Le Couviour--Tuffet <victorien@videolan.org>\nDate: Tue, 7 Sep 2021 15:23:03 +0200\nSubject: [PATCH] Fix lr_lpf_line re-allocation check\n\nCredit to Oss-Fuzz.\n---\n src/decode.c   | 13 +++++++------\n src/internal.h |  3 ++-\n 2 files changed, 9 insertions(+), 7 deletions(-)\n\ndiff --git a/src/decode.c b/src/decode.c\nindex 82605eb..457703d 100644\n--- a/src/decode.c\n+++ b/src/decode.c\n@@ -3082,23 +3082,24 @@ int dav1d_decode_frame_init(Dav1dFrameContext *const f) {\n         f->lf.cdef_line_sz[1] = (int) uv_stride;\n     }\n \n+    const int num_lines = c->n_tc > 1 ? f->sbh * (4 << f->seq_hdr->sb128) : 12;\n     const int lr_line_sz = ((f->sr_cur.p.p.w + 31) & ~31) << hbd;\n-    if (lr_line_sz != f->lf.lr_line_sz) {\n+    const size_t lr_plane_sz = num_lines * lr_line_sz;\n+    if (lr_plane_sz != f->lf.lr_plane_sz) {\n         dav1d_freep_aligned(&f->lf.lr_lpf_line[0]);\n-        const int num_lines = c->n_tc > 1 ? f->sbh * (4 << f->seq_hdr->sb128) : 12;\n         // lr simd may overread the input, so slightly over-allocate the lpf buffer\n-        uint8_t *lr_ptr = dav1d_alloc_aligned(lr_line_sz * num_lines * 3 + 64, 32);\n+        uint8_t *lr_ptr = dav1d_alloc_aligned(lr_plane_sz * 3 + 64, 32);\n         if (!lr_ptr) {\n-            f->lf.lr_line_sz = 0;\n+            f->lf.lr_plane_sz = 0;\n             goto error;\n         }\n \n         for (int pl = 0; pl <= 2; pl++) {\n             f->lf.lr_lpf_line[pl] = lr_ptr;\n-            lr_ptr += lr_line_sz * num_lines;\n+            lr_ptr += lr_plane_sz;\n         }\n \n-        f->lf.lr_line_sz = lr_line_sz;\n+        f->lf.lr_plane_sz = lr_plane_sz;\n     }\n \n     // update allocation for loopfilter masks\ndiff --git a/src/internal.h b/src/internal.h\nindex 6fe915d..c708a1a 100644\n--- a/src/internal.h\n+++ b/src/internal.h\n@@ -272,7 +272,8 @@ struct Dav1dFrameContext {\n         Av1Restoration *lr_mask;\n         int top_pre_cdef_toggle;\n         int mask_sz /* w*h */, lr_mask_sz, cdef_line_sz[2] /* stride */;\n-        int lr_line_sz, re_sz /* h */;\n+        size_t lr_plane_sz; /* w*sbh*4*is_sb128 if n_tc > 1, else w*12 */\n+        int re_sz /* h */;\n         ALIGN(Av1FilterLUT lim_lut, 16);\n         int last_sharpness;\n         uint8_t lvl[8 /* seg_id */][4 /* dir */][8 /* ref */][2 /* is_gmv */];\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42501259-vul",
+      "digest": "sha256:f59e8b04d85110dccc3f4937e46a17a93f2b84f4660d0b40f8a9e3027da6e3f8"
+    },
+    "patched": {
+      "ref": "n132/arvo:42501259-fix",
+      "digest": "sha256:33032f8a1fec4551b0f40c37480e76e0f220a6d6dcc724994f051357a4e5d9b7"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": null,
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": null
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

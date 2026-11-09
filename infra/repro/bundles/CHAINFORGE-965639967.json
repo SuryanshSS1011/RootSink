@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-965639967",
+  "chain": "CWE-456->CWE-457",
+  "project": "wabt",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42516193",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/WebAssembly/wabt/commit/aebf63d2e3b26db3e7d76374f3906c50a0f02085",
+      "fix_commits": [
+        "aebf63d2e3b26db3e7d76374f3906c50a0f02085"
+      ],
+      "repo": "https://github.com/WebAssembly/wabt"
+    },
+    "patch": "diff --git a/src/binary-reader-ir.cc b/src/binary-reader-ir.cc\nindex 2d21a6ceb6..9eba058b00 100644\n--- a/src/binary-reader-ir.cc\n+++ b/src/binary-reader-ir.cc\n@@ -449,6 +449,10 @@ Result BinaryReaderIR::TopLabelExpr(LabelNode** label, Expr** expr) {\n   CHECK_RESULT(TopLabel(label));\n   LabelNode* parent_label;\n   CHECK_RESULT(GetLabelAt(&parent_label, 1));\n+  if (parent_label->exprs->empty()) {\n+    PrintError(\"TopLabelExpr: parent label has empty expr list\");\n+    return Result::Error;\n+  }\n   *expr = &parent_label->exprs->back();\n   return Result::Ok;\n }\n@@ -1217,6 +1221,10 @@ Result BinaryReaderIR::OnUnreachableExpr() {\n \n Result BinaryReaderIR::EndFunctionBody(Index index) {\n   current_func_ = nullptr;\n+  if (!label_stack_.empty()) {\n+    PrintError(\"function %\" PRIindex \" missing end marker\", index);\n+    return Result::Error;\n+  }\n   return Result::Ok;\n }\n \n@@ -1297,6 +1305,10 @@ Result BinaryReaderIR::BeginElemSegmentInitExpr(Index index) {\n }\n \n Result BinaryReaderIR::EndInitExpr() {\n+  if (!label_stack_.empty()) {\n+    PrintError(\"init expression missing end marker\");\n+    return Result::Error;\n+  }\n   return Result::Ok;\n }\n \ndiff --git a/src/binary-reader.cc b/src/binary-reader.cc\nindex de91300ac7..8e86383db4 100644\n--- a/src/binary-reader.cc\n+++ b/src/binary-reader.cc\n@@ -560,7 +560,14 @@ Index BinaryReader::NumTotalFuncs() {\n \n Result BinaryReader::ReadInitExpr(Index index) {\n   // Read instructions until END opcode is reached.\n-  return ReadInstructions(/*stop_on_end=*/true, read_end_, NULL);\n+  Opcode final_opcode(Opcode::Invalid);\n+  CHECK_RESULT(\n+      ReadInstructions(/*stop_on_end=*/true, read_end_, &final_opcode));\n+  ERROR_UNLESS(state_.offset <= read_end_,\n+               \"init expression longer than given size\");\n+  ERROR_UNLESS(final_opcode == Opcode::End,\n+               \"init expression must end with END opcode\");\n+  return Result::Ok;\n }\n \n Result BinaryReader::ReadTable(Type* out_elem_type, Limits* out_elem_limits) {\ndiff --git a/test/regress/bad-missing-end.txt b/test/regress/bad-missing-end.txt\nnew file mode 100644\nindex 0000000000..8c00f59f26\n--- /dev/null\n+++ b/test/regress/bad-missing-end.txt\n@@ -0,0 +1,11 @@\n+;;; TOOL: run-gen-wasm-bad\n+magic\n+version\n+section(TYPE) { count[1] function params[0] results[0] }\n+section(FUNCTION) { count[1] type[0] }\n+section(GLOBAL) { count[1] i32 mut[0] init_expr[] }\n+section(CODE) { count[1] func { locals[0] } }\n+(;; STDERR ;;;\n+0000017: error: init expression must end with END opcode\n+0000017: error: init expression must end with END opcode\n+;;; STDERR ;;)\ndiff --git a/test/spec/binary.txt b/test/spec/binary.txt\nindex 58784707f2..b9de7087eb 100644\n--- a/test/spec/binary.txt\n+++ b/test/spec/binary.txt\n@@ -265,7 +265,7 @@ out/test/spec/binary.wast:1653: assert_malformed passed:\n out/test/spec/binary.wast:1687: assert_malformed passed:\n   0000021: error: unable to read u32 leb128: elem segment flags\n out/test/spec/binary.wast:1703: assert_malformed passed:\n-  0000024: error: unable to read u32 leb128: elem count\n+  0000024: error: init expression must end with END opcode\n out/test/spec/binary.wast:1720: assert_malformed passed:\n   0000021: error: unfinished section (expected end: 0x27)\n out/test/spec/binary.wast:1746: assert_malformed passed:\ndiff --git a/test/spec/exception-handling/binary.txt b/test/spec/exception-handling/binary.txt\nindex 2e7e25f887..918bba95e9 100644\n--- a/test/spec/exception-handling/binary.txt\n+++ b/test/spec/exception-handling/binary.txt\n@@ -266,7 +266,7 @@ out/test/spec/exception-handling/binary.wast:1653: assert_malformed passed:\n out/test/spec/exception-handling/binary.wast:1687: assert_malformed passed:\n   0000021: error: unable to read u32 leb128: elem segment flags\n out/test/spec/exception-handling/binary.wast:1703: assert_malformed passed:\n-  0000024: error: unable to read u32 leb128: elem count\n+  0000024: error: init expression must end with END opcode\n out/test/spec/exception-handling/binary.wast:1720: assert_malformed passed:\n   0000021: error: unfinished section (expected end: 0x27)\n out/test/spec/exception-handling/binary.wast:1746: assert_malformed passed:\ndiff --git a/test/spec/multi-memory/binary.txt b/test/spec/multi-memory/binary.txt\nindex 8aad12feb6..c98ba8a506 100644\n--- a/test/spec/multi-memory/binary.txt\n+++ b/test/spec/multi-memory/binary.txt\n@@ -246,7 +246,7 @@ out/test/spec/multi-memory/binary.wast:1462: assert_malformed passed:\n out/test/spec/multi-memory/binary.wast:1496: assert_malformed passed:\n   0000021: error: unable to read u32 leb128: elem segment flags\n out/test/spec/multi-memory/binary.wast:1512: assert_malformed passed:\n-  0000024: error: unable to read u32 leb128: elem count\n+  0000024: error: init expression must end with END opcode\n out/test/spec/multi-memory/binary.wast:1529: assert_malformed passed:\n   0000021: error: unfinished section (expected end: 0x27)\n out/test/spec/multi-memory/binary.wast:1555: assert_malformed passed:\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42516193-vul",
+      "digest": "sha256:b4eacb89ab96da9c1c221f5307099f3de79e79c96e6c907b9bae85829b5bd17a"
+    },
+    "patched": {
+      "ref": "n132/arvo:42516193-fix",
+      "digest": "sha256:2589a9ce5666a28cf3ee2cae5a1a6c41da20224c04b72b8f13dc80e89cb55a9e"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/wabt/./src/binary-reader-objdump.cc:1758",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/wabt/./src/binary-reader-objdump.cc:1758"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-964246653",
+  "chain": "CWE-456->CWE-457",
+  "project": "miniz",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42508282",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/richgel999/miniz/commit/9eedb97176408008a2263cef9b4bac5c7f955d4f",
+      "fix_commits": [
+        "9eedb97176408008a2263cef9b4bac5c7f955d4f"
+      ],
+      "repo": "https://github.com/richgel999/miniz"
+    },
+    "patch": "diff --git a/miniz_tinfl.c b/miniz_tinfl.c\nindex 027b0d64..7a20fe31 100644\n--- a/miniz_tinfl.c\n+++ b/miniz_tinfl.c\n@@ -173,6 +173,16 @@ extern \"C\" {\n     }                                                                                                                               \\\n     MZ_MACRO_END\n \n+static void tinfl_clear_tree(tinfl_decompressor *r)\n+{\n+    if (r->m_type == 0)\n+        MZ_CLEAR_ARR(r->m_tree_0);\n+    else if (r->m_type == 1)\n+        MZ_CLEAR_ARR(r->m_tree_1);\n+    else\n+        MZ_CLEAR_ARR(r->m_tree_2);\n+}\n+\n tinfl_status tinfl_decompress(tinfl_decompressor *r, const mz_uint8 *pIn_buf_next, size_t *pIn_buf_size, mz_uint8 *pOut_buf_start, mz_uint8 *pOut_buf_next, size_t *pOut_buf_size, const mz_uint32 decomp_flags)\n {\n     static const mz_uint16 s_length_base[31] = { 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 19, 23, 27, 31, 35, 43, 51, 59, 67, 83, 99, 115, 131, 163, 195, 227, 258, 0, 0 };\n@@ -325,7 +335,7 @@ tinfl_status tinfl_decompress(tinfl_decompressor *r, const mz_uint8 *pIn_buf_nex\n                 pCode_size = pCode_sizes[r->m_type];\n                 MZ_CLEAR_ARR(total_syms);\n                 TINFL_MEMSET(pLookUp, 0, sizeof(r->m_look_up[0]));\n-                TINFL_MEMSET(pTree, 0, r->m_table_sizes[r->m_type] * sizeof(pTree[0]) * 2);\n+                tinfl_clear_tree(r);\n                 for (i = 0; i < r->m_table_sizes[r->m_type]; ++i)\n                     total_syms[pCode_size[i]]++;\n                 used_syms = 0, total = 0;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42508282-vul",
+      "digest": "sha256:35afaa372add1bc9d0134f14b4bd0c865eb9f9df670815ce6a53b394114940a2"
+    },
+    "patched": {
+      "ref": "n132/arvo:42508282-fix",
+      "digest": "sha256:e71fbe939b88445ad66bbc00eca1b27feb43a9d80e4a535aac44a2023656c554"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/miniz/build/amalgamation/miniz.c:2599",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/miniz/build/amalgamation/miniz.c:2599"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

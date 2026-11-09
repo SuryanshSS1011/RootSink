@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042534374",
+  "chain": "CWE-1284->CWE-787",
+  "project": "lcms",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42534374",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "dbb4a1a4fbb4fe3708155cfa15947ccd2c3d290b",
+      "fix_commits": [
+        "dbb4a1a4fbb4fe3708155cfa15947ccd2c3d290b"
+      ],
+      "repo": "https://github.com/mm2/Little-CMS"
+    },
+    "patch": "diff --git a/src/cmscgats.c b/src/cmscgats.c\nindex ab117e45..0a1905c3 100644\n--- a/src/cmscgats.c\n+++ b/src/cmscgats.c\n@@ -1375,10 +1375,13 @@ KEYVALUE* AddAvailableSampleID(cmsIT8* it8, const char* Key)\n \n \n static\n-void AllocTable(cmsIT8* it8)\n+cmsBool AllocTable(cmsIT8* it8)\n {\n     TABLE* t;\n \n+    if (it8->TablesCount >= (MAXTABLES-1)) \n+        return FALSE;\n+\n     t = it8 ->Tab + it8 ->TablesCount;\n \n     t->HeaderList = NULL;\n@@ -1386,6 +1389,7 @@ void AllocTable(cmsIT8* it8)\n     t->Data       = NULL;\n \n     it8 ->TablesCount++;\n+    return TRUE;\n }\n \n \n@@ -1397,7 +1401,10 @@ cmsInt32Number CMSEXPORT cmsIT8SetTable(cmsHANDLE  IT8, cmsUInt32Number nTable)\n \n          if (nTable == it8 ->TablesCount) {\n \n-             AllocTable(it8);\n+             if (!AllocTable(it8)) {\n+                 SynError(it8, \"Too many tables\");\n+                 return -1;\n+             }\n          }\n          else {\n              SynError(it8, \"Table %d is out of sequence\", nTable);\n@@ -2197,8 +2204,8 @@ cmsBool HeaderSection(cmsIT8* it8)\n             if (!GetVal(it8, Buffer, MAXSTR - 1, \"Property data expected\")) return FALSE;\n \n             if (Key->WriteAs != WRITE_PAIR) {\n-                AddToList(it8, &GetTable(it8)->HeaderList, VarName, NULL, Buffer,\n-                    (it8->sy == SSTRING) ? WRITE_STRINGIFY : WRITE_UNCOOKED);\n+                if (AddToList(it8, &GetTable(it8)->HeaderList, VarName, NULL, Buffer,\n+                    (it8->sy == SSTRING) ? WRITE_STRINGIFY : WRITE_UNCOOKED) == NULL) return FALSE;\n             }\n             else {\n                 const char *Subkey;\n@@ -2306,7 +2313,8 @@ cmsBool ParseIT8(cmsIT8* it8, cmsBool nosheet)\n \n                     if (it8 -> sy != SEOF) {\n \n-                            AllocTable(it8);\n+                            if (!AllocTable(it8)) return FALSE;                        \n+\n                             it8 ->nTable = it8 ->TablesCount - 1;\n \n                             // Read sheet type if present. We only support identifier and string.\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42534374-vul",
+      "digest": "sha256:0bddcb5ca9ac16aff6c239ef833f3db37e654c6c35a9c7ee98a7a9b7a33fc0b3"
+    },
+    "patched": {
+      "ref": "n132/arvo:42534374-fix",
+      "digest": "sha256:bafc82d490a720160fd6b705dd7fecacf171d0bff48caf060f979f7270228520"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/lcms/src/cmscgats.c:1252",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/lcms/src/cmscgats.c:1252"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,71 @@
+Accepting input from '/tmp/poc'
+Usage for fuzzing: honggfuzz -P [flags] -- /out/read_gml_fuzzer
+=================================================================
+==3196==ERROR: AddressSanitizer: heap-use-after-free on address 0x608000000068 at pc 0x0000004fb310 bp 0x7ffe341e8780 sp 0x7ffe341e8778
+READ of size 8 at 0x608000000068 thread T0
+SCARINESS: 51 (8-byte-read-heap-use-after-free)
+    #0 0x4fb30f in igraph_vector_ptr_size /src/igraph/src/core/vector_ptr.c:264:15
+    #1 0x54bf5a in igraph_gml_tree_destroy /src/igraph/src/io/gml-tree.c:162:21
+    #2 0x4e4f0c in igraph_i_gml_parsedata_destroy /src/igraph/src/io/gml.c:130:9
+    #3 0x4d52e8 in IGRAPH_FINALLY_FREE /src/igraph/src/core/error.c:239:9
+    #4 0x4d5262 in igraph_error_handler_ignore /src/igraph/src/core/error.c:188:5
+    #5 0x4d4fff in igraph_error /src/igraph/src/core/error.c:147:9
+    #6 0x4e548f in igraph_read_graph_gml /src/igraph/src/io/gml.c
+    #7 0x4d4bf0 in LLVMFuzzerTestOneInput /src/igraph/./fuzzing/read_gml_fuzzer.c:51:9
+    #8 0x4cae2b in main (/out/read_gml_fuzzer+0x4cae2b)
+    #9 0x7f7bad4b883f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2083f)
+    #10 0x41cd38 in _start (/out/read_gml_fuzzer+0x41cd38)
+
+DEDUP_TOKEN: igraph_vector_ptr_size--igraph_gml_tree_destroy--igraph_i_gml_parsedata_destroy
+0x608000000068 is located 72 bytes inside of 88-byte region [0x608000000020,0x608000000078)
+freed by thread T0 here:
+    #0 0x497982 in free /src/llvm-project/compiler-rt/lib/asan/asan_malloc_linux.cpp:127:3
+    #1 0x54c274 in igraph_gml_tree_destroy /src/igraph/src/io/gml-tree.c:189:5
+    #2 0x4e581e in igraph_read_graph_gml /src/igraph/src/io/gml.c:225:9
+    #3 0x4d4bf0 in LLVMFuzzerTestOneInput /src/igraph/./fuzzing/read_gml_fuzzer.c:51:9
+    #4 0x4cae2b in main (/out/read_gml_fuzzer+0x4cae2b)
+
+DEDUP_TOKEN: free--igraph_gml_tree_destroy--igraph_read_graph_gml
+previously allocated by thread T0 here:
+    #0 0x497d62 in calloc /src/llvm-project/compiler-rt/lib/asan/asan_malloc_linux.cpp:154:3
+    #1 0x4ed30d in igraph_i_gml_make_numeric /src/igraph/src/io/gml-parser.y:192:24
+    #2 0x4ec203 in igraph_gml_yyparse /src/igraph/src/io/gml-parser.y:131:20
+    #3 0x4e53aa in igraph_read_graph_gml /src/igraph/src/io/gml.c:209:9
+    #4 0x4d4bf0 in LLVMFuzzerTestOneInput /src/igraph/./fuzzing/read_gml_fuzzer.c:51:9
+    #5 0x4cae2b in main (/out/read_gml_fuzzer+0x4cae2b)
+
+DEDUP_TOKEN: calloc--igraph_i_gml_make_numeric--igraph_gml_yyparse
+SUMMARY: AddressSanitizer: heap-use-after-free /src/igraph/src/core/vector_ptr.c:264:15 in igraph_vector_ptr_size
+Shadow bytes around the buggy address:
+  0x0c107fff7fb0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c107fff7fc0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c107fff7fd0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c107fff7fe0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c107fff7ff0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x0c107fff8000: fa fa fa fa fd fd fd fd fd fd fd fd fd[fd]fd fa
+  0x0c107fff8010: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c107fff8020: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c107fff8030: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c107fff8040: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c107fff8050: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+  Shadow gap:              cc
+==3196==ABORTING

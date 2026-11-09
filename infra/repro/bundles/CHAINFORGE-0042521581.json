@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042521581",
+  "chain": "CWE-20->CWE-125",
+  "project": "libdwarf",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42521581",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "680899627db6f05b8cf8d86272255563b6d81ebd",
+      "fix_commits": [
+        "680899627db6f05b8cf8d86272255563b6d81ebd"
+      ],
+      "repo": "https://github.com/davea42/libdwarf-code"
+    },
+    "patch": "diff --git a/fuzz/fuzz_die_cu_attrs.c b/fuzz/fuzz_die_cu_attrs.c\nindex 0937785c..0a75d7bf 100644\n--- a/fuzz/fuzz_die_cu_attrs.c\n+++ b/fuzz/fuzz_die_cu_attrs.c\n@@ -46,7 +46,7 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {\n   Dwarf_Ptr errarg = 0;\n   Dwarf_Error *errp = 0;\n   int i = 0;\n-  Dwarf_Die die;\n+  Dwarf_Die die = 0;\n \n   fuzz_fd = open(filename, O_RDONLY);\n   if (fuzz_fd != -1) {\n@@ -155,7 +155,7 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {\n             Dwarf_Half attrnum = 0;\n             const char *attrname = 0;\n             res = dwarf_whatform(attr, &formnum, errp);\n-            Dwarf_Bool *dw_returned_bool;\n+            Dwarf_Bool *dw_returned_bool = 0;\n             res = dwarf_hasform(attr, formnum, dw_returned_bool, errp);\n             res = dwarf_get_FORM_name(formnum, &formname);\n             Dwarf_Block *tempb = 0;\n@@ -165,7 +165,7 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {\n               Dwarf_Unsigned u = 0;\n               Dwarf_Unsigned arraycount = 0;\n               int sres = 0;\n-\n+                 \n               sres = dwarf_discr_list(dbg, (Dwarf_Small *)tempb->bl_data,\n                                       tempb->bl_len, &h, &arraycount, errp);\n             }\ndiff --git a/fuzz/fuzz_die_cu_offset.c b/fuzz/fuzz_die_cu_offset.c\nindex fc8b0fcf..43535639 100644\n--- a/fuzz/fuzz_die_cu_offset.c\n+++ b/fuzz/fuzz_die_cu_offset.c\n@@ -47,7 +47,7 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {\n   Dwarf_Ptr errarg = 0;\n   Dwarf_Error *errp = 0;\n   int i = 0;\n-  Dwarf_Die die;\n+  Dwarf_Die die = 0;\n \n   fuzz_fd = open(filename, O_RDONLY);\n   if (fuzz_fd != -1) {\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42521581-vul",
+      "digest": "sha256:8897cdf0f5d50cd9ee91e4f107cd121acbf4a502bd07b5363714a2244cc592fe"
+    },
+    "patched": {
+      "ref": "n132/arvo:42521581-fix",
+      "digest": "sha256:1cbdc7b9cacff6a566b6f608137dbf5df0601c14018309276064949e8cb57c8a"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/libdwarf/src/lib/libdwarf/dwarf_query.c:1160",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/libdwarf/src/lib/libdwarf/dwarf_query.c:1160"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-951655283",
+  "chain": "CWE-129->CWE-125",
+  "project": "ffmpeg",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42479228",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://git.ffmpeg.org/gitweb/ffmpeg.git/commitdiff/ac8dfcbd89a818b786d05ebc1af70f7bf6aeb86e",
+      "fix_commits": [
+        "ac8dfcbd89a818b786d05ebc1af70f7bf6aeb86e"
+      ],
+      "repo": "https://git.ffmpeg.org/gitweb/ffmpeg.git/commitdiff"
+    },
+    "patch": "From ac8dfcbd89a818b786d05ebc1af70f7bf6aeb86e Mon Sep 17 00:00:00 2001\nFrom: Michael Niedermayer <michael@niedermayer.cc>\nDate: Sat, 27 May 2017 13:17:34 +0200\nSubject: [PATCH] avcodec/mlpdec: Do not leave invalid values in\n matrix_out_ch[] on error\n\nFixes: runtime error: index 12 out of bounds for type 'uint8_t [8]'\nFixes: 1832/clusterfuzz-testcase-minimized-6574546079449088\n\nFound-by: continuous fuzzing process https://github.com/google/oss-fuzz/tree/master/projects/ffmpeg\nSigned-off-by: Michael Niedermayer <michael@niedermayer.cc>\n---\n libavcodec/mlpdec.c | 12 ++++++++----\n 1 file changed, 8 insertions(+), 4 deletions(-)\n\ndiff --git a/libavcodec/mlpdec.c b/libavcodec/mlpdec.c\nindex c0a23c5..0b0f836 100644\n--- a/libavcodec/mlpdec.c\n+++ b/libavcodec/mlpdec.c\n@@ -729,8 +729,7 @@ static int read_matrix_params(MLPDecodeContext *m, unsigned int substr, GetBitCo\n         av_log(m->avctx, AV_LOG_ERROR,\n                \"Number of primitive matrices cannot be greater than %d.\\n\",\n                max_primitive_matrices);\n-        s->num_primitive_matrices = 0;\n-        return AVERROR_INVALIDDATA;\n+        goto error;\n     }\n \n     for (mat = 0; mat < s->num_primitive_matrices; mat++) {\n@@ -743,12 +742,12 @@ static int read_matrix_params(MLPDecodeContext *m, unsigned int substr, GetBitCo\n             av_log(m->avctx, AV_LOG_ERROR,\n                     \"Invalid channel %d specified as output from matrix.\\n\",\n                     s->matrix_out_ch[mat]);\n-            return AVERROR_INVALIDDATA;\n+            goto error;\n         }\n         if (frac_bits > 14) {\n             av_log(m->avctx, AV_LOG_ERROR,\n                     \"Too many fractional bits specified.\\n\");\n-            return AVERROR_INVALIDDATA;\n+            goto error;\n         }\n \n         max_chan = s->max_matrix_channel;\n@@ -770,6 +769,11 @@ static int read_matrix_params(MLPDecodeContext *m, unsigned int substr, GetBitCo\n     }\n \n     return 0;\n+error:\n+    s->num_primitive_matrices = 0;\n+    memset(s->matrix_out_ch, 0, sizeof(s->matrix_out_ch));\n+\n+    return AVERROR_INVALIDDATA;\n }\n \n /** Read channel parameters. */\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42479228-vul",
+      "digest": "sha256:1f423aaf26d9136ce626ad4fb64b02aebd3007e974464cd35a388d4febbf8d93"
+    },
+    "patched": {
+      "ref": "n132/arvo:42479228-fix",
+      "digest": "sha256:44bf6d74e604d590649dd36927bc49d9936a7506658a4914a6f1f618570f3b9d"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "crash_site": "/src/ffmpeg/libavcodec/mlpdec.c:1072",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 129,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "site": "/src/ffmpeg/libavcodec/mlpdec.c:1072"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

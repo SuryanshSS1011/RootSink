@@ -1,0 +1,82 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-30042510317",
+  "chain": "CWE-1285->CWE-190->CWE-125",
+  "project": "openexr",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42510317",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "36af3db60e2c4dff4c3efe51cd83a28add116871",
+      "fix_commits": [
+        "36af3db60e2c4dff4c3efe51cd83a28add116871"
+      ],
+      "repo": "https://github.com/AcademySoftwareFoundation/openexr"
+    },
+    "patch": "diff --git a/src/lib/OpenEXRUtil/ImfCheckFile.cpp b/src/lib/OpenEXRUtil/ImfCheckFile.cpp\nindex 52ef9de80f..4cab8435ed 100644\n--- a/src/lib/OpenEXRUtil/ImfCheckFile.cpp\n+++ b/src/lib/OpenEXRUtil/ImfCheckFile.cpp\n@@ -1555,7 +1555,7 @@ memstream_read (\n     {\n         memdata* md   = static_cast<memdata*> (userdata);\n         uint64_t left = sz;\n-        if ((offset + sz) > md->bytes)\n+        if (offset > md->bytes ||  sz > md->bytes || offset+sz > md->bytes)\n             left = (offset < md->bytes) ? md->bytes - offset : 0;\n         if (left > 0) memcpy (buffer, md->data + offset, left);\n         rdsz = static_cast<int64_t> (left);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42510317-vul",
+      "digest": "sha256:c7038f448897bf9a31183f72f20405afe5c486a812264d3da0d5b8db59375e93"
+    },
+    "patched": {
+      "ref": "n132/arvo:42510317-fix",
+      "digest": "sha256:001a1baf46d5c2a78d84c21b3bd9badab928c1d788e2019e95e6c73fbc4ce969"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/openexr/src/lib/OpenEXRUtil/ImfCheckFile.cpp:1560",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 190,
+      "role": "intermediate",
+      "witness": {
+        "method": "ubsan-rebuild",
+        "recipe": "SANITIZER=undefined compile && $ENTRYPOINT",
+        "ubsan_options": "print_stacktrace=1:halt_on_error=0:silence_unsigned_overflow=0:symbolize=1"
+      },
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/openexr/src/lib/OpenEXRUtil/ImfCheckFile.cpp:1560"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

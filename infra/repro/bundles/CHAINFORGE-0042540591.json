@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042540591",
+  "chain": "CWE-456->CWE-457",
+  "project": "skia",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42540591",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "94d4d3e20b8be29233bc7056ed3b8b36def3e98a",
+      "fix_commits": [
+        "94d4d3e20b8be29233bc7056ed3b8b36def3e98a"
+      ],
+      "repo": "https://skia.googlesource.com/skia.git"
+    },
+    "patch": "diff --git a/BUILD.gn b/BUILD.gn\nindex 2a832a5..1691936 100644\n--- a/BUILD.gn\n+++ b/BUILD.gn\n@@ -1385,6 +1385,7 @@\n       \":flags\",\n       \":skia\",\n       \":tool_utils\",\n+      \"modules/skottie:tests\",\n       \"modules/sksg:tests\",\n       \"//third_party/libpng\",\n       \"//third_party/zlib\",\ndiff --git a/modules/skottie/BUILD.gn b/modules/skottie/BUILD.gn\nindex dff355c..9442592 100644\n--- a/modules/skottie/BUILD.gn\n+++ b/modules/skottie/BUILD.gn\n@@ -40,6 +40,26 @@\n   }\n }\n \n+source_set(\"tests\") {\n+  if (skia_enable_skottie) {\n+    testonly = true\n+\n+    configs += [\n+      \"../..:skia_private\",\n+      \"../..:tests_config\",\n+    ]\n+    sources = [\n+      \"src/SkottieTest.cpp\",\n+    ]\n+\n+    deps = [\n+      \":skottie\",\n+      \"../..:gpu_tool_utils\",\n+      \"../..:skia\",\n+    ]\n+  }\n+}\n+\n source_set(\"fuzz\") {\n   if (skia_enable_skottie) {\n     testonly = true\ndiff --git a/modules/skottie/src/SkottieJson.cpp b/modules/skottie/src/SkottieJson.cpp\nindex 4f23939..186cd42 100644\n--- a/modules/skottie/src/SkottieJson.cpp\n+++ b/modules/skottie/src/SkottieJson.cpp\n@@ -84,8 +84,12 @@\n     const auto& jvy = ov[\"y\"];\n \n     // Some BM versions seem to store x/y as single-element arrays.\n-    return Parse<SkScalar>(jvx.is<ArrayValue>() ? jvx.as<ArrayValue>()[0] : jvx, &pt->fX)\n-        && Parse<SkScalar>(jvy.is<ArrayValue>() ? jvy.as<ArrayValue>()[0] : jvy, &pt->fY);\n+    // TODO: We should be able to check size == 1 below, or just delegate to Parse<SkScalar>,\n+    //       but that change introduces diffs.  Investigate.\n+    const ArrayValue* jvxa = jvx;\n+    const ArrayValue* jvya = jvy;\n+    return Parse<SkScalar>(jvxa && jvxa->size() > 0 ? (*jvxa)[0] : jvx, &pt->fX)\n+        && Parse<SkScalar>(jvya && jvya->size() > 0 ? (*jvya)[0] : jvy, &pt->fY);\n }\n \n template <>\ndiff --git a/modules/skottie/src/SkottieTest.cpp b/modules/skottie/src/SkottieTest.cpp\nnew file mode 100644\nindex 0000000..1c4cc07\n--- /dev/null\n+++ b/modules/skottie/src/SkottieTest.cpp\n@@ -0,0 +1,23 @@\n+/*\n+ * Copyright 2018 Google Inc.\n+ *\n+ * Use of this source code is governed by a BSD-style license that can be\n+ * found in the LICENSE file.\n+ */\n+\n+#include \"Skottie.h\"\n+#include \"SkStream.h\"\n+\n+#include \"Test.h\"\n+\n+DEF_TEST(Skottie_OssFuzz8956, reporter) {\n+    static constexpr const char json[] =\n+        \"{\\\"v\\\":\\\" \\\",\\\"fr\\\":3,\\\"w\\\":4,\\\"h\\\":3,\\\"layers\\\":[{\\\"ty\\\": 1, \\\"sw\\\": 10, \\\"sh\\\": 10,\"\n+            \" \\\"sc\\\":\\\"#ffffff\\\", \\\"ks\\\":{\\\"o\\\":{\\\"a\\\": true, \\\"k\\\":\"\n+            \" [{\\\"t\\\": 0, \\\"s\\\": 0, \\\"e\\\": 1, \\\"i\\\": {\\\"x\\\":[]}}]}}}]}\";\n+\n+    SkMemoryStream stream(json, strlen(json));\n+\n+    // Passes if parsing doesn't crash.\n+    auto animation = skottie::Animation::Make(&stream);\n+}\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42540591-vul",
+      "digest": "sha256:12f285bde0334c8a5dffcd0dadf53cf5ac14f8bdba1301cfaa8a1080a7987d9d"
+    },
+    "patched": {
+      "ref": "n132/arvo:42540591-fix",
+      "digest": "sha256:8f9d227e1c1768930034b63bcb5eb20796aca14e63d584954988d39596ac4e1b"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/skia/out/Fuzz/../../modules/skjson/include/SkJSON.h:341",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/skia/out/Fuzz/../../modules/skjson/include/SkJSON.h:341"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

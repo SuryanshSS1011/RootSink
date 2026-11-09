@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042482376",
+  "chain": "CWE-456->CWE-457",
+  "project": "gnutls",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42482376",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "82bd85449f867a838dfe47475f9f5c0364ec1dd9",
+      "fix_commits": [
+        "82bd85449f867a838dfe47475f9f5c0364ec1dd9"
+      ],
+      "repo": "https://gitlab.com/gnutls/gnutls.git"
+    },
+    "patch": "diff --git a/fuzz/gnutls_x509_crl_parser_fuzzer.repro/698e01fdc3f9a4c402424302768da75f2464a63f b/fuzz/gnutls_x509_crl_parser_fuzzer.repro/698e01fdc3f9a4c402424302768da75f2464a63f\nnew file mode 100644\nindex 0000000000000000000000000000000000000000..9cc53a3e7d5a94ab538fd3584079c9b118d7ee5b\nBinary files /dev/null and b/fuzz/gnutls_x509_crl_parser_fuzzer.repro/698e01fdc3f9a4c402424302768da75f2464a63f differ\ndiff --git a/lib/x509/common.c b/lib/x509/common.c\nindex 4939d07d2be69b804b3518404cb1d833f4448f3b..fbc7cc975fe59cc73533309b327740c52a4307f2 100644\n--- a/lib/x509/common.c\n+++ b/lib/x509/common.c\n@@ -1926,3 +1926,23 @@ gnutls_gost_paramset_t gnutls_oid_to_gost_paramset(const char *oid)\n \telse\n \t\treturn gnutls_assert_val(GNUTLS_GOST_PARAMSET_UNKNOWN);\n }\n+\n+int _gnutls_x509_get_version(ASN1_TYPE root, const char *name)\n+{\n+\tuint8_t version[8];\n+\tint len, result;\n+\n+\tlen = sizeof(version);\n+\tresult = asn1_read_value(root, name, version, &len);\n+\tif (result != ASN1_SUCCESS) {\n+\t\tif (result == ASN1_ELEMENT_NOT_FOUND)\n+\t\t\treturn 1;\t/* the DEFAULT version */\n+\t\tgnutls_assert();\n+\t\treturn _gnutls_asn2err(result);\n+\t}\n+\n+\tif (len != 1 || version[0] >= 0x80)\n+\t\treturn gnutls_assert_val(GNUTLS_E_ASN1_DER_ERROR);\n+\n+\treturn (int) version[0] + 1;\n+}\ndiff --git a/lib/x509/common.h b/lib/x509/common.h\nindex 498ccc4e97090cc6f5214a30465172ef7e577e3a..54ded21188620d710cdf35e3eb7cdae0b4e9e91c 100644\n--- a/lib/x509/common.h\n+++ b/lib/x509/common.h\n@@ -264,6 +264,8 @@ int _gnutls_x509_decode_ext(const gnutls_datum_t *der, gnutls_x509_ext_st *out);\n int _gnutls_x509_raw_crt_to_raw_pubkey(const gnutls_datum_t * cert,\n \t\t\t   gnutls_datum_t * rpubkey);\n \n+int _gnutls_x509_get_version(ASN1_TYPE root, const char *name);\n+\n int x509_crt_to_raw_pubkey(gnutls_x509_crt_t crt,\n \t\t\t   gnutls_datum_t * rpubkey);\n \ndiff --git a/lib/x509/crl.c b/lib/x509/crl.c\nindex 82deb5e60a88d1afba757bbf40098aaf05d1e72d..76d90925e80aa100ee564088b8a973b8764a132c 100644\n--- a/lib/x509/crl.c\n+++ b/lib/x509/crl.c\n@@ -484,23 +484,12 @@ gnutls_x509_crl_get_signature(gnutls_x509_crl_t crl,\n  **/\n int gnutls_x509_crl_get_version(gnutls_x509_crl_t crl)\n {\n-\tuint8_t version[8];\n-\tint len, result;\n-\n \tif (crl == NULL) {\n \t\tgnutls_assert();\n \t\treturn GNUTLS_E_INVALID_REQUEST;\n \t}\n \n-\tlen = sizeof(version);\n-\tif ((result =\n-\t     asn1_read_value(crl->crl, \"tbsCertList.version\", version,\n-\t\t\t     &len)) != ASN1_SUCCESS) {\n-\t\tgnutls_assert();\n-\t\treturn _gnutls_asn2err(result);\n-\t}\n-\n-\treturn (int) version[0] + 1;\n+\treturn _gnutls_x509_get_version(crl->crl, \"tbsCertList.version\");\n }\n \n /**\ndiff --git a/lib/x509/ocsp.c b/lib/x509/ocsp.c\nindex 38df56ef1cae744a58173ab630068fb1b44c190e..caa511e9db728ba98d2985cf781ffc4d5f40e516 100644\n--- a/lib/x509/ocsp.c\n+++ b/lib/x509/ocsp.c\n@@ -456,25 +456,12 @@ int gnutls_ocsp_resp_export2(gnutls_ocsp_resp_const_t resp, gnutls_datum_t * dat\n  **/\n int gnutls_ocsp_req_get_version(gnutls_ocsp_req_const_t req)\n {\n-\tuint8_t version[8];\n-\tint len, ret;\n-\n \tif (req == NULL) {\n \t\tgnutls_assert();\n \t\treturn GNUTLS_E_INVALID_REQUEST;\n \t}\n \n-\tlen = sizeof(version);\n-\tret =\n-\t    asn1_read_value(req->req, \"tbsRequest.version\", version, &len);\n-\tif (ret != ASN1_SUCCESS) {\n-\t\tif (ret == ASN1_ELEMENT_NOT_FOUND)\n-\t\t\treturn 1;\t/* the DEFAULT version */\n-\t\tgnutls_assert();\n-\t\treturn _gnutls_asn2err(ret);\n-\t}\n-\n-\treturn (int) version[0] + 1;\n+\treturn _gnutls_x509_get_version(req->req, \"tbsRequest.version\");\n }\n \n /**\n@@ -1153,26 +1140,12 @@ gnutls_ocsp_resp_get_response(gnutls_ocsp_resp_const_t resp,\n  **/\n int gnutls_ocsp_resp_get_version(gnutls_ocsp_resp_const_t resp)\n {\n-\tuint8_t version[8];\n-\tint len, ret;\n-\n \tif (resp == NULL) {\n \t\tgnutls_assert();\n \t\treturn GNUTLS_E_INVALID_REQUEST;\n \t}\n \n-\tlen = sizeof(version);\n-\tret =\n-\t    asn1_read_value(resp->resp, \"tbsResponseData.version\", version,\n-\t\t\t    &len);\n-\tif (ret != ASN1_SUCCESS) {\n-\t\tif (ret == ASN1_ELEMENT_NOT_FOUND)\n-\t\t\treturn 1;\t/* the DEFAULT version */\n-\t\tgnutls_assert();\n-\t\treturn _gnutls_asn2err(ret);\n-\t}\n-\n-\treturn (int) version[0] + 1;\n+\treturn _gnutls_x509_get_version(resp->resp, \"tbsResponseData.version\");\n }\n \n /**\ndiff --git a/lib/x509/output.c b/lib/x509/output.c\nindex 7278c3c0f8d8c33fd08dd04676887285c1e9db5d..8084b92b2905c4d49dbe9ddbaa74b3cf0bc25bf8 100644\n--- a/lib/x509/output.c\n+++ b/lib/x509/output.c\n@@ -2204,9 +2204,7 @@ print_crl(gnutls_buffer_st * str, gnutls_x509_crl_t crl, int notsigned)\n \t/* Version. */\n \t{\n \t\tint version = gnutls_x509_crl_get_version(crl);\n-\t\tif (version == GNUTLS_E_ASN1_ELEMENT_NOT_FOUND)\n-\t\t\tadds(str, _(\"\\tVersion: 1 (default)\\n\"));\n-\t\telse if (version < 0)\n+\t\tif (version < 0)\n \t\t\taddf(str, \"error: get_version: %s\\n\",\n \t\t\t     gnutls_strerror(version));\n \t\telse\ndiff --git a/lib/x509/x509.c b/lib/x509/x509.c\nindex 57c718289474edd97b88725ee4292530ce35aba7..2091f3ae643b5cec630a245a1d307335183eb4cc 100644\n--- a/lib/x509/x509.c\n+++ b/lib/x509/x509.c\n@@ -1177,29 +1177,12 @@ gnutls_x509_crt_get_signature(gnutls_x509_crt_t cert,\n  **/\n int gnutls_x509_crt_get_version(gnutls_x509_crt_t cert)\n {\n-\tuint8_t version[8];\n-\tint len, result;\n-\n \tif (cert == NULL) {\n \t\tgnutls_assert();\n \t\treturn GNUTLS_E_INVALID_REQUEST;\n \t}\n \n-\tlen = sizeof(version);\n-\tif ((result =\n-\t     asn1_read_value(cert->cert, \"tbsCertificate.version\", version,\n-\t\t\t     &len)) != ASN1_SUCCESS) {\n-\n-\t\tif (result == ASN1_ELEMENT_NOT_FOUND)\n-\t\t\treturn 1;\t/* the DEFAULT version */\n-\t\tgnutls_assert();\n-\t\treturn _gnutls_asn2err(result);\n-\t}\n-\n-\tif (len != 1 || version[0] >= 0x80)\n-\t\treturn gnutls_assert_val(GNUTLS_E_CERTIFICATE_ERROR);\n-\n-\treturn (int) version[0] + 1;\n+\treturn _gnutls_x509_get_version(cert->cert, \"tbsCertificate.version\");\n }\n \n /**\ndiff --git a/tests/cert-tests/data/crl-demo3.pem b/tests/cert-tests/data/crl-demo3.pem\nindex 1e04338c67ab57dfe2ffeca6c35e89b148cdccbf..a91b1f905ab158d6a09856fc0f0af6de37623d7e 100644\n--- a/tests/cert-tests/data/crl-demo3.pem\n+++ b/tests/cert-tests/data/crl-demo3.pem\n@@ -1,5 +1,5 @@\n X.509 Certificate Revocation List Information:\n-\tVersion: 1 (default)\n+\tVersion: 1\n \tIssuer: OU=VeriSign Commercial Software Publishers CA,O=VeriSign\\, Inc.,L=Internet\n \tUpdate dates:\n \t\tIssued: Wed Mar 08 09:00:11 UTC 2017\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42482376-vul",
+      "digest": "sha256:1f2df572fecbf0653e4c9e39fb12c8255a0c3fd7383629c117a24f7654629301"
+    },
+    "patched": {
+      "ref": "n132/arvo:42482376-fix",
+      "digest": "sha256:352e789ceab38308d8c22d08fca3ecd90296c9ca6b51c35ff944e0c212dc55f3"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/gnutls/lib/x509/output.c:2278",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/gnutls/lib/x509/output.c:2278"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

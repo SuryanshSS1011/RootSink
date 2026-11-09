@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042498519",
+  "chain": "CWE-416->CWE-125",
+  "project": "sleuthkit",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42498519",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "3a32d25c88a771892c9db1d2055395ae4523a682",
+      "fix_commits": [
+        "3a32d25c88a771892c9db1d2055395ae4523a682"
+      ],
+      "repo": "https://github.com/sleuthkit/sleuthkit"
+    },
+    "patch": "diff --git a/tsk/fs/apfs_fs.cpp b/tsk/fs/apfs_fs.cpp\nindex 67c1b2071b..e0a64a56dd 100644\n--- a/tsk/fs/apfs_fs.cpp\n+++ b/tsk/fs/apfs_fs.cpp\n@@ -74,33 +74,49 @@ void APFSJObject::add_entry(const jit::value_type& e) {\n       _is_clone = (_inode.private_id != key->oid());\n \n       // If there's more data than the size of the inode then we have xdata\n-      if ((size_t)e.value.count() > sizeof(apfs_inode)) {\n+      size_t e_offset = sizeof(apfs_inode);\n+      size_t e_size = e.value.count();\n+      // Need at least 4 bytes for start of extended fields (xf_blob_t)\n+      if (e_size > sizeof(apfs_inode) + 4) {\n         // The xfield headers are right after the inode\n         const auto xfield = reinterpret_cast<const apfs_xfield*>(value + 1);\n \n-        // The xfield data is after all of the xfield headers\n-        auto xfield_data =\n-            reinterpret_cast<const char*>(&xfield->entries[xfield->num_exts]);\n+        e_offset += 4;\n \n-        for (auto i = 0U; i < xfield->num_exts; i++) {\n-          const auto& ext = xfield->entries[i];\n+        // Need at least 4 bytes for each x_field_t\n+        if (xfield->num_exts < (e_size - e_offset) / 4) {\n+          // sizeof(xf_blob_t) + number of extenteded fields * sizeof(x_field_t)\n+          e_offset += xfield->num_exts * 4;\n \n-          switch (ext.type) {\n-            case APFS_XFIELD_TYPE_NAME:\n-              _name = std::string(xfield_data);\n-              break;\n-            case APFS_XFIELD_TYPE_DSTREAM: {\n-              const auto ds =\n-                  reinterpret_cast<const apfs_dstream*>(xfield_data);\n+          // The xfield data is after all of the xfield headers\n+          auto xfield_data =\n+              reinterpret_cast<const char*>(&xfield->entries[xfield->num_exts]);\n \n-              _size = ds->size;\n-              _size_on_disk = ds->alloced_size;\n-              break;\n+          for (auto i = 0U; i < xfield->num_exts; i++) {\n+            const auto& ext = xfield->entries[i];\n+\n+            switch (ext.type) {\n+              case APFS_XFIELD_TYPE_NAME:\n+                if((ext.len < 1) || (ext.len > e_size) || (e_offset > e_size - ext.len)) {\n+                  break;\n+                }\n+                _name = std::string(xfield_data, ext.len - 1);\n+                break;\n+\n+              case APFS_XFIELD_TYPE_DSTREAM: {\n+                const auto ds =\n+                    reinterpret_cast<const apfs_dstream*>(xfield_data);\n+\n+                _size = ds->size;\n+                _size_on_disk = ds->alloced_size;\n+                break;\n+              }\n             }\n-          }\n \n-          // The next data needs to be aligned properly\n-          xfield_data += (ext.len + 7) & 0xFFF8;\n+            // The next data needs to be aligned properly\n+            xfield_data += (ext.len + 7) & 0xFFF8;\n+            e_offset += (ext.len + 7) & 0xFFF8;\n+          }\n         }\n       }\n       break;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42498519-vul",
+      "digest": "sha256:72dbcb18198400a88bc68c66cfa63bbc44d2ab35a206734aeffeb68f0ddcf399"
+    },
+    "patched": {
+      "ref": "n132/arvo:42498519-fix",
+      "digest": "sha256:cd9ea4c04c89b3af68d9ddffcc48748199e7a9971bdf3524d885349d82959d8e"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/sleuthkit/tsk/fs/fs_attr.c:334",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/sleuthkit/tsk/fs/fs_attr.c:334"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

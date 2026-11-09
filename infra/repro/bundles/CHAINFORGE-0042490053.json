@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042490053",
+  "chain": "CWE-456->CWE-457",
+  "project": "libjpeg-turbo",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42490053",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "110d8d6dcafaed517e8f77a6253169535ee3a20e",
+      "fix_commits": [
+        "110d8d6dcafaed517e8f77a6253169535ee3a20e"
+      ],
+      "repo": "https://github.com/libjpeg-turbo/libjpeg-turbo"
+    },
+    "patch": "From 110d8d6dcafaed517e8f77a6253169535ee3a20e Mon Sep 17 00:00:00 2001\nFrom: DRC <information@libjpeg-turbo.org>\nDate: Mon, 7 Dec 2020 11:12:49 -0600\nSubject: [PATCH] decompress_smooth_data(): Fix another uninit. read\n\nRegression introduced by 42825b68d570fb07fe820ac62ad91017e61e9a25\n\nThe test case\nhttps://user-images.githubusercontent.com/3491627/101376530-fde56180-38b0-11eb-938d-734119a5b5ba.jpg\nis a malformed progressive JPEG image containing an interleaved Y/Cb/Cr\nDC scan followed by two non-interleaved Y DC scans.  Thus, the\nprev_coef_bits[] array was initialized for the Y component but not the\nother components, the uninitialized values for Cb and Cr were\ntransferred to the prev_coef_bits_latch[] array in smoothing_ok(), and\nbecause cinfo->master->last_good_iMCU_row was 0,\ndecompress_smooth_data() read those uninitialized values when attempting\nto smooth the second iMCU row.\n\nPossibly fixes #478\n---\n jdarith.c | 2 ++\n jdphuff.c | 2 ++\n 2 files changed, 4 insertions(+)\n\ndiff --git a/jdarith.c b/jdarith.c\nindex 3c7ac57..7f0d3a7 100644\n--- a/jdarith.c\n+++ b/jdarith.c\n@@ -672,6 +672,8 @@ bad:\n       for (coefi = MIN(cinfo->Ss, 1); coefi <= MAX(cinfo->Se, 9); coefi++) {\n         if (cinfo->input_scan_number > 1)\n           prev_coef_bit_ptr[coefi] = coef_bit_ptr[coefi];\n+        else\n+          prev_coef_bit_ptr[coefi] = 0;\n       }\n       for (coefi = cinfo->Ss; coefi <= cinfo->Se; coefi++) {\n         int expected = (coef_bit_ptr[coefi] < 0) ? 0 : coef_bit_ptr[coefi];\ndiff --git a/jdphuff.c b/jdphuff.c\nindex cac4582..0e981f2 100644\n--- a/jdphuff.c\n+++ b/jdphuff.c\n@@ -130,6 +130,8 @@ start_pass_phuff_decoder(j_decompress_ptr cinfo)\n     for (coefi = MIN(cinfo->Ss, 1); coefi <= MAX(cinfo->Se, 9); coefi++) {\n       if (cinfo->input_scan_number > 1)\n         prev_coef_bit_ptr[coefi] = coef_bit_ptr[coefi];\n+      else\n+        prev_coef_bit_ptr[coefi] = 0;\n     }\n     for (coefi = cinfo->Ss; coefi <= cinfo->Se; coefi++) {\n       int expected = (coef_bit_ptr[coefi] < 0) ? 0 : coef_bit_ptr[coefi];\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42490053-vul",
+      "digest": "sha256:eab5a0027c20dc284c4a91e3cfd059f6bd9221142140de6aebfac18058aed09c"
+    },
+    "patched": {
+      "ref": "n132/arvo:42490053-fix",
+      "digest": "sha256:18f6db838ce4d6a3c789d7563d8d760c42f0805e6885127aced0ee48f8fc3606"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/libjpeg-turbo/jdcoefct.c:519",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/libjpeg-turbo/jdcoefct.c:519"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

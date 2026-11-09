@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0374218971",
+  "chain": "CWE-1285->CWE-787",
+  "project": "ndpi",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "374218971",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "cd438e255428616c42a1fd2cacd733748700566c",
+      "fix_commits": [
+        "cd438e255428616c42a1fd2cacd733748700566c"
+      ],
+      "repo": "https://github.com/ntop/nDPI"
+    },
+    "patch": "diff --git a/src/lib/ndpi_main.c b/src/lib/ndpi_main.c\nindex 1f24f47efc0..2d855685f71 100644\n--- a/src/lib/ndpi_main.c\n+++ b/src/lib/ndpi_main.c\n@@ -6909,31 +6909,31 @@ static int ndpi_init_packet(struct ndpi_detection_module_struct *ndpi_str,\n \n   /* TCP / UDP detection */\n   if(l4protocol == IPPROTO_TCP) {\n-    u_int16_t header_len;\n+    u_int16_t tcp_header_len;\n \n     if(l4_packet_len < sizeof(struct ndpi_tcphdr) /* min size of tcp */)\n       return(1);\n \n     /* tcp */\n     packet->tcp = (struct ndpi_tcphdr *) l4ptr;\n-    header_len = packet->tcp->doff * 4;\n+    tcp_header_len = packet->tcp->doff * 4;\n \n-    if(l4_packet_len >= header_len) {\n+    if(l4_packet_len >= tcp_header_len) {\n       if(flow->tcp.fingerprint == NULL) {\n \tu_int8_t *t = (u_int8_t*)packet->tcp;\n \tu_int16_t flags = ntohs(*((u_int16_t*)&t[12]));\n \n \tif((flags & (TH_SYN | TH_ECE | TH_CWR)) == TH_SYN) {\n-\t  u_int8_t *options = (u_int8_t*)(&t[sizeof(struct ndpi_tcphdr)]);\n \t  char fingerprint[128], options_fp[128];\n \t  u_int8_t i, fp_idx = 0, options_fp_idx = 0;\n \n-\t  if(header_len >= sizeof(struct ndpi_tcphdr)) {\n-\t    u_int8_t options_len = header_len - sizeof(struct ndpi_tcphdr);\n+\t  if(tcp_header_len > sizeof(struct ndpi_tcphdr)) {\n+\t    u_int8_t *options = (u_int8_t*)(&t[sizeof(struct ndpi_tcphdr)]);\n+\t    u_int8_t options_len = tcp_header_len - sizeof(struct ndpi_tcphdr);\n \t    u_int16_t tcp_win = ntohs(packet->tcp->window);\n \t    u_int8_t ip_ttl;\n \t    u_int8_t sha_hash[NDPI_SHA256_BLOCK_SIZE];\n-\t  \n+\n \t    if(packet->iph)\n \t      ip_ttl = packet->iph->ttl;\n \t    else\n@@ -6944,33 +6944,44 @@ static int ndpi_init_packet(struct ndpi_detection_module_struct *ndpi_str,\n \t    else if(ip_ttl <= 128) ip_ttl = 128;\n \t    else if(ip_ttl <= 192) ip_ttl = 192;\n \t    else ip_ttl = 255;\n-\t  \n+\n \t    fp_idx = snprintf(fingerprint, sizeof(fingerprint), \"%u_%u_\", ip_ttl, tcp_win);\n-\t  \n+\n \t    for(i=0; i<options_len; ) {\n \t      u_int8_t kind = options[i];\n \t      int rc;\n \n+#ifdef DEBUG_TCP_OPTIONS\n+\t      printf(\"Option kind: %u\\n\", kind);\n+#endif\n \t      rc = snprintf(&options_fp[options_fp_idx], sizeof(options_fp)-options_fp_idx, \"%02x\", kind);\n+\t      if((rc < 0) || ((int)(options_fp_idx + rc) == sizeof(options_fp))) break;\n+\n \t      options_fp_idx += rc;\n \n \t      if(kind == 0) /* EOF */\n \t\tbreak;\n \t      else if(kind == 1) /* NOP */\n \t\ti++;\n-\t      else {\n+\t      else if((i+1) < options_len) {\n \t\tu_int8_t len = options[i+1];\n \n+#ifdef DEBUG_TCP_OPTIONS\n+\t\tprintf(\"\\tOption len: %u\\n\", len);\n+#endif\n+\n \t\tif(len == 0)\n \t\t  break;\n \t\telse if(kind == 8) {\n \t\t  /* Timestamp: ignore it */\n-\t\t} else {\n+\t\t} else if(len > 2) {\n \t\t  int j = i+2;\n \t\t  u_int8_t opt_len = len - 2;\n \n \t\t  while((opt_len > 0) && (j < options_len)) {\n \t\t    rc = snprintf(&options_fp[options_fp_idx], sizeof(options_fp)-options_fp_idx, \"%02x\", options[j]);\n+\t\t    if((rc < 0) || ((int)(options_fp_idx + rc) == sizeof(options_fp))) break;\n+\n \t\t    options_fp_idx += rc;\n \t\t    j++, opt_len--;\n \t\t  }\n@@ -6990,8 +7001,8 @@ static int ndpi_init_packet(struct ndpi_detection_module_struct *ndpi_str,\n \t}\n       }\n \n-      packet->payload_packet_len = l4_packet_len - header_len;\n-      packet->payload = ((u_int8_t *) packet->tcp) + header_len;\n+      packet->payload_packet_len = l4_packet_len - tcp_header_len;\n+      packet->payload = ((u_int8_t *) packet->tcp) + tcp_header_len;\n     } else {\n       /* tcp header not complete */\n       return(1);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:374218971-vul",
+      "digest": "sha256:ff7721c7f8b3882f581b541ca6089989d97085db1673d9afe112f341ebf08bf5"
+    },
+    "patched": {
+      "ref": "n132/arvo:374218971-fix",
+      "digest": "sha256:10a0dd89c2790842a97d789874ffbe917035c3dcd2c7cb768822ee2c81c1962c"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/ndpi/src/lib/ndpi_main.c:6973",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/ndpi/src/lib/ndpi_main.c:6973"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

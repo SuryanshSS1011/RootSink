@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042512172",
+  "chain": "CWE-416->CWE-125",
+  "project": "gdal",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42512172",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "9730b5b9dac48c068933986583ba72f405a893f0",
+      "fix_commits": [
+        "9730b5b9dac48c068933986583ba72f405a893f0"
+      ],
+      "repo": "https://github.com/OSGeo/gdal"
+    },
+    "patch": "From 9730b5b9dac48c068933986583ba72f405a893f0 Mon Sep 17 00:00:00 2001\nFrom: Even Rouault <even.rouault@mines-paris.org>\nDate: Sun, 24 Dec 2017 11:43:57 +0000\nSubject: [PATCH] Degrib: avoid int overflow. Fixes\n https://bugs.chromium.org/p/oss-fuzz/issues/detail?id=4752. Credit to OSS\n Fuzz\n\ngit-svn-id: https://svn.osgeo.org/gdal/trunk@41128 f0d54148-0727-0410-94bb-9a71ac55c965\n---\n gdal/frmts/grib/degrib/degrib/clock.c | 2 ++\n 1 file changed, 2 insertions(+)\n\ndiff --git a/gdal/frmts/grib/degrib/degrib/clock.c b/gdal/frmts/grib/degrib/degrib/clock.c\nindex b193b74..291e582 100644\n--- a/gdal/frmts/grib/degrib/degrib/clock.c\n+++ b/gdal/frmts/grib/degrib/degrib/clock.c\n@@ -1755,6 +1755,8 @@ void Clock_ScanDate (double *l_clock, sInt4 year, int mon, int day)\n \n    if ((mon < 1) || (mon > 12) || (day < 0) || (day > 31))\n       return;\n+   if( year < -10000 || year > 10000 )\n+       return;\n    totDay = Clock_NumDay (mon, day, year, 0);\n    if (day > totDay)\n       return;\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42512172-vul",
+      "digest": "sha256:1e4331a7673e8d944c0f0898e5d5d64bf9ca4e398b4d3c38a2427bc4425d6059"
+    },
+    "patched": {
+      "ref": "n132/arvo:42512172-fix",
+      "digest": "sha256:177b76a95357acbdf48a7b03bcc63dcc1f7387c2a549be4c11a2e4c36f072a9e"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/gdal/gdal/ogr/ogrsf_frmts/ntf/ntffilereader.cpp:784",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/gdal/gdal/ogr/ogrsf_frmts/ntf/ntffilereader.cpp:784"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

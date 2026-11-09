@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042506694",
+  "chain": "CWE-1284->CWE-125",
+  "project": "ghostpdl",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42506694",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "b0855fa22cd6ba447482ee2ae1c5e091428c4bc0",
+      "fix_commits": [
+        "b0855fa22cd6ba447482ee2ae1c5e091428c4bc0"
+      ],
+      "repo": "https://cgit.ghostscript.com/ghostpdl.git"
+    },
+    "patch": "From b0855fa22cd6ba447482ee2ae1c5e091428c4bc0 Mon Sep 17 00:00:00 2001\nFrom: Ken Sharp <ken.sharp@artifex.com>\nDate: Mon, 27 Dec 2021 13:55:45 +0000\nSubject: [PATCH] OSS-fuzz #32927 and #42980 - limit section values to sane\n numbers\n\nWhen reading an xref section don't permit a negative starting number\nand make sure the size is at least 1.\n---\n pdf/pdf_xref.c | 13 ++++++++++++-\n 1 file changed, 12 insertions(+), 1 deletion(-)\n\ndiff --git a/pdf/pdf_xref.c b/pdf/pdf_xref.c\nindex 5eea2c5..5ccb688 100644\n--- a/pdf/pdf_xref.c\n+++ b/pdf/pdf_xref.c\n@@ -321,7 +321,7 @@ static int pdfi_process_xref_stream(pdf_context *ctx, pdf_stream *stream_obj, pd\n \n         for (i=0;i < pdfi_array_size(a);i+=2){\n             code = pdfi_array_get_int(ctx, a, (uint64_t)i, &start);\n-            if (code < 0) {\n+            if (code < 0 || start < 0) {\n                 pdfi_countdown(a);\n                 pdfi_close_file(ctx, XRefStrm);\n                 pdfi_countdown(ctx->xref_table);\n@@ -688,6 +688,11 @@ static int read_xref_section(pdf_context *ctx, pdf_c_stream *s, uint64_t *sectio\n         return_error(gs_error_typecheck);\n     }\n \n+    if (((pdf_num *)o)->value.i < 0) {\n+        pdfi_pop(ctx, 1);\n+        return_error(gs_error_rangecheck);\n+    }\n+\n     *section_start = start = ((pdf_num *)o)->value.i;\n \n     code = pdfi_read_token(ctx, ctx->main_stream, 0, 0);\n@@ -706,6 +711,12 @@ static int read_xref_section(pdf_context *ctx, pdf_c_stream *s, uint64_t *sectio\n         pdfi_pop(ctx, 2);\n         return_error(gs_error_typecheck);\n     }\n+\n+    if (((pdf_num *)o)->value.i < 1) {\n+        pdfi_pop(ctx, 2);\n+        return_error(gs_error_rangecheck);\n+    }\n+\n     *section_size = size = ((pdf_num *)o)->value.i;\n     pdfi_pop(ctx, 2);\n \n-- \n2.55.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42506694-vul",
+      "digest": "sha256:503f713ed21ff23dfc2a38cc833dcf6fdbd5de2b26c9762be80952001e7fccc2"
+    },
+    "patched": {
+      "ref": "n132/arvo:42506694-fix",
+      "digest": "sha256:93df0fe23a44afffeb1fa12b3e6e6943129ad3abf72ff97af9bd554a15ed0d05"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/ghostpdl/./pdf/pdf_xref.c:762",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/ghostpdl/./pdf/pdf_xref.c:762"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

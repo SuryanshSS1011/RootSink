@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042527126",
+  "chain": "CWE-1285->CWE-125",
+  "project": "ntopng",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42527126",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "4893dfaaa59c4cccf2f372be2407dc25eb0ff8eb",
+      "fix_commits": [
+        "4893dfaaa59c4cccf2f372be2407dc25eb0ff8eb"
+      ],
+      "repo": "https://github.com/ntop/ntopng"
+    },
+    "patch": "diff --git a/src/IEC104Stats.cpp b/src/IEC104Stats.cpp\nindex 1a81a665919d..3d0203fb8880 100644\n--- a/src/IEC104Stats.cpp\n+++ b/src/IEC104Stats.cpp\n@@ -177,10 +177,9 @@ void IEC104Stats::processPacket(Flow *f, bool tx_direction,\n       memcpy(&last_i_apdu, packet_time, sizeof(struct timeval));\n       stats.type_i++;\n \n-      if (len >= 6 /* Ignore 4 bytes APDUs */) {\n+      if(((offset + 6) < payload_len) && (len >= 6 /* Ignore 4 bytes APDUs */)) {\n         u_int16_t rx_value, tx_value;\n-        bool initial_run =\n-            ((rx_seq_num == 0) && (tx_seq_num == 0)) ? true : false;\n+        bool initial_run = ((rx_seq_num == 0) && (tx_seq_num == 0)) ? true : false;\n \n         tx_value = ((((u_int16_t)payload[offset + 2]) << 8) + payload[offset + 1]) >> 1;\n         rx_value = ((((u_int16_t)payload[offset + 4]) << 8) + payload[offset + 3]) >> 1;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42527126-vul",
+      "digest": "sha256:2ba681ae75c3bddf1d2d3c7fea9404c58ac29737e62b409f3cc0a86252a49629"
+    },
+    "patched": {
+      "ref": "n132/arvo:42527126-fix",
+      "digest": "sha256:06ac16daafb8df91f43c96a9bf59a4ee63d27e5800e37d676155b9460bc3523e"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/ntopng/src/IEC104Stats.cpp:186",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/ntopng/src/IEC104Stats.cpp:186"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

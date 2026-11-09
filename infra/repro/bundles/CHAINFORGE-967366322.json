@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-967366322",
+  "chain": "CWE-456->CWE-457",
+  "project": "librawspeed",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42506888",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/darktable-org/rawspeed/commit/e1b849034261580c2e4e8598408fc6fba8eec91f",
+      "fix_commits": [
+        "e1b849034261580c2e4e8598408fc6fba8eec91f"
+      ],
+      "repo": "https://github.com/darktable-org/rawspeed"
+    },
+    "patch": "diff --git a/src/librawspeed/decompressors/SonyArw2Decompressor.cpp b/src/librawspeed/decompressors/SonyArw2Decompressor.cpp\nindex 461c5d669..231b23a72 100644\n--- a/src/librawspeed/decompressors/SonyArw2Decompressor.cpp\n+++ b/src/librawspeed/decompressors/SonyArw2Decompressor.cpp\n@@ -41,7 +41,7 @@ SonyArw2Decompressor::SonyArw2Decompressor(const RawImage& img,\n   const uint32 w = mRaw->dim.x;\n   const uint32 h = mRaw->dim.y;\n \n-  if (w == 0 || h == 0 || w > 8000 || h > 5320)\n+  if (w == 0 || h == 0 || w % 32 != 0 || w > 8000 || h > 5320)\n     ThrowRDE(\"Unexpected image dimensions found: (%u; %u)\", w, h);\n \n   // 1 byte per pixel\n@@ -54,6 +54,10 @@ void SonyArw2Decompressor::decompressThreaded(\n   uint32 pitch = mRaw->pitch;\n   int32 w = mRaw->dim.x;\n \n+  assert(mRaw->dim.x > 0);\n+  assert(mRaw->dim.x % 32 == 0);\n+  assert(mRaw->dim.y > 0);\n+\n   BitPumpLSB bits(input);\n   for (uint32 y = t->start; y < t->end; y++) {\n     auto* dest = reinterpret_cast<ushort16*>(&data[y * pitch]);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42506888-vul",
+      "digest": "sha256:e00ff5f0988bf59709f4cceb5e70c1316649cadbf0152fc77c138f336051e185"
+    },
+    "patched": {
+      "ref": "n132/arvo:42506888-fix",
+      "digest": "sha256:7eb39b9853c5dbc37834038f6cd441f62ff2d86aeab315da1b64ced78c3aea7a"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/librawspeed/src/librawspeed/common/RawImage.cpp:174",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/librawspeed/src/librawspeed/common/RawImage.cpp:174"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

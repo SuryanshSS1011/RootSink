@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042521696",
+  "chain": "CWE-456->CWE-457",
+  "project": "mruby",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42521696",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "31c99eb99b52d7469bbe3f46863fcfe1bff36cfe",
+      "fix_commits": [
+        "31c99eb99b52d7469bbe3f46863fcfe1bff36cfe"
+      ],
+      "repo": "https://github.com/mruby/mruby"
+    },
+    "patch": "From 31c99eb99b52d7469bbe3f46863fcfe1bff36cfe Mon Sep 17 00:00:00 2001\nFrom: \"Yukihiro \\\"Matz\\\" Matsumoto\" <matz@ruby.or.jp>\nDate: Thu, 6 Apr 2023 15:47:24 +0900\nSubject: [PATCH] debug.c (mrb_debug_get_position): do not keep lp and fp\n uninitialized\n\n---\n src/debug.c | 7 ++-----\n 1 file changed, 2 insertions(+), 5 deletions(-)\n\ndiff --git a/src/debug.c b/src/debug.c\nindex d59d8e9..c17c095 100644\n--- a/src/debug.c\n+++ b/src/debug.c\n@@ -159,11 +159,7 @@ mrb_debug_get_line(mrb_state *mrb, const mrb_irep *irep, uint32_t pc)\n MRB_API mrb_bool\n mrb_debug_get_position(mrb_state *mrb, const mrb_irep *irep, uint32_t pc, int32_t *lp, const char **fp)\n {\n-  if (irep && pc < irep->ilen) {\n-    if (!irep->debug_info) {\n-      *lp = -1; *fp = NULL;\n-      return FALSE;\n-    }\n+  if (irep && pc < irep->ilen && irep->debug_info) {\n     mrb_irep_debug_info_file *f = get_file(irep->debug_info, pc);\n     *lp = debug_get_line(mrb, f, pc);\n     if (*lp > 0) {\n@@ -171,6 +167,7 @@ mrb_debug_get_position(mrb_state *mrb, const mrb_irep *irep, uint32_t pc, int32_\n       if (*fp) return TRUE;\n     }\n   }\n+  *lp = -1; *fp = NULL;\n   return FALSE;\n }\n \n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42521696-vul",
+      "digest": "sha256:856de32af81ab9a74c4c6efa8620543203c344ea4b10ab8174d3e58cb1f1706f"
+    },
+    "patched": {
+      "ref": "n132/arvo:42521696-fix",
+      "digest": "sha256:46457e5be91331a5900d06e57eb73e04fdb08f6aa2ca17ffa697489be440fec0"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/mruby/src/backtrace.c:65",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/mruby/src/backtrace.c:65"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

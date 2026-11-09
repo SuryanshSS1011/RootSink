@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042522074",
+  "chain": "CWE-1285->CWE-125",
+  "project": "libdwarf",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42522074",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "771cfcca1ef6a4a7eb9595d700fc72020d0ed72e",
+      "fix_commits": [
+        "771cfcca1ef6a4a7eb9595d700fc72020d0ed72e"
+      ],
+      "repo": "https://github.com/davea42/libdwarf-code"
+    },
+    "patch": "diff --git a/src/lib/libdwarf/dwarf_die_deliv.c b/src/lib/libdwarf/dwarf_die_deliv.c\nindex e47d48582..3d1eb3ca6 100644\n--- a/src/lib/libdwarf/dwarf_die_deliv.c\n+++ b/src/lib/libdwarf/dwarf_die_deliv.c\n@@ -321,7 +321,20 @@ _dwarf_read_cu_version_and_abbrev_offset(Dwarf_Debug dbg,\n     dataptr += DWARF_HALF_SIZE;\n     if (version == DW_CU_VERSION5) {\n         Dwarf_Ubyte unit_typeb = 0;\n+        Dwarf_Unsigned herelen = sizeof(unit_typeb) +\n+            sizeof(addrsize) + offset_size;\n+          \n+            \n \n+        if ((dataptr+herelen) > end_data) {\n+            _dwarf_error_string(dbg, error,\n+            DW_DLE_CU_UT_TYPE_ERROR,\n+            \"DW_DLE_UT_TYPE_ERROR: \"\n+            \" Reading the unit type, address size, \"\n+            \"and abbrev_offset of the DWARF5 header\"\n+            \" will run off the end of the section. \"\n+            \"Corrupt DWARF\");\n+        }\n         READ_UNALIGNED_CK(dbg, unit_typeb, Dwarf_Ubyte,\n             dataptr, sizeof(unit_typeb),error,end_data);\n         dataptr += sizeof(unit_typeb);\n@@ -357,6 +370,17 @@ _dwarf_read_cu_version_and_abbrev_offset(Dwarf_Debug dbg,\n     } else if (version == DW_CU_VERSION2 ||\n         version == DW_CU_VERSION3 ||\n         version == DW_CU_VERSION4) {\n+        Dwarf_Unsigned herelen = sizeof(addrsize) + offset_size;\n+\n+        if ((dataptr+herelen) > end_data) {\n+            _dwarf_error_string(dbg, error,\n+            DW_DLE_CU_UT_TYPE_ERROR,\n+            \"DW_DLE_UT_TYPE_ERROR: \"\n+            \" Reading the address size, \"\n+            \"and abbrev_offset of the DWARF header\"\n+            \" will run off the end of the section. \"\n+            \"Corrupt DWARF\");\n+        }\n         /*  DWARF2,3,4  */\n         READ_UNALIGNED_CK(dbg, abbrev_offset, Dwarf_Unsigned,\n             dataptr, offset_size,error,end_data);\n@@ -579,14 +603,14 @@ finish_cu_context_via_cudie_inner(\n             error);\n         if (resdwob == DW_DLV_NO_ENTRY) {\n             /* The CU die has no children */\n-            dwarf_dealloc(dbg,cudie,DW_DLA_DIE);\n+            dwarf_dealloc_die(cudie);\n             cudie = 0;\n             cu_context->cc_cu_die_has_children = FALSE;\n             return DW_DLV_OK;\n         }\n         if (resdwob == DW_DLV_ERROR) {\n             /*  Not applicable or an error */\n-            dwarf_dealloc(dbg,cudie,DW_DLA_DIE);\n+            dwarf_dealloc_die(cudie);\n             cudie = 0;\n             return resdwob;\n         }\n@@ -594,7 +618,7 @@ finish_cu_context_via_cudie_inner(\n         if (resdwob == DW_DLV_OK) {\n             cu_context->cc_cu_die_tag = cutag;\n         }\n-        dwarf_dealloc(dbg,cudie,DW_DLA_DIE);\n+        dwarf_dealloc_die(cudie);\n         return resdwob;\n     }\n     if (resdwo == DW_DLV_NO_ENTRY) {\n@@ -820,7 +844,9 @@ _dwarf_make_CU_Context(Dwarf_Debug dbg,\n         types_extra_len)) {\n \n         local_dealloc_cu_context(dbg,cu_context);\n-        _dwarf_error(dbg, error, DW_DLE_CU_LENGTH_ERROR);\n+        _dwarf_error_string(dbg, error, DW_DLE_CU_LENGTH_ERROR,\n+             \"DW_DLE_CU_LENGTH_ERROR: reading version \"\n+             \"stamp and address size fields\");\n         return DW_DLV_ERROR;\n     }\n     /*  Now we can read the fields with some confidence,\n@@ -840,6 +866,13 @@ _dwarf_make_CU_Context(Dwarf_Debug dbg,\n             (as in Type Unit),\n             there was no dwo in DWARF4\n         */\n+        if ((cu_ptr + sizeof(signaturedata)) > section_end_ptr) {\n+            _dwarf_error_string(dbg, error, DW_DLE_CU_LENGTH_ERROR,\n+                 \"DW_DLE_CU_LENGTH_ERROR: reading \"\n+                 \"Dwarf_Sig8 signature field\");\n+            local_dealloc_cu_context(dbg,cu_context);\n+            return DW_DLV_ERROR;\n+        }\n         memcpy(&signaturedata,cu_ptr,sizeof(signaturedata));\n         cu_ptr += sizeof(signaturedata);\n         tres = _dwarf_read_unaligned_ck_wrapper(dbg,\n@@ -862,6 +895,13 @@ _dwarf_make_CU_Context(Dwarf_Debug dbg,\n         break;\n     case DW_UT_skeleton:\n     case DW_UT_split_compile: {\n+        if ((cu_ptr + sizeof(signaturedata)) > section_end_ptr) {\n+            _dwarf_error_string(dbg, error, DW_DLE_CU_LENGTH_ERROR,\n+                 \"DW_DLE_CU_LENGTH_ERROR: reading \"\n+                 \"Dwarf_Sig8 signature field\");\n+            local_dealloc_cu_context(dbg,cu_context);\n+            return DW_DLV_ERROR;\n+        }\n         /*  These unit types make a pair and\n             paired units have identical signature.*/\n         memcpy(&signaturedata,cu_ptr,sizeof(signaturedata));\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42522074-vul",
+      "digest": "sha256:b566d753ef565315ec1cb44960a479e0c28194ba4db334a425b16fdd2a888fc0"
+    },
+    "patched": {
+      "ref": "n132/arvo:42522074-fix",
+      "digest": "sha256:f868f6c0a567604a8607318b791a6a3e5e0e2318d001f5cb22f0d1a1e491c4df"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/libdwarf/src/lib/libdwarf/dwarf_die_deliv.c:841",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/libdwarf/src/lib/libdwarf/dwarf_die_deliv.c:841"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

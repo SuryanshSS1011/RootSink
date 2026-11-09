@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042496981",
+  "chain": "CWE-20->CWE-125",
+  "project": "json",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42496981",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "383a29a924af973e4cf9d5d2054a60f7d718f0d3",
+      "fix_commits": [
+        "383a29a924af973e4cf9d5d2054a60f7d718f0d3"
+      ],
+      "repo": "https://github.com/nlohmann/json"
+    },
+    "patch": "diff --git a/src/json.hpp b/src/json.hpp\nindex 76824cf850..aab3b34f42 100644\n--- a/src/json.hpp\n+++ b/src/json.hpp\n@@ -6981,6 +6981,7 @@ class basic_json\n                 case 0xca: // float 32\n                 {\n                     // copy bytes in reverse order into the double variable\n+                    check_length(v.size(), sizeof(float), 1);\n                     float res;\n                     for (size_t byte = 0; byte < sizeof(float); ++byte)\n                     {\n@@ -6993,6 +6994,7 @@ class basic_json\n                 case 0xcb: // float 64\n                 {\n                     // copy bytes in reverse order into the double variable\n+                    check_length(v.size(), sizeof(double), 1);\n                     double res;\n                     for (size_t byte = 0; byte < sizeof(double); ++byte)\n                     {\n@@ -7558,6 +7560,7 @@ class basic_json\n \n             case 0xf9: // Half-Precision Float (two-byte IEEE 754)\n             {\n+                check_length(v.size(), 2, 1);\n                 idx += 2; // skip two content bytes\n \n                 // code from RFC 7049, Appendix D, Figure 3:\n@@ -7589,6 +7592,7 @@ class basic_json\n             case 0xfa: // Single-Precision Float (four-byte IEEE 754)\n             {\n                 // copy bytes in reverse order into the float variable\n+                check_length(v.size(), sizeof(float), 1);\n                 float res;\n                 for (size_t byte = 0; byte < sizeof(float); ++byte)\n                 {\n@@ -7600,6 +7604,7 @@ class basic_json\n \n             case 0xfb: // Double-Precision Float (eight-byte IEEE 754)\n             {\n+                check_length(v.size(), sizeof(double), 1);\n                 // copy bytes in reverse order into the double variable\n                 double res;\n                 for (size_t byte = 0; byte < sizeof(double); ++byte)\ndiff --git a/src/json.hpp.re2c b/src/json.hpp.re2c\nindex 10bfaf575f..7b6b7ec4a2 100644\n--- a/src/json.hpp.re2c\n+++ b/src/json.hpp.re2c\n@@ -6981,6 +6981,7 @@ class basic_json\n                 case 0xca: // float 32\n                 {\n                     // copy bytes in reverse order into the double variable\n+                    check_length(v.size(), sizeof(float), 1);\n                     float res;\n                     for (size_t byte = 0; byte < sizeof(float); ++byte)\n                     {\n@@ -6993,6 +6994,7 @@ class basic_json\n                 case 0xcb: // float 64\n                 {\n                     // copy bytes in reverse order into the double variable\n+                    check_length(v.size(), sizeof(double), 1);\n                     double res;\n                     for (size_t byte = 0; byte < sizeof(double); ++byte)\n                     {\n@@ -7558,6 +7560,7 @@ class basic_json\n \n             case 0xf9: // Half-Precision Float (two-byte IEEE 754)\n             {\n+                check_length(v.size(), 2, 1);\n                 idx += 2; // skip two content bytes\n \n                 // code from RFC 7049, Appendix D, Figure 3:\n@@ -7589,6 +7592,7 @@ class basic_json\n             case 0xfa: // Single-Precision Float (four-byte IEEE 754)\n             {\n                 // copy bytes in reverse order into the float variable\n+                check_length(v.size(), sizeof(float), 1);\n                 float res;\n                 for (size_t byte = 0; byte < sizeof(float); ++byte)\n                 {\n@@ -7600,6 +7604,7 @@ class basic_json\n \n             case 0xfb: // Double-Precision Float (eight-byte IEEE 754)\n             {\n+                check_length(v.size(), sizeof(double), 1);\n                 // copy bytes in reverse order into the double variable\n                 double res;\n                 for (size_t byte = 0; byte < sizeof(double); ++byte)\ndiff --git a/test/src/unit-regression.cpp b/test/src/unit-regression.cpp\nindex 033041ab9a..6123352d78 100644\n--- a/test/src/unit-regression.cpp\n+++ b/test/src/unit-regression.cpp\n@@ -547,4 +547,27 @@ TEST_CASE(\"regression tests\")\n         std::vector<uint8_t> vec {0x65, 0xf5, 0x0a, 0x48, 0x21};\n         CHECK_THROWS_AS(json::from_cbor(vec), std::out_of_range);\n     }\n+\n+    SECTION(\"issue #407 - Heap-buffer-overflow (OSS-Fuzz issue 343)\")\n+    {\n+        // original test case: incomplete float64\n+        std::vector<uint8_t> vec1 {0xcb, 0x8f, 0x0a};\n+        CHECK_THROWS_AS(json::from_msgpack(vec1), std::out_of_range);\n+\n+        // related test case: incomplete float32\n+        std::vector<uint8_t> vec2 {0xca, 0x8f, 0x0a};\n+        CHECK_THROWS_AS(json::from_msgpack(vec2), std::out_of_range);\n+\n+        // related test case: incomplete Half-Precision Float (CBOR)\n+        std::vector<uint8_t> vec3 {0xf9, 0x8f};\n+        CHECK_THROWS_AS(json::from_cbor(vec3), std::out_of_range);\n+\n+        // related test case: incomplete Single-Precision Float (CBOR)\n+        std::vector<uint8_t> vec4 {0xfa, 0x8f, 0x0a};\n+        CHECK_THROWS_AS(json::from_cbor(vec4), std::out_of_range);\n+\n+        // related test case: incomplete Double-Precision Float (CBOR)\n+        std::vector<uint8_t> vec5 {0xfb, 0x8f, 0x0a};\n+        CHECK_THROWS_AS(json::from_cbor(vec5), std::out_of_range);\n+    }\n }\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42496981-vul",
+      "digest": "sha256:da629646469cb24f9d7b3c73c4051556197a95ff6ad45420b08c5214580dc3e3"
+    },
+    "patched": {
+      "ref": "n132/arvo:42496981-fix",
+      "digest": "sha256:ec287a7c0fe881aaa44b9424cf980d3ba4992c8c10615b5cd8a1b3d7f4e5642e"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/json/src/json.hpp:6993",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/json/src/json.hpp:6993"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

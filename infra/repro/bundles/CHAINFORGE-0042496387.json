@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042496387",
+  "chain": "CWE-416->CWE-125",
+  "project": "wasm3",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42496387",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "6bb612ccbfd5f8993a07a99092fab534722df1c3",
+      "fix_commits": [
+        "6bb612ccbfd5f8993a07a99092fab534722df1c3"
+      ],
+      "repo": "https://github.com/wasm3/wasm3"
+    },
+    "patch": "From 6bb612ccbfd5f8993a07a99092fab534722df1c3 Mon Sep 17 00:00:00 2001\nFrom: Vova <vshymanskyi@gmail.com>\nDate: Tue, 4 May 2021 23:23:51 +0300\nSubject: [PATCH] Disable start func execution for fuzzing builds\n\n---\n source/m3_compile.c | 5 ++++-\n source/m3_env.c     | 5 +++++\n 2 files changed, 9 insertions(+), 1 deletion(-)\n\ndiff --git a/source/m3_compile.c b/source/m3_compile.c\nindex 835a9a4..76e6ccd 100644\n--- a/source/m3_compile.c\n+++ b/source/m3_compile.c\n@@ -1114,7 +1114,10 @@ _   (Read_u8 (& opcode, & o->wasm, o->wasmEnd));             m3log (compile, d_i\n \n     //printf(\"Extended opcode: 0x%x\\n\", i_opcode);\n \n-    M3Compiler compiler = GetOpInfo (i_opcode)->compiler;\n+    const M3OpInfo* opinfo = GetOpInfo (i_opcode);\n+    _throwif (m3Err_unknownOpcode, not opinfo);\n+\n+    M3Compiler compiler = opinfo->compiler;\n     _throwif (m3Err_noCompiler, not compiler);\n \n _   ((* compiler) (o, i_opcode));\ndiff --git a/source/m3_env.c b/source/m3_env.c\nindex b6c8e01..dbaca05 100644\n--- a/source/m3_env.c\n+++ b/source/m3_env.c\n@@ -515,6 +515,11 @@ _               (ReadLEB_u32 (& functionIndex, & bytes, end));\n \n M3Result  m3_RunStart  (IM3Module io_module)\n {\n+#ifdef FUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION\n+    // Execution disabled for fuzzing builds\n+    return m3Err_none;\n+#endif\n+\n     M3Result result = m3Err_none;\n \n     if (io_module and io_module->startFunction >= 0)\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42496387-vul",
+      "digest": "sha256:b23fa4c7fc8160a8b9a7479883be8751b6015bc48c5d89505a85468bf97ebccb"
+    },
+    "patched": {
+      "ref": "n132/arvo:42496387-fix",
+      "digest": "sha256:5f0466c4f46935ed08b590fd12a8678c477df8dd2069887a6ead5496a2d4f789"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/wasm3/source/m3_env.c:205",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/wasm3/source/m3_env.c:205"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

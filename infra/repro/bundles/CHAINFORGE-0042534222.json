@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042534222",
+  "chain": "CWE-416->CWE-125",
+  "project": "hdf5",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42534222",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "7cc8b5e1010a09c892bc97ac32d9515c3777ce07",
+      "fix_commits": [
+        "7cc8b5e1010a09c892bc97ac32d9515c3777ce07"
+      ],
+      "repo": "https://github.com/HDFGroup/hdf5"
+    },
+    "patch": "From 7cc8b5e1010a09c892bc97ac32d9515c3777ce07 Mon Sep 17 00:00:00 2001\nFrom: bmribler <39579120+bmribler@users.noreply.github.com>\nDate: Tue, 5 Aug 2025 09:12:33 -0400\nSubject: [PATCH] Fix reading bad size in the raw header continuation message\n (#5710)\n\nThis issue was reported in GH-5376 as a heap-use-after-free vulnerability in\none of the free lists.  It appeared that the library came to this vulnerability\nafter it encountered an undetected reading of a bad value.  The fuzzer now failed\nwith an appropriate error message.\n---\n src/H5Ocont.c | 2 ++\n 1 file changed, 2 insertions(+)\n\ndiff --git a/src/H5Ocont.c b/src/H5Ocont.c\nindex c58ed3e..a30a328 100644\n--- a/src/H5Ocont.c\n+++ b/src/H5Ocont.c\n@@ -100,6 +100,8 @@ H5O__cont_decode(H5F_t *f, H5O_t H5_ATTR_UNUSED *open_oh, unsigned H5_ATTR_UNUSE\n     if (H5_IS_BUFFER_OVERFLOW(p, H5F_sizeof_size(f), p_end))\n         HGOTO_ERROR(H5E_OHDR, H5E_OVERFLOW, NULL, \"ran off end of input buffer while decoding\");\n     H5F_DECODE_LENGTH(f, p, cont->size);\n+    if (cont->size == 0)\n+        HGOTO_ERROR(H5E_OHDR, H5E_BADVALUE, NULL, \"invalid continuation chunk size (0)\");\n \n     cont->chunkno = 0;\n \n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42534222-vul",
+      "digest": "sha256:4eca0d4c592c6ab8c08c2c80c35975a42c6f3747da947ff91696324e259b075d"
+    },
+    "patched": {
+      "ref": "n132/arvo:42534222-fix",
+      "digest": "sha256:b2e41da16da4b36970f3134fb84a7da049ecda977efb42898cf2d23d9737201b"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/hdf5/src/H5FL.c:1200",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/hdf5/src/H5FL.c:1200"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

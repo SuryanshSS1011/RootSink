@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042527431",
+  "chain": "CWE-1285->CWE-125",
+  "project": "libheif",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42527431",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "6c4016fd3d944a8903bdd3e6be8fcdd1bc73ca79",
+      "fix_commits": [
+        "6c4016fd3d944a8903bdd3e6be8fcdd1bc73ca79"
+      ],
+      "repo": "https://github.com/strukturag/libheif"
+    },
+    "patch": "diff --git a/libheif/context.cc b/libheif/context.cc\nindex 359a5b74f3..ca1dfd9a6c 100644\n--- a/libheif/context.cc\n+++ b/libheif/context.cc\n@@ -969,20 +969,33 @@ Error HeifContext::interpret_heif_file()\n             img_iter->second->add_region_item_id(id);\n             m_region_items.push_back(region_item);\n           }\n+\n           /* When the geometry 'mask' of a region is represented by a mask stored in\n           * another image item the image item containing the mask shall be identified\n           * by an item reference of type 'mask' from the region item to the image item\n           * containing the mask. */\n           if (ref.header.get_short_type() == fourcc(\"mask\")) {\n             std::vector<uint32_t> refs = ref.to_item_ID;\n-            int mask_index = 0;\n+            size_t mask_index = 0;\n             for (int j = 0; j < region_item->get_number_of_regions(); j++) {\n               if (region_item->get_regions()[j]->getRegionType() == heif_region_type_referenced_mask) {\n                 std::shared_ptr<RegionGeometry_ReferencedMask> mask_geometry = std::dynamic_pointer_cast<RegionGeometry_ReferencedMask>(region_item->get_regions()[j]);\n+\n+                if (mask_index >= refs.size()) {\n+                  return Error(heif_error_Invalid_input,\n+                               heif_suberror_Unspecified,\n+                               \"Region mask reference with non-existing mask image reference\");\n+                }\n+\n                 uint32_t mask_image_id = refs[mask_index];\n-                assert(is_image(mask_image_id));\n-                mask_geometry->referenced_item = mask_image_id;\n+                if (!is_image(mask_image_id)) {\n+                  return Error(heif_error_Invalid_input,\n+                               heif_suberror_Unspecified,\n+                               \"Region mask referenced item is not an image\");\n+                }\n+\n                 auto mask_image = m_all_images.find(mask_image_id)->second;\n+                mask_geometry->referenced_item = mask_image_id;\n                 if (mask_geometry->width == 0) {\n                   mask_geometry->width = mask_image->get_ispe_width();\n                 }\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42527431-vul",
+      "digest": "sha256:a604e113ddf1277c89171f9e82716499e1c2480653f296ba839cb016194656e5"
+    },
+    "patched": {
+      "ref": "n132/arvo:42527431-fix",
+      "digest": "sha256:12704a43144bbb015393e1d496785ba87faf2ec9ae94d21c4ed78dc71f7f8560"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/libheif/libheif/context.cc:985",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/libheif/libheif/context.cc:985"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

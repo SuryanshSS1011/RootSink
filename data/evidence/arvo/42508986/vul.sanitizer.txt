@@ -1,0 +1,79 @@
+======================= INFO =========================
+This binary is built for AFL-fuzz.
+To run the target function on individual input(s) execute this:
+  /out/PanasonicDecompressorFuzzer < INPUT_FILE
+or
+  /out/PanasonicDecompressorFuzzer INPUT_FILE1 [INPUT_FILE2 ... ]
+To fuzz with afl-fuzz execute this:
+  afl-fuzz [afl-flags] /out/PanasonicDecompressorFuzzer [-N]
+afl-fuzz will run N iterations before re-spawning the process (default: 1000)
+======================================================
+Reading 16416 bytes from /tmp/poc
+=================================================================
+==2432560==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x629000009204 at pc 0x000000509075 bp 0x7ffc9638bf10 sp 0x7ffc9638b6c0
+WRITE of size 16388 at 0x629000009204 thread T0
+SCARINESS: 45 (multi-byte-write-heap-buffer-overflow)
+    #0 0x509074 in __asan_memcpy /src/llvm/projects/compiler-rt/lib/asan/asan_interceptors_memintrinsics.cc:23
+    #1 0x55c1b2 in rawspeed::PanasonicDecompressor::PanaBitpump::getBits(int) /src/librawspeed/src/librawspeed/decompressors/PanasonicDecompressor.cpp:80:7
+    #2 0x55aec8 in rawspeed::PanasonicDecompressor::decompressThreaded(rawspeed::RawDecompressorThread const*) const /src/librawspeed/src/librawspeed/decompressors/PanasonicDecompressor.cpp:129:24
+    #3 0x55989f in rawspeed::RawDecompressorThread::start_routine(void*) /src/librawspeed/src/librawspeed/decompressors/AbstractParallelizedDecompressor.h:67:22
+    #4 0x5593d9 in rawspeed::AbstractParallelizedDecompressor::decompressOne(unsigned int) const /src/librawspeed/src/librawspeed/decompressors/AbstractParallelizedDecompressor.cpp:39:3
+    #5 0x545d8c in LLVMFuzzerTestOneInput /src/librawspeed/fuzz/librawspeed/decompressors/PanasonicDecompressor.cpp:51:7
+    #6 0x56b40f in ExecuteFilesOnyByOne(int, char**) /src/libfuzzer/afl/afl_driver.cpp:271:5
+    #7 0x56b9af in main /src/libfuzzer/afl/afl_driver.cpp:308:12
+    #8 0x14fd8fe8282f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+    #9 0x447408 in _start (/out/PanasonicDecompressorFuzzer+0x447408)
+
+DEDUP_TOKEN: __asan_memcpy--rawspeed::PanasonicDecompressor::PanaBitpump::getBits(int)--rawspeed::PanasonicDecompressor::decompressThreaded(rawspeed::RawDecompressorThread const*) const
+0x629000009204 is located 3 bytes to the right of 16385-byte region [0x629000005200,0x629000009201)
+allocated by thread T0 here:
+    #0 0x541458 in operator new(unsigned long) /src/llvm/projects/compiler-rt/lib/asan/asan_new_delete.cc:92
+    #1 0x560384 in std::__1::__allocate(unsigned long) /usr/local/bin/../include/c++/v1/new:226:10
+    #2 0x560384 in std::__1::allocator<unsigned char>::allocate(unsigned long, void const*) /usr/local/bin/../include/c++/v1/memory:1747
+    #3 0x560384 in std::__1::allocator_traits<std::__1::allocator<unsigned char> >::allocate(std::__1::allocator<unsigned char>&, unsigned long) /usr/local/bin/../include/c++/v1/memory:1502
+    #4 0x560384 in std::__1::__split_buffer<unsigned char, std::__1::allocator<unsigned char>&>::__split_buffer(unsigned long, unsigned long, std::__1::allocator<unsigned char>&) /usr/local/bin/../include/c++/v1/__split_buffer:311
+    #5 0x560384 in std::__1::vector<unsigned char, std::__1::allocator<unsigned char> >::__append(unsigned long) /usr/local/bin/../include/c++/v1/vector:1047
+    #6 0x55bdc6 in std::__1::vector<unsigned char, std::__1::allocator<unsigned char> >::resize(unsigned long) /usr/local/bin/../include/c++/v1/vector:2008:15
+    #7 0x55bdc6 in rawspeed::PanasonicDecompressor::PanaBitpump::PanaBitpump(rawspeed::ByteStream, int) /src/librawspeed/src/librawspeed/decompressors/PanasonicDecompressor.cpp:63
+    #8 0x55a9b7 in rawspeed::PanasonicDecompressor::decompressThreaded(rawspeed::RawDecompressorThread const*) const /src/librawspeed/src/librawspeed/decompressors/PanasonicDecompressor.cpp:94:15
+    #9 0x55989f in rawspeed::RawDecompressorThread::start_routine(void*) /src/librawspeed/src/librawspeed/decompressors/AbstractParallelizedDecompressor.h:67:22
+    #10 0x5593d9 in rawspeed::AbstractParallelizedDecompressor::decompressOne(unsigned int) const /src/librawspeed/src/librawspeed/decompressors/AbstractParallelizedDecompressor.cpp:39:3
+    #11 0x545d8c in LLVMFuzzerTestOneInput /src/librawspeed/fuzz/librawspeed/decompressors/PanasonicDecompressor.cpp:51:7
+    #12 0x56b40f in ExecuteFilesOnyByOne(int, char**) /src/libfuzzer/afl/afl_driver.cpp:271:5
+    #13 0x56b9af in main /src/libfuzzer/afl/afl_driver.cpp:308:12
+    #14 0x14fd8fe8282f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+
+DEDUP_TOKEN: operator new(unsigned long)--std::__1::__allocate(unsigned long)--std::__1::allocator<unsigned char>::allocate(unsigned long, void const*)
+SUMMARY: AddressSanitizer: heap-buffer-overflow /src/llvm/projects/compiler-rt/lib/asan/asan_interceptors_memintrinsics.cc:23 in __asan_memcpy
+Shadow bytes around the buggy address:
+  0x0c527fff91f0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c527fff9200: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c527fff9210: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c527fff9220: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c527fff9230: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x0c527fff9240:[01]fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c527fff9250: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c527fff9260: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c527fff9270: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c527fff9280: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c527fff9290: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+==2432560==ABORTING

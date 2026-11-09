@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042524683",
+  "chain": "CWE-416->CWE-125",
+  "project": "qemu",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42524683",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "82d70a84c8ee42ef969a9cfddc0f5b30b16165f5",
+      "fix_commits": [
+        "82d70a84c8ee42ef969a9cfddc0f5b30b16165f5"
+      ],
+      "repo": "https://git.qemu.org/git/qemu.git"
+    },
+    "patch": "From 82d70a84c8ee42ef969a9cfddc0f5b30b16165f5 Mon Sep 17 00:00:00 2001\nFrom: Richard Henderson <richard.henderson@linaro.org>\nDate: Tue, 14 Nov 2023 12:13:29 -0800\nSubject: [PATCH] linux-user: Fix loaddr computation for some elf files\n\nThe file offset of the load segment is not relevant to the\nlow address, only the beginning of the virtual address page.\n\nCc: qemu-stable@nongnu.org\nFixes: a93934fecd4 (\"elf: take phdr offset into account when calculating the program load address\")\nResolves: https://gitlab.com/qemu-project/qemu/-/issues/1952\nSigned-off-by: Richard Henderson <richard.henderson@linaro.org>\nReviewed-by: Michael Tokarev <mjt@tls.msk.ru>\n---\n linux-user/elfload.c | 2 +-\n 1 file changed, 1 insertion(+), 1 deletion(-)\n\ndiff --git a/linux-user/elfload.c b/linux-user/elfload.c\nindex 4cd6891..cf9e744 100644\n--- a/linux-user/elfload.c\n+++ b/linux-user/elfload.c\n@@ -3308,7 +3308,7 @@ static void load_elf_image(const char *image_name, const ImageSource *src,\n     for (i = 0; i < ehdr->e_phnum; ++i) {\n         struct elf_phdr *eppnt = phdr + i;\n         if (eppnt->p_type == PT_LOAD) {\n-            abi_ulong a = eppnt->p_vaddr - eppnt->p_offset;\n+            abi_ulong a = eppnt->p_vaddr & TARGET_PAGE_MASK;\n             if (a < loaddr) {\n                 loaddr = a;\n             }\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42524683-vul",
+      "digest": "sha256:a6b59c1f7ebbc057b4500caf1a5d7f6b87a711a5dfc1122f75d0f4beaf9c973d"
+    },
+    "patched": {
+      "ref": "n132/arvo:42524683-fix",
+      "digest": "sha256:7cf8664091ae77e41037a67165d635e4f7fd2824f2fa630c5cc1f661e846adcb"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/qemu/build-oss-fuzz/../hw/net/e1000e_core.c:1651",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/qemu/build-oss-fuzz/../hw/net/e1000e_core.c:1651"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

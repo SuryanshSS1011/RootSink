@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042535468",
+  "chain": "CWE-20->CWE-125",
+  "project": "opensc",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42535468",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "0ba15ba096b9cd58354cf8960e04f295af3de59c",
+      "fix_commits": [
+        "0ba15ba096b9cd58354cf8960e04f295af3de59c"
+      ],
+      "repo": "https://github.com/OpenSC/OpenSC"
+    },
+    "patch": "diff --git a/src/libopensc/card-atrust-acos.c b/src/libopensc/card-atrust-acos.c\nindex ecfb7e9ee9..1f044d6ca6 100644\n--- a/src/libopensc/card-atrust-acos.c\n+++ b/src/libopensc/card-atrust-acos.c\n@@ -803,7 +803,7 @@ static int atrust_acos_check_sw(struct sc_card *card, unsigned int sw1,\n \n \tsc_log(card->ctx,  \"sw1 = 0x%02x, sw2 = 0x%02x\\n\", sw1, sw2);\n \n-\tif (sw1 == 0x90)\n+\tif (sw1 == 0x90 && sw2 == 0x00)\n \t\treturn SC_SUCCESS;\n \tif (sw1 == 0x63 && (sw2 & ~0x0fU) == 0xc0 )\n \t{\ndiff --git a/src/libopensc/card-starcos.c b/src/libopensc/card-starcos.c\nindex baf673b007..48eb49cbaa 100644\n--- a/src/libopensc/card-starcos.c\n+++ b/src/libopensc/card-starcos.c\n@@ -1974,7 +1974,7 @@ static int starcos_check_sw(sc_card_t *card, unsigned int sw1, unsigned int sw2)\n \tsc_log(card->ctx,\n \t\t\"sw1 = 0x%02x, sw2 = 0x%02x\\n\", sw1, sw2);\n \n-\tif (sw1 == 0x90)\n+\tif (sw1 == 0x90 && sw2 == 0x00)\n \t\treturn SC_SUCCESS;\n \tif (sw1 == 0x63 && (sw2 & ~0x0fU) == 0xc0 )\n \t{\ndiff --git a/src/libopensc/iso7816.c b/src/libopensc/iso7816.c\nindex 2fea840785..6a49d64dff 100644\n--- a/src/libopensc/iso7816.c\n+++ b/src/libopensc/iso7816.c\n@@ -117,12 +117,12 @@ iso7816_check_sw(struct sc_card *card, unsigned int sw1, unsigned int sw2)\n \t\tsc_log(card->ctx, \"Wrong length; correct length is %d\", sw2);\n \t\treturn SC_ERROR_WRONG_LENGTH;\n \t}\n-\tif (sw1 == 0x90)\n+\tif (sw1 == 0x90 && sw2 == 0x00)\n \t\treturn SC_SUCCESS;\n-        if (sw1 == 0x63U && (sw2 & ~0x0fU) == 0xc0U ) {\n-             sc_log(card->ctx, \"PIN not verified (remaining tries: %d)\", (sw2 & 0x0f));\n-             return SC_ERROR_PIN_CODE_INCORRECT;\n-        }\n+\tif (sw1 == 0x63U && (sw2 & ~0x0fU) == 0xc0U ) {\n+\t\t\tsc_log(card->ctx, \"PIN not verified (remaining tries: %d)\", (sw2 & 0x0f));\n+\t\t\treturn SC_ERROR_PIN_CODE_INCORRECT;\n+\t}\n \tfor (i = 0; i < err_count; i++)   {\n \t\tif (iso7816_errors[i].SWs == ((sw1 << 8) | sw2)) {\n \t\t\tsc_log(card->ctx, \"%s\", iso7816_errors[i].errorstr);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42535468-vul",
+      "digest": "sha256:9d5241592881ec63444135a001c0352b4fefc021fe5e17e08f0d1492b2af1080"
+    },
+    "patched": {
+      "ref": "n132/arvo:42535468-fix",
+      "digest": "sha256:bff2eedbbcebf3d289db54c154c5bd56ada680cb30069f152196b7a6e440dbb9"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/opensc/src/pkcs15init/pkcs15-openpgp.c:259",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/opensc/src/pkcs15init/pkcs15-openpgp.c:259"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

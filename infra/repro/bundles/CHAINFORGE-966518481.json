@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-966518481",
+  "chain": "CWE-456->CWE-457",
+  "project": "cpython3",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42527435",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/python/cpython/commit/3107b453bcceb0e2d2590fef3612859f2f802d72",
+      "fix_commits": [
+        "3107b453bcceb0e2d2590fef3612859f2f802d72"
+      ],
+      "repo": "https://github.com/python/cpython"
+    },
+    "patch": "diff --git a/Objects/funcobject.c b/Objects/funcobject.c\nindex 2820e47bdf2e6b5..648b660859c04de 100644\n--- a/Objects/funcobject.c\n+++ b/Objects/funcobject.c\n@@ -131,7 +131,7 @@ _PyFunction_FromConstructor(PyFrameConstructor *constr)\n     op->func_annotations = NULL;\n     op->func_typeparams = NULL;\n     op->vectorcall = _PyFunction_Vectorcall;\n-    _PyFunction_SetVersion(op, 0);\n+    op->func_version = 0;\n     _PyObject_GC_TRACK(op);\n     handle_func_event(PyFunction_EVENT_CREATE, op, NULL);\n     return op;\n@@ -207,7 +207,7 @@ PyFunction_NewWithQualName(PyObject *code, PyObject *globals, PyObject *qualname\n     op->func_annotations = NULL;\n     op->func_typeparams = NULL;\n     op->vectorcall = _PyFunction_Vectorcall;\n-    _PyFunction_SetVersion(op, 0);\n+    op->func_version = 0;\n     _PyObject_GC_TRACK(op);\n     handle_func_event(PyFunction_EVENT_CREATE, op, NULL);\n     return (PyObject *)op;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42527435-vul",
+      "digest": "sha256:f39e861308a33e3f8f0e3665f4a881a8e9fe62ab3572abfd18e084fadf773f82"
+    },
+    "patched": {
+      "ref": "n132/arvo:42527435-fix",
+      "digest": "sha256:b89890d2ac68b5deb2b050aba6c9b2e731d9ef0760a91ae89c020aa525fa3470"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/cpython3/Objects/funcobject.c:272",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/cpython3/Objects/funcobject.c:272"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042531542",
+  "chain": "CWE-1284->CWE-125",
+  "project": "libavc",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42531542",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "a20a5df162992908b166644f4d5b7dad96b4cdfd",
+      "fix_commits": [
+        "a20a5df162992908b166644f4d5b7dad96b4cdfd"
+      ],
+      "repo": "https://github.com/ittiam-systems/libavc"
+    },
+    "patch": "diff --git a/decoder/ih264d_sei.c b/decoder/ih264d_sei.c\nindex 079f036e..e7d436c2 100644\n--- a/decoder/ih264d_sei.c\n+++ b/decoder/ih264d_sei.c\n@@ -853,6 +853,14 @@ WORD32 ih264d_parse_fgc(dec_bit_stream_t *ps_bitstrm, dec_struct_t *ps_dec,\n \n                 for(i = 0; i <= ps_sei->s_sei_fgc_params.au1_num_intensity_intervals_minus1[c]; i++)\n                 {\n+                    /* Although the fag end of both the NALU and the bitstream buffer */\n+                    /* is being parsed, not all FGC SEI symbols would have been */\n+                    /* decoded semantically. The code below detects this condition */\n+                    if((ps_bitstrm->u4_ofst + 8 + 8) >= ps_bitstrm->u4_max_ofst)\n+                    {\n+                        return ERROR_INV_SEI_FGC_PARAMS;\n+                    }\n+\n                     ps_sei->s_sei_fgc_params.au1_intensity_interval_lower_bound[c][i] =\n                         (UWORD8) ih264d_get_bits_h264(ps_bitstrm, 8);\n \ndiff --git a/decoder/mvc/imvcd_api.c b/decoder/mvc/imvcd_api.c\nindex 3e95a80a..1026fc8d 100644\n--- a/decoder/mvc/imvcd_api.c\n+++ b/decoder/mvc/imvcd_api.c\n@@ -737,7 +737,9 @@ static IV_API_CALL_STATUS_T imvcd_view_decode(iv_obj_t *ps_dec_hdl, imvcd_video_\n \n             if(u4_nalu_buf_size > u4_bitstream_buf_size)\n             {\n-                if(IV_SUCCESS != imvcd_bitstream_buf_realloc(ps_view_ctxt, u4_nalu_buf_size))\n+                /* 64 extra bytes to account for OOB accesses during SEI parsing in */\n+                /* some fuzzer bitstreams */\n+                if(IV_SUCCESS != imvcd_bitstream_buf_realloc(ps_view_ctxt, u4_nalu_buf_size + 64))\n                 {\n                     return IV_FAIL;\n                 }\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42531542-vul",
+      "digest": "sha256:af44775cac1230fbd8259a5a6c7677b04e93da81af172eb46ef0e07de2b9c2be"
+    },
+    "patched": {
+      "ref": "n132/arvo:42531542-fix",
+      "digest": "sha256:612b24183cca07fc2d47ee9bc78bff2f156eb4b1f10d35730e4a887c9ff962f9"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/libavc/decoder/ih264d_bitstrm.c:94",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/libavc/decoder/ih264d_bitstrm.c:94"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

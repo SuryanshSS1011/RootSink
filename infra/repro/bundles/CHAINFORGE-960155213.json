@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-960155213",
+  "chain": "CWE-456->CWE-457",
+  "project": "rdkit",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42486741",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/rdkit/rdkit/commit/193f27730c3b3bb5068e56858ea90a3ddcc92a8e",
+      "fix_commits": [
+        "193f27730c3b3bb5068e56858ea90a3ddcc92a8e"
+      ],
+      "repo": "https://github.com/rdkit/rdkit"
+    },
+    "patch": "diff --git a/Code/GraphMol/FileParsers/MolFileParser.cpp b/Code/GraphMol/FileParsers/MolFileParser.cpp\nindex f28efc1fd08..284c7b1a627 100644\n--- a/Code/GraphMol/FileParsers/MolFileParser.cpp\n+++ b/Code/GraphMol/FileParsers/MolFileParser.cpp\n@@ -250,7 +250,7 @@ void ParseOldAtomList(RWMol *mol, const std::string &text, unsigned int line) {\n     default:\n       delete q;\n       std::ostringstream errout;\n-      errout << \"Unrecognized atom-list query modifier: '\" << text[14]\n+      errout << \"Unrecognized atom-list query modifier: '\" << text[4]\n              << \"' on line \" << line;\n       throw FileParseException(errout.str());\n   }\ndiff --git a/Code/GraphMol/MolPickler.cpp b/Code/GraphMol/MolPickler.cpp\nindex a02ec237177..5f6b5c9afba 100644\n--- a/Code/GraphMol/MolPickler.cpp\n+++ b/Code/GraphMol/MolPickler.cpp\n@@ -1946,13 +1946,18 @@ void MolPickler::_addRingInfoFromPickle(std::istream &ss, ROMol *mol,\n       T tmpT;\n       T ringSize;\n       streamRead(ss, ringSize, version);\n-\n+      if (ringSize < 0) {\n+        throw MolPicklerException(\"negative ring size\");\n+      }\n       INT_VECT atoms(static_cast<int>(ringSize));\n       INT_VECT bonds(static_cast<int>(ringSize));\n       for (unsigned int j = 0; j < static_cast<unsigned int>(ringSize); j++) {\n         streamRead(ss, tmpT, version);\n         if (directMap) {\n           atoms[j] = static_cast<int>(tmpT);\n+          if (atoms[j] < 0 || atoms[j] >= mol->getNumAtoms()) {\n+            throw MolPicklerException(\"ring-atom index out of range\");\n+          }\n         } else {\n           atoms[j] = mol->getAtomWithBookmark(static_cast<int>(tmpT))->getIdx();\n         }\n@@ -1962,6 +1967,10 @@ void MolPickler::_addRingInfoFromPickle(std::istream &ss, ROMol *mol,\n           streamRead(ss, tmpT, version);\n           if (directMap) {\n             bonds[j] = static_cast<int>(tmpT);\n+            if (bonds[j] < 0 || bonds[j] >= mol->getNumBonds()) {\n+              throw MolPicklerException(\"ring-bond index out of range\");\n+            }\n+\n           } else {\n             bonds[j] =\n                 mol->getBondWithBookmark(static_cast<int>(tmpT))->getIdx();\ndiff --git a/Code/GraphMol/RWMol.cpp b/Code/GraphMol/RWMol.cpp\nindex a17ec7d9027..54c44d68aeb 100644\n--- a/Code/GraphMol/RWMol.cpp\n+++ b/Code/GraphMol/RWMol.cpp\n@@ -146,10 +146,19 @@ void RWMol::replaceAtom(unsigned int idx, Atom *atom_pin, bool updateLabel,\n     atom_p->updateProps(*d_graph[vd], replaceExistingData);\n   }\n   removeSubstanceGroupsReferencingAtom(*this, idx);\n-  delete d_graph[vd];\n+\n+  const auto orig_p = d_graph[vd];\n+  delete orig_p;\n   d_graph[vd] = atom_p;\n \n-  // FIX: do something about bookmarks\n+  // handle bookmarks\n+  for (auto &ab : d_atomBookmarks) {\n+    for (auto &elem : ab.second) {\n+      if (elem == orig_p) {\n+        elem = atom_p;\n+      }\n+    }\n+  }\n };\n \n void RWMol::replaceBond(unsigned int idx, Bond *bond_pin, bool preserveProps) {\n@@ -170,11 +179,19 @@ void RWMol::replaceBond(unsigned int idx, Bond *bond_pin, bool preserveProps) {\n     bond_p->updateProps(*d_graph[*(bIter.first)], replaceExistingData);\n   }\n \n-  delete d_graph[*(bIter.first)];\n+  const auto orig_p = d_graph[*(bIter.first)];\n+  delete orig_p;\n   d_graph[*(bIter.first)] = bond_p;\n-  // FIX: do something about bookmarks\n-\n   removeSubstanceGroupsReferencingBond(*this, idx);\n+\n+  // handle bookmarks\n+  for (auto &ab : d_bondBookmarks) {\n+    for (auto &elem : ab.second) {\n+      if (elem == orig_p) {\n+        elem = bond_p;\n+      }\n+    }\n+  }\n };\n \n Atom *RWMol::getActiveAtom() {\ndiff --git a/Code/GraphMol/SmilesParse/SmilesParse.cpp b/Code/GraphMol/SmilesParse/SmilesParse.cpp\nindex b05f67ef0a0..6af8e046909 100644\n--- a/Code/GraphMol/SmilesParse/SmilesParse.cpp\n+++ b/Code/GraphMol/SmilesParse/SmilesParse.cpp\n@@ -175,6 +175,11 @@ std::string labelRecursivePatterns(const std::string &sma) {\n     } else if (sma[pos] == '(') {\n       state.push_back(BRANCH);\n     } else if (sma[pos] == ')') {\n+      if (state.empty() || state.back() == BASE) {\n+        // seriously bogus input. Just return the input\n+        // and let the SMARTS parser itself report the error\n+        return sma;\n+      }\n       SmaState currState = state.back();\n       state.pop_back();\n       if (currState == RECURSE) {\ndiff --git a/Code/GraphMol/SmilesParse/catch_tests.cpp b/Code/GraphMol/SmilesParse/catch_tests.cpp\nindex 590642869f7..67807a0ccdc 100644\n--- a/Code/GraphMol/SmilesParse/catch_tests.cpp\n+++ b/Code/GraphMol/SmilesParse/catch_tests.cpp\n@@ -851,3 +851,8 @@ TEST_CASE(\"Github #2788: doKekule=true should kekulize the molecule\",\n     }\n   }\n }\n+\n+TEST_CASE(\"bogus recursive SMARTS\", \"[smarts]\") {\n+  std::string sma = \"C)foo\";\n+  CHECK(SmartsToMol(sma) == nullptr);\n+}\n\\ No newline at end of file\ndiff --git a/Code/GraphMol/catch_graphmol.cpp b/Code/GraphMol/catch_graphmol.cpp\nindex 5b75d799746..64b9a5f56a7 100644\n--- a/Code/GraphMol/catch_graphmol.cpp\n+++ b/Code/GraphMol/catch_graphmol.cpp\n@@ -1397,7 +1397,9 @@ TEST_CASE(\"Github #3470: Hydrogen is incorrectly identified as an early atom\",\n   }\n   SECTION(\"confirm with SMILES\") {\n     RWMol m;\n-    m.addAtom(new Atom(1));\n+    bool updateLabel = false;\n+    bool takeOwnership = true;\n+    m.addAtom(new Atom(1), updateLabel, takeOwnership);\n     m.getAtomWithIdx(0)->setFormalCharge(-1);\n     m.updatePropertyCache();\n     CHECK(MolToSmiles(m) == \"[H-]\");\n@@ -1462,7 +1464,9 @@ TEST_CASE(\"needsHs function\", \"[chemistry]\") {\n     CHECK(MolOps::needsHs(*m));\n \n     // add a single H:\n-    m->addAtom(new Atom(1));\n+    bool updateLabel = false;\n+    bool takeOwnership = true;\n+    m->addAtom(new Atom(1), updateLabel, takeOwnership);\n     m->addBond(0, 2, Bond::BondType::SINGLE);\n     MolOps::sanitizeMol(*m);\n     CHECK(MolOps::needsHs(*m));\n@@ -1796,7 +1800,9 @@ TEST_CASE(\"batch edits\", \"[editing]\") {\n     REQUIRE(m);\n     m->beginBatchEdit();\n     m->removeAtom(2);\n-    m->addAtom(new Atom(7));\n+    bool updateLabel = false;\n+    bool takeOwnership = true;\n+    m->addAtom(new Atom(7), updateLabel, takeOwnership);\n     m->removeAtom(1);\n     m->commitBatchEdit();\n     CHECK(MolToSmiles(*m) == \"C.N.O\");\n@@ -1806,7 +1812,9 @@ TEST_CASE(\"batch edits\", \"[editing]\") {\n     REQUIRE(m);\n     m->beginBatchEdit();\n     m->removeAtom(2);\n-    m->addAtom(new Atom(7));\n+    bool updateLabel = false;\n+    bool takeOwnership = true;\n+    m->addAtom(new Atom(7), updateLabel, takeOwnership);\n     m->removeAtom(4);\n     m->commitBatchEdit();\n     CHECK(MolToSmiles(*m) == \"CC.O\");\n@@ -1902,3 +1910,30 @@ TEST_CASE(\"bridgehead queries\", \"[query]\") {\n     }\n   }\n }\n+\n+TEST_CASE(\"replaceAtom/Bond should not screw up bookmarks\", \"[RWMol]\") {\n+  SECTION(\"atom basics\") {\n+    auto m = \"CCC\"_smiles;\n+    REQUIRE(m);\n+    m->setAtomBookmark(m->getAtomWithIdx(2), 1);\n+    auto origAt2 = m->getAtomWithIdx(2);\n+    CHECK(m->getUniqueAtomWithBookmark(1) == origAt2);\n+    Atom O(8);\n+    m->replaceAtom(2, &O);\n+    auto at2 = m->getAtomWithIdx(2);\n+    CHECK(at2 != origAt2);\n+    CHECK(m->getUniqueAtomWithBookmark(1) == at2);\n+  }\n+  SECTION(\"bond basics\") {\n+    auto m = \"CCCC\"_smiles;\n+    REQUIRE(m);\n+    m->setBondBookmark(m->getBondWithIdx(2), 1);\n+    auto origB2 = m->getBondWithIdx(2);\n+    CHECK(m->getUniqueBondWithBookmark(1) == origB2);\n+    Bond single(Bond::BondType::SINGLE);\n+    m->replaceBond(2, &single);\n+    auto b2 = m->getBondWithIdx(2);\n+    CHECK(b2 != origB2);\n+    CHECK(m->getUniqueBondWithBookmark(1) == b2);\n+  }\n+}\n\\ No newline at end of file\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42486741-vul",
+      "digest": "sha256:ef34b9f6716d10c0ad93c478272727fe235bcf9e1bbc517421b1cb0948a37ecf"
+    },
+    "patched": {
+      "ref": "n132/arvo:42486741-fix",
+      "digest": "sha256:2cbbbbb6b090bf29469770284b4d0d9b459120d347e4b6e55d66fe845ed48549"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/rdkit/Code/GraphMol/SubstanceGroup.cpp:233",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/rdkit/Code/GraphMol/SubstanceGroup.cpp:233"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

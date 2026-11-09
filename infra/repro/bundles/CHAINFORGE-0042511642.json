@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042511642",
+  "chain": "CWE-1285->CWE-125",
+  "project": "ghostpdl",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42511642",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "7ab96e83d85165801894e887816db6042ea2f9be",
+      "fix_commits": [
+        "7ab96e83d85165801894e887816db6042ea2f9be"
+      ],
+      "repo": "https://cgit.ghostscript.com/ghostpdl.git"
+    },
+    "patch": "From 7ab96e83d85165801894e887816db6042ea2f9be Mon Sep 17 00:00:00 2001\nFrom: Chris Liddell <chris.liddell@artifex.com>\nDate: Thu, 19 May 2022 09:26:20 +0100\nSubject: [PATCH] oss-fuzz 47499: reading xref, check starting object num is\n positive\n\n---\n pdf/pdf_xref.c | 3 +++\n 1 file changed, 3 insertions(+)\n\ndiff --git a/pdf/pdf_xref.c b/pdf/pdf_xref.c\nindex b0912d2..3142f2e 100644\n--- a/pdf/pdf_xref.c\n+++ b/pdf/pdf_xref.c\n@@ -660,6 +660,9 @@ static int read_xref_section(pdf_context *ctx, pdf_c_stream *s, uint64_t *sectio\n         return 1;\n     }\n \n+    if (start < 0)\n+        return_error(gs_error_rangecheck);\n+\n     *section_start = start;\n \n     code = pdfi_read_bare_int(ctx, ctx->main_stream, &size);\n-- \n2.55.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42511642-vul",
+      "digest": "sha256:126c6f252d6a5cecab75206e8b144afd47fc618c121749bc246b0060074c824f"
+    },
+    "patched": {
+      "ref": "n132/arvo:42511642-fix",
+      "digest": "sha256:fc5d51179bf908f1e52b55e453b24d3df5dd211e09bc93b1f9580e82647297f3"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/ghostpdl/./pdf/pdf_xref.c:739",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/ghostpdl/./pdf/pdf_xref.c:739"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

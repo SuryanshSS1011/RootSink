@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042533893",
+  "chain": "CWE-1284->CWE-125",
+  "project": "libspdm",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42533893",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "c2d004512067a23f483a99224165accf3d9d89f2",
+      "fix_commits": [
+        "c2d004512067a23f483a99224165accf3d9d89f2"
+      ],
+      "repo": "https://github.com/DMTF/libspdm"
+    },
+    "patch": "diff --git a/unit_test/fuzzing/test_responder/test_spdm_responder_chunk_send_ack/chunk_send_ack.c b/unit_test/fuzzing/test_responder/test_spdm_responder_chunk_send_ack/chunk_send_ack.c\nindex f5895438c2b..2be1d4bc5d6 100644\n--- a/unit_test/fuzzing/test_responder/test_spdm_responder_chunk_send_ack/chunk_send_ack.c\n+++ b/unit_test/fuzzing/test_responder/test_spdm_responder_chunk_send_ack/chunk_send_ack.c\n@@ -84,26 +84,30 @@ void libspdm_test_responder_chunk_send_ack_case1(void **State)\n     chunk_num = 0;\n     bytes_sent = 0;\n     bytes_total = spdm_test_context->test_buffer_size;\n-\n+    /* All chunk send message sequences, including chunk_send_header and spdm_chunk. */\n     request = (uint8_t *)spdm_test_context->test_buffer;\n \n     do\n     {\n         if (chunk_num == 0) {\n+            /* (uint32_t)LargeMessageSize , This field shall only be present when ChunkSeqNo\n+             * is zero and shall have a non-zero value.\n+             * The bytes_total should not be less than the minimum effective size.*/\n+            if(bytes_total < sizeof(spdm_chunk_send_request_t) + sizeof(uint32_t)) {\n+                break;\n+            }\n             chunk_send_request = (spdm_chunk_send_request_t *)request;\n             spdm_message_header_t *test_spdm_message_header_t;\n \n             request_size = sizeof(spdm_chunk_send_request_t) + sizeof(uint32_t) +\n                            chunk_send_request->chunk_size;\n \n-            if (chunk_send_request->chunk_size > bytes_total) {\n-                break;\n-            }\n-            if (chunk_send_request->chunk_size >\n-                (request_size - sizeof(spdm_chunk_send_request_t) - sizeof(uint32_t)) ||\n-                chunk_send_request->chunk_size == 0) {\n+            /* Remaining space should meet the chunk_size. */\n+            if(bytes_total - sizeof(spdm_chunk_send_request_t) - sizeof(uint32_t) <\n+               chunk_send_request->chunk_size) {\n                 break;\n             }\n+\n             test_spdm_message_header_t =\n                 (spdm_message_header_t *)(((uint8_t*) (chunk_send_request + 1)) + sizeof(uint32_t));\n             if (test_spdm_message_header_t->request_response_code == SPDM_RESPOND_IF_READY) {\n@@ -113,17 +117,18 @@ void libspdm_test_responder_chunk_send_ack_case1(void **State)\n                 chunk_send_request->chunk_size + sizeof(spdm_chunk_send_request_t) +\n                 sizeof(uint32_t);\n         } else {\n+            /* The remaining number of bytes should not be less than the minimum effective size*/\n+            if(bytes_total - bytes_sent < sizeof(spdm_chunk_send_request_t)) {\n+                break;\n+            }\n             chunk_send_request = (spdm_chunk_send_request_t *)request;\n             spdm_message_header_t *test_spdm_message_header_t;\n \n             request_size = sizeof(spdm_chunk_send_request_t) + chunk_send_request->chunk_size;\n \n-            if (chunk_send_request->chunk_size > bytes_total) {\n-                break;\n-            }\n-            if (chunk_send_request->chunk_size >\n-                (request_size - sizeof(spdm_chunk_send_request_t) - bytes_sent) ||\n-                chunk_send_request->chunk_size == 0) {\n+            /* Remaining space should meet the chunk_size. */\n+            if(bytes_total - bytes_sent - sizeof(spdm_chunk_send_request_t) <\n+               chunk_send_request->chunk_size) {\n                 break;\n             }\n \n@@ -155,7 +160,7 @@ void libspdm_test_responder_chunk_send_ack_case1(void **State)\n         if (status != LIBSPDM_STATUS_SUCCESS) {\n             break;\n         }\n-    } while (bytes_sent < bytes_total);\n+    }while (true);\n }\n \n libspdm_test_context_t m_libspdm_responder_chunk_send_ack_test_context = {\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42533893-vul",
+      "digest": "sha256:829caefece16c1dfe0ad09e2931f9152dc613e8168a9d9023b306fac9fc7ea08"
+    },
+    "patched": {
+      "ref": "n132/arvo:42533893-fix",
+      "digest": "sha256:079cb7a0de49c5770185812766b1178c85eaf7aa66b2bc7c940971e06dec8107"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/libspdm/os_stub/memlib/copy_mem.c:30",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/libspdm/os_stub/memlib/copy_mem.c:30"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

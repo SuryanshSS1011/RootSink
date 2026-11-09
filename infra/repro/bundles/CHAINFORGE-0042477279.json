@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042477279",
+  "chain": "CWE-1284->CWE-125",
+  "project": "libvips",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42477279",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "19a80e4efbcf67ac8703f1c0d25820dd13d6f071",
+      "fix_commits": [
+        "19a80e4efbcf67ac8703f1c0d25820dd13d6f071"
+      ],
+      "repo": "https://github.com/libvips/libvips"
+    },
+    "patch": "diff --git a/ChangeLog b/ChangeLog\nindex 162ba56fd9..442271319c 100644\n--- a/ChangeLog\n+++ b/ChangeLog\n@@ -21,6 +21,8 @@\n - fix build with GM\n - add locks for pdfium load\n - fix build with MSVC \n+- fix a problem with shinkv tail processing [angelmixu]\n+- fix a read one byte beyond buffer bug in jpegload\n \n 24/5/19 started 8.8.1\n - improve realpath() use on older libc\ndiff --git a/fuzz/common_fuzzer_corpus/clusterfuzz-testcase-minimized-jpegsave_buffer_fuzzer-5673786296238080 b/fuzz/common_fuzzer_corpus/clusterfuzz-testcase-minimized-jpegsave_buffer_fuzzer-5673786296238080\nnew file mode 100644\nindex 0000000000..447f0f65a2\nBinary files /dev/null and b/fuzz/common_fuzzer_corpus/clusterfuzz-testcase-minimized-jpegsave_buffer_fuzzer-5673786296238080 differ\ndiff --git a/libvips/foreign/jpeg2vips.c b/libvips/foreign/jpeg2vips.c\nindex aacb691871..8ae2782e49 100644\n--- a/libvips/foreign/jpeg2vips.c\n+++ b/libvips/foreign/jpeg2vips.c\n@@ -344,13 +344,16 @@ attach_xmp_blob( VipsImage *im, void *data, int data_length )\n \tchar *p = (char *) data;\n \tint i;\n \n-\tif( !vips_isprefix( \"http\", p ) ) \n+\tif( data_length < 4 ||\n+\t\t!vips_isprefix( \"http\", p ) ) \n \t\treturn( 0 );\n \n \t/* Search for a null char within the first few characters. 80\n \t * should be plenty for a basic URL.\n+\t *\n+\t * -2 for the extra null.\n \t */\n-\tfor( i = 0; i < 80; i++ )\n+\tfor( i = 0; i < VIPS_MIN( 80, data_length - 2 ); i++ )\n \t\tif( !p[i] ) \n \t\t\tbreak;\n \tif( p[i] )\ndiff --git a/libvips/iofuncs/header.c b/libvips/iofuncs/header.c\nindex cc23e674c0..79bf8b1aca 100644\n--- a/libvips/iofuncs/header.c\n+++ b/libvips/iofuncs/header.c\n@@ -1454,12 +1454,15 @@ vips_image_set_blob_copy( VipsImage *image,\n {\n \tvoid *data_copy;\n \n+\t/* Cap at 100mb for sanity.\n+\t */\n \tif( !data ||\n-\t\tlength == 0 )\n+\t\tlength == 0 ||\n+\t\tlength > 100 * 1024 * 1024 )\n \t\treturn;\n \n \t/* We add an extra, secret null byte at the end, just in case this blob \n-\t * is read as a C string. The libtiff reader (for example) attaches\n+\t * is read as a C string. The libtiff reader attaches\n \t * XMP XML as a blob, for example.\n \t */\n \tif( !(data_copy = vips_malloc( NULL, length + 1 )) ) \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42477279-vul",
+      "digest": "sha256:543f1ec4e98828d3e6bca2da74cc93fa123d6fae3f9da9b2a46d6b84200fa5d3"
+    },
+    "patched": {
+      "ref": "n132/arvo:42477279-fix",
+      "digest": "sha256:bb3b2f7fe837120e840863d051cf880b1bc815cf8b02d8c7547e47d322402828"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/libvips/libvips/foreign/jpeg2vips.c:354",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/libvips/libvips/foreign/jpeg2vips.c:354"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

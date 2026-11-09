@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042503796",
+  "chain": "CWE-416->CWE-125",
+  "project": "php-src",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42503796",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "b5f8b76df27504f9d9e075d441cd0880453c4e6f",
+      "fix_commits": [
+        "b5f8b76df27504f9d9e075d441cd0880453c4e6f"
+      ],
+      "repo": "https://github.com/php/php-src"
+    },
+    "patch": "diff --git a/ext/opcache/jit/zend_jit_arm64.dasc b/ext/opcache/jit/zend_jit_arm64.dasc\nindex 3d3c111d002f..21d8392b6cb6 100644\n--- a/ext/opcache/jit/zend_jit_arm64.dasc\n+++ b/ext/opcache/jit/zend_jit_arm64.dasc\n@@ -3602,6 +3602,18 @@ static int zend_jit_escape_if_undef_r0(dasm_State **Dst, int var, uint32_t flags\n \n \tZEND_ASSERT(opline);\n \n+\tif ((opline-1)->opcode != ZEND_FETCH_CONSTANT\n+\t && (opline-1)->opcode != ZEND_FETCH_LIST_R\n+\t && ((opline-1)->op1_type & (IS_VAR|IS_TMP_VAR))\n+\t && !(flags & ZEND_JIT_EXIT_FREE_OP1)) {\n+\t\tval_addr = ZEND_ADDR_MEM_ZVAL(ZREG_FP, (opline-1)->op1.var);\n+\n+\t\t|\tIF_NOT_ZVAL_REFCOUNTED val_addr, >2, ZREG_TMP1, ZREG_TMP2\n+\t\t|\tGET_ZVAL_PTR TMP1, val_addr, TMP2\n+\t\t|\tGC_ADDREF TMP1, TMP2w\n+\t\t|2:\n+\t}\n+\n \t|\tLOAD_IP_ADDR (opline - 1)\n \t|\tb ->trace_escape\n \t|1:\ndiff --git a/ext/opcache/jit/zend_jit_x86.dasc b/ext/opcache/jit/zend_jit_x86.dasc\nindex e3802ef5aec6..07ca85a8c1a7 100644\n--- a/ext/opcache/jit/zend_jit_x86.dasc\n+++ b/ext/opcache/jit/zend_jit_x86.dasc\n@@ -3953,6 +3953,18 @@ static int zend_jit_escape_if_undef_r0(dasm_State **Dst, int var, uint32_t flags\n \n \tZEND_ASSERT(opline);\n \n+\tif ((opline-1)->opcode != ZEND_FETCH_CONSTANT\n+\t && (opline-1)->opcode != ZEND_FETCH_LIST_R\n+\t && ((opline-1)->op1_type & (IS_VAR|IS_TMP_VAR))\n+\t && !(flags & ZEND_JIT_EXIT_FREE_OP1)) {\n+\t\tval_addr = ZEND_ADDR_MEM_ZVAL(ZREG_FP, (opline-1)->op1.var);\n+\n+\t\t|\tIF_NOT_ZVAL_REFCOUNTED val_addr, >2\n+\t\t|\tGET_ZVAL_PTR r0, val_addr\n+\t\t|\tGC_ADDREF r0\n+\t\t|2:\n+\t}\n+\n \t|\tLOAD_IP_ADDR (opline - 1)\n \t|\tjmp ->trace_escape\n \t|1:\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42503796-vul",
+      "digest": "sha256:a5f7d4caa5856a3820e978ee9685c2e35378d1a97091730b526d35a2b84a0467"
+    },
+    "patched": {
+      "ref": "n132/arvo:42503796-fix",
+      "digest": "sha256:6c73aac6300ce62bd8951198089fb3408457da4b60bc4b9d1492f439c7e335d1"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/php-src/Zend/zend_types.h:1155",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/php-src/Zend/zend_types.h:1155"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

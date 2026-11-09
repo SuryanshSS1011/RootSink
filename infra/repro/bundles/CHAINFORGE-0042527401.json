@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042527401",
+  "chain": "CWE-456->CWE-457",
+  "project": "libxaac",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42527401",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "e3f38372d0e16b33369e0b56e116fedaf055936a",
+      "fix_commits": [
+        "e3f38372d0e16b33369e0b56e116fedaf055936a"
+      ],
+      "repo": "https://github.com/ittiam-systems/libxaac"
+    },
+    "patch": "From e3f38372d0e16b33369e0b56e116fedaf055936a Mon Sep 17 00:00:00 2001\nFrom: Yash Patil <yash.patil@ittiam.com>\nDate: Fri, 1 Sep 2023 15:47:53 +0530\nSubject: [PATCH] Fix for use of uninitialized value in ixheaacd_cos_sin_mod\n\nThese changes handle the Use-of-uninitialized-value\nruntime error reported because local buffer was not initialized\nin complex analysis QMF filter block leading to uninitialized access.\n\nBug: ossFuzz:61691\nTest: poc in bug\n---\n decoder/generic/ixheaacd_qmf_dec_generic.c | 2 +-\n 1 file changed, 1 insertion(+), 1 deletion(-)\n\ndiff --git a/decoder/generic/ixheaacd_qmf_dec_generic.c b/decoder/generic/ixheaacd_qmf_dec_generic.c\nindex ff1e958..e3e8e4a 100644\n--- a/decoder/generic/ixheaacd_qmf_dec_generic.c\n+++ b/decoder/generic/ixheaacd_qmf_dec_generic.c\n@@ -597,7 +597,7 @@ VOID ixheaacd_cplx_anal_qmffilt(const WORD16 *time_sample_buf,\n   WORD32 i, k;\n   WORD32 num_time_slots = qmf_bank->num_time_slots;\n \n-  WORD32 analysis_buffer[4 * NO_ANALYSIS_CHANNELS];\n+  WORD32 analysis_buffer[4 * NO_ANALYSIS_CHANNELS] = { 0 };\n   WORD16 *filter_states = qmf_bank->core_samples_buffer;\n \n   WORD16 *fp1, *fp2, *tmp;\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42527401-vul",
+      "digest": "sha256:cc76506b8c5d3dd28a6def69b073058fb8759e6db3889893b9f1d75c15539a22"
+    },
+    "patched": {
+      "ref": "n132/arvo:42527401-fix",
+      "digest": "sha256:c0811332986b1efee570baf9da65e2f4f95b63d33245616e7e66db40004c1358"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/libxaac/common/ixheaac_basic_ops32.h:202",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/libxaac/common/ixheaac_basic_ops32.h:202"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

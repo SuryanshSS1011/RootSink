@@ -1,0 +1,60 @@
+Running LLVMFuzzerInitialize ...
+continue...
+Reading 512 bytes from /tmp/poc
+19/Oct/2026 23:51:30 [NetworkInterface.cpp:2421] WARNING: If TSO/GRO is enabled, please disable it for best accuracy
+19/Oct/2026 23:51:30 [NetworkInterface.cpp:2426] WARNING: using: sudo ethtool -K custom gro off gso off tso off
+=================================================================
+==24025==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x60700000110a at pc 0x0000006dbb5d bp 0x7fff2fdeba90 sp 0x7fff2fdeba88
+READ of size 1 at 0x60700000110a thread T0
+SCARINESS: 12 (1-byte-read-heap-buffer-overflow)
+    #0 0x6dbb5c in IEC104Stats::processPacket(Flow*, bool, unsigned char const*, unsigned short, timeval*) /src/ntopng/src/IEC104Stats.cpp:393:11
+    #1 0x64d436 in Flow::processIEC60870Packet(bool, unsigned char const*, unsigned short, timeval*) /src/ntopng/src/Flow.cpp:1134:13
+    #2 0x64a0f2 in Flow::processPacket(pcap_pkthdr const*, unsigned char const*, unsigned short, unsigned long, unsigned char*, unsigned short, unsigned short) /src/ntopng/src/Flow.cpp:992:5
+    #3 0x5a4f6d in NetworkInterface::processPacket(unsigned int, bool, timeval const*, unsigned long, ndpi_ethhdr*, unsigned short, ndpi_iphdr*, ndpi_ipv6hdr*, unsigned short, unsigned short, unsigned int, pcap_pkthdr const*, unsigned char const*, unsigned short*, Host**, Host**, Flow**) /src/ntopng/src/NetworkInterface.cpp:2034:13
+    #4 0x5b0633 in NetworkInterface::dissectPacket(unsigned int, bool, unsigned char*, pcap_pkthdr const*, unsigned char const*, unsigned short*, Host**, Host**, Flow**) /src/ntopng/src/NetworkInterface.cpp:2820:26
+    #5 0x4e9435 in LLVMFuzzerTestOneInput /src/ntopng/fuzz/fuzz_dissect_packet.cpp:197:16
+    #6 0x4e833a in ExecuteFilesOnyByOne /src/aflplusplus/utils/aflpp_driver/aflpp_driver.c:234:7
+    #7 0x4e810c in main /src/aflplusplus/utils/aflpp_driver/aflpp_driver.c:318:12
+    #8 0x7f4593357082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 1878e6b475720c7c51969e69ab2d276fae6d1dee)
+    #9 0x4294bd in _start (/out/fuzz_dissect_packet+0x4294bd)
+
+DEDUP_TOKEN: IEC104Stats::processPacket(Flow*, bool, unsigned char const*, unsigned short, timeval*)--Flow::processIEC60870Packet(bool, unsigned char const*, unsigned short, timeval*)--Flow::processPacket(pcap_pkthdr const*, unsigned char const*, unsigned short, unsigned long, unsigned char*, unsigned short, unsigned short)
+0x60700000110a is located 0 bytes to the right of 74-byte region [0x6070000010c0,0x60700000110a)
+allocated by thread T0 here:
+    #0 0x4aa8f6 in malloc /src/llvm-project/compiler-rt/lib/asan/asan_malloc_linux.cpp:69:3
+    #1 0x9bc003 in pcap_check_header /src/libpcap-1.9.1/./sf-pcap.c:405:14
+
+DEDUP_TOKEN: malloc--pcap_check_header
+SUMMARY: AddressSanitizer: heap-buffer-overflow /src/ntopng/src/IEC104Stats.cpp:393:11 in IEC104Stats::processPacket(Flow*, bool, unsigned char const*, unsigned short, timeval*)
+Shadow bytes around the buggy address:
+  0x0c0e7fff81d0: fa fa 00 00 00 00 00 00 00 00 00 fa fa fa fa fa
+  0x0c0e7fff81e0: fd fd fd fd fd fd fd fd fd fd fa fa fa fa fd fd
+  0x0c0e7fff81f0: fd fd fd fd fd fd fd fa fa fa fa fa fd fd fd fd
+  0x0c0e7fff8200: fd fd fd fd fd fd fa fa fa fa fd fd fd fd fd fd
+  0x0c0e7fff8210: fd fd fd fa fa fa fa fa 00 00 00 00 00 00 00 00
+=>0x0c0e7fff8220: 00[02]fa fa fa fa 00 00 00 00 00 00 00 00 00 00
+  0x0c0e7fff8230: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c0e7fff8240: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c0e7fff8250: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c0e7fff8260: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c0e7fff8270: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+==24025==ABORTING

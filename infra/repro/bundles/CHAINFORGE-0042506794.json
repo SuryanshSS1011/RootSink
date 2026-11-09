@@ -1,0 +1,59 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042506794",
+  "chain": "CWE-1284->CWE-125",
+  "project": "Simd",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42506794",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "6072c461c12be6f947492aaf7d6d77f31341df7c",
+      "fix_commits": [
+        "6072c461c12be6f947492aaf7d6d77f31341df7c"
+      ],
+      "repo": "https://github.com/ermig1979/Simd"
+    },
+    "patch": "diff --git a/docs/2022.html b/docs/2022.html\nindex 0c7b7ed2f3..a4e0e84a0c 100644\n--- a/docs/2022.html\n+++ b/docs/2022.html\n@@ -39,6 +39,10 @@ <h5>New features</h5>\n <ul>\n  <li>Base implementation of ResizerByteBicubic class.</li>\n </ul>\n+<h5>Bug fixing</h5>\n+<ul>\n+ <li>Error in SSE4.1, AVX2, AVX-512BW optimizations of function BgraToRgba.</li>\n+</ul>\n \n <a href=\"#HOME\">Home</a> \n <hr/>\ndiff --git a/src/Simd/SimdAvx2BgraToBgr.cpp b/src/Simd/SimdAvx2BgraToBgr.cpp\nindex aac574d71c..1b16e6feec 100644\n--- a/src/Simd/SimdAvx2BgraToBgr.cpp\n+++ b/src/Simd/SimdAvx2BgraToBgr.cpp\n@@ -128,10 +128,10 @@ namespace Simd\n \r\n             for (size_t row = 0; row < height; ++row)\r\n             {\r\n-                for (size_t i = 0; i < size; i += A)\r\n+                for (size_t i = 0; i < sizeA; i += A)\r\n                     BgraToRgba<align>(bgra + i, rgba + i);\r\n                 if (size != sizeA)\r\n-                    BgraToRgba<false>(bgra + size - sizeA, rgba + size - sizeA);\r\n+                    BgraToRgba<false>(bgra + size - A, rgba + size - A);\r\n                 bgra += bgraStride;\r\n                 rgba += rgbaStride;\r\n             }\r\ndiff --git a/src/Simd/SimdAvx512bwBgraToBgr.cpp b/src/Simd/SimdAvx512bwBgraToBgr.cpp\nindex 335af42514..467a852bcb 100644\n--- a/src/Simd/SimdAvx512bwBgraToBgr.cpp\n+++ b/src/Simd/SimdAvx512bwBgraToBgr.cpp\n@@ -173,7 +173,7 @@ namespace Simd\n             for (size_t row = 0; row < height; ++row)\n             {\n                 size_t i = 0;\n-                for (; i < size; i += A)\n+                for (; i < sizeA; i += A)\n                     BgraToRgba<align, false>(bgra + i, rgba + i);\n                 if (i < size)\n                     BgraToRgba<align, true>(bgra + i, rgba + i, tail);\ndiff --git a/src/Simd/SimdSse41BgraToBgr.cpp b/src/Simd/SimdSse41BgraToBgr.cpp\nindex a3000972e6..1e0820d853 100644\n--- a/src/Simd/SimdSse41BgraToBgr.cpp\n+++ b/src/Simd/SimdSse41BgraToBgr.cpp\n@@ -144,10 +144,10 @@ namespace Simd\n \r\n             for (size_t row = 0; row < height; ++row)\r\n             {\r\n-                for (size_t i = 0; i < size; i += A)\r\n+                for (size_t i = 0; i < sizeA; i += A)\r\n                     BgraToRgba<align>(bgra + i, rgba + i);\r\n                 if (size != sizeA)\r\n-                    BgraToRgba<false>(bgra + size - sizeA, rgba + size - sizeA);\r\n+                    BgraToRgba<false>(bgra + size - A, rgba + size - A);\r\n                 bgra += bgraStride;\r\n                 rgba += rgbaStride;\r\n             }\r\ndiff --git a/src/Test/TestResize.cpp b/src/Test/TestResize.cpp\nindex 785ccdb0b9..507615d2b5 100644\n--- a/src/Test/TestResize.cpp\n+++ b/src/Test/TestResize.cpp\n@@ -323,7 +323,7 @@ namespace Test\n         bool result = true;\r\n \r\n #if !defined(__aarch64__) || 1  \r\n-        std::vector<SimdResizeMethodType> methods = { /*SimdResizeMethodNearest, SimdResizeMethodBilinear, */SimdResizeMethodBicubic/*, SimdResizeMethodArea*/};\r\n+        std::vector<SimdResizeMethodType> methods = { /*SimdResizeMethodNearest, */SimdResizeMethodBilinear, SimdResizeMethodBicubic/*, SimdResizeMethodArea*/};\r\n         for (size_t m = 0; m < methods.size(); ++m)\r\n         {\r\n             result = result && ResizerAutoTest(methods[m], SimdResizeChannelByte, 1, f1, f2);\r\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42506794-vul",
+      "digest": "sha256:6d1b8c7858b9da805d2e8701c674ff2621478330283256315cf0b6be531b30fd"
+    },
+    "patched": {
+      "ref": "n132/arvo:42506794-fix",
+      "digest": "sha256:114a214a2080e9424feff59ea148ab93b5cf509f8ac7c7fa578ac427da416631"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": null
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witnessed": false
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-969179251",
+  "chain": "CWE-456->CWE-457",
+  "project": "mupdf",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42521281",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/ArtifexSoftware/mupdf/commit/862245679f67ff35d9868bad5b7ede1c7b1c0873",
+      "fix_commits": [
+        "862245679f67ff35d9868bad5b7ede1c7b1c0873"
+      ],
+      "repo": "https://github.com/ArtifexSoftware/mupdf"
+    },
+    "patch": "diff --git a/source/fitz/filter-predict.c b/source/fitz/filter-predict.c\nindex d0b2717cfb..24007bfefa 100644\n--- a/source/fitz/filter-predict.c\n+++ b/source/fitz/filter-predict.c\n@@ -98,7 +98,7 @@ fz_predict_tiff(fz_predict *state, unsigned char *out, unsigned char *in)\n }\n \n static void\n-fz_predict_png(fz_predict *state, unsigned char *out, unsigned char *in, size_t len, int predictor)\n+fz_predict_png(fz_context *ctx, fz_predict *state, unsigned char *out, unsigned char *in, size_t len, int predictor)\n {\n \tint bpp = state->bpp;\n \tsize_t i;\n@@ -109,6 +109,9 @@ fz_predict_png(fz_predict *state, unsigned char *out, unsigned char *in, size_t\n \n \tswitch (predictor)\n \t{\n+\tdefault:\n+\t\tfz_warn(ctx, \"unknown png predictor %d, treating as none\", predictor);\n+\t\t/* fallthrough */\n \tcase 0:\n \t\tmemcpy(out, in, len);\n \t\tbreak;\n@@ -188,7 +191,7 @@ next_predict(fz_context *ctx, fz_stream *stm, size_t len)\n \t\t\tfz_predict_tiff(state, state->out, state->in);\n \t\telse\n \t\t{\n-\t\t\tfz_predict_png(state, state->out, state->in + 1, n - 1, state->in[0]);\n+\t\t\tfz_predict_png(ctx, state, state->out, state->in + 1, n - 1, state->in[0]);\n \t\t\tmemcpy(state->ref, state->out, state->stride);\n \t\t}\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42521281-vul",
+      "digest": "sha256:5921d76fa887d3b82e14efb443fc3d62b00965d0655817f32d9f6cf90b4c11c1"
+    },
+    "patched": {
+      "ref": "n132/arvo:42521281-fix",
+      "digest": "sha256:a5d3db1874e833eae9921bed7b4236a6774e65a3de49ff898963a5fe5c9ed576"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/mupdf/source/pdf/pdf-xref.c:951",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/mupdf/source/pdf/pdf-xref.c:951"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

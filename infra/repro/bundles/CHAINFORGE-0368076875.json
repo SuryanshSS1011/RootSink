@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0368076875",
+  "chain": "CWE-416->CWE-125",
+  "project": "cpython3",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "368076875",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "a1be83dae311e4a1a6e66ed5e128b1ad8794f72f",
+      "fix_commits": [
+        "a1be83dae311e4a1a6e66ed5e128b1ad8794f72f"
+      ],
+      "repo": "https://github.com/python/cpython"
+    },
+    "patch": "From a1be83dae311e4a1a6e66ed5e128b1ad8794f72f Mon Sep 17 00:00:00 2001\nFrom: \"Tomas R.\" <tomas.roun8@gmail.com>\nDate: Sun, 6 Oct 2024 21:46:03 +0200\nSubject: [PATCH] gh-125010: Fix `use-after-free` in AST `repr()` (#125015)\n\n---\n Lib/test/test_ast/test_ast.py | 7 +++++++\n Parser/asdl_c.py              | 1 -\n Python/Python-ast.c           | 1 -\n 3 files changed, 7 insertions(+), 2 deletions(-)\n\ndiff --git a/Lib/test/test_ast/test_ast.py b/Lib/test/test_ast/test_ast.py\nindex f052822..01d2e39 100644\n--- a/Lib/test/test_ast/test_ast.py\n+++ b/Lib/test/test_ast/test_ast.py\n@@ -789,6 +789,13 @@ class AST_Tests(unittest.TestCase):\n             with self.subTest(test_input=test):\n                 self.assertEqual(repr(ast.parse(test)), snapshot)\n \n+    def test_repr_large_input_crash(self):\n+        # gh-125010: Fix use-after-free in ast repr()\n+        source = \"0x0\" + \"e\" * 10_000\n+        with self.assertRaisesRegex(ValueError,\n+                                    r\"Exceeds the limit \\(\\d+ digits\\)\"):\n+            repr(ast.Constant(value=eval(source)))\n+\n \n class CopyTests(unittest.TestCase):\n     \"\"\"Test copying and pickling AST nodes.\"\"\"\ndiff --git a/Parser/asdl_c.py b/Parser/asdl_c.py\nindex ab5fd22..f50c28a 100755\n--- a/Parser/asdl_c.py\n+++ b/Parser/asdl_c.py\n@@ -1608,7 +1608,6 @@ ast_repr_max_depth(AST_object *self, int depth)\n \n         if (!value_repr) {\n             Py_DECREF(name);\n-            Py_DECREF(value);\n             goto error;\n         }\n \ndiff --git a/Python/Python-ast.c b/Python/Python-ast.c\nindex 4a58c09..89c52b9 100644\n--- a/Python/Python-ast.c\n+++ b/Python/Python-ast.c\n@@ -5809,7 +5809,6 @@ ast_repr_max_depth(AST_object *self, int depth)\n \n         if (!value_repr) {\n             Py_DECREF(name);\n-            Py_DECREF(value);\n             goto error;\n         }\n \n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:368076875-vul",
+      "digest": "sha256:bdde4076db566bdf8a305efd63c997e7fbe177d093312ca380caa4b45d5d1776"
+    },
+    "patched": {
+      "ref": "n132/arvo:368076875-fix",
+      "digest": "sha256:9fed23cb72fb552bf60e044be613da3c3fcfe4312556777569111755abe647ba"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/cpython3/./Include/refcount.h:104",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/cpython3/./Include/refcount.h:104"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

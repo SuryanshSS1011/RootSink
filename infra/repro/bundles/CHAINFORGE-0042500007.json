@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042500007",
+  "chain": "CWE-416->CWE-787",
+  "project": "h2o",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42500007",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "505d1147e5931a522f28e790b2342b8bc6e67584",
+      "fix_commits": [
+        "505d1147e5931a522f28e790b2342b8bc6e67584"
+      ],
+      "repo": "https://github.com/h2o/h2o"
+    },
+    "patch": "diff --git a/include/h2o.h b/include/h2o.h\nindex f65fac32e8..17bfb32af4 100644\n--- a/include/h2o.h\n+++ b/include/h2o.h\n@@ -989,9 +989,16 @@ typedef struct st_h2o_conn_callbacks_t {\n      */\n     uint32_t (*num_reqs_inflight)(h2o_conn_t *conn);\n     /**\n-     * optional callbacks that returns the tracer regsitry\n+     * optional callbacks that return the tracer registry\n      */\n     quicly_tracer_t *(*get_tracer)(h2o_conn_t *conn);\n+    /**\n+     * An optional callback reporting an estimate of the connection round-trip\n+     * time in microseconds obtained by timing the acknowledgement of our\n+     * settings frame in HTTP/2.  Only supported for H2.  The callback will\n+     * return a negative value if the information is not yet available.\n+     */\n+    int64_t (*get_rtt_estimate)(h2o_conn_t *conn);\n     /**\n      * logging callbacks (all of them are optional)\n      */\ndiff --git a/include/h2o/http2_internal.h b/include/h2o/http2_internal.h\nindex c3b5e43b1a..e2ec868b5f 100644\n--- a/include/h2o/http2_internal.h\n+++ b/include/h2o/http2_internal.h\n@@ -201,6 +201,10 @@ struct st_h2o_http2_conn_t {\n         h2o_http2_stream_t *streams[HTTP2_CLOSED_STREAM_PRIORITIES];\n         size_t next_slot;\n     } _recently_closed_streams;\n+    struct {\n+        struct timeval settings_sent_at;\n+        struct timeval settings_acked_at;\n+    } timestamps;\n };\n \n /* connection */\ndiff --git a/include/h2o/mruby_.h b/include/h2o/mruby_.h\nindex 4461642eaa..02556d92ad 100644\n--- a/include/h2o/mruby_.h\n+++ b/include/h2o/mruby_.h\n@@ -57,6 +57,7 @@ enum {\n     H2O_MRUBY_LIT_SERVER_SOFTWARE_VALUE,\n     H2O_MRUBY_LIT_H2O_REMAINING_DELEGATIONS,\n     H2O_MRUBY_LIT_H2O_REMAINING_REPROCESSES,\n+    H2O_MRUBY_LIT_H2O_GET_RTT_ESTIMATE,\n     H2O_MRUBY_PROC_EACH_TO_ARRAY,\n     H2O_MRUBY_PROC_APP_TO_FIBER,\n \ndiff --git a/lib/handler/mruby.c b/lib/handler/mruby.c\nindex 57a90088ab..b401914e1d 100644\n--- a/lib/handler/mruby.c\n+++ b/lib/handler/mruby.c\n@@ -253,6 +253,20 @@ mrb_value send_early_hints_proc(mrb_state *mrb, mrb_value self)\n     return mrb_nil_value();\n }\n \n+static mrb_value get_rtt_estimate_proc(mrb_state *mrb, mrb_value self)\n+{\n+    h2o_mruby_generator_t *generator = h2o_mruby_get_generator(mrb, mrb_proc_cfunc_env_get(mrb, 0));\n+    if (generator == NULL)\n+        return mrb_nil_value();\n+    if (generator->req->conn->callbacks->get_rtt_estimate != NULL) {\n+        int64_t rtt_us = generator->req->conn->callbacks->get_rtt_estimate(generator->req->conn);\n+        if (rtt_us >= 0) {\n+            return mrb_fixnum_value(rtt_us);\n+        }\n+    }\n+    return mrb_nil_value();\n+}\n+\n static mrb_value build_constants(mrb_state *mrb, const char *server_name, size_t server_name_len)\n {\n     mrb_value ary = mrb_ary_new_capa(mrb, H2O_MRUBY_NUM_CONSTANTS);\n@@ -319,6 +333,7 @@ static mrb_value build_constants(mrb_state *mrb, const char *server_name, size_t\n     SET_LITERAL(H2O_MRUBY_LIT_SERVER_SOFTWARE, \"SERVER_SOFTWARE\");\n     SET_LITERAL(H2O_MRUBY_LIT_H2O_REMAINING_DELEGATIONS, \"h2o.remaining_delegations\");\n     SET_LITERAL(H2O_MRUBY_LIT_H2O_REMAINING_REPROCESSES, \"h2o.remaining_reprocesses\");\n+    SET_LITERAL(H2O_MRUBY_LIT_H2O_GET_RTT_ESTIMATE, \"h2o.get_rtt_estimate\");\n     SET_STRING(H2O_MRUBY_LIT_SERVER_SOFTWARE_VALUE, h2o_mruby_new_str(mrb, server_name, server_name_len));\n \n #undef SET_LITERAL\n@@ -766,6 +781,10 @@ static mrb_value build_env(h2o_mruby_generator_t *generator)\n         if (!mrb_nil_p(p))\n             mrb_hash_set(mrb, env, mrb_ary_entry(shared->constants, H2O_MRUBY_LIT_REMOTE_PORT), p);\n     }\n+    if (generator->req->conn->callbacks->get_rtt_estimate != NULL) {\n+        mrb_hash_set(mrb, env, mrb_ary_entry(shared->constants, H2O_MRUBY_LIT_H2O_GET_RTT_ESTIMATE),\n+                     mrb_obj_value(mrb_proc_new_cfunc_with_env(mrb, get_rtt_estimate_proc, 1, &generator->refs.generator)));\n+    }\n     {\n         size_t i;\n         for (i = 0; i != generator->req->env.size; i += 2) {\ndiff --git a/lib/http2/connection.c b/lib/http2/connection.c\nindex 51400ef4a5..32d3538e0a 100644\n--- a/lib/http2/connection.c\n+++ b/lib/http2/connection.c\n@@ -991,6 +991,9 @@ static int handle_settings_frame(h2o_http2_conn_t *conn, h2o_http2_frame_t *fram\n             *err_desc = \"invalid SETTINGS frame (+ACK)\";\n             return H2O_HTTP2_ERROR_FRAME_SIZE;\n         }\n+        if (conn->timestamps.settings_acked_at.tv_sec == 0 && conn->timestamps.settings_sent_at.tv_sec != 0) {\n+            gettimeofday(&conn->timestamps.settings_acked_at, NULL);\n+        }\n     } else {\n         uint32_t prev_initial_window_size = conn->peer_settings.initial_window_size;\n         /* FIXME handle SETTINGS_HEADER_TABLE_SIZE */\n@@ -1169,6 +1172,9 @@ static ssize_t expect_preface(h2o_http2_conn_t *conn, const uint8_t *src, size_t\n             /* write origin frame */\n             h2o_http2_encode_origin_frame(&conn->_write.buf, *conn->http2_origin_frame);\n         }\n+        if (conn->timestamps.settings_sent_at.tv_sec == 0) {\n+            gettimeofday(&conn->timestamps.settings_sent_at, NULL);\n+        }\n         h2o_http2_conn_request_write(conn);\n     }\n \n@@ -1464,6 +1470,16 @@ static int skip_tracing(h2o_conn_t *_conn)\n     return h2o_socket_skip_tracing(conn->sock);\n }\n \n+static int64_t get_rtt_estimate(h2o_conn_t *_conn)\n+{\n+    struct st_h2o_http2_conn_t *conn = (void *)_conn;\n+    if (conn->timestamps.settings_sent_at.tv_sec != 0 && conn->timestamps.settings_acked_at.tv_sec != 0) {\n+        return h2o_timeval_subtract(&conn->timestamps.settings_sent_at, &conn->timestamps.settings_acked_at);\n+    } else {\n+        return -1;\n+    }\n+}\n+\n #define DEFINE_LOGGER(name)                                                                                                        \\\n     static h2o_iovec_t log_##name(h2o_req_t *req)                                                                                  \\\n     {                                                                                                                              \\\n@@ -1566,6 +1582,7 @@ static h2o_http2_conn_t *create_conn(h2o_context_t *ctx, h2o_hostconf_t **hosts,\n         .skip_tracing = skip_tracing,\n         .push_path = push_path,\n         .get_debug_state = h2o_http2_get_debug_state,\n+        .get_rtt_estimate = get_rtt_estimate,\n         .log_ = {{\n             .congestion_control =\n                 {\ndiff --git a/t/50mruby-h2-rtt.t b/t/50mruby-h2-rtt.t\nnew file mode 100644\nindex 0000000000..7bc808eb97\n--- /dev/null\n+++ b/t/50mruby-h2-rtt.t\n@@ -0,0 +1,43 @@\n+use strict;\n+use warnings;\n+use Test::More;\n+use t::Util;\n+\n+plan skip_all => 'mruby support is off'\n+    unless server_features()->{mruby};\n+\n+plan skip_all => 'curl not found'\n+    unless prog_exists('curl');\n+\n+subtest 'HTTP/2' => sub {\n+    my $server = spawn_h2o(<< \"EOT\");\n+num-threads: 1\n+hosts:\n+  default:\n+    paths:\n+      /:\n+        mruby.handler-file: t/assets/50mruby-h2o-rtt.rb\n+EOT\n+    (undef, my $body) = run_prog(\"curl --http2 -sS http://127.0.0.1:$server->{port}/\");\n+    like $body, qr{^RTT = \\d+$};\n+    if ($body =~ qr{^RTT = (\\d+)$}) {\n+        my $rtt = $1;\n+        # In the local test this can be 0us.\n+        cmp_ok $rtt, '>=', 0, \"The round-trip time estimate is $rtt microseconds.\";\n+    }\n+};\n+\n+subtest 'HTTP/1.1' => sub {\n+    my $server = spawn_h2o(<< \"EOT\");\n+num-threads: 1\n+hosts:\n+  default:\n+    paths:\n+      /:\n+        mruby.handler-file: t/assets/50mruby-h2o-rtt.rb\n+EOT\n+    (undef, my $body) = run_prog(\"curl --http1.1 -sS http://127.0.0.1:$server->{port}/\");\n+    like $body, qr{^RTT = N/A$};\n+};\n+\n+done_testing;\ndiff --git a/t/assets/50mruby-h2o-rtt.rb b/t/assets/50mruby-h2o-rtt.rb\nnew file mode 100644\nindex 0000000000..55c606d902\n--- /dev/null\n+++ b/t/assets/50mruby-h2o-rtt.rb\n@@ -0,0 +1,14 @@\n+Proc.new do |env|\n+  rtt = nil\n+  unless env[\"h2o.get_rtt_estimate\"].nil?\n+    rtt = env[\"h2o.get_rtt_estimate\"].call()\n+    while rtt.nil? do\n+      sleep(0.1)\n+      rtt = env[\"h2o.get_rtt_estimate\"].call()\n+    end\n+  end\n+  if rtt.nil?\n+    rtt = 'N/A'\n+  end\n+  [200, {}, [\"RTT = \", rtt]]\n+end\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42500007-vul",
+      "digest": "sha256:0a6e7c7fe5e1fc3a5c5b3ef274b134d66bf1f0f074162265bd85c50f5743cf7f"
+    },
+    "patched": {
+      "ref": "n132/arvo:42500007-fix",
+      "digest": "sha256:ddb12b66cb67c315ec3545debf46bb899831447e9a9b9100e4af79147aacbd7a"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "ABRT",
+        "direction": null,
+        "crash_site": "/src/h2o/fuzz/driver_common.cc:83",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "ABRT",
+        "direction": null,
+        "site": "/src/h2o/fuzz/driver_common.cc:83"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

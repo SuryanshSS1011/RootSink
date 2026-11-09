@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042532684",
+  "chain": "CWE-416->CWE-125",
+  "project": "libxml2",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42532684",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "70da4c089c8a47301697a1fc07c638d1b8f47239",
+      "fix_commits": [
+        "70da4c089c8a47301697a1fc07c638d1b8f47239"
+      ],
+      "repo": "https://gitlab.gnome.org/GNOME/libxml2.git"
+    },
+    "patch": "From 70da4c089c8a47301697a1fc07c638d1b8f47239 Mon Sep 17 00:00:00 2001\nFrom: Nick Wellnhofer <wellnhofer@aevum.de>\nDate: Sun, 4 Feb 2024 13:30:32 +0100\nSubject: [PATCH] valid: Fix use-after-free in xmlAddIDSafe\n\nShort-lived regression.\n---\n valid.c | 3 ++-\n 1 file changed, 2 insertions(+), 1 deletion(-)\n\ndiff --git a/valid.c b/valid.c\nindex 19d6447..ed6eeb2 100644\n--- a/valid.c\n+++ b/valid.c\n@@ -2373,7 +2373,8 @@ xmlAddIDSafe(xmlDocPtr doc, const xmlChar *value, xmlAttrPtr attr,\n     }\n \n     attr->atype = XML_ATTRIBUTE_ID;\n-    attr->id = ret;\n+    if (!streaming)\n+        attr->id = ret;\n \n     if (id != NULL)\n         *id = ret;\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42532684-vul",
+      "digest": "sha256:95f3a1222c274292ab81b8bbe4abdffa4bafb84bb7146b305deb8296212420f1"
+    },
+    "patched": {
+      "ref": "n132/arvo:42532684-fix",
+      "digest": "sha256:4d1f03dc7a182abefd6320ccecab67919e5bbf05299332225f057a50d458ea03"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/libxml2/valid.c:2745",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/libxml2/valid.c:2745"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042516248",
+  "chain": "CWE-20->CWE-125",
+  "project": "ffmpeg",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42516248",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "f1f78e3cf4da658225067d9ef35cdb25541e5fe2",
+      "fix_commits": [
+        "f1f78e3cf4da658225067d9ef35cdb25541e5fe2"
+      ],
+      "repo": "https://git.ffmpeg.org/ffmpeg.git"
+    },
+    "patch": "From f1f78e3cf4da658225067d9ef35cdb25541e5fe2 Mon Sep 17 00:00:00 2001\nFrom: Michael Niedermayer <michael@niedermayer.cc>\nDate: Fri, 30 Sep 2022 00:44:31 +0200\nSubject: [PATCH] avcodec/mlpdec: add max channels check\n\nFixes: out of array access\nFixes: 51648/clusterfuzz-testcase-minimized-ffmpeg_AV_CODEC_ID_TRUEHD_fuzzer-4644322217164800\n\nFound-by: continuous fuzzing process https://github.com/google/oss-fuzz/tree/master/projects/ffmpeg\nSigned-off-by: Michael Niedermayer <michael@niedermayer.cc>\n---\n libavcodec/mlpdec.c | 3 +++\n 1 file changed, 3 insertions(+)\n\ndiff --git a/libavcodec/mlpdec.c b/libavcodec/mlpdec.c\nindex 635f928..0b0eb75 100644\n--- a/libavcodec/mlpdec.c\n+++ b/libavcodec/mlpdec.c\n@@ -547,6 +547,9 @@ static int read_restart_header(MLPDecodeContext *m, GetBitContext *gbp,\n         return AVERROR_PATCHWELCOME;\n     }\n \n+    if (max_channel + 1 > MAX_CHANNELS || max_channel + 1 < min_channel)\n+        return AVERROR_INVALIDDATA;\n+\n     s->min_channel        = min_channel;\n     s->max_channel        = max_channel;\n     s->coded_channels     = ((1LL << (max_channel - min_channel + 1)) - 1) << min_channel;\n-- \n2.55.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42516248-vul",
+      "digest": "sha256:1738e8eb321b1bf963e17e4210a48dd14078be351aa464d77f6ac96017e46dc9"
+    },
+    "patched": {
+      "ref": "n132/arvo:42516248-fix",
+      "digest": "sha256:5959842388de702cfdef697cf9faf2a5787c7c119d851852cc5dd49e953c2079"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/ffmpeg/libavcodec/mlpdsp.c:116",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/ffmpeg/libavcodec/mlpdsp.c:116"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

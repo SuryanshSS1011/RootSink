@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-969821314",
+  "chain": "CWE-456->CWE-457",
+  "project": "imagemagick",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42475908",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/imagemagick/imagemagick/commit/6325963f9b31d6fce685adb0fcf4e9379f13f40a",
+      "fix_commits": [
+        "6325963f9b31d6fce685adb0fcf4e9379f13f40a"
+      ],
+      "repo": "https://github.com/imagemagick/imagemagick"
+    },
+    "patch": "diff --git a/coders/pict.c b/coders/pict.c\nindex 8bcbfe9300f..84fa0a05ed8 100644\n--- a/coders/pict.c\n+++ b/coders/pict.c\n@@ -807,9 +807,11 @@ static MagickBooleanType ReadRectangle(Image *image,PICTRectangle *rectangle)\n   rectangle->left=(short) ReadBlobMSBShort(image);\n   rectangle->bottom=(short) ReadBlobMSBShort(image);\n   rectangle->right=(short) ReadBlobMSBShort(image);\n-  if ((EOFBlob(image) != MagickFalse) || \n-      ((rectangle->bottom-rectangle->top) <= 0) ||\n-      ((rectangle->right-rectangle->left) <= 0))\n+  if (((EOFBlob(image) != MagickFalse) ||\n+      (((rectangle->bottom | rectangle->top |\n+         rectangle->right | rectangle->left ) & 0x8000) != 0) ||\n+      (rectangle->bottom <= rectangle->top) ||\n+      (rectangle->right <= rectangle->left)))\n     return(MagickFalse);\n   return(MagickTrue);\n }\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42475908-vul",
+      "digest": "sha256:c01ebfa45e194f11f30522f2c18043560aa953dc9fa9d2d3fb0e56265c2df1bc"
+    },
+    "patched": {
+      "ref": "n132/arvo:42475908-fix",
+      "digest": "sha256:1e72f56b4768303f9051fb6140a3fec473c2f0096e1f27d06db5076cf6d17e5b"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/imagemagick/./MagickCore/quantum.h:116",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/imagemagick/./MagickCore/quantum.h:116"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

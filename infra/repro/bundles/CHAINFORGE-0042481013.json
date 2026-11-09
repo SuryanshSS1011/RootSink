@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042481013",
+  "chain": "CWE-456->CWE-457",
+  "project": "wavpack",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42481013",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "4cb11c66de6cc759e57508d38df4956fe4bb3311",
+      "fix_commits": [
+        "4cb11c66de6cc759e57508d38df4956fe4bb3311"
+      ],
+      "repo": "https://github.com/dbry/WavPack"
+    },
+    "patch": "From 4cb11c66de6cc759e57508d38df4956fe4bb3311 Mon Sep 17 00:00:00 2001\nFrom: David Bryant <david@wavpack.com>\nDate: Thu, 9 Jan 2020 16:54:05 -0800\nSubject: [PATCH] more fixes for uninitialized memory access (and remove some\n tabs)\n\n---\n src/unpack_seek.c  |  2 +-\n src/unpack_utils.c | 12 ++++++------\n 2 files changed, 7 insertions(+), 7 deletions(-)\n\ndiff --git a/src/unpack_seek.c b/src/unpack_seek.c\nindex 20592e7..6c24955 100644\n--- a/src/unpack_seek.c\n+++ b/src/unpack_seek.c\n@@ -237,7 +237,7 @@ int WavpackSeekSample64 (WavpackContext *wpc, int64_t sample)\n         decimate_dsd_reset (wpc->decimation_context);\n \n     if (samples_to_decode) {\n-        buffer = (int32_t *)malloc (samples_to_decode * wpc->config.num_channels * 4);\n+        buffer = (int32_t *)calloc (1, samples_to_decode * wpc->config.num_channels * 4);\n \n         if (buffer) {\n             WavpackUnpackSamples (wpc, buffer, samples_to_decode);\ndiff --git a/src/unpack_utils.c b/src/unpack_utils.c\nindex ce7d7da..13c645e 100644\n--- a/src/unpack_utils.c\n+++ b/src/unpack_utils.c\n@@ -178,15 +178,15 @@ uint32_t WavpackUnpackSamples (WavpackContext *wpc, int32_t *buffer, uint32_t sa\n         // to stereo), then enter this conditional block...otherwise we just unpack the samples directly\n \n         if (!wpc->reduced_channels && !(wps->wphdr.flags & FINAL_BLOCK)) {\n-            int32_t *temp_buffer = (int32_t *)malloc (samples_to_unpack * 8), *src, *dst;\n+            int32_t *temp_buffer = (int32_t *)calloc (1, samples_to_unpack * 8), *src, *dst;\n             int offset = 0;     // offset to next channel in sequence (0 to num_channels - 1)\n             uint32_t samcnt;\n \n             // since we are getting samples from multiple bocks in a multichannel sequence, we must\n             // allocate a temporary buffer to unpack to so that we can re-interleave the samples\n \n-\t    if (!temp_buffer)\n-\t\tbreak;\n+            if (!temp_buffer)\n+                break;\n \n             // loop through all the streams...\n \n@@ -198,12 +198,12 @@ uint32_t WavpackUnpackSamples (WavpackContext *wpc, int32_t *buffer, uint32_t sa\n                     wpc->streams = (WavpackStream **)realloc (wpc->streams, (wpc->num_streams + 1) * sizeof (wpc->streams [0]));\n \n                     if (!wpc->streams)\n-\t\t\tbreak;\n+                        break;\n \n                     wps = wpc->streams [wpc->num_streams++] = (WavpackStream *)malloc (sizeof (WavpackStream));\n \n                     if (!wps)\n-\t\t\tbreak;\n+                        break;\n \n                     CLEAR (*wps);\n                     bcount = read_next_header (wpc->reader, wpc->wv_in, &wps->wphdr);\n@@ -218,7 +218,7 @@ uint32_t WavpackUnpackSamples (WavpackContext *wpc, int32_t *buffer, uint32_t sa\n                     wps->blockbuff = (unsigned char *)malloc (wps->wphdr.ckSize + 8);\n \n                     if (!wps->blockbuff)\n-\t\t        break;\n+                        break;\n \n                     memcpy (wps->blockbuff, &wps->wphdr, 32);\n \n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42481013-vul",
+      "digest": "sha256:8d377b5532cba729c057bae8115dc9b34cedb4a7ee475b5f5dbac4e095b6bb2f"
+    },
+    "patched": {
+      "ref": "n132/arvo:42481013-fix",
+      "digest": "sha256:3a6b6580b5c62ecee4903497c0cc3d4a2a0cab11d5b2b26187f9f3edce84dffb"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/wavpack/src/unpack_dsd.c:588",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/wavpack/src/unpack_dsd.c:588"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

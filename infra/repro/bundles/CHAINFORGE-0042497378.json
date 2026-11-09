@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042497378",
+  "chain": "CWE-20->CWE-125",
+  "project": "bitcoin-core",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42497378",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "912cb594901b1a5dd99aa4c00be34ae36512bc57",
+      "fix_commits": [
+        "912cb594901b1a5dd99aa4c00be34ae36512bc57"
+      ],
+      "repo": "https://github.com/bitcoin/bitcoin"
+    },
+    "patch": "diff --git a/src/test/fuzz/fuzz.cpp b/src/test/fuzz/fuzz.cpp\nindex 631c861bb6bf..a33297e0ed7b 100644\n--- a/src/test/fuzz/fuzz.cpp\n+++ b/src/test/fuzz/fuzz.cpp\n@@ -13,6 +13,7 @@\n #include <cstdint>\n #include <exception>\n #include <memory>\n+#include <string>\n #include <unistd.h>\n #include <vector>\n \n@@ -37,6 +38,14 @@ void initialize()\n     // Terminate immediately if a fuzzing harness ever tries to create a TCP socket.\n     CreateSock = [](const CService&) -> std::unique_ptr<Sock> { std::terminate(); };\n \n+    // Terminate immediately if a fuzzing harness ever tries to perform a DNS lookup.\n+    g_dns_lookup = [](const std::string& name, bool allow_lookup) {\n+        if (allow_lookup) {\n+            std::terminate();\n+        }\n+        return WrappedGetAddrInfo(name, false);\n+    };\n+\n     bool should_abort{false};\n     if (std::getenv(\"PRINT_ALL_FUZZ_TARGETS_AND_ABORT\")) {\n         for (const auto& t : FuzzTargets()) {\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42497378-vul",
+      "digest": "sha256:69f4a58608469db0fc77448f949d1199b12173044d6631a666012f2be846a620"
+    },
+    "patched": {
+      "ref": "n132/arvo:42497378-fix",
+      "digest": "sha256:448faddbcb7feaf0450d527fa15561d619529c030771d3887cc7b17a53379d10"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/bitcoin-core/src/univalue/lib/univalue_write.cpp:39",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/bitcoin-core/src/univalue/lib/univalue_write.cpp:39"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

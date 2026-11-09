@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042484321",
+  "chain": "CWE-456->CWE-457",
+  "project": "leptonica",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42484321",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "187250bda910463f5a3f718b2c7a537102e68005",
+      "fix_commits": [
+        "187250bda910463f5a3f718b2c7a537102e68005"
+      ],
+      "repo": "https://github.com/DanBloomberg/leptonica"
+    },
+    "patch": "From 187250bda910463f5a3f718b2c7a537102e68005 Mon Sep 17 00:00:00 2001\nFrom: Dan Bloomberg <dan.bloomberg@gmail.com>\nDate: Fri, 5 Jun 2020 11:58:40 -0700\nSubject: [PATCH] Issue 23091 and 23092 in oss-fuzz: divide by zero and\n uninitialized value * Also changed enhance_fuzzer to use Spix input.\n\n---\n prog/fuzzing/enhance_fuzzer.cc | 4 ++--\n src/readbarcode.c              | 6 ++++--\n src/readfile.c                 | 2 +-\n 3 files changed, 7 insertions(+), 5 deletions(-)\n\ndiff --git a/prog/fuzzing/enhance_fuzzer.cc b/prog/fuzzing/enhance_fuzzer.cc\nindex e9a22b2..33dbf9f 100644\n--- a/prog/fuzzing/enhance_fuzzer.cc\n+++ b/prog/fuzzing/enhance_fuzzer.cc\n@@ -14,8 +14,8 @@ LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)\n \n         leptSetStdNullHandler();\n \n-        pix = pixReadMem(data, size);\n-        if(pix==NULL) return 0;\n+        pix = pixReadMemSpix(data, size);\n+        if (pix == NULL) return 0;\n         \n         pix0 = pixModifyHue(NULL, pix, 0.01 + 0.05 * 1);\n         pix1 = pixModifySaturation(NULL, pix, -0.9 + 0.1 * 1);\ndiff --git a/src/readbarcode.c b/src/readbarcode.c\nindex 77c6774..71257be 100644\n--- a/src/readbarcode.c\n+++ b/src/readbarcode.c\n@@ -858,7 +858,7 @@ numaQuantizeCrossingsByWidth(NUMA       *nas,\n                              NUMA      **pnaohist,\n                              l_int32     debugflag)\n {\n-l_int32    i, n, ned, nod, iw, width;\n+l_int32    i, n, ret, ned, nod, iw, width;\n l_float32  val, minsize, maxsize, factor;\n GPLOT     *gplot;\n NUMA      *naedist, *naodist, *naehist, *naohist, *naecent, *naocent;\n@@ -875,7 +875,9 @@ NUMA      *naerange, *naorange, *naelut, *naolut, *nad;\n         return (NUMA *)ERROR_PTR(\"binfract <= 0.0\", procName, NULL);\n \n         /* Get even and odd crossing distances */\n-    numaGetCrossingDistances(nas, &naedist, &naodist, &minsize, &maxsize);\n+    ret = numaGetCrossingDistances(nas, &naedist, &naodist, &minsize, &maxsize);\n+    if (ret)\n+        return (NUMA *)ERROR_PTR(\"crossing data not found\", procName, NULL);\n \n         /* Bin the spans in units of binfract * minsize.  These\n          * units are convenient because they scale to make at least\ndiff --git a/src/readfile.c b/src/readfile.c\nindex f37bf12..51e58bf 100644\n--- a/src/readfile.c\n+++ b/src/readfile.c\n@@ -633,7 +633,7 @@ l_int32  format;\n \n     if (fread(&firstbytes, 1, 12, fp) != 12)\n         return ERROR_INT(\"failed to read first 12 bytes of file\", procName, 1);\n-    firstbytes[12] = '\\0';\n+    firstbytes[12] = 0;\n     rewind(fp);\n \n     findFileFormatBuffer(firstbytes, &format);\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42484321-vul",
+      "digest": "sha256:5c84f72834bb70c6a930b46815970d30dfcaf056a06a8d2467eeffdd1829a185"
+    },
+    "patched": {
+      "ref": "n132/arvo:42484321-fix",
+      "digest": "sha256:9a235ead7aeb61113153cba0973243b24b196e0f0810cfec5f4202b88ea4a78a"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/leptonica/src/convolve.c:375",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/leptonica/src/convolve.c:375"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

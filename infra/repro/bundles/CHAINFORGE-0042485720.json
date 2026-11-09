@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042485720",
+  "chain": "CWE-20->CWE-125",
+  "project": "muparser",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42485720",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "650fbf88fae47c315ac4ba1c5519423664e4119e",
+      "fix_commits": [
+        "650fbf88fae47c315ac4ba1c5519423664e4119e"
+      ],
+      "repo": "https://github.com/beltoforion/muparser"
+    },
+    "patch": "diff --git a/CHANGELOG b/CHANGELOG\nindex 3ff3b68..5698b02 100644\n--- a/CHANGELOG\n+++ b/CHANGELOG\n@@ -26,7 +26,7 @@ GitHub Master\n      class interface as well as the C-interface. Before the linux shared library was using the class interface and the \n      windows dll was using the C-interface.\n     \n-     Only the C-Interface is safe to use when you intent to bring an executable to another linux distribution or windows version. \n+     Only the C-Interface is safe to use when you intent to bring an executable to another linux distribution or windows version! \n      This is up to the client software. I cannot change this because on linux the shared library was always using the class \n      interface. Usually this is not a problem since distributions compile all applications from scratch. \n \n@@ -34,8 +34,11 @@ GitHub Master\n      version compiled for another operating system or linux distribution! You must either use the C-Interface if you \n      want this or use a static library build of muparser!\n \n+  Security Fixes: (The issues were present in all prior stable releases)\n+   * https://bugs.chromium.org/p/oss-fuzz/issues/detail?id=24167 \n+\n   Bugfixes:\n-    * fixed a couple of issues for building the C-Interface (muParserDLL.cpp/.h) with wide character support.\n+   * fixed a couple of issues for building the C-Interface (muParserDLL.cpp/.h) with wide character support.\n \n Rev 2.3.2: 17.06.2020\n ---------------------\ndiff --git a/samples/example1/example1.cpp b/samples/example1/example1.cpp\nindex e07b261..582fdfa 100644\n--- a/samples/example1/example1.cpp\n+++ b/samples/example1/example1.cpp\n@@ -380,6 +380,7 @@ static int CheckKeywords(const mu::char_type* a_szLine, mu::Parser& a_Parser)\n \t}\n \telse if (sLine == _T(\"dbg\"))\n \t{\n+//\t\tstring_type dbg = _T(R\"(avg(0>3?4:(\"\"),0^3?4:(\"\")))\");\n \t\tstring_type dbg = _T(R\"(avg(0>3?4:(\"\"),0^3?4:(\"\")))\");\n \t\ta_Parser.SetExpr(dbg);\n \t\tmu::console() << dbg;\ndiff --git a/src/muParserBase.cpp b/src/muParserBase.cpp\nindex 3fbddc4..5d1c415 100644\n--- a/src/muParserBase.cpp\n+++ b/src/muParserBase.cpp\n@@ -890,18 +890,24 @@ namespace mu\n \t\twhile (a_stOpt.size() && a_stOpt.top().GetCode() == cmELSE)\n \t\t{\n \t\t\tMUP_ASSERT(!a_stOpt.empty())\n-\t\t\t\ttoken_type opElse = a_stOpt.top();\n+\t\t\ttoken_type opElse = a_stOpt.top();\n \t\t\ta_stOpt.pop();\n \n \t\t\t// Take the value associated with the else branch from the value stack\n \t\t\tMUP_ASSERT(!a_stVal.empty());\n \t\t\ttoken_type vVal2 = a_stVal.top();\n+\t\t\tif (vVal2.GetType() != tpDBL)\n+\t\t\t\tError(ecUNEXPECTED_STR, m_pTokenReader->GetPos());\n+\t\t\t\n \t\t\ta_stVal.pop();\n \n \t\t\t// it then else is a ternary operator Pop all three values from the value s\n \t\t\t// tack and just return the right value\n \t\t\tMUP_ASSERT(!a_stVal.empty());\n \t\t\ttoken_type vVal1 = a_stVal.top();\n+\t\t\tif (vVal1.GetType() != tpDBL)\n+\t\t\t\tError(ecUNEXPECTED_STR, m_pTokenReader->GetPos());\n+\n \t\t\ta_stVal.pop();\n \n \t\t\tMUP_ASSERT(!a_stVal.empty());\ndiff --git a/src/muParserTest.cpp b/src/muParserTest.cpp\nindex 3b94bc3..9d39436 100644\n--- a/src/muParserTest.cpp\n+++ b/src/muParserTest.cpp\n@@ -139,13 +139,13 @@ namespace mu\n \t\t\t// from oss-fuzz: https://bugs.chromium.org/p/oss-fuzz/issues/detail?id=23410\n \t\t\tiStat += ThrowTest(_T(R\"(6 - 6 ? 4 : \"\", ? 4 : \"\", ? 4 : \"\")\"), ecUNEXPECTED_STR,  true);\n \t\t\t// variations:\n-\t\t\tiStat += ThrowTest(_T(R\"(avg(0?4:(\"\"),1))\"), ecVAL_EXPECTED);\n-\t\t\tiStat += ThrowTest(_T(R\"(1 ? 4 : \"\")\"), ecUNEXPECTED_STR, true);\n-\t\t\tiStat += ThrowTest(_T(R\"(1 ? \"\" : 4)\"), ecUNEXPECTED_STR, true);\n-\t\t\tiStat += ThrowTest(_T(R\"(1 ? \"\" : \"\")\"), ecUNEXPECTED_STR, true);\n-\t\t\tiStat += ThrowTest(_T(R\"(0 ? 4 : \"\")\"), ecUNEXPECTED_STR, true);\n-\t\t\tiStat += ThrowTest(_T(R\"(0 ? 4 : (\"\"))\"), ecSTR_RESULT, true);\n-\t\t\tiStat += ThrowTest(_T(R\"(1 ? 4 : \"\")\"), ecUNEXPECTED_STR, true);\n+\t\t\tiStat += ThrowTest(_T(R\"(avg(0?4:(\"\"),1))\"), ecUNEXPECTED_STR);\n+\t\t\tiStat += ThrowTest(_T(R\"(1 ? 4 : \"\")\"), ecUNEXPECTED_STR);\n+\t\t\tiStat += ThrowTest(_T(R\"(1 ? \"\" : 4)\"), ecUNEXPECTED_STR);\n+\t\t\tiStat += ThrowTest(_T(R\"(1 ? \"\" : \"\")\"), ecUNEXPECTED_STR);\n+\t\t\tiStat += ThrowTest(_T(R\"(0 ? 4 : \"\")\"), ecUNEXPECTED_STR);\n+\t\t\tiStat += ThrowTest(_T(R\"(0 ? 4 : (\"\"))\"), ecUNEXPECTED_STR);\n+\t\t\tiStat += ThrowTest(_T(R\"(1 ? 4 : \"\")\"), ecUNEXPECTED_STR);\n \n \t\t\t// from oss-fuzz: https://oss-fuzz.com/testcase-detail/5106868061208576\n \t\t\tiStat += ThrowTest(_T(R\"(\"\",\"\",\"\",\"\",\"\",\"\",\"\",\"\",\"\",\"\",\"\",\"\",\"\",\"\",\"\",\"\",\"\",\"\",\"\",\"\",\"\",\"\",\"\",\"\",\"\",\"\",\"\",\"\",\"\",\"\",\"\",8)\"), ecSTR_RESULT);\n@@ -634,8 +634,8 @@ namespace mu\n \t\t\tiStat += ThrowTest(_T(\"6, +, +, +, +, +, +, +, +, +, +, +, +, +, +, 1, +, +, +, +, +, +, +, +, +, +, +, +, +, +, +, +, +, +, +, +, +, +, +, +, +, +, +, +, +, +, +, +\"), ecUNEXPECTED_ARG_SEP, true);\n \n \t\t\t// misplaced string argument\t\t\t\n-\t\t\tiStat += ThrowTest(_T(R\"(sin(0?4:(\"\")))\"), ecVAL_EXPECTED);\n-\t\t\tiStat += ThrowTest(_T(R\"(avg(0?4:(\"\"),1))\"), ecVAL_EXPECTED);\n+\t\t\tiStat += ThrowTest(_T(R\"(sin(0?4:(\"\")))\"), ecUNEXPECTED_STR);\n+\t\t\tiStat += ThrowTest(_T(R\"(avg(0?4:(\"\"),1))\"), ecUNEXPECTED_STR);\n \n \t\t\t// Compound expressions\n \t\t\tiStat += EqnTest(_T(\"1,2,3\"), 3, true);\n@@ -944,9 +944,15 @@ namespace mu\n \t\t\tmu::console() << _T(\"testing if-then-else operator...\");\n \n \t\t\t// from oss-fuzz.com: https://bugs.chromium.org/p/oss-fuzz/issues/detail?id=24167\n-//\t\t\tiStat += ThrowTest(_T(R\"(avg(0?(\"\"):4,1))\"), ecVAL_EXPECTED);\n-//\t\t\tiStat += ThrowTest(_T(\"avg(0>3?4:(\\\"\\\"),0^3?4:(\\\"\\\"))\"), ecUNEXPECTED_ARG_SEP);\n-//\t\t\tiStat += ThrowTest(_T(\"0^3^avg(0>3?4:(\\\"\\\"),0^3?4:(\\\"\\\"))\"), ecUNEXPECTED_ARG_SEP);\n+\t\t\tiStat += ThrowTest(_T(R\"(0^3^avg(0>3?4:(\"\"),0^3?4:(\"\")))\"), ecUNEXPECTED_STR);\n+\t\t\t// derivatives\n+\t\t\tiStat += ThrowTest(_T(R\"(avg(0?(\"\"):4,1))\"), ecUNEXPECTED_STR);\n+\t\t\tiStat += ThrowTest(_T(R\"(avg(0>3?4:(\"\"),0^3?4:(\"\")))\"), ecUNEXPECTED_STR);\n+\n+\t\t\tiStat += ThrowTest(_T(R\"(0?4:(\"\"))\"), ecUNEXPECTED_STR);\n+\t\t\tiStat += ThrowTest(_T(R\"((0)?4:(\"\"))\"), ecUNEXPECTED_STR);\n+\t\t\tiStat += ThrowTest(_T(R\"((0>3)?4:(\"\"))\"), ecUNEXPECTED_STR);\n+\t\t\tiStat += ThrowTest(_T(R\"(0>3?4:(\"\"))\"), ecUNEXPECTED_STR);\n \n \t\t\t// from oss-fuzz.com: https://oss-fuzz.com/testcase-detail/4777121158529024\n \t\t\tiStat += ThrowTest(_T(\"3!=min(0?2>2,2>5,1:6)\"), ecUNEXPECTED_ARG_SEP);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42485720-vul",
+      "digest": "sha256:806e360a9e1dc199d018ccf92a44e27b906d520cd5cfa095390127710c0e4566"
+    },
+    "patched": {
+      "ref": "n132/arvo:42485720-fix",
+      "digest": "sha256:8b345812afcb1cef764f40e605921a85a72a2257fb63d3fe08d14327376c2524"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/muparser/src/muParserBase.cpp:1104",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/muparser/src/muParserBase.cpp:1104"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

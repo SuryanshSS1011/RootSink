@@ -1,0 +1,86 @@
+======================= INFO =========================
+This binary is built for AFL-fuzz.
+To run the target function on individual input(s) execute this:
+  /out/imdecode_fuzzer < INPUT_FILE
+or
+  /out/imdecode_fuzzer INPUT_FILE1 [INPUT_FILE2 ... ]
+To fuzz with afl-fuzz execute this:
+  afl-fuzz [afl-flags] /out/imdecode_fuzzer [-N]
+afl-fuzz will run N iterations before re-spawning the process (default: 1000)
+======================================================
+Reading 1218 bytes from /tmp/poc
+[ WARN:0] global /src/opencv/modules/imgcodecs/src/grfmt_jpeg2000_openjpeg.cpp (304) warningLogCallback OpenJPEG2000: Found a misplaced 'pclr' box outside jp2h box
+
+[ WARN:0] global /src/opencv/modules/imgcodecs/src/grfmt_jpeg2000_openjpeg.cpp (304) warningLogCallback OpenJPEG2000: Found a misplaced 'cmap' box outside jp2h box
+
+=================================================================
+==630405==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x61d000001d80 at pc 0x000001adcb54 bp 0x7ffdc619b140 sp 0x7ffdc619b138
+READ of size 4 at 0x61d000001d80 thread T0
+SCARINESS: 17 (4-byte-read-heap-buffer-overflow)
+    #0 0x1adcb53 in opj_jp2_apply_pclr /src/opencv/3rdparty/openjpeg/openjp2/jp2.c:1112:26
+    #1 0x1ad9f83 in opj_jp2_decode /src/opencv/3rdparty/openjpeg/openjp2/jp2.c:1639:22
+    #2 0x52756a in cv::Jpeg2KOpjDecoder::readData(cv::Mat&) /src/opencv/modules/imgcodecs/src/grfmt_jpeg2000_openjpeg.cpp:594:10
+    #3 0x4edc8d in cv::imdecode_(cv::Mat const&, int, cv::Mat&) /src/opencv/modules/imgcodecs/src/loadsave.cpp:845:22
+    #4 0x4eb1bf in cv::imdecode(cv::_InputArray const&, int) /src/opencv/modules/imgcodecs/src/loadsave.cpp:885:5
+    #5 0x4d2899 in LLVMFuzzerTestOneInput /src/imdecode_fuzzer.cc:10:30
+    #6 0x4d0dee in ExecuteFilesOnyByOne /src/libfuzzer/afl/afl_driver.cpp:217:5
+    #7 0x4d0dee in main /src/libfuzzer/afl/afl_driver.cpp:254:12
+    #8 0x154a784b183f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2083f)
+    #9 0x422cd8 in _start (/out/imdecode_fuzzer+0x422cd8)
+
+DEDUP_TOKEN: opj_jp2_apply_pclr--opj_jp2_decode--cv::Jpeg2KOpjDecoder::readData(cv::Mat&)
+0x61d000001d80 is located 0 bytes to the right of 2304-byte region [0x61d000001480,0x61d000001d80)
+allocated by thread T0 here:
+    #0 0x49ec77 in posix_memalign /src/llvm-project/compiler-rt/lib/asan/asan_malloc_linux.cpp:226:3
+    #1 0x1a9cbf8 in opj_aligned_alloc_n /src/opencv/3rdparty/openjpeg/openjp2/opj_malloc.c:61:9
+    #2 0x1a9cbf8 in opj_aligned_malloc /src/opencv/3rdparty/openjpeg/openjp2/opj_malloc.c:209:12
+    #3 0x1b0b06c in opj_alloc_tile_component_data /src/opencv/3rdparty/openjpeg/openjp2/tcd.c:694:39
+    #4 0x1b0b06c in opj_tcd_decode_tile /src/opencv/3rdparty/openjpeg/openjp2/tcd.c:1530:18
+    #5 0x1aaca8b in opj_j2k_decode_tile /src/opencv/3rdparty/openjpeg/openjp2/j2k.c:8947:11
+    #6 0x1acd2fa in opj_j2k_decode_tiles /src/opencv/3rdparty/openjpeg/openjp2/j2k.c:10734:15
+    #7 0x1ab30ae in opj_j2k_exec /src/opencv/3rdparty/openjpeg/openjp2/j2k.c:8105:33
+    #8 0x1ab30ae in opj_j2k_decode /src/opencv/3rdparty/openjpeg/openjp2/j2k.c:11029:11
+    #9 0x1ad9d83 in opj_jp2_decode /src/opencv/3rdparty/openjpeg/openjp2/jp2.c:1603:11
+    #10 0x52756a in cv::Jpeg2KOpjDecoder::readData(cv::Mat&) /src/opencv/modules/imgcodecs/src/grfmt_jpeg2000_openjpeg.cpp:594:10
+    #11 0x4edc8d in cv::imdecode_(cv::Mat const&, int, cv::Mat&) /src/opencv/modules/imgcodecs/src/loadsave.cpp:845:22
+    #12 0x4eb1bf in cv::imdecode(cv::_InputArray const&, int) /src/opencv/modules/imgcodecs/src/loadsave.cpp:885:5
+    #13 0x4d2899 in LLVMFuzzerTestOneInput /src/imdecode_fuzzer.cc:10:30
+    #14 0x4d0dee in ExecuteFilesOnyByOne /src/libfuzzer/afl/afl_driver.cpp:217:5
+    #15 0x4d0dee in main /src/libfuzzer/afl/afl_driver.cpp:254:12
+    #16 0x154a784b183f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2083f)
+
+DEDUP_TOKEN: posix_memalign--opj_aligned_alloc_n--opj_aligned_malloc
+SUMMARY: AddressSanitizer: heap-buffer-overflow /src/opencv/3rdparty/openjpeg/openjp2/jp2.c:1112:26 in opj_jp2_apply_pclr
+Shadow bytes around the buggy address:
+  0x0c3a7fff8360: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c3a7fff8370: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c3a7fff8380: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c3a7fff8390: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c3a7fff83a0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x0c3a7fff83b0:[fa]fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c3a7fff83c0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c3a7fff83d0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c3a7fff83e0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c3a7fff83f0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c3a7fff8400: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+  Shadow gap:              cc
+==630405==ABORTING

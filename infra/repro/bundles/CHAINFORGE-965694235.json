@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-965694235",
+  "chain": "CWE-456->CWE-457",
+  "project": "librawspeed",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42538651",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/darktable-org/rawspeed/commit/ab959c2235ab69359cdc75372c5cdf7bcc324726",
+      "fix_commits": [
+        "ab959c2235ab69359cdc75372c5cdf7bcc324726"
+      ],
+      "repo": "https://github.com/darktable-org/rawspeed"
+    },
+    "patch": "diff --git a/src/librawspeed/decoders/ArwDecoder.cpp b/src/librawspeed/decoders/ArwDecoder.cpp\nindex 8b671f772..ff9736053 100644\n--- a/src/librawspeed/decoders/ArwDecoder.cpp\n+++ b/src/librawspeed/decoders/ArwDecoder.cpp\n@@ -425,15 +425,21 @@ void ArwDecoder::GetWB() {\n \n     // \"Decrypt\" IFD\n     const auto& ifd_crypt = priv->getRootIfdData();\n-    auto ifd_size = ifd_crypt.getSize();\n-    auto ifd_decoded = Buffer::Create(ifd_size);\n+    const auto EncryptedBuffer = ifd_crypt.getSubView(off, len);\n+    // We do have to prepend 'off' padding, because TIFF uses absolute offsets.\n+    const auto DecryptedBufferSize = off + EncryptedBuffer.getSize();\n+    auto DecryptedBuffer = Buffer::Create(DecryptedBufferSize);\n \n-    SonyDecrypt(reinterpret_cast<const uint32*>(ifd_crypt.getData(off, len)),\n-                reinterpret_cast<uint32*>(ifd_decoded.get() + off), len / 4,\n+    SonyDecrypt(reinterpret_cast<const uint32*>(EncryptedBuffer.begin()),\n+                reinterpret_cast<uint32*>(DecryptedBuffer.get() + off), len / 4,\n                 key);\n \n     NORangesSet<Buffer> ifds_decoded;\n-    Buffer decIFD(move(ifd_decoded), ifd_size);\n+    Buffer decIFD(std::move(DecryptedBuffer), DecryptedBufferSize);\n+    const Buffer Padding(decIFD.getSubView(0, off));\n+    // The Decrypted Root Ifd can not point to preceding padding buffer.\n+    ifds_decoded.emplace(Padding);\n+\n     DataBuffer dbIDD(decIFD, priv->getRootIfdData().getByteOrder());\n     TiffRootIFD encryptedIFD(nullptr, &ifds_decoded, dbIDD, off);\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42538651-vul",
+      "digest": "sha256:c1e3e72c096597afef7971ff4a61cda950add07277e1d2ee1eb2019bf5c3ac9c"
+    },
+    "patched": {
+      "ref": "n132/arvo:42538651-fix",
+      "digest": "sha256:457af68ec7f63f2557b6f6f03eb24f15007eaadb7f5c94ba66f8d3168b4bf34f"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/librawspeed/src/librawspeed/io/Buffer.h:127",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/librawspeed/src/librawspeed/io/Buffer.h:127"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

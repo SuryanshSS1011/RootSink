@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-961238052",
+  "chain": "CWE-456->CWE-457",
+  "project": "libraw",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42536604",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/libraw/libraw/commit/9c9c04b44cf2e6fc8272ca4919ebded607a9f390",
+      "fix_commits": [
+        "9c9c04b44cf2e6fc8272ca4919ebded607a9f390"
+      ],
+      "repo": "https://github.com/libraw/libraw"
+    },
+    "patch": "diff --git a/src/metadata/tiff.cpp b/src/metadata/tiff.cpp\nindex 1d60930c5..c2f323838 100644\n--- a/src/metadata/tiff.cpp\n+++ b/src/metadata/tiff.cpp\n@@ -1580,11 +1580,13 @@ int LibRaw::parse_tiff_ifd(int base)\n                     (buf_SR2 = (unsigned *)malloc(SR2SubIFDLength + 1024)))\n                 { // 1024b for safety\n                   fseek(ifp, SR2SubIFDOffset + base, SEEK_SET);\n-                  fread(buf_SR2, SR2SubIFDLength, 1, ifp);\n-                  sony_decrypt(buf_SR2, SR2SubIFDLength / 4, 1, SR2SubIFDKey);\n-                  parseSonySR2((uchar *)buf_SR2, SR2SubIFDOffset,\n-                               SR2SubIFDLength, AdobeDNG);\n-\n+                  int items = fread(buf_SR2, 1, SR2SubIFDLength, ifp);\n+\t\t\t\t  if (items == SR2SubIFDLength)\n+\t\t\t\t  {\n+\t\t\t\t\t  sony_decrypt(buf_SR2, SR2SubIFDLength / 4, 1, SR2SubIFDKey);\n+\t\t\t\t\t  parseSonySR2((uchar *)buf_SR2, SR2SubIFDOffset,\n+\t\t\t\t\t\t  SR2SubIFDLength, AdobeDNG);\n+\t\t\t\t  }\n                   free(buf_SR2);\n                 }\n \n@@ -1669,9 +1671,12 @@ int LibRaw::parse_tiff_ifd(int base)\n       (buf = (unsigned *)malloc(sony_length)))\n   {\n     fseek(ifp, sony_offset, SEEK_SET);\n-    fread(buf, sony_length, 1, ifp);\n-    sony_decrypt(buf, sony_length / 4, 1, sony_key);\n-    parseSonySR2((uchar *)buf, sony_offset, sony_length, nonDNG);\n+    int items = fread(buf, 1, sony_length, ifp);\n+\tif (items == sony_length)\n+\t{\n+\t\tsony_decrypt(buf, sony_length / 4, 1, sony_key);\n+\t\tparseSonySR2((uchar *)buf, sony_offset, sony_length, nonDNG);\n+\t}\n     free(buf);\n   }\n   for (i = 0; i < colors && i < 4; i++)\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42536604-vul",
+      "digest": "sha256:0bf33ca99e48920540b2f67629fa4f7cde6555a4a35ed23dc9b885c6b1249176"
+    },
+    "patched": {
+      "ref": "n132/arvo:42536604-fix",
+      "digest": "sha256:4c46258caaa71442a3bb9165b2ebfc67fb36d591578f7ce6697281a669a6f63a"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/libraw/src/metadata/sony.cpp:1811",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/libraw/src/metadata/sony.cpp:1811"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

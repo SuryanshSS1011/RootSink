@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042535637",
+  "chain": "CWE-456->CWE-457",
+  "project": "libxaac",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42535637",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "85cf44c90c20926fafd980bff0f9d6a7de51be33",
+      "fix_commits": [
+        "85cf44c90c20926fafd980bff0f9d6a7de51be33"
+      ],
+      "repo": "https://github.com/ittiam-systems/libxaac"
+    },
+    "patch": "From 85cf44c90c20926fafd980bff0f9d6a7de51be33 Mon Sep 17 00:00:00 2001\nFrom: akshayragir833 <110660198+akshayragir833@users.noreply.github.com>\nDate: Fri, 24 May 2024 17:15:08 +0530\nSubject: [PATCH] Added a fix in the FAC payload writing path (#91)\n\n- The bit-writing logic had to be skipped when no bits were to be written. Updated the existing check for the same.\n- This change also resolves an issue identified by oss-fuzz.\n\nBug: ossFuzz: 69103\nTest: poc in bug\n---\n encoder/iusace_enc_fac.c | 6 +++---\n 1 file changed, 3 insertions(+), 3 deletions(-)\n\ndiff --git a/encoder/iusace_enc_fac.c b/encoder/iusace_enc_fac.c\nindex bc89007..10fb761 100644\n--- a/encoder/iusace_enc_fac.c\n+++ b/encoder/iusace_enc_fac.c\n@@ -523,14 +523,14 @@ WORD32 iusace_fd_encode_fac(WORD32 *prm, WORD16 *ptr_bit_buf, WORD32 fac_length)\n     if (qn != 0) {\n       iusace_write_bits2buf(I, 4 * n, ptr_bit_buf);\n       ptr_bit_buf += 4 * n;\n-\n+    }\n+    if (qn > 4) {\n       for (j = 0; j < 8; j++) {\n         iusace_write_bits2buf(kv[j], nk, ptr_bit_buf);\n         ptr_bit_buf += nk;\n       }\n-\n-      fac_bits += 4 * qn;\n     }\n+    fac_bits += 4 * qn;\n   }\n \n   return fac_bits;\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42535637-vul",
+      "digest": "sha256:4cf7d236ada36843ba3b12d8117f86ddb8d2c38073b37b7c38e177230432f3b5"
+    },
+    "patched": {
+      "ref": "n132/arvo:42535637-fix",
+      "digest": "sha256:5051584266d1107221623ae8a6971737b438c3f82c48cbd8dfaa97d1162132d2"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/libxaac/encoder/iusace_enc_fac.c:523",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/libxaac/encoder/iusace_enc_fac.c:523"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

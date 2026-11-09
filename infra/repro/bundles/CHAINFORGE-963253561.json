@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-963253561",
+  "chain": "CWE-456->CWE-457",
+  "project": "imagemagick",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42471637",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/imagemagick/imagemagick/commit/1b8cb09a7f04fec05ef70bd85e635ea48abb9b41",
+      "fix_commits": [
+        "1b8cb09a7f04fec05ef70bd85e635ea48abb9b41"
+      ],
+      "repo": "https://github.com/imagemagick/imagemagick"
+    },
+    "patch": "diff --git a/coders/icon.c b/coders/icon.c\nindex 80822e535b2..5f422798a6d 100644\n--- a/coders/icon.c\n+++ b/coders/icon.c\n@@ -359,7 +359,7 @@ static Image *ReadICONImage(const ImageInfo *image_info,\n         length=icon_file.directory[i].size;\n         if ((length < 16) || (~length < 16))\n           ThrowReaderException(ResourceLimitError,\"MemoryAllocationFailed\");\n-        png=(unsigned char *) AcquireQuantumMemory(length+16,sizeof(*png));\n+        png=(unsigned char *) AcquireQuantumMemory(length,sizeof(*png));\n         if (png == (unsigned char *) NULL)\n           ThrowReaderException(ResourceLimitError,\"MemoryAllocationFailed\");\n         (void) memcpy(png,\"\\211PNG\\r\\n\\032\\n\\000\\000\\000\\015\",12);\n@@ -376,7 +376,7 @@ static Image *ReadICONImage(const ImageInfo *image_info,\n           }\n         read_info=CloneImageInfo(image_info);\n         (void) CopyMagickString(read_info->magick,\"PNG\",MagickPathExtent);\n-        icon_image=BlobToImage(read_info,png,length+16,exception);\n+        icon_image=BlobToImage(read_info,png,length,exception);\n         read_info=DestroyImageInfo(read_info);\n         png=(unsigned char *) RelinquishMagickMemory(png);\n         if (icon_image == (Image *) NULL)\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42471637-vul",
+      "digest": "sha256:30285da0d689f0b842eb1d12343335b9d2e1eb194c68220d8c9131c1e5b32213"
+    },
+    "patched": {
+      "ref": "n132/arvo:42471637-fix",
+      "digest": "sha256:fd9b7209258cf943947fd08eca94e4781952b256d0f286ad90685405a8a1cc6e"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/libpng/pngrutil.c:26",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/libpng/pngrutil.c:26"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

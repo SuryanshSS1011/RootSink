@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042537498",
+  "chain": "CWE-416->CWE-787",
+  "project": "tarantool",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42537498",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "600dbbdab19003bbf06cfb66b04066371add3fc2",
+      "fix_commits": [
+        "600dbbdab19003bbf06cfb66b04066371add3fc2"
+      ],
+      "repo": "https://github.com/tarantool/luajit"
+    },
+    "patch": "diff --git a/src/lj_opt_narrow.c b/src/lj_opt_narrow.c\nindex db0da10f31..6b6f20d3ca 100644\n--- a/src/lj_opt_narrow.c\n+++ b/src/lj_opt_narrow.c\n@@ -341,7 +341,8 @@ static int narrow_conv_backprop(NarrowConv *nc, IRRef ref, int depth)\n       NarrowIns *savesp = nc->sp;\n       int count = narrow_conv_backprop(nc, ir->op1, depth);\n       count += narrow_conv_backprop(nc, ir->op2, depth);\n-      if (count <= 1) {  /* Limit total number of conversions. */\n+      /* Limit total number of conversions. */\n+      if (count <= 1 && nc->sp < nc->maxsp) {\n \t*nc->sp++ = NARROWINS(IRT(ir->o, nc->t), ref);\n \treturn count;\n       }\ndiff --git a/test/tarantool-tests/lj-1262-fix-limit-narrow-conv-backprop.test.lua b/test/tarantool-tests/lj-1262-fix-limit-narrow-conv-backprop.test.lua\nnew file mode 100644\nindex 0000000000..c225fa1475\n--- /dev/null\n+++ b/test/tarantool-tests/lj-1262-fix-limit-narrow-conv-backprop.test.lua\n@@ -0,0 +1,61 @@\n+local tap = require('tap')\n+\n+-- Test file to demonstrate stack-buffer-overflow during the\n+-- narrowing optimization.\n+-- See also: https://github.com/LuaJIT/LuaJIT/issues/1262.\n+\n+local test = tap.test('lj-1262-fix-limit-narrow-conv-backprop'):skipcond({\n+  ['Test requires JIT enabled'] = not jit.status(),\n+})\n+\n+test:plan(1)\n+\n+-- XXX: Test fails only under ASAN.\n+-- XXX: The original reproducer was found by fuzzer:\n+-- https://bugs.chromium.org/p/oss-fuzz/issues/detail?id=70779.\n+-- It creates a long side trace with a huge amount of ADD IRs,\n+-- which are recursively used in the `narrow_conv_backprop()` many\n+-- enough times to catch the stack-buffer-overflow. I can't more\n+-- simplify the reproducer any (or write it from scratch), so I\n+-- leave it in that state.\n+\n+local DEFAULT_NUMBER = 1\n+local tonumber = tonumber\n+\n+local always_number = function(val)\n+  return tonumber(val) or DEFAULT_NUMBER\n+end\n+\n+local add = function(v1, v2)\n+  return always_number(v1) + always_number(v2)\n+end\n+\n+jit.opt.start('hotloop=1', 'hotexit=1')\n+\n+local counter_0 = 0\n+local counter_1 = 0\n+local counter_2 = 0\n+local tmp = add(nil, 'Name')\n+local Name0 = add(tmp, 'Name')\n+-- Start a long side trace here.\n+for _ = 0, 0, 0 do\n+  if counter_0 > 5 then break end\n+  counter_0 = counter_0 + 1\n+\n+  for _ = always_number(false), 1, always_number(Name0) do\n+    if counter_1 > 5 then break end\n+    counter_1 = counter_1 + 1\n+\n+    repeat\n+      if counter_2 > 5 then break end\n+      counter_2 = counter_2 + 1\n+\n+      Name0 = Name0 + Name0 + Name0\n+      Name0 = add(Name0, nil) + Name0\n+    until nil\n+  end\n+end\n+\n+test:ok(true, 'no stack-buffer-overflow during narrowing')\n+\n+test:done(true)\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42537498-vul",
+      "digest": "sha256:c562224fd48839fb4101530f8db74212aa37f7b8712707d82a83ad834804fe05"
+    },
+    "patched": {
+      "ref": "n132/arvo:42537498-fix",
+      "digest": "sha256:c9e097574c05e1fc5e9d7dac966ab8ef5ff76e06d20f90f9ce693222ec7a7fbb"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/tarantool/third_party/luajit/src/lj_opt_narrow.c:345",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/tarantool/third_party/luajit/src/lj_opt_narrow.c:345"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

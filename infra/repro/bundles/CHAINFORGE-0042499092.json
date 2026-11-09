@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042499092",
+  "chain": "CWE-1284->CWE-125",
+  "project": "freetype2",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42499092",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "e9a154e70015e602d695d65a588ecb38f5bb38cc",
+      "fix_commits": [
+        "e9a154e70015e602d695d65a588ecb38f5bb38cc"
+      ],
+      "repo": "https://github.com/freetype/freetype2"
+    },
+    "patch": "diff --git a/ChangeLog b/ChangeLog\nindex 23f574823..df3626970 100644\n--- a/ChangeLog\n+++ b/ChangeLog\n@@ -1,4 +1,15 @@\n-2016-09-08  Werner Lemberg  <wl@gnu.org>\n+2016-12-31  Werner Lemberg  <wl@gnu.org>\n+\n+\t[truetype] Check axis count in HVAR table.\n+\n+\tReported as\n+\n+\t  https://bugs.chromium.org/p/oss-fuzz/issues/detail?id=362\n+\n+\t* src/truetype/ttgxvar.c (ft_var_load_hvar): Check axis count.\n+\t(ft_var_load_avar): Fix tracing message.\n+\n+2016-12-30  Werner Lemberg  <wl@gnu.org>\n \n \t* Version 2.7.1 released.\n \t=========================\ndiff --git a/src/truetype/ttgxvar.c b/src/truetype/ttgxvar.c\nindex cf4f7b17a..768987027 100644\n--- a/src/truetype/ttgxvar.c\n+++ b/src/truetype/ttgxvar.c\n@@ -346,7 +346,7 @@\n \n     if ( axisCount != (FT_Long)blend->mmvar->num_axis )\n     {\n-      FT_TRACE2(( \"ft_var_load_avar: number of axes in `avar' and `cvar'\\n\"\n+      FT_TRACE2(( \"ft_var_load_avar: number of axes in `avar' and `fvar'\\n\"\n                   \"                  table are different\\n\" ));\n       goto Exit;\n     }\n@@ -521,6 +521,14 @@\n            FT_READ_USHORT( itemStore->regionCount ) )\n         goto Exit;\n \n+      if ( itemStore->axisCount != (FT_Long)blend->mmvar->num_axis )\n+      {\n+        FT_TRACE2(( \"ft_var_load_hvar: number of axes in `hvar' and `fvar'\\n\"\n+                    \"                  table are different\\n\" ));\n+        error = FT_THROW( Invalid_Table );\n+        goto Exit;\n+      }\n+\n       if ( FT_NEW_ARRAY( itemStore->varRegionList, itemStore->regionCount ) )\n         goto Exit;\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42499092-vul",
+      "digest": "sha256:c4343e72e3c26b92bf5de9d5b9300a51a126b8386ee7d7db5052c39a48c869db"
+    },
+    "patched": {
+      "ref": "n132/arvo:42499092-fix",
+      "digest": "sha256:95c41ae2c91fa24646bb85bde797d94676b6ab816764effea648893e4de75486"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/freetype2/src/truetype/ttgxvar.c:851",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/freetype2/src/truetype/ttgxvar.c:851"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042503194",
+  "chain": "CWE-1285->CWE-125",
+  "project": "opensips",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42503194",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "cb56694d290530ac308f44b453c18120b1c1109d",
+      "fix_commits": [
+        "cb56694d290530ac308f44b453c18120b1c1109d"
+      ],
+      "repo": "https://github.com/OpenSIPS/opensips"
+    },
+    "patch": "diff --git a/parser/parse_to.c b/parser/parse_to.c\nindex f8ac0b14f3d..ba71a3cfe87 100644\n--- a/parser/parse_to.c\n+++ b/parser/parse_to.c\n@@ -232,6 +232,8 @@ static inline char* parse_to_param(char *buffer, char *end,\n \t\t\t\tswitch (status)\n \t\t\t\t{\n \t\t\t\t\tcase PARA_VALUE_QUOTED:\n+\t\t\t\t\t\tif (tmp+1==end)\n+\t\t\t\t\t\t\tgoto parse_error;\n \t\t\t\t\t\tswitch (*(tmp+1))\n \t\t\t\t\t\t{\n \t\t\t\t\t\t\tcase '\\r':\n@@ -453,8 +455,13 @@ static inline char* parse_to_param(char *buffer, char *end,\n \t\t}/*switch*/\n \t}/*for*/\n \n+\tif (status==PARA_VALUE_QUOTED) {\n+\t\t\tLM_ERR(\"unexpected end of header in state %d\\n\", status);\n+\t\t\tgoto parse_error;\n+\t}\n \n endofheader:\n+\tLM_DBG(\"end of header reached, state=%d\\n\", status);\n \tif (param) {\n \t\tif (saved_status==S_EQUAL||saved_status==S_PARA_VALUE) {\n \t\t\tsaved_status = E_PARA_VALUE;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42503194-vul",
+      "digest": "sha256:d81d84a639138023e7305196bac7395d879829048fdcc96d764f105afc79d859"
+    },
+    "patched": {
+      "ref": "n132/arvo:42503194-fix",
+      "digest": "sha256:66755f65fb39e4f1892c5530496dc296365372c9ad4099054501aac4b737fb6e"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/opensips/parser/parse_to.c:235",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/opensips/parser/parse_to.c:235"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

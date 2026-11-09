@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042473716",
+  "chain": "CWE-456->CWE-457",
+  "project": "libidn2",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42473716",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "734ef70e7e719e7aa777dbafbc727225bf71980a",
+      "fix_commits": [
+        "734ef70e7e719e7aa777dbafbc727225bf71980a"
+      ],
+      "repo": "https://gitlab.com/libidn/libidn2.git"
+    },
+    "patch": "diff --git a/lib/puny_decode.c b/lib/puny_decode.c\nindex 13a5fe65c72720ef9188760597e6548f75a73449..0d5f3f2d0f723505a8fe7cd11fb6b883c4901fea 100644\n--- a/lib/puny_decode.c\n+++ b/lib/puny_decode.c\n@@ -161,7 +161,9 @@ int punycode_decode(\n     if (!basic(input[j])) return punycode_bad_input;\n     output[out++] = input[j];\n   }\n-  b += delim(input[b]);\n+\n+  if (input_length)\n+    b += delim(input[b]);\n \n   for (j = b;  j < input_length;  ++j)\n     if (!basic(input[j])) return punycode_bad_input;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42473716-vul",
+      "digest": "sha256:120ca8ff60bac0f86beec3587ceb7864c63fa1f94b756e2791758f03364c94ed"
+    },
+    "patched": {
+      "ref": "n132/arvo:42473716-fix",
+      "digest": "sha256:3094fae28ce4d61b934b6652b774f7cc01f561f9415fbc3f26d24455970eaf48"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/libidn2/lib/puny_decode.c:166",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/libidn2/lib/puny_decode.c:166"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042532420",
+  "chain": "CWE-1285->CWE-125",
+  "project": "mruby",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42532420",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "e61a2881a7c9adc895416fdd409e7362130198d3",
+      "fix_commits": [
+        "e61a2881a7c9adc895416fdd409e7362130198d3"
+      ],
+      "repo": "https://github.com/mruby/mruby"
+    },
+    "patch": "diff --git a/src/string.c b/src/string.c\nindex 5044c1d50d..b7e1820851 100644\n--- a/src/string.c\n+++ b/src/string.c\n@@ -574,6 +574,7 @@ str_index_str_by_char(mrb_state *mrb, mrb_value str, mrb_value sub, mrb_int pos)\n    * returns mrb_int\n    * alignment adjustment added\n    * support bigendian CPU\n+   * fixed potential buffer overflow\n */\n static inline mrb_int\n mrb_memsearch_ss(const unsigned char *xs, long m, const unsigned char *ys, long n)\n@@ -599,22 +600,33 @@ mrb_memsearch_ss(const unsigned char *xs, long m, const unsigned char *ys, long\n #define MASK4 0x80\n #endif\n \n+#define MAX(a,b) ((a) > (b) ? (a) : (b))\n+\n   const bitint first = MASK1 * (uint8_t)xs[0];\n   const bitint last  = MASK1 * (uint8_t)xs[m-1];\n \n-  bitint *s0 = (bitint*)(ys);\n-  bitint *s1 = (bitint*)(ys+m-1);\n+  const unsigned char *s0 = ys;\n+  const unsigned char *s1 = ys+m-1;\n+\n+  const mrb_int lim = n - MAX(m, (mrb_int)sizeof(bitint));\n+  mrb_int i;\n+\n+  for (i=0; i < lim; i+=sizeof(bitint)) {\n+    bitint t0, t1;\n \n-  for (mrb_int i=0; i < n; i+=sizeof(bitint), s0++, s1++) {\n-    const bitint eq = (*s0 ^ first) | (*s1 ^ last);\n+    memcpy(&t0, s0+i, sizeof(bitint));\n+    memcpy(&t1, s1+i, sizeof(bitint));\n+\n+    const bitint eq = (t0 ^ first) | (t1 ^ last);\n     bitint zeros = ((~eq & MASK2) + MASK1) & (~eq & MASK3);\n     size_t j = 0;\n \n     while (zeros) {\n       if (zeros & MASK4) {\n-        const char* substr = (char*)s0 + j + 1;\n-        if (memcmp(substr, xs + 1, m - 2) == 0) {\n-          return i + j;\n+        const mrb_int idx = i + j;\n+        const unsigned char* p = s0 + idx + 1;\n+        if (memcmp(p, xs + 1, m - 2) == 0) {\n+          return idx;\n         }\n       }\n \n@@ -623,9 +635,21 @@ mrb_memsearch_ss(const unsigned char *xs, long m, const unsigned char *ys, long\n #else\n       zeros >>= 8;\n #endif\n-      j += 1;\n+      j++;\n     }\n   }\n+\n+  if (i+m < n) {\n+    const unsigned char *p = s0;\n+    const unsigned char *e = ys + n;\n+    for (;p<e;) {\n+      p = (const unsigned char*)memchr(p, *xs, e-p);\n+      if (p == NULL) break;\n+      if (memcmp(p+1, xs+1, m-1) == 0) return (mrb_int)(p - ys);\n+      p++;\n+    }\n+  }\n+\n   return -1;\n }\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42532420-vul",
+      "digest": "sha256:2e48741aaa5d7d272029c83df89245426542fa18da5ebc8c16f4883da71e3812"
+    },
+    "patched": {
+      "ref": "n132/arvo:42532420-fix",
+      "digest": "sha256:5608f5dfadda5d88e0bb94a78bd4f1701240d5c062d1e8ee13f39fd5a7eb4d9a"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/mruby/src/string.c:619",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/mruby/src/string.c:619"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

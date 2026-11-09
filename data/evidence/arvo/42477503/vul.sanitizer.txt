@@ -1,0 +1,86 @@
+======================= INFO =========================
+This binary is built for AFL-fuzz.
+To run the target function on individual input(s) execute this:
+  /out/pngsave_buffer_fuzzer < INPUT_FILE
+or
+  /out/pngsave_buffer_fuzzer INPUT_FILE1 [INPUT_FILE2 ... ]
+To fuzz with afl-fuzz execute this:
+  afl-fuzz [afl-flags] /out/pngsave_buffer_fuzzer [-N]
+afl-fuzz will run N iterations before re-spawning the process (default: 1000)
+======================================================
+Reading 7816 bytes from /tmp/poc
+=================================================================
+==1081550==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x611000003c00 at pc 0x000000497c2a bp 0x7ffda4a55a20 sp 0x7ffda4a551e8
+READ of size 260 at 0x611000003c00 thread T0
+SCARINESS: 26 (multi-byte-read-heap-buffer-overflow)
+    #0 0x497c29 in __asan_memcpy /src/llvm/projects/compiler-rt/lib/asan/asan_interceptors_memintrinsics.cpp:22:3
+    #1 0x51ed6c in vips_value_set_array_int /src/libvips/libvips/iofuncs/type.c:1727:3
+    #2 0x4db444 in vips_image_set_array_int /src/libvips/libvips/iofuncs/header.c:1859:2
+    #3 0x6b6618 in vips_foreign_load_gif_set_header /src/libvips/libvips/foreign/gifload.c:603:3
+    #4 0x6b4d7d in vips_foreign_load_gif_header /src/libvips/libvips/foreign/gifload.c:687:6
+    #5 0x6af3c5 in vips_foreign_load_build /src/libvips/libvips/foreign/foreign.c:951:3
+    #6 0x4e88e3 in vips_object_build /src/libvips/libvips/iofuncs/object.c:367:6
+    #7 0x743045 in vips_cache_operation_buildp /src/libvips/libvips/iofuncs/cache.c:866:7
+    #8 0x4f760f in vips_call_required_optional /src/libvips/libvips/iofuncs/operation.c:880:6
+    #9 0x4fb134 in vips_call_by_name /src/libvips/libvips/iofuncs/operation.c:920:11
+    #10 0x4fb4de in vips_call_split_option_string /src/libvips/libvips/iofuncs/operation.c:1039:11
+    #11 0x4dde52 in vips_image_new_from_buffer /src/libvips/libvips/iofuncs/image.c:2158:11
+    #12 0x4ca89a in LLVMFuzzerTestOneInput /src/libvips/fuzz/pngsave_buffer_fuzzer.cc:17:16
+    #13 0xbd307e in ExecuteFilesOnyByOne /src/libfuzzer/afl/afl_driver.cpp:216:5
+    #14 0xbd307e in main /src/libfuzzer/afl/afl_driver.cpp:253:12
+    #15 0x14915ea5b82f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+    #16 0x4203a8 in _start (/out/pngsave_buffer_fuzzer+0x4203a8)
+
+DEDUP_TOKEN: __asan_memcpy--vips_value_set_array_int--vips_image_set_array_int
+0x611000003c00 is located 0 bytes to the right of 256-byte region [0x611000003b00,0x611000003c00)
+allocated by thread T0 here:
+    #0 0x498b09 in realloc /src/llvm/projects/compiler-rt/lib/asan/asan_malloc_linux.cpp:164:3
+    #1 0xdbd2a7 in g_realloc (/out/pngsave_buffer_fuzzer+0xdbd2a7)
+    #2 0x6b4ae8 in vips_foreign_load_gif_header /src/libvips/libvips/foreign/gifload.c:658:8
+    #3 0x6af3c5 in vips_foreign_load_build /src/libvips/libvips/foreign/foreign.c:951:3
+    #4 0x4e88e3 in vips_object_build /src/libvips/libvips/iofuncs/object.c:367:6
+    #5 0x743045 in vips_cache_operation_buildp /src/libvips/libvips/iofuncs/cache.c:866:7
+    #6 0x4f760f in vips_call_required_optional /src/libvips/libvips/iofuncs/operation.c:880:6
+    #7 0x4fb134 in vips_call_by_name /src/libvips/libvips/iofuncs/operation.c:920:11
+    #8 0x4fb4de in vips_call_split_option_string /src/libvips/libvips/iofuncs/operation.c:1039:11
+    #9 0x4dde52 in vips_image_new_from_buffer /src/libvips/libvips/iofuncs/image.c:2158:11
+    #10 0x4ca89a in LLVMFuzzerTestOneInput /src/libvips/fuzz/pngsave_buffer_fuzzer.cc:17:16
+    #11 0xbd307e in ExecuteFilesOnyByOne /src/libfuzzer/afl/afl_driver.cpp:216:5
+    #12 0xbd307e in main /src/libfuzzer/afl/afl_driver.cpp:253:12
+    #13 0x14915ea5b82f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+
+DEDUP_TOKEN: realloc--g_realloc--vips_foreign_load_gif_header
+SUMMARY: AddressSanitizer: heap-buffer-overflow /src/llvm/projects/compiler-rt/lib/asan/asan_interceptors_memintrinsics.cpp:22:3 in __asan_memcpy
+Shadow bytes around the buggy address:
+  0x0c227fff8730: fa fa fa fa fa fa fa fa 00 00 00 00 00 00 00 00
+  0x0c227fff8740: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c227fff8750: 00 00 00 00 00 00 00 00 fa fa fa fa fa fa fa fa
+  0x0c227fff8760: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c227fff8770: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x0c227fff8780:[fa]fa fa fa fa fa fa fa fd fd fd fd fd fd fd fd
+  0x0c227fff8790: fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd
+  0x0c227fff87a0: fd fd fd fd fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c227fff87b0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c227fff87c0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c227fff87d0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+  Shadow gap:              cc
+==1081550==ABORTING

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-953971698",
+  "chain": "CWE-129->CWE-125",
+  "project": "ffmpeg",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42475818",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://git.ffmpeg.org/gitweb/ffmpeg.git/commitdiff/d33414d2ad27a5d2193c9ab0948ba7a282c2f910",
+      "fix_commits": [
+        "d33414d2ad27a5d2193c9ab0948ba7a282c2f910"
+      ],
+      "repo": "https://git.ffmpeg.org/gitweb/ffmpeg.git/commitdiff"
+    },
+    "patch": "From d33414d2ad27a5d2193c9ab0948ba7a282c2f910 Mon Sep 17 00:00:00 2001\nFrom: Michael Niedermayer <michael@niedermayer.cc>\nDate: Tue, 18 Jun 2019 23:55:56 +0200\nSubject: [PATCH] avcodec/utils: Check bits_per_coded_sample\n\nThis avoids the need for each decoder separately having to handle this case\n\nFixes: shift exponent -100663046 is negative\nFixes: out of array access\nFixes: 15270/clusterfuzz-testcase-minimized-ffmpeg_AV_CODEC_ID_IFF_ILBM_fuzzer-5727829913763840\n\nFound-by: continuous fuzzing process https://github.com/google/oss-fuzz/tree/master/projects/ffmpeg\nSigned-off-by: Michael Niedermayer <michael@niedermayer.cc>\n---\n libavcodec/utils.c | 4 ++++\n 1 file changed, 4 insertions(+)\n\ndiff --git a/libavcodec/utils.c b/libavcodec/utils.c\nindex cc04b73..1b1feca 100644\n--- a/libavcodec/utils.c\n+++ b/libavcodec/utils.c\n@@ -962,6 +962,10 @@ FF_ENABLE_DEPRECATION_WARNINGS\n             ret = AVERROR(EINVAL);\n             goto free_and_end;\n         }\n+        if (avctx->bits_per_coded_sample < 0) {\n+            ret = AVERROR(EINVAL);\n+            goto free_and_end;\n+        }\n         if (avctx->sub_charenc) {\n             if (avctx->codec_type != AVMEDIA_TYPE_SUBTITLE) {\n                 av_log(avctx, AV_LOG_ERROR, \"Character encoding is only \"\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42475818-vul",
+      "digest": "sha256:15d24d8282d9c3002fd3038c179e901aa019f3833c1f282f5dddb02e3ce94f75"
+    },
+    "patched": {
+      "ref": "n132/arvo:42475818-fix",
+      "digest": "sha256:196349c7f6e0ab945a712f8b68819408d8d584514226f839086e5cad376c8b1b"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "crash_site": "/src/ffmpeg/libavcodec/vc1_block.c:519",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 129,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "site": "/src/ffmpeg/libavcodec/vc1_block.c:519"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

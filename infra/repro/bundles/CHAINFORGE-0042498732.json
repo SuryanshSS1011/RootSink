@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042498732",
+  "chain": "CWE-416->CWE-125",
+  "project": "php-src",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42498732",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "62ecf54f35e227d09d19ec40920f7bb8d29e9356",
+      "fix_commits": [
+        "62ecf54f35e227d09d19ec40920f7bb8d29e9356"
+      ],
+      "repo": "https://github.com/php/php-src"
+    },
+    "patch": "From 62ecf54f35e227d09d19ec40920f7bb8d29e9356 Mon Sep 17 00:00:00 2001\nFrom: Nikita Popov <nikita.ppv@gmail.com>\nDate: Wed, 7 Jul 2021 09:36:30 +0200\nSubject: [PATCH] Fix use after free on compound division by zero\n\nWe can't destroy the result operand early, because the division\nmight fail, in which case we need to preserve the original value.\nPlace the division result in a temporary zval, and only copy it\non success.\n\nFixes oss-fuzz #35876.\n---\n Zend/tests/div_by_zero_compound_refcounted.phpt | 16 ++++++++++++++++\n Zend/zend_operators.c                           | 12 ++++++------\n 2 files changed, 22 insertions(+), 6 deletions(-)\n create mode 100644 Zend/tests/div_by_zero_compound_refcounted.phpt\n\ndiff --git a/Zend/tests/div_by_zero_compound_refcounted.phpt b/Zend/tests/div_by_zero_compound_refcounted.phpt\nnew file mode 100644\nindex 00000000..7f0f5962\n--- /dev/null\n+++ b/Zend/tests/div_by_zero_compound_refcounted.phpt\n@@ -0,0 +1,16 @@\n+--TEST--\n+Division by zero in compound assignment with refcounted operand\n+--FILE--\n+<?php\n+$h = \"1\";\n+$h .= \"2\";\n+try {\n+    $h /= 0;\n+} catch (DivisionByZeroError $e) {\n+    echo $e->getMessage(), \"\\n\";\n+}\n+var_dump($h);\n+?>\n+--EXPECT--\n+Division by zero\n+string(2) \"12\"\ndiff --git a/Zend/zend_operators.c b/Zend/zend_operators.c\nindex 193aade5..b4fe753a 100644\n--- a/Zend/zend_operators.c\n+++ b/Zend/zend_operators.c\n@@ -1314,7 +1314,7 @@ ZEND_API zend_result ZEND_FASTCALL div_function(zval *result, zval *op1, zval *o\n \n \tZEND_TRY_BINARY_OBJECT_OPERATION(ZEND_DIV);\n \n-\tzval op1_copy, op2_copy;\n+\tzval result_copy, op1_copy, op2_copy;\n \tif (UNEXPECTED(zendi_try_convert_scalar_to_number(op1, &op1_copy) == FAILURE)\n \t\t\t|| UNEXPECTED(zendi_try_convert_scalar_to_number(op2, &op2_copy) == FAILURE)) {\n \t\tzend_binop_error(\"/\", op1, op2);\n@@ -1324,12 +1324,12 @@ ZEND_API zend_result ZEND_FASTCALL div_function(zval *result, zval *op1, zval *o\n \t\treturn FAILURE;\n \t}\n \n-\tif (result == op1) {\n-\t\tzval_ptr_dtor(result);\n-\t}\n-\n-\tretval = div_function_base(result, &op1_copy, &op2_copy);\n+\tretval = div_function_base(&result_copy, &op1_copy, &op2_copy);\n \tif (retval == SUCCESS) {\n+\t\tif (result == op1) {\n+\t\t\tzval_ptr_dtor(result);\n+\t\t}\n+\t\tZVAL_COPY_VALUE(result, &result_copy);\n \t\treturn SUCCESS;\n \t}\n \n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42498732-vul",
+      "digest": "sha256:fff0a6e96c2b7ffd873f145b0748ad374dc5e7e6100c204fd9d16e8d0516fe32"
+    },
+    "patched": {
+      "ref": "n132/arvo:42498732-fix",
+      "digest": "sha256:8f98d0316d53b543f8b48b41052f08ed02c4788d6ca052815f5afc85ab37a72f"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/php-src/Zend/zend_types.h:1161",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/php-src/Zend/zend_types.h:1161"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

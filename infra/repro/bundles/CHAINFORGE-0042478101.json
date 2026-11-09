@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042478101",
+  "chain": "CWE-416->CWE-125",
+  "project": "wireshark",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42478101",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "7d874e2d3caff57d571cfca28b7919bda9f30c97",
+      "fix_commits": [
+        "7d874e2d3caff57d571cfca28b7919bda9f30c97"
+      ],
+      "repo": "https://github.com/wireshark/wireshark"
+    },
+    "patch": "From 7d874e2d3caff57d571cfca28b7919bda9f30c97 Mon Sep 17 00:00:00 2001\nFrom: Pascal Quantin <pascal@wireshark.org>\nDate: Sun, 22 Sep 2019 12:08:12 +0200\nSubject: [PATCH] RRC: do not use a freed wmem_strbuf structure\n\nBug: 16067\nChange-Id: Id67445d1769ff60560ac52ba03736055892fd029\nReviewed-on: https://code.wireshark.org/review/34590\nPetri-Dish: Pascal Quantin <pascal@wireshark.org>\nTested-by: Petri Dish Buildbot\nReviewed-by: Pascal Quantin <pascal@wireshark.org>\n---\n epan/dissectors/asn1/rrc/rrc.cnf | 2 +-\n epan/dissectors/packet-rrc.c     | 2 +-\n 2 files changed, 2 insertions(+), 2 deletions(-)\n\ndiff --git a/epan/dissectors/asn1/rrc/rrc.cnf b/epan/dissectors/asn1/rrc/rrc.cnf\nindex 791a76d..058e8e0 100644\n--- a/epan/dissectors/asn1/rrc/rrc.cnf\n+++ b/epan/dissectors/asn1/rrc/rrc.cnf\n@@ -901,7 +901,7 @@ HandoverFromUTRANCommand-GSM-r6-IEs/gsm-message/single-GSM-Message single-GSM-Me\n         /* Concat MCC and MNC in temp buffer */\n         temp_strbuf = wmem_strbuf_sized_new(actx->pinfo->pool,7,7);\n         wmem_strbuf_append_printf(temp_strbuf,\"%%s\",wmem_strbuf_get_str(last_mcc_strbuf));\n-        wmem_strbuf_append_printf(temp_strbuf,\"%%s\",wmem_strbuf_get_str(mcc_mnc_strbuf));\n+        wmem_strbuf_append_printf(temp_strbuf,\"%%s\",mcc_mnc_string);\n         /* Update length of recovered MCC-MNC pair */\n         string_len = (guint32)wmem_strbuf_get_len(temp_strbuf);\n         mcc_mnc_string = wmem_strbuf_finalize(temp_strbuf);\ndiff --git a/epan/dissectors/packet-rrc.c b/epan/dissectors/packet-rrc.c\nindex e113ebb..6422582 100644\n--- a/epan/dissectors/packet-rrc.c\n+++ b/epan/dissectors/packet-rrc.c\n@@ -135861,7 +135861,7 @@ dissect_rrc_PLMN_IdentityWithOptionalMCC_r6(tvbuff_t *tvb _U_, int offset _U_, a\n         /* Concat MCC and MNC in temp buffer */\n         temp_strbuf = wmem_strbuf_sized_new(actx->pinfo->pool,7,7);\n         wmem_strbuf_append_printf(temp_strbuf,\"%s\",wmem_strbuf_get_str(last_mcc_strbuf));\n-        wmem_strbuf_append_printf(temp_strbuf,\"%s\",wmem_strbuf_get_str(mcc_mnc_strbuf));\n+        wmem_strbuf_append_printf(temp_strbuf,\"%s\",mcc_mnc_string);\n         /* Update length of recovered MCC-MNC pair */\n         string_len = (guint32)wmem_strbuf_get_len(temp_strbuf);\n         mcc_mnc_string = wmem_strbuf_finalize(temp_strbuf);\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42478101-vul",
+      "digest": "sha256:2745eccc4240527dc3d3e7d55e5481a108e66c96c40c674a2b67320f9515ba68"
+    },
+    "patched": {
+      "ref": "n132/arvo:42478101-fix",
+      "digest": "sha256:96495c8f10ad843298347f05f0d00e57b9168e27690c292afb059f010862be62"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/wireshark/epan/wmem/wmem_strbuf.c:258",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/wireshark/epan/wmem/wmem_strbuf.c:258"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

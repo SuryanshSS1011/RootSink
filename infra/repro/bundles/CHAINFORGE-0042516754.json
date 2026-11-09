@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042516754",
+  "chain": "CWE-416->CWE-125",
+  "project": "MapServer",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42516754",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "122126fdb6c534a44dc189428972081551876695",
+      "fix_commits": [
+        "122126fdb6c534a44dc189428972081551876695"
+      ],
+      "repo": "https://github.com/MapServer/MapServer"
+    },
+    "patch": "From 122126fdb6c534a44dc189428972081551876695 Mon Sep 17 00:00:00 2001\nFrom: Even Rouault <even.rouault@spatialys.com>\nDate: Tue, 4 Oct 2022 14:59:00 +0200\nSubject: [PATCH] msLoadMap(): fix double-free related to labels\n\nFixes https://bugs.chromium.org/p/oss-fuzz/issues/detail?id=52102\n---\n mapfile.c | 5 +++--\n 1 file changed, 3 insertions(+), 2 deletions(-)\n\ndiff --git a/mapfile.c b/mapfile.c\nindex 69e2c42..bad5433 100755\n--- a/mapfile.c\n+++ b/mapfile.c\n@@ -1623,7 +1623,6 @@ static int loadLabel(labelObj *label)\n         break;\n       case(EOF):\n         msSetError(MS_EOFERR, NULL, \"loadLabel()\");\n-        freeLabel(label);       /* free any structures allocated before EOF */\n         return(-1);\n       case(EXPRESSION):\n         if(loadExpression(&(label->expression)) == -1) return(-1); /* loadExpression() cleans up previously allocated expression */\n@@ -3231,7 +3230,9 @@ int loadClass(classObj *class, layerObj *layer)\n         initLabel(class->labels[class->numlabels]);\n         class->labels[class->numlabels]->size = MS_MEDIUM; /* only set a default if the LABEL section is present */\n         if(loadLabel(class->labels[class->numlabels]) == -1) {\n-          msFree(class->labels[class->numlabels]);\n+          freeLabel(class->labels[class->numlabels]);\n+          free(class->labels[class->numlabels]);\n+          class->labels[class->numlabels] = NULL;\n           return(-1);\n         }\n         class->numlabels++;\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42516754-vul",
+      "digest": "sha256:cd60f6007fa802788bd99affe5469294489fe3fd55ebe8d294e71fa82fda49d0"
+    },
+    "patched": {
+      "ref": "n132/arvo:42516754-fix",
+      "digest": "sha256:5e8811384dc89d930258dacc69b444837200ad8e4228bcf259ae1c2b36d3b0d8"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/MapServer/mapfile.c:1506",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/MapServer/mapfile.c:1506"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

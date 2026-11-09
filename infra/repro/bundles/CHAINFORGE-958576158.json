@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-958576158",
+  "chain": "CWE-129->CWE-787",
+  "project": "ffmpeg",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42476270",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://git.ffmpeg.org/gitweb/ffmpeg.git/commitdiff/208225bd782207aaf2b380522f96fd4fe4dc3441",
+      "fix_commits": [
+        "208225bd782207aaf2b380522f96fd4fe4dc3441"
+      ],
+      "repo": "https://git.ffmpeg.org/gitweb/ffmpeg.git/commitdiff"
+    },
+    "patch": "From 208225bd782207aaf2b380522f96fd4fe4dc3441 Mon Sep 17 00:00:00 2001\nFrom: Michael Niedermayer <michael@niedermayer.cc>\nDate: Sun, 4 Aug 2019 00:45:20 +0200\nSubject: [PATCH] avcodec/atrac9dec: Check grad_range[1] more tightly\n\nAlternatively the array could be made bigger but the extra values\nwould not be read without other changes.\n\nFixes: Out of array access\nFixes: 15658/clusterfuzz-testcase-minimized-ffmpeg_AV_CODEC_ID_ATRAC9_fuzzer-5738260074070016\n\nFound-by: continuous fuzzing process https://github.com/google/oss-fuzz/tree/master/projects/ffmpeg\nReviewed-by: Lynne <dev@lynne.ee>\nSigned-off-by: Michael Niedermayer <michael@niedermayer.cc>\n---\n libavcodec/atrac9dec.c | 2 +-\n 1 file changed, 1 insertion(+), 1 deletion(-)\n\ndiff --git a/libavcodec/atrac9dec.c b/libavcodec/atrac9dec.c\nindex 7e59af8..4ea6ff0 100644\n--- a/libavcodec/atrac9dec.c\n+++ b/libavcodec/atrac9dec.c\n@@ -121,7 +121,7 @@ static inline int parse_gradient(ATRAC9Context *s, ATRAC9BlockData *b,\n     }\n     b->grad_boundary = get_bits(gb, 4);\n \n-    if (grad_range[0] >= grad_range[1] || grad_range[1] > 47)\n+    if (grad_range[0] >= grad_range[1] || grad_range[1] > 31)\n         return AVERROR_INVALIDDATA;\n \n     if (b->grad_boundary > b->q_unit_cnt)\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42476270-vul",
+      "digest": "sha256:dfa9278a91c23137436ce43289732358ba38dd6d86222f677f3ce8fe12b16e8a"
+    },
+    "patched": {
+      "ref": "n132/arvo:42476270-fix",
+      "digest": "sha256:9b581a39cf3e6bea133ea38eb132dd3e1fb8fc2e0cc8336cb61abf59ba1bd4e8"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "crash_site": "/src/ffmpeg/libavcodec/atrac9dec.c:141",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 129,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "site": "/src/ffmpeg/libavcodec/atrac9dec.c:141"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042473850",
+  "chain": "CWE-20->CWE-787",
+  "project": "ffmpeg",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42473850",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://git.ffmpeg.org/gitweb/ffmpeg.git/commitdiff/ce551a3925a1cf9c7824e26a246b99b6773bda4b",
+      "fix_commits": [
+        "ce551a3925a1cf9c7824e26a246b99b6773bda4b"
+      ],
+      "repo": "https://git.ffmpeg.org/gitweb/ffmpeg.git/commitdiff"
+    },
+    "patch": "From ce551a3925a1cf9c7824e26a246b99b6773bda4b Mon Sep 17 00:00:00 2001\nFrom: Michael Niedermayer <michael@niedermayer.cc>\nDate: Fri, 5 May 2017 12:48:12 +0200\nSubject: [PATCH] avcodec/tiertexseqv: set the fixed dimenasions, do not depend\n on the demuxer doing so\n\nFixes: out of array access\nFixes: 1348/clusterfuzz-testcase-minimized-6195673642827776\n\nFound-by: continuous fuzzing process https://github.com/google/oss-fuzz/tree/master/targets/ffmpeg\nSigned-off-by: Michael Niedermayer <michael@niedermayer.cc>\n---\n libavcodec/tiertexseqv.c | 5 +++++\n 1 file changed, 5 insertions(+)\n\ndiff --git a/libavcodec/tiertexseqv.c b/libavcodec/tiertexseqv.c\nindex 06c5fd6..af39f74 100644\n--- a/libavcodec/tiertexseqv.c\n+++ b/libavcodec/tiertexseqv.c\n@@ -213,10 +213,15 @@ static int seqvideo_decode(SeqVideoContext *seq, const unsigned char *data, int\n static av_cold int seqvideo_decode_init(AVCodecContext *avctx)\n {\n     SeqVideoContext *seq = avctx->priv_data;\n+    int ret;\n \n     seq->avctx = avctx;\n     avctx->pix_fmt = AV_PIX_FMT_PAL8;\n \n+    ret = ff_set_dimensions(avctx, 256, 128);\n+    if (ret < 0)\n+        return ret;\n+\n     seq->frame = av_frame_alloc();\n     if (!seq->frame)\n         return AVERROR(ENOMEM);\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42473850-vul",
+      "digest": "sha256:9cf013b45349434ea5a3e64ff530f0ee49df2201a723ed1eb8cd39e3d06df4fb"
+    },
+    "patched": {
+      "ref": "n132/arvo:42473850-fix",
+      "digest": "sha256:5d7843b436de40e10a35a5686625ecff03b25a9b7d68d7a77cede58d0c2b7008"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/ffmpeg/libavcodec/tiertexseqv.c:138",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/ffmpeg/libavcodec/tiertexseqv.c:138"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

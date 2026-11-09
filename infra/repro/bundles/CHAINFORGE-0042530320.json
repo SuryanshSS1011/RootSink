@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042530320",
+  "chain": "CWE-416->CWE-125",
+  "project": "libredwg",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42530320",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "6f43e71f4cbddf96d47648f36161a9815389b50a",
+      "fix_commits": [
+        "6f43e71f4cbddf96d47648f36161a9815389b50a"
+      ],
+      "repo": "https://github.com/LibreDWG/libredwg"
+    },
+    "patch": "From 6f43e71f4cbddf96d47648f36161a9815389b50a Mon Sep 17 00:00:00 2001\nFrom: Reini Urban <reini.urban@gmail.com>\nDate: Tue, 23 Jan 2024 13:24:26 +0100\nSubject: [PATCH] indxf: reject invalid number pairs\n\n0\\nSECTION ok,\n0SECTION not ok.\n---\n src/in_dxf.c | 38 ++++++++++++++++++++++++++++++++++----\n 1 file changed, 34 insertions(+), 4 deletions(-)\n\ndiff --git a/src/in_dxf.c b/src/in_dxf.c\nindex ee2319f..50027e6 100644\n--- a/src/in_dxf.c\n+++ b/src/in_dxf.c\n@@ -290,7 +290,7 @@ dxf_skip_ws (Bit_Chain *dat)\n     if (errno == ERANGE)                                                      \\\n       return (rettype)num;                                                    \\\n     if (dat->byte + 1 >= dat->size)                                           \\\n-    return (rettype)num\n+      return (rettype)num\n \n static BITCODE_RC\n dxf_read_rc (Bit_Chain *dat)\n@@ -310,9 +310,18 @@ dxf_read_rc (Bit_Chain *dat)\n         dat->byte++;\n       if (dat->chain[dat->byte] == '\\n')\n         dat->byte++;\n+      else\n+        {\n+          LOG_ERROR (\"%s: \\\\n missing after %ld (at %\" PRIuSIZE \")\",\n+                     __FUNCTION__, num, dat->byte);\n+          dat->byte = dat->size;\n+        }\n       if (num > UINT8_MAX)\n-        LOG_ERROR (\"%s: RC overflow %ld (at %\" PRIuSIZE \")\", __FUNCTION__, num,\n-                   dat->byte);\n+        {\n+          LOG_ERROR (\"%s: RC overflow %ld (at %\" PRIuSIZE \")\", __FUNCTION__, num,\n+                     dat->byte);\n+          dat->byte = dat->size;\n+        }\n       return (BITCODE_RC)num;\n     }\n }\n@@ -334,9 +343,18 @@ dxf_read_rs (Bit_Chain *dat)\n         dat->byte++;\n       if (dat->chain[dat->byte] == '\\n')\n         dat->byte++;\n+      else\n+        {\n+          LOG_ERROR (\"%s: \\\\n missing after %ld (at %\" PRIuSIZE \")\",\n+                     __FUNCTION__, num, dat->byte);\n+          dat->byte = dat->size;\n+        }\n       if (num > UINT16_MAX)\n-        LOG_ERROR (\"%s: RS overflow %ld (at %\" PRIuSIZE \")\", __FUNCTION__, num,\n+        {\n+          LOG_ERROR (\"%s: RS overflow %ld (at %\" PRIuSIZE \")\", __FUNCTION__, num,\n                    dat->byte);\n+          dat->byte = dat->size;\n+        }\n       return (BITCODE_RS)num;\n     }\n }\n@@ -359,6 +377,12 @@ dxf_read_rl (Bit_Chain *dat)\n         dat->byte++;\n       if (dat->chain[dat->byte] == '\\n')\n         dat->byte++;\n+      else\n+        {\n+          LOG_ERROR (\"%s: \\\\n missing after %ld (at %\" PRIuSIZE \")\",\n+                     __FUNCTION__, num, dat->byte);\n+          dat->byte = dat->size;\n+        }\n       /*\n       if (num > (long)0xffffffff)\n         LOG_ERROR (\"%s: RL overflow %ld (at %\" PRIuSIZE \")\", __FUNCTION__, num,\n@@ -386,6 +410,12 @@ dxf_read_rll (Bit_Chain *dat)\n         dat->byte++;\n       if (dat->chain[dat->byte] == '\\n')\n         dat->byte++;\n+      else\n+        {\n+          LOG_ERROR (\"%s: \\\\n missing after %ld (at %\" PRIuSIZE \")\",\n+                     __FUNCTION__, (long)num, dat->byte);\n+          dat->byte = dat->size;\n+        }\n       return num;\n     }\n }\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42530320-vul",
+      "digest": "sha256:a7373ef762b76e3ad22505010f8f43fcba3b8b58bfcee15620981b708578c75c"
+    },
+    "patched": {
+      "ref": "n132/arvo:42530320-fix",
+      "digest": "sha256:ee9376c6c034917154e31e76ab0fd1617f804b984398340a8e5d1b5c8890fe50"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/libredwg/src/in_dxf.c:11738",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/libredwg/src/in_dxf.c:11738"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

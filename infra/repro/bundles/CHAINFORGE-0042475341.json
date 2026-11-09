@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042475341",
+  "chain": "CWE-20->CWE-787",
+  "project": "openthread",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42475341",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "8bb50d4ccde667295f892f976ee5ff90ba4a4a2f",
+      "fix_commits": [
+        "8bb50d4ccde667295f892f976ee5ff90ba4a4a2f"
+      ],
+      "repo": "https://github.com/openthread/openthread"
+    },
+    "patch": "diff --git a/src/core/net/ip6_address.cpp b/src/core/net/ip6_address.cpp\nindex 0bd765adfdd..57797a05757 100644\n--- a/src/core/net/ip6_address.cpp\n+++ b/src/core/net/ip6_address.cpp\n@@ -316,6 +316,9 @@ otError Address::FromString(const char *aBuf)\n \n             // Do not count bytes of the embedded IPv4 address.\n             endp -= kIp4AddressSize;\n+\n+            VerifyOrExit(dst <= endp, error = OT_ERROR_PARSE);\n+\n             break;\n         }\n         else\ndiff --git a/tests/unit/test_ip6_address.cpp b/tests/unit/test_ip6_address.cpp\nindex e6b83aeb0ae..bda00293c4e 100644\n--- a/tests/unit/test_ip6_address.cpp\n+++ b/tests/unit/test_ip6_address.cpp\n@@ -189,6 +189,13 @@ void TestIp6AddressFromString(void)\n             {0},\n             OT_ERROR_PARSE\n         },\n+\n+        // Invalid embedded IPv4 address.\n+        {\n+            \":f:0:0:c:0:f:f:.\",\n+            {0},\n+            OT_ERROR_PARSE\n+        },\n     };\n \n     for (uint32_t index = 0; index < OT_ARRAY_LENGTH(testVectors); index++)\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42475341-vul",
+      "digest": "sha256:e0c91a46defd6d942575c6ecc66250f4f3479017d9223a6e6703fb7c3d629b8c"
+    },
+    "patched": {
+      "ref": "n132/arvo:42475341-fix",
+      "digest": "sha256:fb452cbda4bfbc3c30aca4a6487263345cbb4610decc485bd23185697fecb9b1"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/openthread/src/core/net/ip6_address.cpp:333",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/openthread/src/core/net/ip6_address.cpp:333"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

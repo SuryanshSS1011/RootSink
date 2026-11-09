@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042480353",
+  "chain": "CWE-1285->CWE-125",
+  "project": "ndpi",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42480353",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "843204299c79c55c736231c06db98def2b3a6bba",
+      "fix_commits": [
+        "843204299c79c55c736231c06db98def2b3a6bba"
+      ],
+      "repo": "https://github.com/ntop/nDPI"
+    },
+    "patch": "diff --git a/src/lib/protocols/stun.c b/src/lib/protocols/stun.c\nindex d5114204fc5..cc38722e00f 100644\n--- a/src/lib/protocols/stun.c\n+++ b/src/lib/protocols/stun.c\n@@ -314,7 +314,7 @@ static ndpi_int_stun_t ndpi_int_check_stun(struct ndpi_detection_module_struct *\n        https://en.wikipedia.org/wiki/Skype_for_Business\n        */\n \n-      while((offset+2) < payload_length) {\n+      while((offset+4) < payload_length) {\n         u_int16_t attribute = ntohs(*((u_int16_t*)&payload[offset]));\n         u_int16_t len = ntohs(*((u_int16_t*)&payload[offset+2]));\n         u_int16_t x = (len + 4) % 4;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42480353-vul",
+      "digest": "sha256:03a543e199bc791b77d0c5a563f34783b354c109bcd44a1f6a9a1051b3c2450c"
+    },
+    "patched": {
+      "ref": "n132/arvo:42480353-fix",
+      "digest": "sha256:01e939515a74935ed05d3c47a966fb7b6c20d6d9bde8a20facf357a2394efb29"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/ndpi/src/lib/protocols/stun.c:319",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/ndpi/src/lib/protocols/stun.c:319"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

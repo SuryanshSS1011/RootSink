@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042494805",
+  "chain": "CWE-456->CWE-457",
+  "project": "oniguruma",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42494805",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "bb5e7d56416f989a1ea62de4b9ae50158e268b9d",
+      "fix_commits": [
+        "bb5e7d56416f989a1ea62de4b9ae50158e268b9d"
+      ],
+      "repo": "https://github.com/kkos/oniguruma"
+    },
+    "patch": "From bb5e7d56416f989a1ea62de4b9ae50158e268b9d Mon Sep 17 00:00:00 2001\nFrom: \"K.Kosako\" <kkosako0@gmail.com>\nDate: Tue, 23 Mar 2021 12:09:23 +0900\nSubject: [PATCH] fix: Issue 32340, 32345, 32355 in oss-fuzz\n\n---\n src/regexec.c | 38 +++++++++++++++++++++-----------------\n 1 file changed, 21 insertions(+), 17 deletions(-)\n\ndiff --git a/src/regexec.c b/src/regexec.c\nindex 27e6605..b018336 100644\n--- a/src/regexec.c\n+++ b/src/regexec.c\n@@ -54,7 +54,11 @@\n   (MEM_STATUS_AT((reg)->push_mem_end, (idx)) != 0 ? \\\n    STACK_AT(mem_end_stk[idx].i)->u.mem.pstr : mem_end_stk[idx].s)\n \n-#define DIST_CAST(d)   (int )(d)\n+#ifdef _MSC_VER\n+#define DIST_CAST(d)   (OnigLen )(d)\n+#else\n+#define DIST_CAST(d)   (d)\n+#endif\n \n \n static int forward_search(regex_t* reg, const UChar* str, const UChar* end, UChar* start, UChar* range, UChar** low, UChar** high);\n@@ -4498,7 +4502,7 @@ regset_search_body_position_lead(OnigRegSet* set,\n     sr[i].state = SRS_DEAD;\n     if (reg->optimize != OPTIMIZE_NONE) {\n       if (reg->dist_max != INFINITE_LEN) {\n-        if (end - range > DIST_CAST(reg->dist_max))\n+        if (DIST_CAST(end - range) > reg->dist_max)\n           sch_range = (UChar* )range + reg->dist_max;\n         else\n           sch_range = (UChar* )end;\n@@ -5161,7 +5165,7 @@ forward_search(regex_t* reg, const UChar* str, const UChar* end, UChar* start,\n \n   p = start;\n   if (reg->dist_min != 0) {\n-    if (end - p <= DIST_CAST(reg->dist_min))\n+    if (DIST_CAST(end - p) <= reg->dist_min)\n       return 0; /* fail */\n \n     if (ONIGENC_IS_SINGLEBYTE(reg->enc)) {\n@@ -5194,7 +5198,7 @@ forward_search(regex_t* reg, const UChar* str, const UChar* end, UChar* start,\n   }\n \n   if (p && p < range) {\n-    if (p - start < DIST_CAST(reg->dist_min)) {\n+    if (DIST_CAST(p - start) < reg->dist_min) {\n     retry_gate:\n       pprev = p;\n       p += enclen(reg->enc, p);\n@@ -5239,7 +5243,7 @@ forward_search(regex_t* reg, const UChar* str, const UChar* end, UChar* start,\n     }\n     else {\n       if (reg->dist_max != INFINITE_LEN) {\n-        if (p - str < DIST_CAST(reg->dist_max)) {\n+        if (DIST_CAST(p - str) < reg->dist_max) {\n           *low = (UChar* )str;\n         }\n         else {\n@@ -5250,7 +5254,7 @@ forward_search(regex_t* reg, const UChar* str, const UChar* end, UChar* start,\n         }\n       }\n       /* no needs to adjust *high, *high is used as range check only */\n-      if (p - str < DIST_CAST(reg->dist_min))\n+      if (DIST_CAST(p - str) < reg->dist_min)\n         *high = (UChar* )str;\n       else\n         *high = p - reg->dist_min;\n@@ -5335,13 +5339,13 @@ backward_search(regex_t* reg, const UChar* str, const UChar* end, UChar* s,\n     }\n \n     if (reg->dist_max != INFINITE_LEN) {\n-      if (p - str < DIST_CAST(reg->dist_max))\n+      if (DIST_CAST(p - str) < reg->dist_max)\n         *low = (UChar* )str;\n       else\n         *low = p - reg->dist_max;\n \n       if (reg->dist_min != 0) {\n-        if (p - str < DIST_CAST(reg->dist_min))\n+        if (DIST_CAST(p - str) < reg->dist_min)\n           *high = (UChar* )str;\n         else\n           *high = p - reg->dist_min;\n@@ -5485,13 +5489,13 @@ search_in_range(regex_t* reg, const UChar* str, const UChar* end,\n \n       if (range > start) {\n         if (reg->anc_dist_max != INFINITE_LEN &&\n-            min_semi_end - start > DIST_CAST(reg->anc_dist_max)) {\n+            DIST_CAST(min_semi_end - start) > reg->anc_dist_max) {\n           start = min_semi_end - reg->anc_dist_max;\n           if (start < end)\n             start = onigenc_get_right_adjust_char_head(reg->enc, str, start);\n         }\n-        if (max_semi_end - (range - 1) < DIST_CAST(reg->anc_dist_min)) {\n-          if (max_semi_end - str + 1 < DIST_CAST(reg->anc_dist_min))\n+        if (DIST_CAST(max_semi_end - (range - 1)) < reg->anc_dist_min) {\n+          if (DIST_CAST(max_semi_end - str + 1) < reg->anc_dist_min)\n             goto mismatch_no_msa;\n           else\n             range = max_semi_end - reg->anc_dist_min + 1;\n@@ -5503,11 +5507,11 @@ search_in_range(regex_t* reg, const UChar* str, const UChar* end,\n       }\n       else {\n         if (reg->anc_dist_max != INFINITE_LEN &&\n-            min_semi_end - range > DIST_CAST(reg->anc_dist_max)) {\n+            DIST_CAST(min_semi_end - range) > reg->anc_dist_max) {\n           range = min_semi_end - reg->anc_dist_max;\n         }\n-        if (max_semi_end - start < DIST_CAST(reg->anc_dist_min)) {\n-          if (max_semi_end - str < DIST_CAST(reg->anc_dist_min))\n+        if (DIST_CAST(max_semi_end - start) < reg->anc_dist_min) {\n+          if (DIST_CAST(max_semi_end - str) < reg->anc_dist_min)\n             goto mismatch_no_msa;\n           else {\n             start = max_semi_end - reg->anc_dist_min;\n@@ -5578,7 +5582,7 @@ search_in_range(regex_t* reg, const UChar* str, const UChar* end,\n         if (reg->dist_max == INFINITE_LEN)\n           sch_range = (UChar* )end;\n         else {\n-          if (end - range < DIST_CAST(reg->dist_max))\n+          if (DIST_CAST(end - range) < reg->dist_max)\n             sch_range = (UChar* )end;\n           else {\n             sch_range = (UChar* )range + reg->dist_max;\n@@ -5654,14 +5658,14 @@ search_in_range(regex_t* reg, const UChar* str, const UChar* end,\n       else\n         adjrange = (UChar* )end;\n \n-      if (end - range > DIST_CAST(reg->dist_min))\n+      if (DIST_CAST(end - range) > reg->dist_min)\n         min_range = range + reg->dist_min;\n       else\n         min_range = end;\n \n       if (reg->dist_max != INFINITE_LEN) {\n         do {\n-          if (end - s > DIST_CAST(reg->dist_max))\n+          if (DIST_CAST(end - s) > reg->dist_max)\n             sch_start = s + reg->dist_max;\n           else {\n             sch_start = onigenc_get_prev_char_head(reg->enc, str, end);\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42494805-vul",
+      "digest": "sha256:d5d262e629ad5e2a0737bf449f6df841ab6f1be131cb980bab545592753618ea"
+    },
+    "patched": {
+      "ref": "n132/arvo:42494805-fix",
+      "digest": "sha256:fcd3ac1c3c13bbbbd7fb9a64e4a1547e382fa6b74da6958119522778ace2c61b"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/oniguruma/src/euc_jp.c:56",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/oniguruma/src/euc_jp.c:56"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

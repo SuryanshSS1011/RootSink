@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-964792561",
+  "chain": "CWE-456->CWE-457",
+  "project": "karchive",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42475396",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://invent.kde.org/frameworks/karchive/-/commit/386a1ac6eecf01231b7839deba7e24dd50f5d718",
+      "fix_commits": [
+        "386a1ac6eecf01231b7839deba7e24dd50f5d718"
+      ],
+      "repo": "https://invent.kde.org/frameworks/karchive"
+    },
+    "patch": "diff --git a/src/kcompressiondevice.cpp b/src/kcompressiondevice.cpp\nindex 35c1e46b2addd003e509773a817c35de3376a1d3..784c150f374da8fbd9849004dcda087f81522bf5 100644\n--- a/src/kcompressiondevice.cpp\n+++ b/src/kcompressiondevice.cpp\n@@ -47,7 +47,6 @@ public:\n         : bNeedHeader(true)\n         , bSkipHeaders(false)\n         , bOpenedUnderlyingDevice(false)\n-        , bIgnoreData(false)\n         , type(KCompressionDevice::None)\n         , errorCode(QFileDevice::NoError)\n         , deviceReadPos(0)\n@@ -60,7 +59,6 @@ public:\n     bool bNeedHeader;\n     bool bSkipHeaders;\n     bool bOpenedUnderlyingDevice;\n-    bool bIgnoreData;\n     QByteArray buffer; // Used as 'input buffer' when reading, as 'output buffer' when writing\n     QByteArray origFileName;\n     KFilterBase::Result result;\n@@ -250,9 +248,7 @@ bool KCompressionDevice::seek(qint64 pos)\n \n     //qCDebug(KArchiveLog) << \"reading \" << bytesToRead << \" dummy bytes\";\n     QByteArray dummy(qMin(bytesToRead, qint64(3 * BUFFER_SIZE)), 0);\n-    d->bIgnoreData = true;\n     const bool result = (read(dummy.data(), bytesToRead) == bytesToRead);\n-    d->bIgnoreData = false;\n     return result;\n }\n \n@@ -281,15 +277,8 @@ qint64 KCompressionDevice::readData(char *data, qint64 maxlen)\n         return -1;\n     }\n \n-    qint64 outBufferSize;\n-    if (d->bIgnoreData) {\n-        outBufferSize = qMin(maxlen, static_cast<qint64>(3 * BUFFER_SIZE));\n-    } else {\n-        outBufferSize = maxlen;\n-    }\n-    outBufferSize -= dataReceived;\n-    qint64 availOut = outBufferSize;\n-    filter->setOutBuffer(data, outBufferSize);\n+    qint64 availOut = maxlen;\n+    filter->setOutBuffer(data, maxlen);\n \n     while (dataReceived < maxlen) {\n         if (filter->inBufferEmpty()) {\n@@ -327,12 +316,8 @@ qint64 KCompressionDevice::readData(char *data, qint64 maxlen)\n         }\n \n         dataReceived += outReceived;\n-        if (!d->bIgnoreData) {  // Move on in the output buffer\n-            data += outReceived;\n-            availOut = maxlen - dataReceived;\n-        } else if (maxlen - dataReceived < outBufferSize) {\n-            availOut = maxlen - dataReceived;\n-        }\n+        data += outReceived;\n+        availOut = maxlen - dataReceived;\n         if (d->result == KFilterBase::End) {\n             // We're actually at the end, no more data to check\n             if (filter->device()->atEnd()) {\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42475396-vul",
+      "digest": "sha256:20682b69a8c9e3ccd283445403fd921bcccfcda08b7196850182d5b168fccc97"
+    },
+    "patched": {
+      "ref": "n132/arvo:42475396-fix",
+      "digest": "sha256:6c49803edae42611b39afeea22d4209cddb92e176b73b613da77f6b6b947b3ec"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/qtbase/include/QtCore/../../src/corelib/tools/qbytearray.h:74",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/qtbase/include/QtCore/../../src/corelib/tools/qbytearray.h:74"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

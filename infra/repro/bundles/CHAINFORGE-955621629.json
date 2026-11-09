@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-955621629",
+  "chain": "CWE-129->CWE-787",
+  "project": "ndpi",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42482017",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/ntop/nDPI/commit/933351840dbed3646aeb4f75a359649434b001eb",
+      "fix_commits": [
+        "933351840dbed3646aeb4f75a359649434b001eb"
+      ],
+      "repo": "https://github.com/ntop/nDPI"
+    },
+    "patch": "diff --git a/src/lib/protocols/mail_imap.c b/src/lib/protocols/mail_imap.c\nindex 99b3862057c..c3a18c065bf 100644\n--- a/src/lib/protocols/mail_imap.c\n+++ b/src/lib/protocols/mail_imap.c\n@@ -161,7 +161,7 @@ void ndpi_search_mail_imap_tcp(struct ndpi_detection_module_struct *ndpi_struct,\n \t    && (packet->payload[command_start + 4] == 'N' || packet->payload[command_start + 4] == 'n')) {\n \t  /* xxxx LOGIN \"username\" \"password\" */\n \t  char str[256], *item;\n-\t  u_int len = packet->payload_packet_len > sizeof(str) ? sizeof(str) : packet->payload_packet_len;\n+\t  u_int len = packet->payload_packet_len >= sizeof(str) ? sizeof(str)-1 : packet->payload_packet_len;\n \t  \n \t  strncpy(str, (const char*)packet->payload, len);\n \t  str[len] = '\\0';\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42482017-vul",
+      "digest": "sha256:1cfde9f1ed5ec789f4424f959fbff1b90f0e46e51cd4e2be45e2125a837e8c50"
+    },
+    "patched": {
+      "ref": "n132/arvo:42482017-fix",
+      "digest": "sha256:e1624549f55b903464fb9551340a9c21ce3c99e140ef55bf9f12df16eac39d1a"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "crash_site": "/src/ndpi/src/lib/protocols/mail_imap.c:167",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 129,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "site": "/src/ndpi/src/lib/protocols/mail_imap.c:167"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

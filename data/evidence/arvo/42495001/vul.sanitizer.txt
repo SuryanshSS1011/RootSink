@@ -1,0 +1,79 @@
+Accepting input from '/tmp/poc'
+Usage for fuzzing: honggfuzz -P [flags] -- /out/php-fuzz-execute
+=================================================================
+==7==ERROR: AddressSanitizer: heap-use-after-free on address 0x6040000263e0 at pc 0x000000d49948 bp 0x7ffde07e56d0 sp 0x7ffde07e56c8
+READ of size 8 at 0x6040000263e0 thread T0
+SCARINESS: 51 (8-byte-read-heap-use-after-free)
+    #0 0xd49947 in zend_string_equal_content /src/php-src/Zend/zend_string.h:346:25
+    #1 0xd49894 in zend_string_equals /src/php-src/Zend/zend_string.h:351:21
+    #2 0xd491c2 in zend_compare_file_handles /src/php-src/Zend/zend_stream.c:254:11
+    #3 0xb5d004 in zend_llist_del_element /src/php-src/Zend/zend_llist.c:93:7
+    #4 0xd49030 in zend_destroy_file_handle /src/php-src/Zend/zend_stream.c:268:3
+    #5 0xec3490 in fuzzer_do_request_from_buffer /src/php-src/sapi/fuzzer/fuzzer-sapi.c:265:3
+    #6 0xec2859 in LLVMFuzzerTestOneInput /src/php-src/sapi/fuzzer/fuzzer-execute.c:69:2
+    #7 0xf5df4b in main (/out/php-fuzz-execute+0xf5df4b)
+    #8 0x7f5e61b7683f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2083f)
+    #9 0x445c38 in _start (/out/php-fuzz-execute+0x445c38)
+
+DEDUP_TOKEN: zend_string_equal_content--zend_string_equals--zend_compare_file_handles
+0x6040000263e0 is located 16 bytes inside of 40-byte region [0x6040000263d0,0x6040000263f8)
+freed by thread T0 here:
+    #0 0x4c0192 in free /src/llvm-project/compiler-rt/lib/asan/asan_malloc_linux.cpp:127:3
+    #1 0xb0119d in tracked_free /src/php-src/Zend/zend_alloc.c:2749:2
+    #2 0xafa45e in _efree_custom /src/php-src/Zend/zend_alloc.c:2428:3
+    #3 0xafa36f in _efree /src/php-src/Zend/zend_alloc.c:2548:3
+    #4 0xb60134 in zend_string_release_ex /src/php-src/Zend/zend_string.h:327:5
+    #5 0xb5f7aa in destroy_op_array /src/php-src/Zend/zend_opcode.c:570:2
+    #6 0xec346e in fuzzer_do_request_from_buffer /src/php-src/sapi/fuzzer/fuzzer-sapi.c:262:4
+    #7 0xec2859 in LLVMFuzzerTestOneInput /src/php-src/sapi/fuzzer/fuzzer-execute.c:69:2
+    #8 0xf5df4b in main (/out/php-fuzz-execute+0xf5df4b)
+
+DEDUP_TOKEN: free--tracked_free--_efree_custom
+previously allocated by thread T0 here:
+    #0 0x4c03fd in malloc /src/llvm-project/compiler-rt/lib/asan/asan_malloc_linux.cpp:145:3
+    #1 0xafaa5d in __zend_malloc /src/php-src/Zend/zend_alloc.c:3031:14
+    #2 0xaf7942 in tracked_malloc /src/php-src/Zend/zend_alloc.c:2734:14
+    #3 0xafa295 in _malloc_custom /src/php-src/Zend/zend_alloc.c:2419:10
+    #4 0xafa19d in _emalloc /src/php-src/Zend/zend_alloc.c:2538:10
+    #5 0xd49553 in zend_string_alloc /src/php-src/Zend/zend_string.h:141:36
+    #6 0xd47c13 in zend_string_init /src/php-src/Zend/zend_string.h:163:21
+    #7 0xd47cab in zend_stream_init_filename /src/php-src/Zend/zend_stream.c:73:32
+    #8 0xec336d in fuzzer_do_request_from_buffer /src/php-src/sapi/fuzzer/fuzzer-sapi.c:252:3
+    #9 0xec2859 in LLVMFuzzerTestOneInput /src/php-src/sapi/fuzzer/fuzzer-execute.c:69:2
+    #10 0xf5df4b in main (/out/php-fuzz-execute+0xf5df4b)
+
+DEDUP_TOKEN: malloc--__zend_malloc--tracked_malloc
+SUMMARY: AddressSanitizer: heap-use-after-free /src/php-src/Zend/zend_string.h:346:25 in zend_string_equal_content
+Shadow bytes around the buggy address:
+  0x0c087fffcc20: fa fa fd fd fd fd fd fa fa fa fd fd fd fd fd fa
+  0x0c087fffcc30: fa fa fd fd fd fd fd fa fa fa fd fd fd fd fd fa
+  0x0c087fffcc40: fa fa fd fd fd fd fd fa fa fa fd fd fd fd fd fa
+  0x0c087fffcc50: fa fa fd fd fd fd fd fa fa fa fd fd fd fd fd fa
+  0x0c087fffcc60: fa fa fd fd fd fd fd fa fa fa 00 00 00 00 07 fa
+=>0x0c087fffcc70: fa fa fd fd fd fd fd fa fa fa fd fd[fd]fd fd fa
+  0x0c087fffcc80: fa fa 00 00 00 00 00 fa fa fa 00 00 00 00 00 fa
+  0x0c087fffcc90: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c087fffcca0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c087fffccb0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c087fffccc0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+  Shadow gap:              cc
+==7==ABORTING

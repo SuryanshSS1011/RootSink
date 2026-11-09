@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042502928",
+  "chain": "CWE-20->CWE-125",
+  "project": "freeradius-server",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42502928",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "1def06002d0722f02e396ee83e900ee4a011ad4d",
+      "fix_commits": [
+        "1def06002d0722f02e396ee83e900ee4a011ad4d"
+      ],
+      "repo": "https://github.com/FreeRADIUS/freeradius-server"
+    },
+    "patch": "diff --git a/src/protocols/dns/decode.c b/src/protocols/dns/decode.c\nindex fbc463d92e2e..768c8a5e37bf 100644\n--- a/src/protocols/dns/decode.c\n+++ b/src/protocols/dns/decode.c\n@@ -351,7 +351,7 @@ static ssize_t decode_dns_labels(TALLOC_CTX *ctx, fr_dcursor_t *cursor, fr_dict_\n \t\t/*\n \t\t *\tDecode starting at \"NEXT\", but allowing decodes from the start of the packet.\n \t\t */\n-\t\tslen = fr_dns_label_uncompressed_length(packet_ctx->packet, data, data + data_len - packet_ctx->packet, &next, packet_ctx->lb);\n+\t\tslen = fr_dns_label_uncompressed_length(packet_ctx->packet, data, data_len, &next, packet_ctx->lb);\n \t\tif (slen <= 0) {\n \t\t\tFR_PROTO_TRACE(\"length failed at %zd - %s\", slen, fr_strerror());\n \t\t\tgoto raw;\n@@ -366,7 +366,7 @@ static ssize_t decode_dns_labels(TALLOC_CTX *ctx, fr_dcursor_t *cursor, fr_dict_\n \t\t *\tIf any of the labels point outside of this\n \t\t *\tarea, OR they are otherwise invalid, then that's an error.\n \t\t */\n-\t\tslen = fr_dns_labels_network_verify(packet_ctx->packet, data, data + data_len - packet_ctx->packet, data, packet_ctx->lb);\n+\t\tslen = fr_dns_labels_network_verify(packet_ctx->packet, data, data_len, data, packet_ctx->lb);\n \t\tif (slen < 0) {\n \t\t\tFR_PROTO_TRACE(\"verify failed\");\n \t\traw:\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42502928-vul",
+      "digest": "sha256:8b3c27e72fff32d0683827a83543b447af34aa60eb4abe9faa781e6dfd28c2a7"
+    },
+    "patched": {
+      "ref": "n132/arvo:42502928-fix",
+      "digest": "sha256:bf3440636d39d703bee605520e72cf01f8a2ec1010ce2f29d8caa40391109c7a"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/freeradius-server/src/lib/util/dns.c:958",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/freeradius-server/src/lib/util/dns.c:958"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

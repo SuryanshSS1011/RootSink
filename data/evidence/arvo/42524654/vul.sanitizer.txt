@@ -1,0 +1,67 @@
+Running LLVMFuzzerInitialize ...
+26/Jul/2026 12:11:41 [Utils.cpp:761] WARNING: mkdir(/out/data-dir/0) failed [30/Read-only file system]
+26/Jul/2026 12:11:41 [Utils.cpp:761] WARNING: mkdir(/out/data-dir/0/top_talkers/) failed [2/No such file or directory]
+26/Jul/2026 12:11:41 [StatsManager.cpp:45] WARNING: Unable to create directory /out/data-dir/0/top_talkers/
+26/Jul/2026 12:11:41 [Utils.cpp:761] WARNING: mkdir(/out/data-dir/0) failed [30/Read-only file system]
+26/Jul/2026 12:11:41 [Utils.cpp:761] WARNING: mkdir(/out/data-dir/0/alerts/) failed [2/No such file or directory]
+26/Jul/2026 12:11:41 [SQLiteStoreManager.cpp:38] WARNING: Unable to open /out/data-dir/0/alerts/alert_store_v11.db: unable to open database file
+26/Jul/2026 12:11:41 [SQLiteAlertStore.cpp:44] WARNING: Unable to initialize store /out/data-dir/0/alerts/alert_store_v11.db
+26/Jul/2026 12:11:41 [SQLiteAlertStore.cpp:49] WARNING: Unable to open store /out/data-dir/0/alerts/alert_store_v11.db
+continue...
+Reading 78 bytes from /tmp/poc
+26/Jul/2026 12:11:41 [NetworkInterface.cpp:2421] WARNING: If TSO/GRO is enabled, please disable it for best accuracy
+26/Jul/2026 12:11:41 [NetworkInterface.cpp:2426] WARNING: using: sudo ethtool -K custom gro off gso off tso off
+=================================================================
+==636780==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x6030000136e0 at pc 0x0000008077c6 bp 0x7fff58b2d6b0 sp 0x7fff58b2d6a8
+READ of size 1 at 0x6030000136e0 thread T0
+SCARINESS: 12 (1-byte-read-heap-buffer-overflow)
+    #0 0x8077c5 in ICMPinfo::dissectICMP(unsigned short, unsigned char const*) /src/ntopng/src/ICMPinfo.cpp:100:17
+    #1 0x62e3d9 in NetworkInterface::processPacket(unsigned int, bool, timeval const*, unsigned long, ndpi_ethhdr*, unsigned short, ndpi_iphdr*, ndpi_ipv6hdr*, unsigned short, unsigned short, unsigned int, pcap_pkthdr const*, unsigned char const*, unsigned short*, Host**, Host**, Flow**) /src/ntopng/src/NetworkInterface.cpp:1824:15
+    #2 0x63bbf3 in NetworkInterface::dissectPacket(unsigned int, bool, unsigned char*, pcap_pkthdr const*, unsigned char const*, unsigned short*, Host**, Host**, Flow**) /src/ntopng/src/NetworkInterface.cpp:2820:26
+    #3 0x4e9445 in LLVMFuzzerTestOneInput /src/ntopng/fuzz/fuzz_dissect_packet.cpp:197:16
+    #4 0x4e834a in ExecuteFilesOnyByOne /src/aflplusplus/utils/aflpp_driver/aflpp_driver.c:234:7
+    #5 0x4e811c in main /src/aflplusplus/utils/aflpp_driver/aflpp_driver.c:318:12
+    #6 0x14d05a4bc082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 1878e6b475720c7c51969e69ab2d276fae6d1dee)
+    #7 0x4294cd in _start (/out/fuzz_dissect_packet+0x4294cd)
+
+DEDUP_TOKEN: ICMPinfo::dissectICMP(unsigned short, unsigned char const*)--NetworkInterface::processPacket(unsigned int, bool, timeval const*, unsigned long, ndpi_ethhdr*, unsigned short, ndpi_iphdr*, ndpi_ipv6hdr*, unsigned short, unsigned short, unsigned int, pcap_pkthdr const*, unsigned char const*, unsigned short*, Host**, Host**, Flow**)--NetworkInterface::dissectPacket(unsigned int, bool, unsigned char*, pcap_pkthdr const*, unsigned char const*, unsigned short*, Host**, Host**, Flow**)
+0x6030000136e0 is located 1 bytes to the right of 31-byte region [0x6030000136c0,0x6030000136df)
+allocated by thread T0 here:
+    #0 0x4aad0c in __interceptor_realloc /src/llvm-project/compiler-rt/lib/asan/asan_malloc_linux.cpp:85:3
+    #1 0x9bc1f1 in grow_buffer /src/libpcap-1.9.1/./sf-pcap.c:426:18
+    #2 0x9bc1f1 in pcap_next_packet /src/libpcap-1.9.1/./sf-pcap.c:604:9
+
+DEDUP_TOKEN: __interceptor_realloc--grow_buffer--pcap_next_packet
+SUMMARY: AddressSanitizer: heap-buffer-overflow /src/ntopng/src/ICMPinfo.cpp:100:17 in ICMPinfo::dissectICMP(unsigned short, unsigned char const*)
+Shadow bytes around the buggy address:
+  0x0c067fffa680: 00 fa fa fa 00 00 00 fa fa fa 00 00 00 fa fa fa
+  0x0c067fffa690: 00 00 00 fa fa fa fd fd fd fa fa fa fd fd fd fa
+  0x0c067fffa6a0: fa fa 00 00 00 00 fa fa 00 00 00 00 fa fa fd fd
+  0x0c067fffa6b0: fd fa fa fa fd fd fd fa fa fa fd fd fd fd fa fa
+  0x0c067fffa6c0: fd fd fd fd fa fa fd fd fd fd fa fa fd fd fd fd
+=>0x0c067fffa6d0: fa fa fd fd fd fd fa fa 00 00 00 07[fa]fa 00 00
+  0x0c067fffa6e0: 00 fa fa fa 00 00 00 fa fa fa 00 00 00 fa fa fa
+  0x0c067fffa6f0: 00 00 00 fa fa fa 00 00 00 fa fa fa 00 00 00 fa
+  0x0c067fffa700: fa fa 00 00 00 fa fa fa fa fa fa fa fa fa fa fa
+  0x0c067fffa710: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c067fffa720: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+==636780==ABORTING

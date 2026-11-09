@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042536390",
+  "chain": "CWE-416->CWE-125",
+  "project": "libical",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42536390",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "7d124da53fdacc13f02ba4b3fe4597a352effe77",
+      "fix_commits": [
+        "7d124da53fdacc13f02ba4b3fe4597a352effe77"
+      ],
+      "repo": "https://github.com/libical/libical"
+    },
+    "patch": "From 7d124da53fdacc13f02ba4b3fe4597a352effe77 Mon Sep 17 00:00:00 2001\nFrom: Allen Winter <winter@kde.org>\nDate: Sat, 30 Nov 2024 15:45:19 -0500\nSubject: [PATCH] icaltypes.c - icalreqstattype_from_string don't allocate\n empty debug str\n\nIn icalreqstattype_from_string() don't allocate memory for an empty\nstatus.debug string.\n\nFixes a fuzzer issue\n---\n src/libical/icaltypes.c |  3 +-\n src/test/CMakeLists.txt |  1 +\n test-data/fuzz42536390  | 89 +++++++++++++++++++++++++++++++++++++++++\n 3 files changed, 91 insertions(+), 2 deletions(-)\n create mode 100644 test-data/fuzz42536390\n\ndiff --git a/src/libical/icaltypes.c b/src/libical/icaltypes.c\nindex 182ef1f..5f4cc1f 100644\n--- a/src/libical/icaltypes.c\n+++ b/src/libical/icaltypes.c\n@@ -140,7 +140,7 @@ struct icalreqstattype icalreqstattype_from_string(const char *str)\n      */\n \n     p2 = strchr(p1 + 1, ';');\n-    if (p2 != 0 && *p2 != 0) {\n+    if (p2 != 0 && *p2 != 0 && *p2 != ';') { // skipping empty debug strings\n         stat.debug = icalmemory_tmp_copy(p2 + 1);\n     }\n \n@@ -171,7 +171,6 @@ char *icalreqstattype_as_string_r(struct icalreqstattype stat)\n     if (stat.debug != 0) {\n         snprintf(temp, TMP_BUF_SIZE, \"%d.%d;%s;%s\", icalenum_reqstat_major(stat.code),\n                  icalenum_reqstat_minor(stat.code), stat.desc, stat.debug);\n-\n     } else {\n         snprintf(temp, TMP_BUF_SIZE, \"%d.%d;%s\", icalenum_reqstat_major(stat.code),\n                  icalenum_reqstat_minor(stat.code), stat.desc);\ndiff --git a/src/test/CMakeLists.txt b/src/test/CMakeLists.txt\nindex 96b456d..0260659 100644\n--- a/src/test/CMakeLists.txt\n+++ b/src/test/CMakeLists.txt\n@@ -263,6 +263,7 @@ if(LIBICAL_BUILD_TESTING_BIGFUZZ)\n     69527\n     69888 # cpu timeout fails beyond 60s\n     42536507 # cpu timeout fails beyond 60s\n+    42536390\n     usban\n     usban2\n     usban3\ndiff --git a/test-data/fuzz42536390 b/test-data/fuzz42536390\nnew file mode 100644\nindex 0000000..89adddc\n--- /dev/null\n+++ b/test-data/fuzz42536390\n@@ -0,0 +1,89 @@\n+BEI:\n+NOG0\ufffdCD\n+END;\n+BEGIN:X-\ufffdX*EQUEST-STATUS;4.;N;-\n+REQUEST-STATUSESTST-STATATUS;4.;N;-\n+PEQUEST-ST@TUS;4.;N;-\n+REQUEST-STATUS;4.;N;-\n+REQUES;-\n+REQUEST-STATUS;4.;N;-\n+REQUEST-STATUS;4.;N;-\n+REQUEST-STATUS;4.;N;-\n+REQUE[T-STATUS;4.;N;-\n+REQUEST-STATUS;4.;N;-\n+REQUEST-STATUS;4.;N;-STATUS;9223372036854775813.;N;-\n+REQUEST-STATUS;4.;N;-E\ufffd;VALUE=ERR*OR\t:\n+X;VALUE=E\ufffd;VALUE=ERROR\t:\n+X;VAPUE=E\ufffd;VALUE=ERROR\t:\n+X;VALUE=E\ufffd;VALUE=ERRO\ufffd\t:\n+X;VALUE=E\ufffd;VALUE=ERROR\t:\n+X;VALUE=E\ufffd;VALUE=ERROR\t:\n+X;VALUE=E\ufffd;VALUE=ERROR\t:\n+X;VALUE=E\ufffd;VALUE=ERROR\t:\n+X;VALUE=E\ufffd;VALUE=ERROR\t:\n+X;VALUE=E\ufffd;VALUE=ERROR\t:\n+X;VALUOR\t:\n+X;VALUE=E\ufffd;VALUE=ERROR\t:\n+X;VALUE=E\ufffd;VALUE=ERROR\t:\n+ERROR\t:\n+X;VALUE=E\ufffd;VALUE=ERROR\t:\n+X;VALUE=E\ufffd;VALUE=ERROR\t:\n+X;VALUE=E\ufffd;VALUE=ERROR\t:\n+X;VALUE=E\ufffd;VALUEVALUE=ERROR\t:\n+ERROR\t:\n+X;VALUE=E\ufffd;VALUE=ERROR\t:\n+X;VALUE=E\ufffd;VALUE=ERROR\t:\n+X;VALUE=E\ufffd;VALUE=ERROR\t:\n+X;VALUE=E\ufffd;VALUE=ERROR\t:\n+X;VALUE=E\ufffd;VALUE=ERROR\t:\n+X;VALUE=E\ufffd;VALUE=ERROR\t:\n+X;VALUE=E\ufffd;VALUE=ERROR\t:\n+ERROR\t:\n+X;VALUE=E\ufffd;VALUE=ERROR\t:\n+X;VALUE=E\ufffd;VALUE=ERROR\t:\n+X;VALUE=E\ufffd;VALUE=ERROR\t:\n+X;VALUE=E\ufffd;VALUE=ERROR\t:\n+X;VALUE=E\ufffd;VALUE=ERROR\t:\n+X;VALUE=E\ufffd;VALUE=ERROR\t:\n+X;VALUE=E\ufffd;VALUE=ERROR\t:\n+X;VALUE=E\ufffd;VALUE=ERROR\t:\n+X;VALUE=E\ufffd;VALUE=ERROR\t:\n+ERROR\t:\n+X;VALUE=E\ufffdR\t:\n+X;VALUE=E\ufffd;VALUE=ERROR\t:\n+X;VALUE=E\ufffd;VALUE=ERROR\t:\n+ERROR\t:\n+X;VALUE=E\ufffd;VALUE=ERROR\t:\n+X;VALUE=E\ufffd;VALUE=ERROR\t:\n+X;VALUE=E\ufffd;VALUE=ERROR\t:\n+X;VALUE=E\ufffd;VALUE=ERROR\t:\n+X;\u202eVALUOR\t:\n+X;VALUE=E\ufffd;VALUE=ERROR\t:\n+X;VALUE=E\ufffd;VALUE=ERROR\t:\n+X;VALUE=E\ufffd;VALUE=ERROR\t:\n+X;VALUE=E\ufffd;VALUE=ERROR\t:\n+ERROR\t:\n+X;VALUE=E\ufffd;VALUE=ERROR\t:\n+X;VALUE=E\ufffd;VALUE=ERROR\t:\n+X;VALUE=E\ufffd;VALUE=ERROR\t:\n+X;VALUE=E\ufffd;VALUE=ERROR\t:\n+X;\u202eVALUOR\t:\n+X;VALUE=E\ufffd;VALUE=ERROR\t:\n+X;VALUE=E\ufffd;VALUE=ERROR\t:\n+ERROR\t:\n+X;VALUE=E\ufffd;VALUE=ERROR\t:\n+X;VALUE=E\ufffd;VALUE=ERROR\t:\n+X;VALUE=E\ufffd;VALUE=ERROR\t:\n+X;VALUE=E\ufffd;VALUE=ERROR\t:\n+X;VALUOR\t:\n+X;VALUE=E\ufffd;VALUE=ERROR\t:\n+X;VALUE=E\ufffd;VALUE=ERROR\t:\n+ERROR\t:\n+X;VALUE=E\ufffd;VALUE=ERROR\t:\n+X;VALUE=E\ufffd;VALUE=ERRM\n+REQUEST-STATUS;4.;N;-\n+REQUEST-STATUS;4.;N;-\n+REQUEST-STATUS;4.-STATUS;4.;N\ufffd\ufffd\ufffd\ufffdE\ufffd\ufffd\ufffd\ufffd\ufffd\u04ac\ufffdATUS;4.;N;-\n+REQWWWNDG2\ufffdCD\n+END;\n+BE\n\\ No newline at end of file\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42536390-vul",
+      "digest": "sha256:ac7a7875b0f1a58fae41ffd5a81621f2df628b2a575dff6cd4356cb018f007af"
+    },
+    "patched": {
+      "ref": "n132/arvo:42536390-fix",
+      "digest": "sha256:7e151fb733a9060a93ccac6505ea571a1d4b2bd6de98afd96c7d2ed2de89ee34"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/libical/src/libical/icaltypes.c:162",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/libical/src/libical/icaltypes.c:162"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

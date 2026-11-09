@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042480786",
+  "chain": "CWE-416->CWE-125",
+  "project": "leptonica",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42480786",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "7a74abcd7b574109d8ad29b0dd5583f3963a6939",
+      "fix_commits": [
+        "7a74abcd7b574109d8ad29b0dd5583f3963a6939"
+      ],
+      "repo": "https://github.com/DanBloomberg/leptonica"
+    },
+    "patch": "diff --git a/src/bmpio.c b/src/bmpio.c\nindex e5da8600a..71245ce4b 100644\n--- a/src/bmpio.c\n+++ b/src/bmpio.c\n@@ -117,10 +117,10 @@ PIX      *pix;\n  * Notes:\n  *      (1) The BMP file is organized as follows:\n  *          * 14 byte fileheader\n- *          * variable size infoheader, from 40 to 124 bytes.  We only use\n- *            data in he first 40 bytes.\n- *          * an optional colormap, with size 4 * ncolors (in bytes)\n- *          * the image data\n+ *          * Variable size infoheader: 40, 108 or 124 bytes.\n+ *            We only use data in he first 40 bytes.\n+ *          * Optional colormap, with size 4 * ncolors (in bytes)\n+ *          * Image data\n  *      (2) 2 bpp bmp files are not valid in the original spec, but they\n  *          are valid in later versions.\n  * </pre>\n@@ -133,7 +133,7 @@ l_uint8    pel[4];\n l_uint8   *cmapBuf, *fdata, *data;\n l_int16    bftype, depth, d;\n l_int32    offset, ihbytes, width, height, height_neg, xres, yres;\n-l_int32    compression, imagebytes, cmapbytes, ncolors, maxcolors;\n+l_int32    compression, imagebytes, fdatabytes, cmapbytes, ncolors, maxcolors;\n l_int32    fdatabpl, extrabytes, pixWpl, pixBpl, i, j, k;\n l_uint32  *line, *pixdata, *pword;\n l_int64    npixels;\n@@ -209,16 +209,27 @@ PIXCMAP   *cmap;\n         height_neg = 1;\n         height = -height;\n     }\n+    if (ihbytes != 40 && ihbytes != 108 && ihbytes != 124) {\n+        L_ERROR(\"invalid ihbytes = %d; not in {40, 108, 124}\\n\",\n+                procName, ihbytes);\n+        return NULL;\n+    }\n     npixels = 1LL * width * height;\n     if (npixels > L_MAX_ALLOWED_PIXELS)\n         return (PIX *)ERROR_PTR(\"npixels too large\", procName, NULL);\n     if (depth != 1 && depth != 2 && depth != 4 && depth != 8 &&\n-        depth != 16 && depth != 24 && depth != 32)\n-        return (PIX *)ERROR_PTR(\"depth not in {1, 2, 4, 8, 16, 24, 32}\",\n-                                procName,NULL);\n+        depth != 16 && depth != 24 && depth != 32) {\n+        L_ERROR(\"invalid depth = %d; not in {1, 2, 4, 8, 16, 24, 32}\\n\",\n+                procName, depth);\n+        return NULL;\n+    }\n     fdatabpl = 4 * ((1LL * width * depth + 31)/32);\n-    if (imagebytes != 0 && imagebytes != fdatabpl * height)\n-        return (PIX *)ERROR_PTR(\"invalid imagebytes\", procName, NULL);\n+    fdatabytes = fdatabpl * height;\n+    if (imagebytes != 0 && imagebytes != fdatabytes) {\n+        L_ERROR(\"invalid imagebytes = %d; not equal to fdatabytes = %d\\n\",\n+                procName, imagebytes, fdatabytes);\n+        return NULL;\n+    }\n \n         /* In the original spec, BITMAPINFOHEADER is 40 bytes.\n          * There have been a number of revisions, to capture more information.\n@@ -233,11 +244,11 @@ PIXCMAP   *cmap;\n         return (PIX *)ERROR_PTR(\"can't have cmap for d > 8\", procName, NULL);\n     maxcolors = (depth <= 8) ? 1 << depth : 256;\n     if (ncolors > maxcolors) {\n-        L_ERROR(\"cmap too large for depth: ncolors = %d > maxcolors = %d\\n\",\n-                procName, ncolors, maxcolors);\n+        L_ERROR(\"cmap too large for depth %d: ncolors = %d > maxcolors = %d\\n\",\n+                procName, depth, ncolors, maxcolors);\n         return NULL;\n     }\n-    if (size != 1LL * offset + 1LL * fdatabpl * height)\n+    if (size != 1LL * offset + 1LL * fdatabytes)\n         return (PIX *)ERROR_PTR(\"size incommensurate with image data\",\n                                 procName,NULL);\n \n@@ -251,7 +262,7 @@ PIXCMAP   *cmap;\n             /* Read the colormap entry data from bmp. The RGBA_QUAD colormap\n              * entries are used for both bmp and leptonica colormaps. */\n         memcpy(cmapBuf, cdata + BMP_FHBYTES + ihbytes,\n-               sizeof(RGBA_QUAD) * ncolors);\n+               ncolors * sizeof(RGBA_QUAD));\n     }\n \n         /* Make a 32 bpp pix if depth is 24 bpp */\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42480786-vul",
+      "digest": "sha256:1a60b5f5ab97408d335e78df710cce3d84afd06c25ba6229c1f2e6d6ceb782ec"
+    },
+    "patched": {
+      "ref": "n132/arvo:42480786-fix",
+      "digest": "sha256:4d89d7512933a5e52abc3b97896b79cca68636eda7f41792b22318bebf3ccaba"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/leptonica/src/bmpio.c:250",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/leptonica/src/bmpio.c:250"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

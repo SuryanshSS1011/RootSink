@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0414916080",
+  "chain": "CWE-1285->CWE-125",
+  "project": "gpac",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "414916080",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "449f061f1514e6aa55538a5ee6bd0a35938a789f",
+      "fix_commits": [
+        "449f061f1514e6aa55538a5ee6bd0a35938a789f"
+      ],
+      "repo": "https://github.com/gpac/gpac"
+    },
+    "patch": "diff --git a/src/filters/dmx_m2ts.c b/src/filters/dmx_m2ts.c\nindex c4d43da2fb..0a49cd6dfe 100644\n--- a/src/filters/dmx_m2ts.c\n+++ b/src/filters/dmx_m2ts.c\n@@ -558,8 +558,10 @@ static void m2tsdmx_declare_pid(GF_M2TSDmxCtx *ctx, GF_M2TS_PES *stream, GF_ESD\n \t\t\tu32 dsi_len = gf_bs_read_u32(bs);\n \t\t\tif (dsi_len) {\n \t\t\t\tu32 pos = (u32) gf_bs_get_position(bs);\n-\t\t\t\tgf_filter_pid_set_property(opid, GF_PROP_PID_DECODER_CONFIG, &PROP_DATA(stream->gpac_meta_dsi+pos, dsi_len) );\n-\t\t\t\tgf_bs_skip_bytes(bs, dsi_len);\n+\t\t\t\tif (pos < stream->gpac_meta_dsi_size && dsi_len < stream->gpac_meta_dsi_size-pos) {\n+\t\t\t\t\tgf_filter_pid_set_property(opid, GF_PROP_PID_DECODER_CONFIG, &PROP_DATA(stream->gpac_meta_dsi+pos, dsi_len) );\n+\t\t\t\t\tgf_bs_skip_bytes(bs, dsi_len);\n+\t\t\t\t}\n \t\t\t} else {\n \t\t\t\tgf_filter_pid_set_property(opid, GF_PROP_PID_DECODER_CONFIG, NULL);\n \t\t\t}\ndiff --git a/src/filters/reframe_nalu.c b/src/filters/reframe_nalu.c\nindex 569e34acc1..758cee04f2 100644\n--- a/src/filters/reframe_nalu.c\n+++ b/src/filters/reframe_nalu.c\n@@ -882,7 +882,7 @@ static void naludmx_hevc_set_parall_type(GF_NALUDmxCtx *ctx, GF_HEVCConfig *hevc\n \n \tGF_SAFEALLOC(hvc_state, HEVCState);\n \tif (!hvc_state) return;\n-\t\n+\n \thvc_state->sps_active_idx = -1;\n \n \tuse_tiles = 0;\n@@ -2562,7 +2562,7 @@ static s32 naludmx_parse_nal_hevc(GF_NALUDmxCtx *ctx, char *data, u32 size, Bool\n \t\tif (ctx->hevc_state->sei.has_3d_ref_disp_info) {\n \t\t\tnaludmx_queue_param_set(ctx, data, size, GF_HEVC_NALU_SEI_PREFIX, 0, temporal_id, layer_id);\n \t\t}\n-\t\tif (ctx->hevc_state->sei.alternative_transfer_characteristics) {\n+\t\tif (ctx->hevc_state->sei.alternative_transfer_characteristics && ctx->opid) {\n \t\t\tgf_filter_pid_set_property(ctx->opid, GF_PROP_PID_COLR_TRANSFER_ALT, & PROP_UINT(ctx->hevc_state->sei.alternative_transfer_characteristics) );\n \t\t}\n \t\tif (!ctx->nosei) {\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:414916080-vul",
+      "digest": "sha256:7847d5d333ec7ac305efe2b48321f3626e41b752b37c4a85bd16c901c99066fc"
+    },
+    "patched": {
+      "ref": "n132/arvo:414916080-fix",
+      "digest": "sha256:27cc6c241240b7bab10711539042e5b164fc0030f1c72e9e8df101a8dcf980c9"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/gpac/src/filter_core/filter_props.c:1017",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/gpac/src/filter_core/filter_props.c:1017"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

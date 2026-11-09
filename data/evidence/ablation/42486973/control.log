@@ -1,0 +1,76 @@
+INFO: Seed: 530074805
+INFO: Loaded 3 modules   (106540 inline 8-bit counters): 88261 [0x7f12be6801f8, 0x7f12be695abd), 18278 [0x7f12bec9d9e8, 0x7f12beca214e), 1 [0x7abfb0, 0x7abfb1), 
+INFO: Loaded 3 PC tables (106540 PCs): 88261 [0x7f12be695ac0,0x7f12be7ee710), 18278 [0x7f12beca2150,0x7f12bece97b0), 1 [0x56d640,0x56d650), 
+/out/fuzz_keyring: Running 1 inputs 1 time(s) each.
+Running: /tmp/poc
+=================================================================
+==2221==ERROR: AddressSanitizer: stack-buffer-overflow on address 0x7f12bf23a9e8 at pc 0x000000520057 bp 0x7fff81e4e390 sp 0x7fff81e4db58
+READ of size 255 at 0x7f12bf23a9e8 thread T0
+SCARINESS: 41 (multi-byte-read-stack-buffer-overflow)
+    #0 0x520056 in __asan_memcpy /src/llvm-project/compiler-rt/lib/asan/asan_interceptors_memintrinsics.cpp:22:3
+    #1 0x7f12be914cb0 in add_packet_body /src/rnp/src/librepgp/stream-packet.cpp:306:5
+    #2 0x7f12be914cb0 in add_packet_body_s2k /src/rnp/src/librepgp/stream-packet.cpp:413:20
+    #3 0x7f12be914cb0 in stream_write_key(pgp_key_pkt_t*, pgp_dest_t*) /src/rnp/src/librepgp/stream-packet.cpp:2012:19
+    #4 0x7f12be9be12a in pgp_rawpacket_t::pgp_rawpacket_t(pgp_key_pkt_t&) /src/rnp/src/lib/pgp-key.cpp:2105:10
+    #5 0x7f12be9a9eb3 in pgp_key_from_pkt(pgp_key_t*, pgp_key_pkt_t const*) /src/rnp/src/lib/pgp-key.cpp:212:23
+    #6 0x7f12be96af76 in rnp_key_from_transferable_subkey(pgp_key_t*, pgp_transferable_subkey_t*, pgp_key_t*) /src/rnp/src/librekey/key_store_pgp.cpp:224:10
+    #7 0x7f12be96a851 in rnp_key_store_add_transferable_subkey(rnp_key_store_t*, pgp_transferable_subkey_t*, pgp_key_t*) /src/rnp/src/librekey/key_store_pgp.cpp:105:10
+    #8 0x7f12be96d978 in rnp_key_store_pgp_read_from_src(rnp_key_store_t*, pgp_source_t*) /src/rnp/src/librekey/key_store_pgp.cpp:254:16
+    #9 0x7f12be96f59e in rnp_key_store_load_from_src(rnp_key_store_t*, pgp_source_t*, pgp_key_provider_t const*) /src/rnp/src/librekey/rnp_key_store.cpp:116:16
+    #10 0x7f12be9cf4ca in load_keys_from_input /src/rnp/src/lib/rnp.cpp:1114:14
+    #11 0x7f12be9cf4ca in do_load_keys /src/rnp/src/lib/rnp.cpp:1169:14
+    #12 0x7f12be9cf4ca in rnp_load_keys /src/rnp/src/lib/rnp.cpp:1274:12
+    #13 0x55364a in LLVMFuzzerTestOneInput /src/rnp/src/fuzzing/keyring.c:46:7
+    #14 0x458891 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:559:15
+    #15 0x444032 in fuzzer::RunOneTest(fuzzer::Fuzzer*, char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:301:6
+    #16 0x449fcd in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:801:9
+    #17 0x4718b2 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #18 0x7f12bbcf783f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2083f)
+    #19 0x41e7d8 in _start (/out/fuzz_keyring+0x41e7d8)
+
+DEDUP_TOKEN: __asan_memcpy--add_packet_body--add_packet_body_s2k
+Address 0x7f12bf23a9e8 is located in stack of thread T0 at offset 12776 in frame
+    #0 0x7f12be96a68f in rnp_key_store_add_transferable_subkey(rnp_key_store_t*, pgp_transferable_subkey_t*, pgp_key_t*) /src/rnp/src/librekey/key_store_pgp.cpp:101
+
+DEDUP_TOKEN: rnp_key_store_add_transferable_subkey(rnp_key_store_t*, pgp_transferable_subkey_t*, pgp_key_t*)
+  This frame has 4 object(s):
+    [32, 12776) 'skey' (line 102) <== Memory access at offset 12776 overflows this variable
+    [13040, 13048) 'keyid' (line 106)
+    [13072, 13089) 'keyidhex' (line 106)
+    [13136, 13153) 'keyid54' (line 107)
+HINT: this may be a false positive if your program uses some custom stack unwind mechanism, swapcontext or vfork
+      (longjmp and C++ exceptions *are* supported)
+SUMMARY: AddressSanitizer: stack-buffer-overflow /src/llvm-project/compiler-rt/lib/asan/asan_interceptors_memintrinsics.cpp:22:3 in __asan_memcpy
+Shadow bytes around the buggy address:
+  0x0fe2d7e3f4e0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0fe2d7e3f4f0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0fe2d7e3f500: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0fe2d7e3f510: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0fe2d7e3f520: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x0fe2d7e3f530: 00 00 00 00 00 00 00 00 00 00 00 00 00[f2]f2 f2
+  0x0fe2d7e3f540: f2 f2 f2 f2 f2 f2 f2 f2 f2 f2 f2 f2 f2 f2 f2 f2
+  0x0fe2d7e3f550: f2 f2 f2 f2 f2 f2 f2 f2 f2 f2 f2 f2 f2 f2 f8 f2
+  0x0fe2d7e3f560: f2 f2 f8 f8 f8 f2 f2 f2 f2 f2 f8 f8 f8 f3 f3 f3
+  0x0fe2d7e3f570: f3 f3 f3 f3 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0fe2d7e3f580: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+  Shadow gap:              cc
+==2221==ABORTING

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042521899",
+  "chain": "CWE-416->CWE-125",
+  "project": "hunspell",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42521899",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "c6d900cfd5d10c428008dc40f804b9d9319cec87",
+      "fix_commits": [
+        "c6d900cfd5d10c428008dc40f804b9d9319cec87"
+      ],
+      "repo": "https://github.com/hunspell/hunspell"
+    },
+    "patch": "From c6d900cfd5d10c428008dc40f804b9d9319cec87 Mon Sep 17 00:00:00 2001\nFrom: =?UTF-8?q?Caol=C3=A1n=20McNamara?= <caolanm@redhat.com>\nDate: Tue, 7 Mar 2023 12:44:07 +0000\nSubject: [PATCH] ofz#56737 use int instead of short in free_flag\n\n---\n src/hunspell/hashmgr.cxx | 2 +-\n src/hunspell/hashmgr.hxx | 2 +-\n 2 files changed, 2 insertions(+), 2 deletions(-)\n\ndiff --git a/src/hunspell/hashmgr.cxx b/src/hunspell/hashmgr.cxx\nindex 1818da5..ca4a71a 100644\n--- a/src/hunspell/hashmgr.cxx\n+++ b/src/hunspell/hashmgr.cxx\n@@ -106,7 +106,7 @@ HashMgr::HashMgr(const char* tpath, const char* apath, const char* key)\n   }\n }\n \n-void HashMgr::free_flag(unsigned short* astr, short alen) {\n+void HashMgr::free_flag(unsigned short* astr, int alen) {\n   if (astr && (aliasf.empty() || TESTAFF(astr, ONLYUPCASEFLAG, alen)))\n     delete[] astr;\n }\ndiff --git a/src/hunspell/hashmgr.hxx b/src/hunspell/hashmgr.hxx\nindex eb8c21f..fb465d2 100644\n--- a/src/hunspell/hashmgr.hxx\n+++ b/src/hunspell/hashmgr.hxx\n@@ -152,7 +152,7 @@ class HashMgr {\n   bool parse_reptable(const std::string& line, FileMgr* af);\n   int remove_forbidden_flag(const std::string& word);\n   void free_table();\n-  void free_flag(unsigned short* astr, short alen);\n+  void free_flag(unsigned short* astr, int alen);\n };\n \n #endif\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42521899-vul",
+      "digest": "sha256:713381849f3d1deb68a954646f559246dd3e3d8842cff52a0a806a73651ce578"
+    },
+    "patched": {
+      "ref": "n132/arvo:42521899-fix",
+      "digest": "sha256:cf0ffeac94cbac746865ce534c7ed7d5247fbb16d9c5177bb64792a439784259"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/hunspell/src/hunspell/hashmgr.cxx:110",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/hunspell/src/hunspell/hashmgr.cxx:110"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

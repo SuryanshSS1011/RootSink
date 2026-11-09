@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042494529",
+  "chain": "CWE-20->CWE-125",
+  "project": "selinux",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42494529",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "d155b410d4bbc90d28f361b966f0429598da8188",
+      "fix_commits": [
+        "d155b410d4bbc90d28f361b966f0429598da8188"
+      ],
+      "repo": "https://github.com/SELinuxProject/selinux"
+    },
+    "patch": "diff --git a/libsepol/cil/src/cil_copy_ast.c b/libsepol/cil/src/cil_copy_ast.c\nindex c9aada9db3..ed96786115 100644\n--- a/libsepol/cil/src/cil_copy_ast.c\n+++ b/libsepol/cil/src/cil_copy_ast.c\n@@ -100,16 +100,17 @@ int cil_copy_block(__attribute__((unused)) struct cil_db *db, void *data, void *\n \tstruct cil_block *orig = data;\n \tchar *key = orig->datum.name;\n \tstruct cil_symtab_datum *datum = NULL;\n+\tstruct cil_block *new;\n \n \tcil_symtab_get_datum(symtab, key, &datum);\n-\tif (datum == NULL) {\n-\t\tstruct cil_block *new;\n-\t\tcil_block_init(&new);\n-\t\t*copy = new;\n-\t} else {\n-\t\t*copy = datum;;\n+\tif (datum != NULL) {\n+\t\tcil_tree_log(NODE(datum), CIL_ERR, \"Re-declaration of %s %s\", cil_node_to_string(NODE(datum)), key);\n+\t\treturn SEPOL_ERR;\n \t}\n \n+\tcil_block_init(&new);\n+\t*copy = new;\n+\n \treturn SEPOL_OK;\n }\n \n@@ -1509,64 +1510,22 @@ int cil_copy_macro(__attribute__((unused)) struct cil_db *db, void *data, void *\n \tstruct cil_macro *orig = data;\n \tchar *key = orig->datum.name;\n \tstruct cil_symtab_datum *datum = NULL;\n+\tstruct cil_macro *new;\n \n \tcil_symtab_get_datum(symtab, key, &datum);\n-\tif (datum == NULL) {\n-\t\tstruct cil_macro *new;\n-\t\tcil_macro_init(&new);\n-\t\tif (orig->params != NULL) {\n-\t\t\tcil_copy_list(orig->params, &new->params);\n-\t\t}\n-\n-\t\t*copy = new;\n-\n-\t} else {\n-\t\tstruct cil_list_item *curr_orig = NULL;\n-\t\tstruct cil_list_item *curr_new = NULL;\n-\t\tstruct cil_param *param_orig = NULL;\n-\t\tstruct cil_param *param_new = NULL;\n-\n-\t\tif (((struct cil_macro*)datum)->params != NULL) {\n-\t\t\tcurr_new = ((struct cil_macro*)datum)->params->head;\n-\t\t}\n-\n-\t\tif (orig->params != NULL) {\n-\t\t\tcurr_orig = orig->params->head;\n-\t\t}\n-\n-\t\tif (curr_orig != NULL && curr_new != NULL) {\n-\t\t\twhile (curr_orig != NULL) {\n-\t\t\t\tif (curr_new == NULL) {\n-\t\t\t\t\tgoto exit;\n-\t\t\t\t}\n-\n-\t\t\t\tparam_orig = (struct cil_param*)curr_orig->data;\n-\t\t\t\tparam_new = (struct cil_param*)curr_new->data;\n-\t\t\t\tif (param_orig->str != param_new->str) {\n-\t\t\t\t\tgoto exit;\n-\t\t\t\t} else if (param_orig->flavor != param_new->flavor) {\n-\t\t\t\t\tgoto exit;\n-\t\t\t\t}\n-\n-\t\t\t\tcurr_orig = curr_orig->next;\n-\t\t\t\tcurr_new = curr_new->next;\n-\t\t\t}\n-\n-\t\t\tif (curr_new != NULL) {\n-\t\t\t\tgoto exit;\n-\t\t\t}\n-\t\t} else if (!(curr_orig == NULL && curr_new == NULL)) {\n-\t\t\tgoto exit;\n-\t\t}\n+\tif (datum != NULL) {\n+\t\tcil_tree_log(NODE(datum), CIL_ERR, \"Re-declaration of %s %s\", cil_node_to_string(NODE(datum)), key);\n+\t\treturn SEPOL_ERR;\n+\t}\n \n-\t\t*copy = datum;\n+\tcil_macro_init(&new);\n+\tif (orig->params != NULL) {\n+\t\tcil_copy_list(orig->params, &new->params);\n \t}\n \n-\treturn SEPOL_OK;\n+\t*copy = new;\n \n-exit:\n-\tcil_log(CIL_INFO, \"cil_copy_macro: macro cannot be redefined\\n\");\n-\treturn SEPOL_ERR;\n+\treturn SEPOL_OK;\n }\n \n int cil_copy_optional(__attribute__((unused)) struct cil_db *db, void *data, void **copy, symtab_t *symtab)\n@@ -1574,16 +1533,17 @@ int cil_copy_optional(__attribute__((unused)) struct cil_db *db, void *data, voi\n \tstruct cil_optional *orig = data;\n \tchar *key = orig->datum.name;\n \tstruct cil_symtab_datum *datum = NULL;\n+\tstruct cil_optional *new;\n \n \tcil_symtab_get_datum(symtab, key, &datum);\n-\tif (datum == NULL) {\n-\t\tstruct cil_optional *new;\n-\t\tcil_optional_init(&new);\n-\t\t*copy = new;\n-\t} else {\n-\t\t*copy = datum;\n+\tif (datum != NULL) {\n+\t\tcil_tree_log(NODE(datum), CIL_ERR, \"Re-declaration of %s %s\", cil_node_to_string(NODE(datum)), key);\n+\t\treturn SEPOL_ERR;\n \t}\n \n+\tcil_optional_init(&new);\n+\t*copy = new;\n+\n \treturn SEPOL_OK;\n }\n \n@@ -2122,6 +2082,7 @@ int __cil_copy_node_helper(struct cil_tree_node *orig, __attribute__((unused)) u\n \t\t\targs->dest = new;\n \t\t}\n \t} else {\n+\t\tcil_tree_log(orig, CIL_ERR, \"Problem copying %s node\", cil_node_to_string(orig));\n \t\tgoto exit;\n \t}\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42494529-vul",
+      "digest": "sha256:8f3aa77a77ad96da1f38df55b97dc975fe3719fc0570a2d0a2d9df22a59ac395"
+    },
+    "patched": {
+      "ref": "n132/arvo:42494529-fix",
+      "digest": "sha256:f54e4478cd78f56af10cfd8687e83c430965e5562b8157d0de11ddea8532ad70"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/selinux/libsepol/src/ebitmap.c:232",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/selinux/libsepol/src/ebitmap.c:232"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042499399",
+  "chain": "CWE-1285->CWE-125",
+  "project": "libtpms",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42499399",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "034a5c02488cf7f0048e130177fc71c9e626e135",
+      "fix_commits": [
+        "034a5c02488cf7f0048e130177fc71c9e626e135"
+      ],
+      "repo": "https://github.com/stefanberger/libtpms"
+    },
+    "patch": "diff --git a/src/tpm2/NVMarshal.c b/src/tpm2/NVMarshal.c\nindex 8e0ec0b4d..e3db9d644 100644\n--- a/src/tpm2/NVMarshal.c\n+++ b/src/tpm2/NVMarshal.c\n@@ -4269,6 +4269,12 @@ INDEX_ORDERLY_RAM_Marshal(void *array, size_t array_size,\n                                      datasize, buffer, size);\n         }\n         offset += nrh.size;\n+        if (offset + sizeof(NV_RAM_HEADER) > array_size) {\n+            /* nothing will fit anymore and there won't be a 0-sized\n+             * terminating node (@1).\n+             */\n+            break;\n+        }\n     }\n \n     written += BLOCK_SKIP_WRITE_PUSH(TRUE, buffer, size);\n@@ -4311,6 +4317,16 @@ INDEX_ORDERLY_RAM_Unmarshal(void *array, size_t array_size,\n          */\n         nrhp = array + offset;\n \n+        if (offset + sizeof(NV_RAM_HEADER) > sourceside_size) {\n+            /* this case can occur with the previous entry filling up the\n+             * space; in this case there will not be a 0-sized terminating\n+             * node (see @1 above). We clear the rest of our space.\n+             */\n+            if (array_size > offset)\n+                memset(nrhp, 0, array_size - offset);\n+            break;\n+        }\n+\n         /* write the NVRAM header;\n            nrh->size holds the complete size including data;\n            nrh->size = 0 indicates the end */\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42499399-vul",
+      "digest": "sha256:423600dbb9e66277f6a167d4d43884bd476b25d845ef9705d937cd871a6c7226"
+    },
+    "patched": {
+      "ref": "n132/arvo:42499399-fix",
+      "digest": "sha256:b1acf3f7eed326176e104f706179e50d1480cc0ec3189c436a968dd5437e5cbe"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/libtpms/src/tpm2/NVMarshal.c:4238",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/libtpms/src/tpm2/NVMarshal.c:4238"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

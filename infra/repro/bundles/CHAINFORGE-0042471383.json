@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042471383",
+  "chain": "CWE-416->CWE-787",
+  "project": "openvswitch",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42471383",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "39976b99178eaa4862c43eaf00959f2653a01a6f",
+      "fix_commits": [
+        "39976b99178eaa4862c43eaf00959f2653a01a6f"
+      ],
+      "repo": "https://github.com/openvswitch/ovs"
+    },
+    "patch": "diff --git a/lib/ofpbuf.c b/lib/ofpbuf.c\nindex 9c0623688f1..1dab25b6444 100644\n--- a/lib/ofpbuf.c\n+++ b/lib/ofpbuf.c\n@@ -469,9 +469,9 @@ void\n ofpbuf_insert(struct ofpbuf *b, size_t offset, const void *data, size_t n)\n {\n     if (offset < b->size) {\n-        ofpbuf_put_uninit(b, n);\n+        ofpbuf_put_uninit(b, n); /* b->size gets increased. */\n         memmove((char *) b->data + offset + n, (char *) b->data + offset,\n-                b->size - offset);\n+                b->size - offset - n);\n         memcpy((char *) b->data + offset, data, n);\n     } else {\n         ovs_assert(offset == b->size);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42471383-vul",
+      "digest": "sha256:5da56fe40c5a07f7cb218e6a785dac3601c8eba9a16f488efffb3a2fca27d37f"
+    },
+    "patched": {
+      "ref": "n132/arvo:42471383-fix",
+      "digest": "sha256:a97bcd94eb53ce8d4df8ba0837e3f74eafdc77e05fb1595b3f1a43fae693aa4b"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/openvswitch/lib/ofpbuf.c:473",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/openvswitch/lib/ofpbuf.c:473"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

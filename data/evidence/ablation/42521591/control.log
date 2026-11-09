@@ -1,0 +1,80 @@
+======================= INFO =========================
+This binary is built for AFL-fuzz.
+To run the target function on individual input(s) execute this:
+  /out/encoder_mvg_fuzzer < INPUT_FILE
+or
+  /out/encoder_mvg_fuzzer INPUT_FILE1 [INPUT_FILE2 ... ]
+To fuzz with afl-fuzz execute this:
+  afl-fuzz [afl-flags] /out/encoder_mvg_fuzzer [-N]
+afl-fuzz will run N iterations before re-spawning the process (default: 1000)
+======================================================
+Reading 20 bytes from /tmp/poc
+=================================================================
+==39406==ERROR: AddressSanitizer: stack-buffer-overflow on address 0x7f248e3788bf at pc 0x0000008170bc bp 0x7ffd98daf690 sp 0x7ffd98daf688
+WRITE of size 1 at 0x7f248e3788bf thread T0
+SCARINESS: 46 (1-byte-write-stack-buffer-overflow)
+    #0 0x8170bb in GetNextToken /src/imagemagick/MagickCore/token.c:313:24
+    #1 0x65ce03 in DrawImage /src/imagemagick/MagickCore/draw.c:1802:5
+    #2 0x908601 in ReadMVGImage /src/imagemagick/coders/mvg.c:221:10
+    #3 0x62c617 in ReadImage /src/imagemagick/MagickCore/constitute.c:497:13
+    #4 0x5cde4f in BlobToImage /src/imagemagick/MagickCore/blob.c:466:13
+    #5 0x526e04 in Magick::Image::read(Magick::Blob const&) /src/imagemagick/Magick++/lib/Image.cpp:4008:12
+    #6 0x51d46a in LLVMFuzzerTestOneInput /src/imagemagick/Magick++/fuzz/encoder_fuzzer.cc:20:11
+    #7 0x51dc4f in ExecuteFilesOnyByOne(int, char**) /src/libfuzzer/afl/afl_driver.cpp:279:5
+    #8 0x51e1ef in main /src/libfuzzer/afl/afl_driver.cpp:316:12
+    #9 0x7f248d31682f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+    #10 0x41d698 in _start (/out/encoder_mvg_fuzzer+0x41d698)
+
+DEDUP_TOKEN: GetNextToken--DrawImage--ReadMVGImage
+Address 0x7f248e3788bf is located in stack of thread T0 at offset 191 in frame
+    #0 0x65c2cf in DrawImage /src/imagemagick/MagickCore/draw.c:1672
+
+DEDUP_TOKEN: DrawImage
+  This frame has 16 object(s):
+    [32, 80) 'affine' (line 1675)
+    [112, 160) 'current' (line 1675)
+    [192, 4288) 'keyword' (line 1679) <== Memory access at offset 191 underflows this variable
+    [4416, 8512) 'geometry' (line 1679)
+    [8640, 8648) 'next_token' (line 1679)
+    [8672, 12768) 'pattern' (line 1679)
+    [12896, 12904) 'q' (line 1687)
+    [12928, 17024) 'name' (line 2312)
+    [17152, 25344) 'key' (line 2337)
+    [25600, 29696) 'name544' (line 2337)
+    [29824, 33920) 'type' (line 2337)
+    [34048, 42240) 'key713' (line 2421)
+    [42496, 46592) 'name714' (line 2421)
+    [46720, 46808) 'stop_color' (line 2571)
+    [46848, 46856) 'r' (line 2641)
+    [46880, 46888) 't' (line 2997)
+HINT: this may be a false positive if your program uses some custom stack unwind mechanism or swapcontext
+      (longjmp and C++ exceptions *are* supported)
+SUMMARY: AddressSanitizer: stack-buffer-overflow /src/imagemagick/MagickCore/token.c:313:24 in GetNextToken
+Shadow bytes around the buggy address:
+  0x0fe511c670c0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0fe511c670d0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0fe511c670e0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0fe511c670f0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0fe511c67100: f1 f1 f1 f1 00 00 00 00 00 00 f2 f2 f2 f2 00 00
+=>0x0fe511c67110: 00 00 00 00 f2 f2 f2[f2]00 00 00 00 00 00 00 00
+  0x0fe511c67120: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0fe511c67130: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0fe511c67140: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0fe511c67150: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0fe511c67160: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb

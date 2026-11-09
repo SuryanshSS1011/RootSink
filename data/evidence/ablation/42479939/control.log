@@ -1,0 +1,80 @@
+INFO: Seed: 660488914
+INFO: Loaded 1 modules   (7426 inline 8-bit counters): 7426 [0x913a30, 0x915732), 
+INFO: Loaded 1 PC tables (7426 PCs): 7426 [0x6a7980,0x6c49a0), 
+/out/avc_dec_fuzzer: Running 1 inputs 1 time(s) each.
+Running: /tmp/poc
+=================================================================
+==805==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x622000001738 at pc 0x00000061ce9f bp 0x7fc847977df0 sp 0x7fc847977de8
+READ of size 8 at 0x622000001738 thread T5
+SCARINESS: 33 (8-byte-read-heap-buffer-overflow-far-from-bounds)
+    #0 0x61ce9e in ih264d_decode_slice_thread /src/libavc/decoder/ih264d_thread_parse_decode.c:510:55
+    #1 0x61cfe0 in ih264d_decode_picture_thread /src/libavc/decoder/ih264d_thread_parse_decode.c:602:9
+    #2 0x7fc84d8956b9 in start_thread (/lib/x86_64-linux-gnu/libpthread.so.0+0x76b9)
+    #3 0x7fc84cfa941c in clone (/lib/x86_64-linux-gnu/libc.so.6+0x10741c)
+
+DEDUP_TOKEN: ih264d_decode_slice_thread--ih264d_decode_picture_thread--start_thread
+0x622000001738 is located 8 bytes to the right of 5680-byte region [0x622000000100,0x622000001730)
+allocated by thread T0 here:
+    #0 0x5221b7 in posix_memalign /src/llvm/projects/compiler-rt/lib/asan/asan_malloc_linux.cpp:226:3
+    #1 0x553b53 in iv_aligned_malloc(void*, int, int) /src/libavc/fuzzer/avc_dec_fuzzer.cpp:63:12
+    #2 0x5deb00 in ih264d_allocate_dynamic_bufs /src/libavc/decoder/ih264d_utils.c:2027:14
+    #3 0x5dced4 in ih264d_init_pic /src/libavc/decoder/ih264d_utils.c:820:15
+    #4 0x5f71e4 in ih264d_start_of_pic /src/libavc/decoder/ih264d_parse_slice.c:341:11
+    #5 0x5fde1b in ih264d_parse_decode_slice /src/libavc/decoder/ih264d_parse_slice.c:1554:19
+    #6 0x5cf131 in ih264d_parse_nal_unit /src/libavc/decoder/ih264d_parse_headers.c:1255:40
+    #7 0x55cdfa in ih264d_video_decode /src/libavc/decoder/ih264d_api.c:2365:15
+    #8 0x555f75 in Codec::decodeFrame(unsigned char const*, unsigned long, unsigned long*) /src/libavc/fuzzer/avc_dec_fuzzer.cpp:313:9
+    #9 0x5568bd in LLVMFuzzerTestOneInput /src/libavc/fuzzer/avc_dec_fuzzer.cpp:362:18
+    #10 0x459ef1 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm/projects/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:556:15
+    #11 0x444b11 in fuzzer::RunOneTest(fuzzer::Fuzzer*, char const*, unsigned long) /src/llvm/projects/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:292:6
+    #12 0x44a7ce in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm/projects/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:774:9
+    #13 0x474942 in main /src/llvm/projects/compiler-rt/lib/fuzzer/FuzzerMain.cpp:19:10
+    #14 0x7fc84cec282f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+
+DEDUP_TOKEN: posix_memalign--iv_aligned_malloc(void*, int, int)--ih264d_allocate_dynamic_bufs
+Thread T5 created by T0 here:
+    #0 0x50be1a in pthread_create /src/llvm/projects/compiler-rt/lib/asan/asan_interceptors.cpp:214:3
+    #1 0x5b0d41 in ih264d_mark_err_slice_skip /src/libavc/decoder/ih264d_parse_pslice.c:1558:21
+    #2 0x5fd201 in ih264d_parse_decode_slice /src/libavc/decoder/ih264d_parse_slice.c:1398:15
+    #3 0x5cf131 in ih264d_parse_nal_unit /src/libavc/decoder/ih264d_parse_headers.c:1255:40
+    #4 0x55cdfa in ih264d_video_decode /src/libavc/decoder/ih264d_api.c:2365:15
+    #5 0x555f75 in Codec::decodeFrame(unsigned char const*, unsigned long, unsigned long*) /src/libavc/fuzzer/avc_dec_fuzzer.cpp:313:9
+    #6 0x5568bd in LLVMFuzzerTestOneInput /src/libavc/fuzzer/avc_dec_fuzzer.cpp:362:18
+    #7 0x459ef1 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm/projects/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:556:15
+    #8 0x444b11 in fuzzer::RunOneTest(fuzzer::Fuzzer*, char const*, unsigned long) /src/llvm/projects/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:292:6
+    #9 0x44a7ce in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm/projects/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:774:9
+    #10 0x474942 in main /src/llvm/projects/compiler-rt/lib/fuzzer/FuzzerMain.cpp:19:10
+    #11 0x7fc84cec282f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+
+DEDUP_TOKEN: pthread_create--ih264d_mark_err_slice_skip--ih264d_parse_decode_slice
+SUMMARY: AddressSanitizer: heap-buffer-overflow /src/libavc/decoder/ih264d_thread_parse_decode.c:510:55 in ih264d_decode_slice_thread
+Shadow bytes around the buggy address:
+  0x0c447fff8290: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c447fff82a0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c447fff82b0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c447fff82c0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c447fff82d0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x0c447fff82e0: 00 00 00 00 00 00 fa[fa]fa fa fa fa fa fa fa fa
+  0x0c447fff82f0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c447fff8300: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c447fff8310: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c447fff8320: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c447fff8330: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca

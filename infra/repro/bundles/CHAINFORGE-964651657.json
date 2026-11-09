@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-964651657",
+  "chain": "CWE-456->CWE-457",
+  "project": "mupdf",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42474174",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/ArtifexSoftware/mupdf/commit/229d3e8f5cc3974c46a017cbdb72a14d6223e5d5",
+      "fix_commits": [
+        "229d3e8f5cc3974c46a017cbdb72a14d6223e5d5"
+      ],
+      "repo": "https://github.com/ArtifexSoftware/mupdf"
+    },
+    "patch": "diff --git a/source/fitz/draw-unpack.c b/source/fitz/draw-unpack.c\nindex d06689c538..6bc0eb402e 100644\n--- a/source/fitz/draw-unpack.c\n+++ b/source/fitz/draw-unpack.c\n@@ -257,11 +257,11 @@ fz_unpack_tile(fz_context *ctx, fz_pixmap *dst, unsigned char *src, int n, int d\n \t\t\t\t\t\telse\n \t\t\t\t\t\t\t*dp++ = fz_read_bits(ctx, stm, depth) >> (depth - 8);\n \t\t\t\t\t}\n-\t\t\t\t\tif (skip == -1)\n+\t\t\t\t\tif (pad)\n \t\t\t\t\t\t*dp++ = 255;\n \t\t\t\t}\n \n-\t\t\t\tdp += dst->stride - w * (n + (skip == -1));\n+\t\t\t\tdp += dst->stride - w * (n + (pad > 0));\n \t\t\t\t(void) fz_read_bits(ctx, stm, skipbits);\n \t\t\t}\n \t\t}\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42474174-vul",
+      "digest": "sha256:e3fb4810546c979e08d45724c475dd7ecb59bd5325a941f2ea397711a299ed9b"
+    },
+    "patched": {
+      "ref": "n132/arvo:42474174-fix",
+      "digest": "sha256:be0370982247f8b361ee2e740a471b9617e8490a8375336c6c5e5fdd0842b780"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/mupdf/source/fitz/image.c:143",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/mupdf/source/fitz/image.c:143"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-960034212",
+  "chain": "CWE-456->CWE-457",
+  "project": "wolfmqtt",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42502623",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/wolfSSL/wolfMQTT/commit/362b34afc2584237175a2a592b4741df7104faec",
+      "fix_commits": [
+        "362b34afc2584237175a2a592b4741df7104faec"
+      ],
+      "repo": "https://github.com/wolfSSL/wolfMQTT"
+    },
+    "patch": "diff --git a/src/mqtt_client.c b/src/mqtt_client.c\nindex 4b4ab2435..3da38ac40 100644\n--- a/src/mqtt_client.c\n+++ b/src/mqtt_client.c\n@@ -296,6 +296,7 @@ static int Handle_Props(MqttClient* client, MqttProp* props, byte use_cb)\n         }\n     #else\n         (void)client;\n+        (void)use_cb;\n     #endif\n         /* Free the properties */\n         MqttProps_Free(props);\ndiff --git a/src/mqtt_packet.c b/src/mqtt_packet.c\nindex 4802bc8bc..b10a6c819 100755\n--- a/src/mqtt_packet.c\n+++ b/src/mqtt_packet.c\n@@ -368,7 +368,7 @@ int MqttEncode_Props(MqttPacketType packet, MqttProp* props, byte* buf)\n     // TODO: Validate property type is allowed for packet type\n \n     /* loop through the list properties */\n-    while (cur_prop != NULL)\n+    while ((cur_prop != NULL) && (rc >= 0))\n     {\n         /* TODO: validate packet type */\n         (void)packet;\n@@ -459,7 +459,8 @@ int MqttEncode_Props(MqttPacketType packet, MqttProp* props, byte* buf)\n             case MQTT_DATA_TYPE_NONE:\n             default:\n             {\n-                /* Do nothing */\n+                /* Invalid property data type */\n+                rc = MQTT_CODE_ERROR_PROPERTY;\n                 break;\n             }\n         }\n@@ -596,17 +597,25 @@ int MqttDecode_Props(MqttPacketType packet, MqttProp** props, byte* pbuf,\n                 tmp = MqttDecode_String(buf,\n                         (const char**)&cur_prop->data_str.str,\n                         &cur_prop->data_str.len);\n-                buf += tmp;\n-                rc += (int)tmp;\n-                prop_len -= tmp;\n+                if (cur_prop->data_str.len <=\n+                    (buf_len - (buf + tmp - pbuf))) {\n+                    buf += tmp;\n+                    rc += (int)tmp;\n+                    prop_len -= tmp;\n \n-                if (cur_prop->data_str.len <= (buf_len - (buf - pbuf))) {\n                     tmp = MqttDecode_String(buf,\n                             (const char**)&cur_prop->data_str2.str,\n                             &cur_prop->data_str2.len);\n-                    buf += tmp;\n-                    rc += (int)tmp;\n-                    prop_len -= tmp;\n+                    if (cur_prop->data_str2.len <=\n+                        (buf_len - (buf + tmp - pbuf))) {\n+                        buf += tmp;\n+                        rc += (int)tmp;\n+                        prop_len -= tmp;\n+                    }\n+                    else {\n+                        /* Invalid length */\n+                        rc = MQTT_CODE_ERROR_PROPERTY;\n+                    }\n                 }\n                 else {\n                     /* Invalid length */\n@@ -617,7 +626,8 @@ int MqttDecode_Props(MqttPacketType packet, MqttProp** props, byte* pbuf,\n             case MQTT_DATA_TYPE_NONE:\n             default:\n             {\n-                /* Do nothing */\n+                /* Invalid property data type */\n+                rc = MQTT_CODE_ERROR_PROPERTY;\n                 break;\n             }\n         }\n@@ -1722,6 +1732,9 @@ int MqttDecode_Auth(byte *rx_buf, int rx_buf_len, MqttAuth *auth)\n \n         if (props_len <= (word32)(rx_buf_len - (rx_payload - rx_buf))) {\n             rx_payload += tmp;\n+            if ((rx_payload - rx_buf) > rx_buf_len) {\n+                return MQTT_CODE_ERROR_OUT_OF_BUFFER;\n+            }\n             if (props_len > 0) {\n                 /* Decode the Properties */\n                 tmp = MqttDecode_Props(MQTT_PACKET_TYPE_AUTH,\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42502623-vul",
+      "digest": "sha256:98c6dc6130a5432581615528828d798d4cdf37ec5ae71d4056ef723013dda878"
+    },
+    "patched": {
+      "ref": "n132/arvo:42502623-fix",
+      "digest": "sha256:147228758a53e61bb3f0e5ef06bef66508f8bd2964960178f2c9fd9833643047"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/wolfmqtt/src/mqtt_packet.c:237",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/wolfmqtt/src/mqtt_packet.c:237"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

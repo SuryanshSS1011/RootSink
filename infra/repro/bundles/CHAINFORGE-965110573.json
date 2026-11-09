@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-965110573",
+  "chain": "CWE-456->CWE-457",
+  "project": "wabt",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42528041",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/WebAssembly/wabt/commit/fde4ca34a5ad55cbaf2327f5df658149e1a53364",
+      "fix_commits": [
+        "fde4ca34a5ad55cbaf2327f5df658149e1a53364"
+      ],
+      "repo": "https://github.com/WebAssembly/wabt"
+    },
+    "patch": "diff --git a/src/binary-reader-ir.cc b/src/binary-reader-ir.cc\nindex 2029b0f7c4..11e88da549 100644\n--- a/src/binary-reader-ir.cc\n+++ b/src/binary-reader-ir.cc\n@@ -1703,8 +1703,11 @@ Result BinaryReaderIR::OnCodeMetadataFuncCount(Index count) {\n }\n \n Result BinaryReaderIR::OnCodeMetadataCount(Index function_index, Index count) {\n-  code_metadata_queue_.push_func(module_->funcs[function_index]);\n-  return Result::Ok;\n+  if (function_index < module_->funcs.size()) {\n+    code_metadata_queue_.push_func(module_->funcs[function_index]);\n+    return Result::Ok;\n+  }\n+  return Result::Error;\n }\n \n Result BinaryReaderIR::OnCodeMetadata(Offset offset,\ndiff --git a/src/binary-reader.cc b/src/binary-reader.cc\nindex 6828435385..cbdd3384f8 100644\n--- a/src/binary-reader.cc\n+++ b/src/binary-reader.cc\n@@ -2439,7 +2439,7 @@ Result BinaryReader::ReadCodeMetadataSection(std::string_view name,\n   Index last_function_index = kInvalidIndex;\n   for (Index i = 0; i < num_functions; ++i) {\n     Index function_index;\n-    CHECK_RESULT(ReadCount(&function_index, \"function index\"));\n+    CHECK_RESULT(ReadIndex(&function_index, \"function index\"));\n     ERROR_UNLESS(function_index >= num_func_imports_,\n                  \"function import can't have metadata (got %\" PRIindex \")\",\n                  function_index);\ndiff --git a/test/parse/branch-hints.txt b/test/parse/branch-hints.txt\nnew file mode 100644\nindex 0000000000..974d88a5ac\n--- /dev/null\n+++ b/test/parse/branch-hints.txt\n@@ -0,0 +1,121 @@\n+;;; TOOL: run-objdump\n+;;; ARGS0: --enable-annotations --enable-code-metadata\n+;;; ARGS1: -x -j \"metadata.code.branch_hint\"\n+;; combined from https://github.com/bytecodealliance/wasm-tools/tree/6ed178840fae8599312ab14c2cad6faea9f80bf1/tests/cli/branch-hinting\n+(module\n+  (func $main (result i32)\n+    (local i32 i32 i32 i32)\n+    i32.const 0\n+    local.tee 2\n+    local.set 3\n+    loop  ;; label = @1\n+      local.get 2\n+      i32.const 50000\n+      i32.eq\n+      (@metadata.code.branch_hint \"\\00\") if  ;; label = @2\n+        i32.const 1\n+        local.set 3\n+      end\n+      local.get 2\n+      i32.const 1\n+      i32.add\n+      local.tee 2\n+      i32.const 100000\n+      i32.ne\n+      (@metadata.code.branch_hint \"\\01\") br_if 0 (;@1;)\n+    end\n+    local.get 3)\n+\n+  (func\n+    i32.const 0\n+    (@metadata.code.branch_hint \"\\00\")\n+    if\n+    end)\n+\n+\n+  (func\n+    i32.const 0\n+    (@metadata.code.branch_hint \"\\00\")\n+    if\n+      i32.const 0\n+      (@metadata.code.branch_hint \"\\01\")\n+      br_if 0\n+    end)\n+\n+  (func\n+    i32.const 0\n+    (@metadata.code.branch_hint \"\\01\")\n+    if\n+      i32.const 0\n+      (@metadata.code.branch_hint \"\\00\")\n+      br_if 0\n+    end)\n+)\n+\n+(;; STDOUT ;;;\n+branch-hints.wasm:\tfile format wasm 0x1\n+Section Details:\n+Custom:\n+ - name: \"metadata.code.branch_hint\"\n+   - func[0]:\n+    - meta[12]:\n+     - 0000000: 00                                       .\n+    - meta[25]:\n+     - 0000000: 01                                       .\n+   - func[1]:\n+    - meta[3]:\n+     - 0000000: 00                                       .\n+   - func[2]:\n+    - meta[3]:\n+     - 0000000: 00                                       .\n+    - meta[7]:\n+     - 0000000: 01                                       .\n+   - func[3]:\n+    - meta[3]:\n+     - 0000000: 01                                       .\n+    - meta[7]:\n+     - 0000000: 00                                       .\n+Code Disassembly:\n+000057 func[0]:\n+ 000058: 04 7f                      | local[0..3] type=i32\n+ 00005a: 41 00                      | i32.const 0\n+ 00005c: 22 02                      | local.tee 2\n+ 00005e: 21 03                      | local.set 3\n+ 000060: 03 40                      | loop\n+ 000062: 20 02                      |   local.get 2\n+ 000064: 41 d0 86 03                |   i32.const 50000\n+ 000068: 46                         |   i32.eq\n+ 000069: 04 40                      |   if\n+ 00006b: 41 01                      |     i32.const 1\n+ 00006d: 21 03                      |     local.set 3\n+ 00006f: 0b                         |   end\n+ 000070: 20 02                      |   local.get 2\n+ 000072: 41 01                      |   i32.const 1\n+ 000074: 6a                         |   i32.add\n+ 000075: 22 02                      |   local.tee 2\n+ 000077: 41 a0 8d 06                |   i32.const 100000\n+ 00007b: 47                         |   i32.ne\n+ 00007c: 0d 00                      |   br_if 0\n+ 00007e: 0b                         | end\n+ 00007f: 20 03                      | local.get 3\n+ 000081: 0b                         | end\n+000083 func[1]:\n+ 000084: 41 00                      | i32.const 0\n+ 000086: 04 40                      | if\n+ 000088: 0b                         | end\n+ 000089: 0b                         | end\n+00008b func[2]:\n+ 00008c: 41 00                      | i32.const 0\n+ 00008e: 04 40                      | if\n+ 000090: 41 00                      |   i32.const 0\n+ 000092: 0d 00                      |   br_if 0\n+ 000094: 0b                         | end\n+ 000095: 0b                         | end\n+000097 func[3]:\n+ 000098: 41 00                      | i32.const 0\n+ 00009a: 04 40                      | if\n+ 00009c: 41 00                      |   i32.const 0\n+ 00009e: 0d 00                      |   br_if 0\n+ 0000a0: 0b                         | end\n+ 0000a1: 0b                         | end\n+;;; STDOUT ;;)\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42528041-vul",
+      "digest": "sha256:e100b8be2c1fa13fb9fd56a2b572523c391a9598d103174885c23cc19d2c9a9f"
+    },
+    "patched": {
+      "ref": "n132/arvo:42528041-fix",
+      "digest": "sha256:f78f10256234b89b04203b47015dd4beb36904a228995bd09e19a13c0308493f"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/wabt/src/binary-reader-ir.cc:72",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/wabt/src/binary-reader-ir.cc:72"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

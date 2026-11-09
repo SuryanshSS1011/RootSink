@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042480457",
+  "chain": "CWE-1285->CWE-787",
+  "project": "wireshark",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42480457",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "c247a8351f4d2be224e8cc424e104d8823450f5d",
+      "fix_commits": [
+        "c247a8351f4d2be224e8cc424e104d8823450f5d"
+      ],
+      "repo": "https://github.com/wireshark/wireshark"
+    },
+    "patch": "diff --git a/epan/dissectors/packet-wcp.c b/epan/dissectors/packet-wcp.c\nindex 82028b673a0..07db5c8d05e 100644\n--- a/epan/dissectors/packet-wcp.c\n+++ b/epan/dissectors/packet-wcp.c\n@@ -159,6 +159,7 @@ static gint ett_wcp_field = -1;\n static expert_field ei_wcp_compressed_data_exceeds = EI_INIT;\n static expert_field ei_wcp_uncompressed_data_exceeds = EI_INIT;\n static expert_field ei_wcp_invalid_window_offset = EI_INIT;\n+static expert_field ei_wcp_buffer_too_long = EI_INIT;\n /* static expert_field ei_wcp_invalid_match_length = EI_INIT; */\n \n static dissector_handle_t fr_uncompressed_handle;\n@@ -262,7 +263,7 @@ dissect_wcp_reset(tvbuff_t *tvb, int offset, proto_tree *tree) {\n }\n \n \n-static void wcp_save_data(tvbuff_t *tvb, packet_info *pinfo) {\n+static void wcp_save_data(tvbuff_t *tvb, packet_info *pinfo, proto_tree* tree) {\n \n \twcp_window_t *buf_ptr = 0;\n \tsize_t len;\n@@ -273,13 +274,17 @@ static void wcp_save_data(tvbuff_t *tvb, packet_info *pinfo) {\n \n \tif ((buf_ptr->buf_cur + len) <= (buf_ptr->buffer + MAX_WIN_BUF_LEN)) {\n \t\ttvb_memcpy(tvb, buf_ptr->buf_cur, 2, len);\n-\t\tbuf_ptr->buf_cur = buf_ptr->buf_cur + len;\n+\t\tbuf_ptr->buf_cur += len;\n \t} else {\n \t\tguint8 *buf_end = buf_ptr->buffer + MAX_WIN_BUF_LEN;\n \t\ttvb_memcpy(tvb, buf_ptr->buf_cur, 2, buf_end - buf_ptr->buf_cur);\n-\t\ttvb_memcpy(tvb, buf_ptr->buffer, (gint) (buf_end - buf_ptr->buf_cur-2),\n-\t\t\tlen - (buf_end - buf_ptr->buf_cur));\n-\t\tbuf_ptr->buf_cur = buf_ptr->buf_cur + len - MAX_WIN_BUF_LEN;\n+\t\tif (buf_ptr->buf_cur + len <= buf_end) {\n+\t\t\ttvb_memcpy(tvb, buf_ptr->buffer, (gint) (buf_end - buf_ptr->buf_cur-2),\n+\t\t\t\tlen - (buf_end - buf_ptr->buf_cur));\n+\t\t\tbuf_ptr->buf_cur += len - MAX_WIN_BUF_LEN;\n+\t\t} else {\n+\t\t\tproto_tree_add_expert(tree, pinfo, &ei_wcp_buffer_too_long, tvb, 0, -1);\n+\t\t}\n \t}\n }\n \n@@ -350,7 +355,7 @@ static int dissect_wcp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void\n \n \tif (cmd == 1) { /* uncompressed data */\n \t\tif (!pinfo->fd->visited) {\t/* if first pass */\n-\t\t\twcp_save_data(tvb, pinfo);\n+\t\t\twcp_save_data(tvb, pinfo, wcp_tree);\n \t\t}\n \t\tnext_tvb = tvb_new_subset_remaining(tvb, wcp_header_len);\n \t} else { /* cmd == 0 || (cmd == 0xf && ext_cmd == 0) */\n@@ -751,6 +756,7 @@ proto_register_wcp(void)\n \t\t{ &ei_wcp_compressed_data_exceeds, { \"wcp.compressed_data.exceeds\", PI_MALFORMED, PI_ERROR, \"Compressed data exceeds maximum buffer length\", EXPFILL }},\n \t\t{ &ei_wcp_uncompressed_data_exceeds, { \"wcp.uncompressed_data.exceeds\", PI_MALFORMED, PI_ERROR, \"Uncompressed data exceeds maximum buffer length\", EXPFILL }},\n \t\t{ &ei_wcp_invalid_window_offset, { \"wcp.off.invalid\", PI_MALFORMED, PI_ERROR, \"Offset points outside of visible window\", EXPFILL }},\n+\t\t{ &ei_wcp_buffer_too_long, { \"wcp.buffer_too_long\", PI_MALFORMED, PI_ERROR, \"Buffer too long\", EXPFILL }},\n #if 0\n \t\t{ &ei_wcp_invalid_match_length, { \"wcp.len.invalid\", PI_MALFORMED, PI_ERROR, \"Length greater than offset\", EXPFILL }},\n #endif\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42480457-vul",
+      "digest": "sha256:22c7eec869f572eadfefa72e44aa02e74d819ce99943102b57dee3b2d0acaf15"
+    },
+    "patched": {
+      "ref": "n132/arvo:42480457-fix",
+      "digest": "sha256:0130df10390e2f603c81aa32e230dd67f66ebfb3485987634ab1ea17818d66ef"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/wireshark/epan/tvbuff.c:844",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/wireshark/epan/tvbuff.c:844"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042532364",
+  "chain": "CWE-20->CWE-125",
+  "project": "upx",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42532364",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "10807ebdc212c44db366131e71b3e358643eae51",
+      "fix_commits": [
+        "10807ebdc212c44db366131e71b3e358643eae51"
+      ],
+      "repo": "https://github.com/upx/upx"
+    },
+    "patch": "diff --git a/src/p_lx_elf.cpp b/src/p_lx_elf.cpp\nindex c7541ab751..80f61a333e 100644\n--- a/src/p_lx_elf.cpp\n+++ b/src/p_lx_elf.cpp\n@@ -7170,7 +7170,10 @@ void PackLinuxElf64::unpack(OutputFile *fo)\n     upx_uint64_t old_dtinit = 0;\n \n     if (Elf64_Ehdr::ET_EXEC == get_te16(&ehdri.e_type)) {\n-        if (get_te64(&ehdri.e_entry) < 0x401180\n+// 40fddf17153ee3db73a04ff1bf288b91676138d6 2001-02-01 ph.version 11; b_info 12 bytes\n+// df9db96bd1c013c07da1d7ec740021d588ab2815 2001-01-17 ph.version 11; no b_info (==> 8 bytes)\n+        if (ph.version <= 11\n+        &&  get_te64(&ehdri.e_entry) < 0x401180\n         &&  get_te16(&ehdri.e_machine)==Elf64_Ehdr::EM_X86_64) {\n             // old style, 8-byte b_info:\n             // sizeof(b_info.sz_unc) + sizeof(b_info.sz_cpr);\n@@ -8338,7 +8341,10 @@ void PackLinuxElf32::unpack(OutputFile *fo)\n     upx_uint32_t old_dtinit = 0;\n \n     if (Elf32_Ehdr::ET_EXEC == get_te16(&ehdri.e_type)) {\n-        if (get_te32(&ehdri.e_entry) < 0x401180\n+// 40fddf17153ee3db73a04ff1bf288b91676138d6 2001-02-01 ph.version 11; b_info 12 bytes\n+// df9db96bd1c013c07da1d7ec740021d588ab2815 2001-01-17 ph.version 11; no b_info (==> 8 bytes)\n+        if (ph.version <= 11\n+        &&  get_te32(&ehdri.e_entry) < 0x401180\n         &&  get_te16(&ehdri.e_machine)==Elf32_Ehdr::EM_386) {\n             // old style, 8-byte b_info:\n             // sizeof(b_info.sz_unc) + sizeof(b_info.sz_cpr);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42532364-vul",
+      "digest": "sha256:1e0cd2854562863964b375c4fe234eb8c74fa5fcd617991fe99d2ca4e532f9f5"
+    },
+    "patched": {
+      "ref": "n132/arvo:42532364-fix",
+      "digest": "sha256:2ed664c39299197aeaf57b25a55d54c92fe499c9574e6d56e8bd6e8334759a4d"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/upx/src/bele.h:117",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/upx/src/bele.h:117"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

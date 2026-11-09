@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042470953",
+  "chain": "CWE-416->CWE-125",
+  "project": "wpantund",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42470953",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "bd1361434619a52b296e6a94c4188aae1a693179",
+      "fix_commits": [
+        "bd1361434619a52b296e6a94c4188aae1a693179"
+      ],
+      "repo": "https://github.com/openthread/wpantund"
+    },
+    "patch": "From bd1361434619a52b296e6a94c4188aae1a693179 Mon Sep 17 00:00:00 2001\nFrom: Abtin Keshavarzian <abtink@google.com>\nDate: Tue, 9 Oct 2018 14:16:30 -0700\nSubject: [PATCH] Fix \"use after delete\" issue in on_mesh_prefix_was_removed()\n (#359)\n\n---\n src/wpantund/NCPInstanceBase-Addresses.cpp | 2 +-\n 1 file changed, 1 insertion(+), 1 deletion(-)\n\ndiff --git a/src/wpantund/NCPInstanceBase-Addresses.cpp b/src/wpantund/NCPInstanceBase-Addresses.cpp\nindex cd52e27..bc413c9 100644\n--- a/src/wpantund/NCPInstanceBase-Addresses.cpp\n+++ b/src/wpantund/NCPInstanceBase-Addresses.cpp\n@@ -916,7 +916,7 @@ NCPInstanceBase::on_mesh_prefix_was_removed(Origin origin, const struct in6_addr\n \t\t\taddr_iter = find_address_with_prefix(prefix, kOriginThreadNCP);\n \n \t\t\tif (addr_iter != mUnicastAddresses.end()) {\n-\t\t\t\tconst struct in6_addr &address = addr_iter->first;\n+\t\t\t\tstruct in6_addr address = addr_iter->first;\n \t\t\t\tsyslog(LOG_NOTICE, \"Removing SLAAC address %s/%d from NCP\", in6_addr_to_string(address).c_str(), prefix_len);\n \t\t\t\tremove_unicast_address_on_ncp(address, prefix_len,\n \t\t\t\t\tboost::bind(&NCPInstanceBase::check_ncp_entry_update_status, this, _1, \"removing SLAAC address\", NilReturn()));\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42470953-vul",
+      "digest": "sha256:60799e993469ffcdd2943cf9c07907b22d1d18b5082ab05d6f61fce1d7451203"
+    },
+    "patched": {
+      "ref": "n132/arvo:42470953-fix",
+      "digest": "sha256:3107c87918b7d1dc89dc519e64baa9c9e0b22289b0712e6c1ba08d850208bebf"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/wpantund/src/wpantund/../util/TunnelIPv6Interface.cpp:451",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/wpantund/src/wpantund/../util/TunnelIPv6Interface.cpp:451"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

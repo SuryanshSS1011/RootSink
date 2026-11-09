@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042531371",
+  "chain": "CWE-1284->CWE-787",
+  "project": "gpac",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42531371",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "067bef9548698847fe9126308626e672e1ecab75",
+      "fix_commits": [
+        "067bef9548698847fe9126308626e672e1ecab75"
+      ],
+      "repo": "https://github.com/gpac/gpac"
+    },
+    "patch": "diff --git a/src/utils/token.c b/src/utils/token.c\nindex 44190488ad..d47a4164d3 100644\n--- a/src/utils/token.c\n+++ b/src/utils/token.c\n@@ -86,7 +86,7 @@ GF_EXPORT\n s32 gf_token_get_line(const char *Buffer, u32 Start, u32 Size, char *LineBuffer, u32 LineBufferSize)\n {\n \tu32 offset;\n-\ts32 i, End, Total;\n+\ts32 End, Total;\n \tLineBuffer[0] = 0;\n \tif (Start >= Size) return -1;\n \n@@ -100,9 +100,9 @@ s32 gf_token_get_line(const char *Buffer, u32 Start, u32 Size, char *LineBuffer,\n \t}\n \n \tTotal = End - Start + offset;\n-\tif ((u32) Total >= LineBufferSize) Total = LineBufferSize;\n-\tfor (i=0; i<Total; i++) LineBuffer[i] = Buffer[Start+i];\n-\tLineBuffer[i] = 0;\n+\tif ((u32) Total >= LineBufferSize) Total = LineBufferSize-1;\n+\tmemcpy(LineBuffer, Buffer + Start, Total);\n+\tLineBuffer[Total] = 0;\n \treturn (End + offset);\n }\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42531371-vul",
+      "digest": "sha256:b711e817588b9f44577ae7843425748162f824f6822d67d79e6e0a709521c4d5"
+    },
+    "patched": {
+      "ref": "n132/arvo:42531371-fix",
+      "digest": "sha256:723fd7a1072da1ed5304eb50ca8674abe930363e607fb06cbf5b22721efcd52c"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/gpac/src/utils/token.c:105",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/gpac/src/utils/token.c:105"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

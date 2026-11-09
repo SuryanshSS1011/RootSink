@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042534457",
+  "chain": "CWE-20->CWE-125",
+  "project": "fwupd",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42534457",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "0d7651574f7aba575546743aac1a598798bbdb50",
+      "fix_commits": [
+        "0d7651574f7aba575546743aac1a598798bbdb50"
+      ],
+      "repo": "https://github.com/fwupd/fwupd"
+    },
+    "patch": "diff --git a/libfwupdplugin/fu-coswid-firmware.c b/libfwupdplugin/fu-coswid-firmware.c\nindex 117213e93c19..41222a35e22f 100644\n--- a/libfwupdplugin/fu-coswid-firmware.c\n+++ b/libfwupdplugin/fu-coswid-firmware.c\n@@ -256,10 +256,11 @@ fu_coswid_firmware_parse_link(FuCoswidFirmware *self,\n \t\t\t} else if (cbor_isa_uint(item)) {\n \t\t\t\tlink->rel = cbor_get_uint8(pairs[i].value);\n \t\t\t} else {\n-\t\t\t\tg_set_error_literal(error,\n-\t\t\t\t\t\t    FWUPD_ERROR,\n-\t\t\t\t\t\t    FWUPD_ERROR_INVALID_DATA,\n-\t\t\t\t\t\t    \"failed to parse link rel: item is not a uint\");\n+\t\t\t\tg_set_error_literal(\n+\t\t\t\t    error,\n+\t\t\t\t    FWUPD_ERROR,\n+\t\t\t\t    FWUPD_ERROR_INVALID_DATA,\n+\t\t\t\t    \"failed to parse link rel: item is not a integer\");\n \t\t\t\treturn FALSE;\n \t\t\t}\n \t\t} else {\n@@ -282,10 +283,19 @@ fu_coswid_firmware_parse_hash(FuCoswidFirmware *self,\n {\n \tFuCoswidFirmwarePayload *payload = (FuCoswidFirmwarePayload *)user_data;\n \tg_autoptr(FuCoswidFirmwareHash) hash = g_new0(FuCoswidFirmwareHash, 1);\n-\tg_autoptr(cbor_item_t) hash_item_alg_id = cbor_array_get(item, 0);\n-\tg_autoptr(cbor_item_t) hash_item_value = cbor_array_get(item, 1);\n+\tg_autoptr(cbor_item_t) hash_item_alg_id = NULL;\n+\tg_autoptr(cbor_item_t) hash_item_value = NULL;\n \n \t/* sanity check */\n+\tif (!cbor_isa_array(item)) {\n+\t\tg_set_error_literal(error,\n+\t\t\t\t    FWUPD_ERROR,\n+\t\t\t\t    FWUPD_ERROR_INVALID_DATA,\n+\t\t\t\t    \"hash item is not an array\");\n+\t\treturn FALSE;\n+\t}\n+\thash_item_alg_id = cbor_array_get(item, 0);\n+\thash_item_value = cbor_array_get(item, 1);\n \tif (hash_item_alg_id == NULL || hash_item_value == NULL) {\n \t\tg_set_error_literal(error,\n \t\t\t\t    FWUPD_ERROR,\n@@ -515,24 +525,32 @@ fu_coswid_firmware_parse_entity(FuCoswidFirmware *self,\n \t\t\tif (cbor_isa_uint(pairs[i].value)) {\n \t\t\t\tFuCoswidEntityRole role = cbor_get_uint8(pairs[i].value);\n \t\t\t\tentity->roles[entity_role_cnt++] = role;\n-\t\t\t}\n-\t\t\tfor (guint j = 0; j < cbor_array_size(pairs[i].value); j++) {\n-\t\t\t\tg_autoptr(cbor_item_t) value = cbor_array_get(pairs[i].value, j);\n-\t\t\t\tif (!cbor_isa_uint(value)) {\n-\t\t\t\t\tg_set_error_literal(error,\n-\t\t\t\t\t\t\t    FWUPD_ERROR,\n-\t\t\t\t\t\t\t    FWUPD_ERROR_INVALID_DATA,\n-\t\t\t\t\t\t\t    \"entity role is not a uint\");\n-\t\t\t\t\treturn FALSE;\n-\t\t\t\t}\n-\t\t\t\tif (entity_role_cnt >= G_N_ELEMENTS(entity->roles)) {\n-\t\t\t\t\tg_set_error_literal(error,\n-\t\t\t\t\t\t\t    FWUPD_ERROR,\n-\t\t\t\t\t\t\t    FWUPD_ERROR_INVALID_DATA,\n-\t\t\t\t\t\t\t    \"too many roles\");\n-\t\t\t\t\treturn FALSE;\n+\t\t\t} else if (cbor_isa_array(pairs[i].value)) {\n+\t\t\t\tfor (guint j = 0; j < cbor_array_size(pairs[i].value); j++) {\n+\t\t\t\t\tg_autoptr(cbor_item_t) value =\n+\t\t\t\t\t    cbor_array_get(pairs[i].value, j);\n+\t\t\t\t\tif (!cbor_isa_uint(value)) {\n+\t\t\t\t\t\tg_set_error_literal(error,\n+\t\t\t\t\t\t\t\t    FWUPD_ERROR,\n+\t\t\t\t\t\t\t\t    FWUPD_ERROR_INVALID_DATA,\n+\t\t\t\t\t\t\t\t    \"entity role is not a uint\");\n+\t\t\t\t\t\treturn FALSE;\n+\t\t\t\t\t}\n+\t\t\t\t\tif (entity_role_cnt >= G_N_ELEMENTS(entity->roles)) {\n+\t\t\t\t\t\tg_set_error_literal(error,\n+\t\t\t\t\t\t\t\t    FWUPD_ERROR,\n+\t\t\t\t\t\t\t\t    FWUPD_ERROR_INVALID_DATA,\n+\t\t\t\t\t\t\t\t    \"too many roles\");\n+\t\t\t\t\t\treturn FALSE;\n+\t\t\t\t\t}\n+\t\t\t\t\tentity->roles[entity_role_cnt++] = cbor_get_uint8(value);\n \t\t\t\t}\n-\t\t\t\tentity->roles[entity_role_cnt++] = cbor_get_uint8(value);\n+\t\t\t} else {\n+\t\t\t\tg_set_error_literal(error,\n+\t\t\t\t\t\t    FWUPD_ERROR,\n+\t\t\t\t\t\t    FWUPD_ERROR_INVALID_DATA,\n+\t\t\t\t\t\t    \"entity role item is not an uint or array\");\n+\t\t\t\treturn FALSE;\n \t\t\t}\n \t\t} else {\n \t\t\tg_debug(\"unhandled tag %s from %s\",\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42534457-vul",
+      "digest": "sha256:e7e044254beb0d7f1a5b9d1d10191299502ff1b8a6e93fd013f162777d8f9bcd"
+    },
+    "patched": {
+      "ref": "n132/arvo:42534457-fix",
+      "digest": "sha256:59b943e8bb0bf7e1a022f7cd9be5272bcc7648009fe821bd27c5d546db860f08"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/libcbor/src/cbor/arrays.c:23",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/libcbor/src/cbor/arrays.c:23"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

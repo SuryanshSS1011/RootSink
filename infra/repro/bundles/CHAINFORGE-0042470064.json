@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042470064",
+  "chain": "CWE-20->CWE-787",
+  "project": "graphicsmagick",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42470064",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "bc328f2fcf47f91b1b14d04665cb209e30e0716d",
+      "fix_commits": [
+        "bc328f2fcf47f91b1b14d04665cb209e30e0716d"
+      ],
+      "repo": "https://foss.heptapod.net/graphicsmagick/graphicsmagick"
+    },
+    "patch": "diff --git a/ChangeLog b/ChangeLog\nindex 078afa72803413ab003c6a6b7081173fb0a87388_Q2hhbmdlTG9n..bc328f2fcf47f91b1b14d04665cb209e30e0716d_Q2hhbmdlTG9n 100644\n--- a/ChangeLog\n+++ b/ChangeLog\n@@ -1,5 +1,10 @@\n 2018-08-25  Bob Friesenhahn  <bfriesen@simple.dallas.tx.us>\n \n+\t* magick/utility.c (TranslateTextEx): Fix off-by-one in loop\n+\tbounds check which allowed a one-byte stack write overflow.  Fixes\n+\toss-fuzz 10055 \"graphicsmagick/coder_MVG_fuzzer:\n+\tStack-buffer-overflow in TranslateTextEx\". (Credit to OSS-Fuzz)\n+\n \t* magick/render.c (DrawImage): Be more precise about error\n \tdetection and reporting, and return from an error more quickly.\n \tAlso added MAX_DRAWIMAGE_RECURSION pre-processor definition to\ndiff --git a/magick/utility.c b/magick/utility.c\nindex 078afa72803413ab003c6a6b7081173fb0a87388_bWFnaWNrL3V0aWxpdHkuYw==..bc328f2fcf47f91b1b14d04665cb209e30e0716d_bWFnaWNrL3V0aWxpdHkuYw== 100644\n--- a/magick/utility.c\n+++ b/magick/utility.c\n@@ -6357,7 +6357,7 @@\n \n         /* Extract attribute key string. */\n         p++;\n-        for (i=0; (i < MaxTextExtent) && (*p) && (*p != ']'); i++)\n+        for (i=0; (i < MaxTextExtent-1) && (*p) && (*p != ']'); i++)\n           {\n           key[i]=(*p++);\n           }\ndiff --git a/www/Changelog.html b/www/Changelog.html\nindex 078afa72803413ab003c6a6b7081173fb0a87388_d3d3L0NoYW5nZWxvZy5odG1s..bc328f2fcf47f91b1b14d04665cb209e30e0716d_d3d3L0NoYW5nZWxvZy5odG1s 100644\n--- a/www/Changelog.html\n+++ b/www/Changelog.html\n@@ -38,6 +38,10 @@\n <p>2018-08-25  Bob Friesenhahn  &lt;<a class=\"reference external\" href=\"mailto:bfriesen&#37;&#52;&#48;simple&#46;dallas&#46;tx&#46;us\">bfriesen<span>&#64;</span>simple<span>&#46;</span>dallas<span>&#46;</span>tx<span>&#46;</span>us</a>&gt;</p>\n <blockquote>\n <ul class=\"simple\">\n+<li>magick/utility.c (TranslateTextEx): Fix off-by-one in loop\n+bounds check which allowed a one-byte stack write overflow.  Fixes\n+oss-fuzz 10055 &quot;graphicsmagick/coder_MVG_fuzzer:\n+Stack-buffer-overflow in TranslateTextEx&quot;. (Credit to OSS-Fuzz)</li>\n <li>magick/render.c (DrawImage): Be more precise about error\n detection and reporting, and return from an error more quickly.\n Also added MAX_DRAWIMAGE_RECURSION pre-processor definition to\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42470064-vul",
+      "digest": "sha256:3c7f59a24f1b11c78a9e267a7a8ab342f1d333ff5dd51640cd01d021c2e629e2"
+    },
+    "patched": {
+      "ref": "n132/arvo:42470064-fix",
+      "digest": "sha256:3e4c32e6936093ad37290ae192427d152e66c9fd77e5a7125ae0f7af19273393"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/graphicsmagick/magick/utility.c:6317",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/graphicsmagick/magick/utility.c:6317"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042539241",
+  "chain": "CWE-456->CWE-457",
+  "project": "skia",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42539241",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "8f88d89796d0ab7fefb302b21e03cc186dfc8bc3",
+      "fix_commits": [
+        "8f88d89796d0ab7fefb302b21e03cc186dfc8bc3"
+      ],
+      "repo": "https://skia.googlesource.com/skia.git"
+    },
+    "patch": "diff --git a/src/shaders/SkPictureShader.cpp b/src/shaders/SkPictureShader.cpp\nindex bbed6d6..42f5c3e 100644\n--- a/src/shaders/SkPictureShader.cpp\n+++ b/src/shaders/SkPictureShader.cpp\n@@ -171,24 +171,15 @@\n     fPicture->flatten(buffer);\n }\n \n-// This helper returns two artifacts:\n-//\n-// 1) a cached image shader, which wraps a single picture tile at the given CTM/local matrix\n-//\n-// 2) a tile scale adjustment, to be applied downstream when dispatching createContext(),\n-//    appendStages() and asFragmentProcessor() in callers\n-//\n-// The composite local matrix includes the actual local matrix, any inherited/outer local matrix\n-// and a scale component (to mape the actual tile bitmap size -> fTile size).\n-//\n+// Returns a cached image shader, which wraps a single picture tile at the given\n+// CTM/local matrix.  Also adjusts the local matrix for tile scaling.\n sk_sp<SkShader> SkPictureShader::refBitmapShader(const SkMatrix& viewMatrix,\n-                                                 const SkMatrix& localMatrix,\n+                                                 SkTCopyOnFirstWrite<SkMatrix>* localMatrix,\n                                                  SkColorSpace* dstColorSpace,\n-                                                 SkVector* scaleAdjust,\n                                                  const int maxTextureSize) const {\n     SkASSERT(fPicture && !fPicture->cullRect().isEmpty());\n \n-    const SkMatrix m = SkMatrix::Concat(viewMatrix, localMatrix);\n+    const SkMatrix m = SkMatrix::Concat(viewMatrix, **localMatrix);\n \n     // Use a rotation-invariant scale\n     SkPoint scale;\n@@ -270,27 +261,24 @@\n         fAddedToCache.store(true);\n     }\n \n-    scaleAdjust->set(1 / tileScale.width(), 1 / tileScale.height());\n+    if (tileScale.width() != 1 || tileScale.height() != 1) {\n+        localMatrix->writable()->preScale(1 / tileScale.width(), 1 / tileScale.height());\n+    }\n \n     return tileShader;\n }\n \n bool SkPictureShader::onAppendStages(const StageRec& rec) const {\n     auto lm = this->totalLocalMatrix(rec.fLocalM);\n-    SkVector scaleAdjust;\n \n     // Keep bitmapShader alive by using alloc instead of stack memory\n     auto& bitmapShader = *rec.fAlloc->make<sk_sp<SkShader>>();\n-    bitmapShader = this->refBitmapShader(rec.fCTM, *lm, rec.fDstCS, &scaleAdjust);\n+    bitmapShader = this->refBitmapShader(rec.fCTM, &lm, rec.fDstCS);\n \n     if (!bitmapShader) {\n         return false;\n     }\n \n-    if (scaleAdjust != SkVector::Make(1, 1)) {\n-        lm.writable()->preScale(scaleAdjust.fX, scaleAdjust.fY);\n-    }\n-\n     StageRec localRec = rec;\n     localRec.fLocalM = lm->isIdentity() ? nullptr : lm.get();\n \n@@ -301,19 +289,11 @@\n SkShaderBase::Context* SkPictureShader::onMakeContext(const ContextRec& rec, SkArenaAlloc* alloc)\n const {\n     auto lm = this->totalLocalMatrix(rec.fLocalMatrix);\n-    SkVector scaleAdjust;\n-    sk_sp<SkShader> bitmapShader = this->refBitmapShader(*rec.fMatrix,\n-                                                         *lm,\n-                                                         rec.fDstColorSpace,\n-                                                         &scaleAdjust);\n+    sk_sp<SkShader> bitmapShader = this->refBitmapShader(*rec.fMatrix, &lm, rec.fDstColorSpace);\n     if (!bitmapShader) {\n         return nullptr;\n     }\n \n-    if (scaleAdjust != SkVector::Make(1, 1)) {\n-        lm.writable()->preScale(scaleAdjust.fX, scaleAdjust.fY);\n-    }\n-\n     ContextRec localRec = rec;\n     localRec.fLocalMatrix = lm->isIdentity() ? nullptr : lm.get();\n \n@@ -382,18 +362,13 @@\n     }\n \n     auto lm = this->totalLocalMatrix(args.fPreLocalMatrix, args.fPostLocalMatrix);\n-    SkVector scaleAdjust;\n-    sk_sp<SkShader> bitmapShader(this->refBitmapShader(*args.fViewMatrix,*lm,\n+    sk_sp<SkShader> bitmapShader(this->refBitmapShader(*args.fViewMatrix, &lm,\n                                                        args.fDstColorSpaceInfo->colorSpace(),\n-                                                       &scaleAdjust, maxTextureSize));\n+                                                       maxTextureSize));\n     if (!bitmapShader) {\n         return nullptr;\n     }\n \n-    if (scaleAdjust != SkVector::Make(1, 1)) {\n-        lm.writable()->preScale(scaleAdjust.fX, scaleAdjust.fY);\n-    }\n-\n     // We want to *reset* args.fPreLocalMatrix, not compose it.\n     GrFPArgs newArgs(args.fContext, args.fViewMatrix, args.fFilterQuality, args.fDstColorSpaceInfo);\n     newArgs.fPreLocalMatrix = lm.get();\ndiff --git a/src/shaders/SkPictureShader.h b/src/shaders/SkPictureShader.h\nindex 5f28b60..6e5201e 100644\n--- a/src/shaders/SkPictureShader.h\n+++ b/src/shaders/SkPictureShader.h\n@@ -46,9 +46,8 @@\n     SkPictureShader(sk_sp<SkPicture>, TileMode, TileMode, const SkMatrix*, const SkRect*,\n                     sk_sp<SkColorSpace>);\n \n-    sk_sp<SkShader> refBitmapShader(const SkMatrix&, const SkMatrix& localMatrix,\n+    sk_sp<SkShader> refBitmapShader(const SkMatrix&, SkTCopyOnFirstWrite<SkMatrix>* localMatrix,\n                                     SkColorSpace* dstColorSpace,\n-                                    SkVector* scaleAdjust,\n                                     const int maxTextureSize = 0) const;\n \n     class PictureShaderContext : public Context {\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42539241-vul",
+      "digest": "sha256:3ae0ae5054d6a1387d51dd99739f9e7dcc8d7ec58a687c1136f6c9f7b6dc43f4"
+    },
+    "patched": {
+      "ref": "n132/arvo:42539241-fix",
+      "digest": "sha256:8ccbcc5895270d92e631590774bad3bf3e848fa7a5df8523592cfac416cce1cd"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/skia/out/Fuzz_mem_constraints/../../include/core/SkPoint.h:439",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/skia/out/Fuzz_mem_constraints/../../include/core/SkPoint.h:439"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

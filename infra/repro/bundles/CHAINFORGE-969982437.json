@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-969982437",
+  "chain": "CWE-456->CWE-457",
+  "project": "open62541",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42520815",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/open62541/open62541/commit/3d4b8666b02ecea0045c2ba8ae4c46a3f766c765",
+      "fix_commits": [
+        "3d4b8666b02ecea0045c2ba8ae4c46a3f766c765"
+      ],
+      "repo": "https://github.com/open62541/open62541"
+    },
+    "patch": "diff --git a/src/server/ua_services_session.c b/src/server/ua_services_session.c\nindex 8dc9532f8c2..a37e97ed828 100644\n--- a/src/server/ua_services_session.c\n+++ b/src/server/ua_services_session.c\n@@ -260,8 +260,19 @@ Service_ActivateSession(UA_Server *server, UA_SecureChannel *channel,\n         UA_LOG_INFO_SESSION(server->config.logger, session,\n                             \"ActivateSession: Detach from old channel\");\n         UA_Session_detachFromSecureChannel(session);\n+        session->activated = false;\n     }\n \n+    if (session->activated) {\n+        UA_LOG_INFO_SESSION(server->config.logger, session,\n+                            \"ActivateSession: SecureChannel %i wants \"\n+                                    \"to activate, but the session is already activated\",\n+                            channel->securityToken.channelId);\n+        response->responseHeader.serviceResult =\n+                UA_STATUSCODE_BADSESSIONIDINVALID;\n+        return;\n+\n+    }\n     /* Attach to the SecureChannel and activate */\n     UA_Session_attachToSecureChannel(session, channel);\n     session->activated = true;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42520815-vul",
+      "digest": "sha256:cc9d6f03d0848241d39e32b8c86109f0922fb7dccbfddd905fcb6b2467046cdc"
+    },
+    "patched": {
+      "ref": "n132/arvo:42520815-fix",
+      "digest": "sha256:956de6dbe2150227639d2a0b16ae551ee06cd54a266456d6d0cdaa2e22bf69ef"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/open62541/src/ua_securechannel.c:86",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/open62541/src/ua_securechannel.c:86"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

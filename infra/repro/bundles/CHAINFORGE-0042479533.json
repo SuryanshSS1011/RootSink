@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042479533",
+  "chain": "CWE-416->CWE-125",
+  "project": "libavc",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42479533",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "29fc5cb2f209311f6ec4ce2abf1775079cd49344",
+      "fix_commits": [
+        "29fc5cb2f209311f6ec4ce2abf1775079cd49344"
+      ],
+      "repo": "https://android.googlesource.com/platform/external/libavc"
+    },
+    "patch": "diff --git a/decoder/ih264d_api.c b/decoder/ih264d_api.c\nindex af2354b..3a73938 100644\n--- a/decoder/ih264d_api.c\n+++ b/decoder/ih264d_api.c\n@@ -1115,6 +1115,30 @@\n     /* Free any dynamic buffers that are allocated */\n     ih264d_free_dynamic_bufs(ps_dec);\n \n+    {\n+        UWORD8 i;\n+        struct pic_buffer_t *ps_init_dpb;\n+        ps_init_dpb = ps_dec->ps_dpb_mgr->ps_init_dpb[0][0];\n+        for(i = 0; i < 2 * MAX_REF_BUFS; i++)\n+        {\n+            ps_init_dpb->pu1_buf1 = NULL;\n+            ps_init_dpb->u1_long_term_frm_idx = MAX_REF_BUFS + 1;\n+            ps_dec->ps_dpb_mgr->ps_init_dpb[0][i] = ps_init_dpb;\n+            ps_dec->ps_dpb_mgr->ps_mod_dpb[0][i] = ps_init_dpb;\n+            ps_init_dpb++;\n+        }\n+\n+        ps_init_dpb = ps_dec->ps_dpb_mgr->ps_init_dpb[1][0];\n+        for(i = 0; i < 2 * MAX_REF_BUFS; i++)\n+        {\n+            ps_init_dpb->pu1_buf1 = NULL;\n+            ps_init_dpb->u1_long_term_frm_idx = MAX_REF_BUFS + 1;\n+            ps_dec->ps_dpb_mgr->ps_init_dpb[1][i] = ps_init_dpb;\n+            ps_dec->ps_dpb_mgr->ps_mod_dpb[1][i] = ps_init_dpb;\n+            ps_init_dpb++;\n+        }\n+    }\n+\n     ps_cur_slice = ps_dec->ps_cur_slice;\n     ps_dec->init_done = 0;\n \n@@ -1623,29 +1647,6 @@\n     ps_dec->ps_col_mv_base = pv_buf;\n     memset(ps_dec->ps_col_mv_base, 0, size);\n \n-    {\n-        UWORD8 i;\n-        struct pic_buffer_t *ps_init_dpb;\n-        ps_init_dpb = ps_dec->ps_dpb_mgr->ps_init_dpb[0][0];\n-        for(i = 0; i < 2 * MAX_REF_BUFS; i++)\n-        {\n-            ps_init_dpb->pu1_buf1 = NULL;\n-            ps_init_dpb->u1_long_term_frm_idx = MAX_REF_BUFS + 1;\n-            ps_dec->ps_dpb_mgr->ps_init_dpb[0][i] = ps_init_dpb;\n-            ps_dec->ps_dpb_mgr->ps_mod_dpb[0][i] = ps_init_dpb;\n-            ps_init_dpb++;\n-        }\n-\n-        ps_init_dpb = ps_dec->ps_dpb_mgr->ps_init_dpb[1][0];\n-        for(i = 0; i < 2 * MAX_REF_BUFS; i++)\n-        {\n-            ps_init_dpb->pu1_buf1 = NULL;\n-            ps_init_dpb->u1_long_term_frm_idx = MAX_REF_BUFS + 1;\n-            ps_dec->ps_dpb_mgr->ps_init_dpb[1][i] = ps_init_dpb;\n-            ps_dec->ps_dpb_mgr->ps_mod_dpb[1][i] = ps_init_dpb;\n-            ps_init_dpb++;\n-        }\n-    }\n     ih264d_init_decoder(ps_dec);\n \n     return IV_SUCCESS;\ndiff --git a/decoder/ih264d_utils.c b/decoder/ih264d_utils.c\nindex 9998757..35cd7b9 100644\n--- a/decoder/ih264d_utils.c\n+++ b/decoder/ih264d_utils.c\n@@ -1239,7 +1239,9 @@\n                             && (DO_NOT_DISP\n                                             != ps_dpb_mgr->ai4_poc_buf_id_map[i][0]))\n             {\n-                if(i4_poc_buf_id_map[i][1] < i4_min_poc)\n+                /* Checking for <= is necessary to handle cases where there is one\n+                   valid buffer with poc set to 0x7FFFFFFF. */\n+                if(i4_poc_buf_id_map[i][1] <= i4_min_poc)\n                 {\n                     i4_min_poc = i4_poc_buf_id_map[i][1];\n                     i4_min_poc_buf_id = i4_poc_buf_id_map[i][0];\n@@ -1303,8 +1305,8 @@\n     WORD32 (*i4_poc_buf_id_map)[3] = ps_dpb_mgr->ai4_poc_buf_id_map;\n \n     i4_min_poc = 0x7fffffff;\n-    i4_min_poc_buf_id = -1;\n-    i4_min_index = -1;\n+    i4_min_poc_buf_id = 0;\n+    i4_min_index = 0;\n \n     ih264d_delete_nonref_nondisplay_pics(ps_dpb_mgr);\n \n@@ -1315,7 +1317,9 @@\n         {\n             if(i4_poc_buf_id_map[i][0] != -1)\n             {\n-                if(i4_poc_buf_id_map[i][1] < i4_min_poc)\n+                /* Checking for <= is necessary to handle cases where there is one\n+                   valid buffer with poc set to 0x7FFFFFFF. */\n+                if(i4_poc_buf_id_map[i][1] <= i4_min_poc)\n                 {\n                     i4_min_poc = i4_poc_buf_id_map[i][1];\n                     i4_min_poc_buf_id = i4_poc_buf_id_map[i][0];\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42479533-vul",
+      "digest": "sha256:cbcec6fe9dc3b60e6e76287ab774ead5058e0e165fd5d76fcb504061f63ce055"
+    },
+    "patched": {
+      "ref": "n132/arvo:42479533-fix",
+      "digest": "sha256:2f87962228c57612b8040a369c7136ad83ebf75057d51cae431631997b13a6f0"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/libavc/common/x86/ih264_inter_pred_filters_ssse3.c:3683",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/libavc/common/x86/ih264_inter_pred_filters_ssse3.c:3683"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

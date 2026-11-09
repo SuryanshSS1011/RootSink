@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-957154847",
+  "chain": "CWE-129->CWE-125",
+  "project": "ffmpeg",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42478470",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://git.ffmpeg.org/gitweb/ffmpeg.git/commitdiff/75fefb1fb7ac8b423e08a8dca19b19884a325ebf",
+      "fix_commits": [
+        "75fefb1fb7ac8b423e08a8dca19b19884a325ebf"
+      ],
+      "repo": "https://git.ffmpeg.org/gitweb/ffmpeg.git/commitdiff"
+    },
+    "patch": "From 75fefb1fb7ac8b423e08a8dca19b19884a325ebf Mon Sep 17 00:00:00 2001\nFrom: Michael Niedermayer <michael@niedermayer.cc>\nDate: Fri, 27 Sep 2019 12:31:39 +0200\nSubject: [PATCH] avcodec/utils: Check sample_rate before opening the decoder\n\nFixes: signed integer overflow: 2 * -1306460384 cannot be represented in type 'int'\nFixes: 17685/clusterfuzz-testcase-minimized-ffmpeg_AV_CODEC_ID_AAC_fuzzer-5747390337777664\nFixes: 17688/clusterfuzz-testcase-minimized-ffmpeg_AV_CODEC_ID_INTERPLAY_ACM_fuzzer-5739287210885120\nFixes: 17699/clusterfuzz-testcase-minimized-ffmpeg_AV_CODEC_ID_INTERPLAY_ACM_fuzzer-5678394531905536\nFixes: 17738/clusterfuzz-testcase-minimized-ffmpeg_AV_CODEC_ID_TAK_fuzzer-5763415733174272\nFixes: 17746/clusterfuzz-testcase-minimized-ffmpeg_AV_CODEC_ID_BINKAUDIO_RDFT_fuzzer-5703008159006720\n\nFound-by: continuous fuzzing process https://github.com/google/oss-fuzz/tree/master/projects/ffmpeg\nReviewed-by: James Almer <jamrial@gmail.com>\nSigned-off-by: Michael Niedermayer <michael@niedermayer.cc>\n---\n libavcodec/utils.c | 5 +++++\n 1 file changed, 5 insertions(+)\n\ndiff --git a/libavcodec/utils.c b/libavcodec/utils.c\nindex a19e008..6cc770b 100644\n--- a/libavcodec/utils.c\n+++ b/libavcodec/utils.c\n@@ -689,6 +689,11 @@ int attribute_align_arg avcodec_open2(AVCodecContext *avctx, const AVCodec *code\n         ret = AVERROR(EINVAL);\n         goto free_and_end;\n     }\n+    if (avctx->sample_rate < 0) {\n+        av_log(avctx, AV_LOG_ERROR, \"Invalid sample rate: %d\\n\", avctx->sample_rate);\n+        ret = AVERROR(EINVAL);\n+        goto free_and_end;\n+    }\n \n     avctx->codec = codec;\n     if ((avctx->codec_type == AVMEDIA_TYPE_UNKNOWN || avctx->codec_type == codec->type) &&\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42478470-vul",
+      "digest": "sha256:9fc0a148c41841b52a5226c1a8251ac5a3484da7c48e3db1e1261e02c2d71c1e"
+    },
+    "patched": {
+      "ref": "n132/arvo:42478470-fix",
+      "digest": "sha256:7fa9e5a4cc2f8c92e915920a3236a61c7c47a6332135033982ff197c777a89af"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "crash_site": "/src/fdk-aac/libDRCdec/src/drcGainDec_process.cpp:312",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 129,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "site": "/src/fdk-aac/libDRCdec/src/drcGainDec_process.cpp:312"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

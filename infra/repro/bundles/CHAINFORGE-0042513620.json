@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042513620",
+  "chain": "CWE-20->CWE-125",
+  "project": "mruby",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42513620",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "b84bca666fdc4fe94286b49b6f6b9a64e4c3a534",
+      "fix_commits": [
+        "b84bca666fdc4fe94286b49b6f6b9a64e4c3a534"
+      ],
+      "repo": "https://github.com/mruby/mruby"
+    },
+    "patch": "diff --git a/mrbgems/mruby-bigint/core/bigint.c b/mrbgems/mruby-bigint/core/bigint.c\nindex 21d1008e3d..5d91c0673f 100644\n--- a/mrbgems/mruby-bigint/core/bigint.c\n+++ b/mrbgems/mruby-bigint/core/bigint.c\n@@ -742,17 +742,21 @@ static int\n mpz_get_int(mpz_t *y, mrb_int *v)\n {\n   mp_limb i;\n+  size_t d;\n \n   if (y->sn == 0) {\n     i = 0;\n   }\n-  else if (digits(y) > 2 || y->p[1] > 1) {\n+  else if ((d = digits(y)) > 2 || (d == 2 && y->p[1] > 1)) {\n     return FALSE;\n   }\n-  else {\n+  else if (d == 2) {\n     i = (y->sn * (y->p[0] | (y->p[1] & 1) << DIGITBITS));\n-    if (MRB_INT_MAX < i || i < MRB_INT_MIN) return FALSE;\n   }\n+  else {/* d == 1 */\n+    i = y->sn * y->p[0];\n+  }\n+  if (MRB_INT_MAX < i || i < MRB_INT_MIN) return FALSE;\n   *v = i;\n   return TRUE;\n }\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42513620-vul",
+      "digest": "sha256:c2afee2ec5a278c6ef551f02b9abfdb40c55483252f33bfaa65c0a8c6b312ae9"
+    },
+    "patched": {
+      "ref": "n132/arvo:42513620-fix",
+      "digest": "sha256:70c54594b4cc734b189c4924fba8d5a5eb0e45245650256da1bff296b8937771"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/mruby/mrbgems/mruby-bigint/core/bigint.c:749",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/mruby/mrbgems/mruby-bigint/core/bigint.c:749"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

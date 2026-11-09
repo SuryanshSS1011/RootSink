@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-962017889",
+  "chain": "CWE-456->CWE-457",
+  "project": "openvswitch",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42480971",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/openvswitch/ovs/commit/bb9303899b8bd7a9251a723393959c923d0c0196",
+      "fix_commits": [
+        "bb9303899b8bd7a9251a723393959c923d0c0196"
+      ],
+      "repo": "https://github.com/openvswitch/ovs"
+    },
+    "patch": "diff --git a/lib/netlink.c b/lib/netlink.c\nindex de3ebcd0e79..26ab20bb4b4 100644\n--- a/lib/netlink.c\n+++ b/lib/netlink.c\n@@ -498,6 +498,7 @@ void\n nl_msg_end_nested(struct ofpbuf *msg, size_t offset)\n {\n     struct nlattr *attr = ofpbuf_at_assert(msg, offset, sizeof *attr);\n+    ovs_assert(!nl_attr_oversized(msg->size - offset - NLA_HDRLEN));\n     attr->nla_len = msg->size - offset;\n }\n \ndiff --git a/lib/odp-util.c b/lib/odp-util.c\nindex 0bd2f9aa8a5..252a91bfa45 100644\n--- a/lib/odp-util.c\n+++ b/lib/odp-util.c\n@@ -5557,13 +5557,16 @@ gtpu_to_attr(struct ofpbuf *a, const void *data_)\n         do {                                               \\\n             len = 0;\n \n-#define SCAN_END_NESTED()                               \\\n-        SCAN_FINISH();                                  \\\n-        nl_msg_end_nested(key, key_offset);             \\\n-        if (mask) {                                     \\\n-            nl_msg_end_nested(mask, mask_offset);       \\\n-        }                                               \\\n-        return s - start;                               \\\n+#define SCAN_END_NESTED()                                                     \\\n+        SCAN_FINISH();                                                        \\\n+        if (nl_attr_oversized(key->size - key_offset - NLA_HDRLEN)) {         \\\n+            return -E2BIG;                                                    \\\n+        }                                                                     \\\n+        nl_msg_end_nested(key, key_offset);                                   \\\n+        if (mask) {                                                           \\\n+            nl_msg_end_nested(mask, mask_offset);                             \\\n+        }                                                                     \\\n+        return s - start;                                                     \\\n     }\n \n #define SCAN_FIELD_NESTED__(NAME, TYPE, SCAN_AS, ATTR, FUNC)  \\\ndiff --git a/tests/tunnel.at b/tests/tunnel.at\nindex e08fd1e048f..b8ae7caa9b5 100644\n--- a/tests/tunnel.at\n+++ b/tests/tunnel.at\n@@ -132,6 +132,35 @@ tunnel(src=3.3.3.200/255.255.255.0,dst=1.1.1.1,ttl=64,tp_src=1,tp_dst=123),recir\n OVS_VSWITCHD_STOP\n AT_CLEANUP\n \n+AT_SETUP([tunnel - too long nested attributes])\n+OVS_VSWITCHD_START([add-port br0 p1 \\\n+    -- set Interface p1 type=gre options:remote_ip=1.1.1.1 ofport_request=1 \\\n+    -- add-port br0 p2 -- set Interface p2 type=dummy ofport_request=2])\n+\n+AT_CHECK([ovs-appctl dpif/show | tail -n +3], [0], [dnl\n+    br0 65534/100: (dummy-internal)\n+    p1 1/1: (gre: remote_ip=1.1.1.1)\n+    p2 2/2: (dummy)\n+])\n+\n+dst_single=\"dst=1.1.1.1\"\n+dst_rep=${dst_single}\n+dnl Size of one OVS_TUNNEL_KEY_ATTR_IPV4_DST is 4 bytes + NLA_HDRLEN (4 bytes).\n+dnl One nested message has room for UINT16_MAX - NLA_HDRLEN (4) bytes, i.e.\n+dnl (UINT16_MAX - NLA_HDRLEN) / (4 + NLA_HDRLEN) = 8191.375 of dst addresses.\n+for i in `seq 1 8192` ; do\n+    dst_rep=\"${dst_rep},${dst_single}\"\n+done\n+\n+AT_CHECK([ovs-appctl dpctl/add-flow \"tunnel(${dst_rep})\" \"2\" 2>&1 | dnl\n+          sed \"s/${dst_single},//g\"], [], [dnl\n+ovs-vswitchd: parsing flow key (syntax error at tunnel(dst=1.1.1.1)) (Argument list too long)\n+ovs-appctl: ovs-vswitchd: server returned an error\n+])\n+\n+OVS_VSWITCHD_STOP\n+AT_CLEANUP\n+\n AT_SETUP([tunnel - output])\n OVS_VSWITCHD_START([add-port br0 p1 -- set Interface p1 type=gre \\\n                     options:remote_ip=1.1.1.1 options:local_ip=2.2.2.2 \\\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42480971-vul",
+      "digest": "sha256:8bf9a7d0e9a17d1a2cb9d1719157ad6463e2a32a85246c5aad45ec72a181c675"
+    },
+    "patched": {
+      "ref": "n132/arvo:42480971-fix",
+      "digest": "sha256:780ed856754697414fe55e934325985a70cc3862cfb271d522ed57fc1dce0f51"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/openvswitch/./lib/netlink.h:166",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/openvswitch/./lib/netlink.h:166"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0376728460",
+  "chain": "CWE-1285->CWE-125",
+  "project": "wamr",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "376728460",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "bf78863c5611de857caae3a998cbbf441dbd90cd",
+      "fix_commits": [
+        "bf78863c5611de857caae3a998cbbf441dbd90cd"
+      ],
+      "repo": "https://github.com/bytecodealliance/wasm-micro-runtime"
+    },
+    "patch": "diff --git a/core/iwasm/interpreter/wasm_loader.c b/core/iwasm/interpreter/wasm_loader.c\nindex ae823d7be0..04fa2473ec 100644\n--- a/core/iwasm/interpreter/wasm_loader.c\n+++ b/core/iwasm/interpreter/wasm_loader.c\n@@ -3610,6 +3610,17 @@ load_function_section(const uint8 *buf, const uint8 *buf_end,\n #endif\n             }\n \n+            /* Code size in code entry can't be smaller than size of vec(locals)\n+             * + expr(at least 1 for opcode end). And expressions are encoded by\n+             * their instruction sequence terminated with an explicit 0x0B\n+             * opcode for end. */\n+            if (p_code_end <= p_code || *(p_code_end - 1) != WASM_OP_END) {\n+                set_error_buf(\n+                    error_buf, error_buf_size,\n+                    \"section size mismatch: function body END opcode expected\");\n+                return false;\n+            }\n+\n             /* Alloc memory, layout: function structure + local types */\n             code_size = (uint32)(p_code_end - p_code);\n \n@@ -15837,15 +15848,12 @@ wasm_loader_prepare_bytecode(WASMModule *module, WASMFunction *func,\n     }\n \n     if (loader_ctx->csp_num > 0) {\n-        if (cur_func_idx < module->function_count - 1)\n-            /* Function with missing end marker (between two functions) */\n-            set_error_buf(error_buf, error_buf_size, \"END opcode expected\");\n-        else\n-            /* Function with missing end marker\n-               (at EOF or end of code sections) */\n-            set_error_buf(error_buf, error_buf_size,\n-                          \"unexpected end of section or function, \"\n-                          \"or section size mismatch\");\n+        /* unmatched end opcodes result from unbalanced control flow structures,\n+         * for example, br_table with inconsistent target count (1 declared, 2\n+         * given), or simply superfluous end opcodes */\n+        set_error_buf(\n+            error_buf, error_buf_size,\n+            \"unexpected end opcodes from unbalanced control flow structures\");\n         goto fail;\n     }\n \ndiff --git a/core/iwasm/interpreter/wasm_mini_loader.c b/core/iwasm/interpreter/wasm_mini_loader.c\nindex 0d1f837049..006a38c1ce 100644\n--- a/core/iwasm/interpreter/wasm_mini_loader.c\n+++ b/core/iwasm/interpreter/wasm_mini_loader.c\n@@ -1183,6 +1183,8 @@ load_function_section(const uint8 *buf, const uint8 *buf_end,\n                 local_count += sub_local_count;\n             }\n \n+            bh_assert(p_code_end > p_code && *(p_code_end - 1) == WASM_OP_END);\n+\n             /* Alloc memory, layout: function structure + local types */\n             code_size = (uint32)(p_code_end - p_code);\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:376728460-vul",
+      "digest": "sha256:8cff075eba04ca3c3b68910c6aedbb7451325f2853d28dc475572dc33613dce9"
+    },
+    "patched": {
+      "ref": "n132/arvo:376728460-fix",
+      "digest": "sha256:89a3094a9ce1c733d379f59913aae655e20ed95523e04b6ca646ac7510477716"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/wamr/core/iwasm/interpreter/wasm_loader.c:10898",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/wamr/core/iwasm/interpreter/wasm_loader.c:10898"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

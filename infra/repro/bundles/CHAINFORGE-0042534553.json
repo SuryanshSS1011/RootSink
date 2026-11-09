@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042534553",
+  "chain": "CWE-416->CWE-125",
+  "project": "gpac",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42534553",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "176b123cc5aaf5230046d8d5bdf9a8f0e216e4ac",
+      "fix_commits": [
+        "176b123cc5aaf5230046d8d5bdf9a8f0e216e4ac"
+      ],
+      "repo": "https://github.com/gpac/gpac"
+    },
+    "patch": "From 176b123cc5aaf5230046d8d5bdf9a8f0e216e4ac Mon Sep 17 00:00:00 2001\nFrom: jeanlf <jeanlf@gpac.io>\nDate: Wed, 17 Apr 2024 16:25:35 +0200\nSubject: [PATCH] fixed possible error with corrupted pcap files\n\n---\n src/utils/os_net.c | 23 +++++++++++++++++------\n 1 file changed, 17 insertions(+), 6 deletions(-)\n\ndiff --git a/src/utils/os_net.c b/src/utils/os_net.c\nindex a9d2c10..72c6941 100644\n--- a/src/utils/os_net.c\n+++ b/src/utils/os_net.c\n@@ -468,7 +468,7 @@ u32 gf_net_has_ipv6()\n GF_EXPORT\n Bool gf_net_is_ipv6(const char *address)\n {\n-\tu32 i, nb_seps=0, nb_dseps=0, nb_dig=0, count = (u32) strlen(address);\n+\tu32 i, nb_seps=0, nb_dseps=0, nb_dig=0, count = address ? (u32) strlen(address) : 0;\n \tfor (i=0;i<count; i++) {\n \t\tif (address[i]==':') {\n \t\t\tnb_seps++;\n@@ -988,7 +988,7 @@ static void gf_netcap_load_pck_gpac(GF_NetcapFilter *nf)\n \t}\n }\n \n-static GF_Err pcapng_load_shb(GF_NetcapFilter *nf)\n+static GF_Err pcapng_load_shb(GF_NetcapFilter *nf, Bool is_init)\n {\n \tu32 blen = gf_bs_read_u32(nf->cap_bs);\n \tu32 le_magic = gf_bs_read_u32(nf->cap_bs);\n@@ -997,7 +997,10 @@ static GF_Err pcapng_load_shb(GF_NetcapFilter *nf)\n \t\tnf->pcap_le = GF_TRUE;\n \t\tblen = ntohl(blen);\n \t} else {\n-\t\tgf_net_close_capture();\n+\t\tif (is_init)\n+\t\t\tgf_net_close_capture();\n+\t\telse\n+\t\t\tnf->is_eos = GF_TRUE;\n \t\tGF_LOG(GF_LOG_ERROR, GF_LOG_NETWORK, (\"[NetCap] Corrrupted pacpng file\\n\"));\n \t\treturn GF_NON_COMPLIANT_BITSTREAM;\n \t}\n@@ -1059,7 +1062,7 @@ refetch_pcap:\n \n \t\tu32 btype = nf->pcap_le ? gf_bs_read_u32_le(nf->cap_bs) : gf_bs_read_u32(nf->cap_bs);\n \t\tif (btype==GF_4CC(0x0A, 0x0D, 0x0D, 0x0A)) {\n-\t\t\tGF_Err e = pcapng_load_shb(nf);\n+\t\t\tGF_Err e = pcapng_load_shb(nf, GF_FALSE);\n \t\t\t//if failure, nf is destroyed by gf_net_close_capture\n \t\t\tif (e) {\n \t\t\t\treturn;\n@@ -1096,6 +1099,11 @@ refetch_pcap:\n \t\tclen = gf_bs_read_u32(nf->cap_bs);\n \t\t/*olen = */gf_bs_read_u32(nf->cap_bs);\n \t}\n+\tif (clen<0) {\n+\t\tGF_LOG(GF_LOG_ERROR, GF_LOG_NETWORK, (\"[NetCap] Corrupted PCAP file, aborting\\n\"));\n+\t\tnf->is_eos = GF_TRUE;\n+\t\treturn;\n+\t}\n \n \tif (nf->cap_mode==NETCAP_PCAPNG) {\n \t\tnf->pcapng_trail = bsize - 28 - clen;\n@@ -1166,6 +1174,9 @@ refetch_pcap:\n \t\t\tdefault:\n \t\t\t\tSKIP_PCAP_PCK\n \t\t\t}\n+\t\t\tif (gf_bs_is_overflow(nf->cap_bs)) {\n+\t\t\t\tbreak;\n+\t\t\t}\n \t\t}\n \t} else {\n \t\tgf_bs_skip_bytes(nf->cap_bs, 9);\n@@ -1199,7 +1210,7 @@ refetch_pcap:\n \t\tSKIP_PCAP_PCK\n \t}\n \n-\tif (clen<0) {\n+\tif ((clen<0)|| gf_bs_is_overflow(nf->cap_bs)) {\n \t\tGF_LOG(GF_LOG_ERROR, GF_LOG_NETWORK, (\"[NetCap] Corrupted PCAP file, aborting\\n\"));\n \t\tnf->is_eos = GF_TRUE;\n \t\treturn;\n@@ -1647,7 +1658,7 @@ static GF_Err gf_netcap_playback(GF_NetcapFilter *nf)\n \t}\n \t//pcapng\n \telse if (nf->cap_mode==NETCAP_PCAPNG) {\n-\t\tGF_Err e = pcapng_load_shb(nf);\n+\t\tGF_Err e = pcapng_load_shb(nf, GF_TRUE);\n \t\tif (e) return e;\n \n \t\tu32 btype = nf->pcap_le ? gf_bs_read_u32_le(nf->cap_bs) : gf_bs_read_u32(nf->cap_bs);\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42534553-vul",
+      "digest": "sha256:b826adadee47b9a3c1ea703e5fec98417a4cc0e681082efc13fab2adb59590da"
+    },
+    "patched": {
+      "ref": "n132/arvo:42534553-fix",
+      "digest": "sha256:c2cdd88b4e06900c2523f1fa145548c7e39687efe730ff322b35b6ac1e4fc6a9"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/gpac/src/utils/os_net.c:1486",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/gpac/src/utils/os_net.c:1486"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-964757945",
+  "chain": "CWE-456->CWE-457",
+  "project": "librawspeed",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42498426",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/darktable-org/rawspeed/commit/c6faf275397eb448987e635a2162d807b9608d70",
+      "fix_commits": [
+        "c6faf275397eb448987e635a2162d807b9608d70"
+      ],
+      "repo": "https://github.com/darktable-org/rawspeed"
+    },
+    "patch": "diff --git a/src/librawspeed/decoders/NefDecoder.cpp b/src/librawspeed/decoders/NefDecoder.cpp\nindex 853c5e470..d76d43df7 100644\n--- a/src/librawspeed/decoders/NefDecoder.cpp\n+++ b/src/librawspeed/decoders/NefDecoder.cpp\n@@ -131,14 +131,9 @@ RawImage NefDecoder::decodeRawInternal() {\n     meta = raw->getEntry(static_cast<TiffTag>(0x8c)); // Fall back\n   }\n \n-  try {\n-    NikonDecompressor::decompress(\n-        &mRaw, ByteStream(mFile, offsets->getU32(), counts->getU32()),\n-        meta->getData(), mRaw->dim, bitPerPixel, uncorrectedRawValues);\n-  } catch (IOException &e) {\n-    mRaw->setError(e.what());\n-    // Let's ignore it, it may have delivered somewhat useful data.\n-  }\n+  NikonDecompressor::decompress(\n+      &mRaw, ByteStream(mFile, offsets->getU32(), counts->getU32()),\n+      meta->getData(), mRaw->dim, bitPerPixel, uncorrectedRawValues);\n \n   return mRaw;\n }\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42498426-vul",
+      "digest": "sha256:43191b9dc78999912e1078ce023ac10665decdbadee77870a53728d4655a73f7"
+    },
+    "patched": {
+      "ref": "n132/arvo:42498426-fix",
+      "digest": "sha256:b4b7a74e7d15aba6a9e441626331ddd2a8b7dea8d20d8800de34a26390213795"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/librawspeed/src/librawspeed/common/RawImage.cpp:168",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/librawspeed/src/librawspeed/common/RawImage.cpp:168"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

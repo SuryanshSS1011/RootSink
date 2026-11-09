@@ -1,0 +1,76 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042510981",
+  "chain": "CWE-20->CWE-125",
+  "project": "ostree",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42510981",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "8f24e0826ac30fe7538bd60a000d9e43500749eb\n2c716552052cd3d03cef5f2968d5945d799f8d90\n75aa7a22f6d6499ade99f66f883dad2a3ebd413c\n60853219d5a78f0c62d1ccb4e3f27585ae5c7ffd\ned1146738b9aa687c7dabb0a4fd8dc2ad16244ce",
+      "fix_commits": [
+        "8f24e0826ac30fe7538bd60a000d9e43500749eb",
+        "2c716552052cd3d03cef5f2968d5945d799f8d90",
+        "75aa7a22f6d6499ade99f66f883dad2a3ebd413c",
+        "60853219d5a78f0c62d1ccb4e3f27585ae5c7ffd",
+        "ed1146738b9aa687c7dabb0a4fd8dc2ad16244ce"
+      ],
+      "repo": "https://github.com/ostreedev/ostree"
+    },
+    "patch": "diff --git a/apidoc/ostree-sections.txt b/apidoc/ostree-sections.txt\nindex 5af8e68773..900e170430 100644\n--- a/apidoc/ostree-sections.txt\n+++ b/apidoc/ostree-sections.txt\n@@ -577,6 +577,7 @@ ostree_sysroot_get_repo\n ostree_sysroot_get_staged_deployment\n ostree_sysroot_init_osname\n ostree_sysroot_deployment_set_kargs\n+ostree_sysroot_deployment_set_kargs_in_place\n ostree_sysroot_deployment_set_mutable\n ostree_sysroot_deployment_unlock\n ostree_sysroot_deployment_set_pinned\ndiff --git a/src/libostree/libostree-devel.sym b/src/libostree/libostree-devel.sym\nindex 54945ecaf6..145ec1ec5f 100644\n--- a/src/libostree/libostree-devel.sym\n+++ b/src/libostree/libostree-devel.sym\n@@ -23,6 +23,7 @@\n LIBOSTREE_2022.5 {\n global:\n   ostree_kernel_args_append_if_missing;\n+  ostree_sysroot_deployment_set_kargs_in_place;\n } LIBOSTREE_2022.4;\n \n /* Stub section for the stable release *after* this development one; don't\ndiff --git a/src/libostree/ostree-sysroot-deploy.c b/src/libostree/ostree-sysroot-deploy.c\nindex 3b04267c80..2dc9f58b16 100644\n--- a/src/libostree/ostree-sysroot-deploy.c\n+++ b/src/libostree/ostree-sysroot-deploy.c\n@@ -3591,6 +3591,53 @@ ostree_sysroot_deployment_set_kargs (OstreeSysroot     *self,\n   return TRUE;\n }\n \n+/**\n+ * ostree_sysroot_deployment_set_kargs_in_place:\n+ * @self: Sysroot\n+ * @deployment: A deployment\n+ * @kargs_str: (allow none): Replace @deployment's kernel arguments\n+ * @cancellable: Cancellable\n+ * @error: Error\n+ *\n+ * Replace the kernel arguments of @deployment with the values in @kargs_str.\n+ */\n+gboolean\n+ostree_sysroot_deployment_set_kargs_in_place (OstreeSysroot     *self,\n+                                              OstreeDeployment  *deployment,\n+                                              char              *kargs_str,\n+                                              GCancellable      *cancellable,\n+                                              GError           **error)\n+{\n+  if (!ostree_sysroot_initialize (self, error))\n+    return FALSE;\n+  if (!_ostree_sysroot_ensure_boot_fd (self, error))\n+    return FALSE;\n+  if (!_ostree_sysroot_ensure_writable (self, error))\n+    return FALSE;\n+\n+  g_assert (!ostree_deployment_is_staged (deployment));\n+\n+  OstreeBootconfigParser *new_bootconfig = ostree_deployment_get_bootconfig (deployment);\n+  ostree_bootconfig_parser_set (new_bootconfig, \"options\", kargs_str);\n+\n+  g_autofree char *bootconf_name =\n+    g_strdup_printf (\"ostree-%d-%s.conf\",\n+                     self->deployments->len - ostree_deployment_get_index (deployment),\n+                     ostree_deployment_get_osname (deployment));\n+\n+  g_autofree char *bootconfdir = g_strdup_printf (\"loader.%d/entries\", self->bootversion);\n+  glnx_autofd int bootconf_dfd = -1;\n+  if (!glnx_opendirat (self->boot_fd, bootconfdir, TRUE, &bootconf_dfd, error))\n+    return FALSE;\n+\n+  if (!ostree_bootconfig_parser_write_at (new_bootconfig,\n+                                          bootconf_dfd, bootconf_name,\n+                                          cancellable, error))\n+    return FALSE;\n+\n+  return TRUE;\n+}\n+\n /**\n  * ostree_sysroot_deployment_set_mutable:\n  * @self: Sysroot\ndiff --git a/src/libostree/ostree-sysroot.h b/src/libostree/ostree-sysroot.h\nindex c240aaa06b..0cde9e4423 100644\n--- a/src/libostree/ostree-sysroot.h\n+++ b/src/libostree/ostree-sysroot.h\n@@ -175,6 +175,13 @@ gboolean ostree_sysroot_deployment_set_kargs (OstreeSysroot     *self,\n                                               GCancellable      *cancellable,\n                                               GError           **error);\n \n+_OSTREE_PUBLIC\n+gboolean ostree_sysroot_deployment_set_kargs_in_place (OstreeSysroot     *self,\n+                                                       OstreeDeployment  *deployment,\n+                                                       char              *kargs_str,\n+                                                       GCancellable      *cancellable,\n+                                                       GError           **error);\n+\n _OSTREE_PUBLIC\n gboolean ostree_sysroot_write_deployments (OstreeSysroot     *self,\n                                            GPtrArray         *new_deployments,\ndiff --git a/src/ostree/ot-admin-kargs-builtin-edit-in-place.c b/src/ostree/ot-admin-kargs-builtin-edit-in-place.c\nindex 40ada02fc6..2a16da9c96 100644\n--- a/src/ostree/ot-admin-kargs-builtin-edit-in-place.c\n+++ b/src/ostree/ot-admin-kargs-builtin-edit-in-place.c\n@@ -67,11 +67,10 @@ ot_admin_kargs_builtin_edit_in_place (int argc, char **argv, OstreeCommandInvoca\n             }\n         }\n       \n-      g_auto(GStrv) kargs_strv = ostree_kernel_args_to_strv (kargs);\n+      g_autofree char *new_options = ostree_kernel_args_to_string (kargs);\n       \n-      if (!ostree_sysroot_deployment_set_kargs (sysroot, deployment,\n-                                              kargs_strv,\n-                                              cancellable, error))\n+      if (!ostree_sysroot_deployment_set_kargs_in_place (sysroot, deployment, new_options, \n+                                                         cancellable, error))\n         return FALSE;\n       \n     }\ndiff --git a/tests/kolainst/destructive/kargs-edit-in-place.sh b/tests/kolainst/destructive/kargs-edit-in-place.sh\nnew file mode 100755\nindex 0000000000..6380ff3340\n--- /dev/null\n+++ b/tests/kolainst/destructive/kargs-edit-in-place.sh\n@@ -0,0 +1,12 @@\n+#!/bin/bash\n+\n+# Verify \"ostree admin kargs edit-in-place\" works\n+\n+set -xeuo pipefail\n+\n+. ${KOLA_EXT_DATA}/libinsttest.sh\n+\n+sudo ostree admin kargs edit-in-place --append-if-missing=testarg\n+assert_file_has_content /boot/loader/entries/ostree-* testarg\n+\n+echo \"ok test `kargs edit-in-place --append-if-missing`\"\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42510981-vul",
+      "digest": "sha256:2d942c45b9a0cd62c9e7cf2f50d8478894a09aa44224f921d27bb7c694f01232"
+    },
+    "patched": {
+      "ref": "n132/arvo:42510981-fix",
+      "digest": "sha256:a48727c150c50c7701c5b4763c36689b2fca7f1cf0e404dcd1d3e58afcd157c3"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/glib/build/../subprojects/pcre-8.37/pcre_newline.c:84",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/glib/build/../subprojects/pcre-8.37/pcre_newline.c:84"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

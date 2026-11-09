@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042510349",
+  "chain": "CWE-416->CWE-787",
+  "project": "libvips",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42510349",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "2dc319b1b1610e4c8ae95b8ca47b46926cd41ce1",
+      "fix_commits": [
+        "2dc319b1b1610e4c8ae95b8ca47b46926cd41ce1"
+      ],
+      "repo": "https://github.com/libvips/libvips"
+    },
+    "patch": "From 2dc319b1b1610e4c8ae95b8ca47b46926cd41ce1 Mon Sep 17 00:00:00 2001\nFrom: John Cupitt <jcupitt@gmail.com>\nDate: Tue, 5 Apr 2022 08:34:45 +0100\nSubject: [PATCH] Revert \"stop JPEG load after 20 warnings\"\n\nThis reverts commit 89bd46d1c4e0465974b886ef5b5021e988f111a2.\n---\n libvips/foreign/jpeg2vips.c |  6 ------\n libvips/foreign/vips2jpeg.c | 32 +++++++++-----------------------\n 2 files changed, 9 insertions(+), 29 deletions(-)\n\ndiff --git a/libvips/foreign/jpeg2vips.c b/libvips/foreign/jpeg2vips.c\nindex e3f69ef..067d4ef 100644\n--- a/libvips/foreign/jpeg2vips.c\n+++ b/libvips/foreign/jpeg2vips.c\n@@ -488,12 +488,6 @@ read_jpeg_header( ReadJpeg *jpeg, VipsImage *out )\n \tsize_t data_length;\n \tint i;\n \n-\t/* Trace level 3 means emit warning messages as they happen. This\n-\t * lets us spot files with crazy numbers of warnings early and\n-\t * prevents some DoS attacks.\n-\t */\n-\tjpeg->eman.pub.trace_level = 3;\n-\n \t/* Read JPEG header. libjpeg will set out_color_space sanely for us \n \t * for YUV YCCK etc.\n \t */\ndiff --git a/libvips/foreign/vips2jpeg.c b/libvips/foreign/vips2jpeg.c\nindex bfe99f4..56e6617 100644\n--- a/libvips/foreign/vips2jpeg.c\n+++ b/libvips/foreign/vips2jpeg.c\n@@ -165,34 +165,20 @@\n void\n vips__new_output_message( j_common_ptr cinfo )\n {\n-\t/* Some DoS attacks use jpg files with thousands of warnings. Try to\n-\t * limit the effect these have.\n-\t */\n-\tif( cinfo->err->num_warnings >= 20 ) {\n-\t\tif( cinfo->err->num_warnings == 20 ) {\n-\t\t\tvips_error( \"VipsJpeg\", \n-\t\t\t\t\"%s\", _( \"too many warnings\" ) );\n-\t\t}\n-\n-\t\tjpeg_abort( cinfo );\n-\t}\n-\telse {\n-\t\tchar buffer[JMSG_LENGTH_MAX];\n+\tchar buffer[JMSG_LENGTH_MAX];\n \n-\t\t(*cinfo->err->format_message)( cinfo, buffer );\n-\t\tvips_error( \"VipsJpeg\", _( \"%s\" ), buffer );\n+\t(*cinfo->err->format_message)( cinfo, buffer );\n+\tvips_error( \"VipsJpeg\", _( \"%s\" ), buffer );\n \n #ifdef DEBUG\n-\t\tprintf( \"vips__new_output_message: \\\"%s\\\"\\n\", buffer );\n+\tprintf( \"vips__new_output_message: \\\"%s\\\"\\n\", buffer );\n #endif /*DEBUG*/\n \n-\t\t/* This is run for things like file truncated. Signal \n-\t\t * invalidate to force this op out of cache. \n-\t\t */\n-\t\tif( cinfo->client_data )\n-\t\t\tvips_foreign_load_invalidate( \n-\t\t\t\tVIPS_IMAGE( cinfo->client_data ) );\n-\t}\n+\t/* This is run for things like file truncated. Signal invalidate to\n+\t * force this op out of cache. \n+\t */\n+        if( cinfo->client_data )\n+\t\tvips_foreign_load_invalidate( VIPS_IMAGE( cinfo->client_data ) );\n }\n \n /* New error_exit handler.\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42510349-vul",
+      "digest": "sha256:c74453c1dffcc14ba9666d0351d1c52bcc95e990890d077198d95f9119f6e37f"
+    },
+    "patched": {
+      "ref": "n132/arvo:42510349-fix",
+      "digest": "sha256:e2039051cc05e0bddae75c05a621e6439b9097791133a18b83e6d4faec6e1580"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "WRITE",
+        "crash_site": "/src/libjpeg-turbo/jdphuff.c:140",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "WRITE",
+        "site": "/src/libjpeg-turbo/jdphuff.c:140"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-969777962",
+  "chain": "CWE-456->CWE-457",
+  "project": "libxslt",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42522676",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://gitlab.gnome.org/GNOME/libxslt.git075b6087785d7ba3dd6904f117ef9d0b9aa36a2b",
+      "fix_commits": [
+        "075b6087785d7ba3dd6904f117ef9d0b9aa36a2b"
+      ],
+      "repo": "https://gitlab.gnome.org/GNOME/libxslt.git"
+    },
+    "patch": "From 075b6087785d7ba3dd6904f117ef9d0b9aa36a2b Mon Sep 17 00:00:00 2001\nFrom: Nick Wellnhofer <wellnhofer@aevum.de>\nDate: Mon, 27 Mar 2023 20:25:02 +0200\nSubject: [PATCH] malloc-fail: Fix use-after-free in xsltCompileAttr\n\nFound by OSS-Fuzz, see #84.\n---\n libxslt/attrvt.c | 19 +++++++++++--------\n 1 file changed, 11 insertions(+), 8 deletions(-)\n\ndiff --git a/libxslt/attrvt.c b/libxslt/attrvt.c\nindex 6157fcd..9d74a81 100644\n--- a/libxslt/attrvt.c\n+++ b/libxslt/attrvt.c\n@@ -154,10 +154,9 @@ xsltSetAttrVTsegment(xsltAttrVTPtr avt, void *val) {\n     if (avt->nb_seg >= avt->max_seg) {\n         size_t size = sizeof(xsltAttrVT) +\n                       (avt->max_seg + MAX_AVT_SEG) * sizeof(void *);\n-\txsltAttrVTPtr tmp = (xsltAttrVTPtr) xmlRealloc(avt, size);\n-\tif (tmp == NULL)\n+\tavt = (xsltAttrVTPtr) xmlRealloc(avt, size);\n+\tif (avt == NULL)\n \t    return NULL;\n-        avt = tmp;\n \tmemset(&avt->segments[avt->nb_seg], 0, MAX_AVT_SEG*sizeof(void *));\n \tavt->max_seg += MAX_AVT_SEG;\n     }\n@@ -181,7 +180,7 @@ xsltCompileAttr(xsltStylesheetPtr style, xmlAttrPtr attr) {\n     xmlChar *ret = NULL;\n     xmlChar *expr = NULL;\n     xmlXPathCompExprPtr comp = NULL;\n-    xsltAttrVTPtr avt;\n+    xsltAttrVTPtr avt, tmp;\n     int i = 0, lastavt = 0;\n \n     if ((style == NULL) || (attr == NULL) || (attr->children == NULL))\n@@ -245,8 +244,9 @@ xsltCompileAttr(xsltStylesheetPtr style, xmlAttrPtr attr) {\n \t\tstr = cur;\n \t\tif (avt->nb_seg == 0)\n \t\t    avt->strstart = 1;\n-\t\tif ((avt = xsltSetAttrVTsegment(avt, (void *) ret)) == NULL)\n+\t\tif ((tmp = xsltSetAttrVTsegment(avt, (void *) ret)) == NULL)\n \t\t    goto error;\n+                avt = tmp;\n \t\tret = NULL;\n \t\tlastavt = 0;\n \t    }\n@@ -290,17 +290,19 @@ xsltCompileAttr(xsltStylesheetPtr style, xmlAttrPtr attr) {\n \t\tif (avt->nb_seg == 0)\n \t\t    avt->strstart = 0;\n \t\tif (lastavt == 1) {\n-\t\t    if ((avt = xsltSetAttrVTsegment(avt, NULL)) == NULL) {\n+\t\t    if ((tmp = xsltSetAttrVTsegment(avt, NULL)) == NULL) {\n                         xsltTransformError(NULL, style, attr->parent,\n                                            \"out of memory\\n\");\n \t\t        goto error;\n                     }\n+                    avt = tmp;\n \t\t}\n-\t\tif ((avt = xsltSetAttrVTsegment(avt, (void *) comp)) == NULL) {\n+\t\tif ((tmp = xsltSetAttrVTsegment(avt, (void *) comp)) == NULL) {\n                     xsltTransformError(NULL, style, attr->parent,\n                                        \"out of memory\\n\");\n \t\t    goto error;\n                 }\n+                avt = tmp;\n \t\tlastavt = 1;\n \t\txmlFree(expr);\n \t\texpr = NULL;\n@@ -329,8 +331,9 @@ xsltCompileAttr(xsltStylesheetPtr style, xmlAttrPtr attr) {\n \tstr = cur;\n \tif (avt->nb_seg == 0)\n \t    avt->strstart = 1;\n-\tif ((avt = xsltSetAttrVTsegment(avt, (void *) ret)) == NULL)\n+\tif ((tmp = xsltSetAttrVTsegment(avt, (void *) ret)) == NULL)\n \t    goto error;\n+        avt = tmp;\n \tret = NULL;\n     }\n \n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42522676-vul",
+      "digest": "sha256:b8c2efd9f7cbf5d58d408fe80d3ae46151afa608997820f3bd2ab7937eb58980"
+    },
+    "patched": {
+      "ref": "n132/arvo:42522676-fix",
+      "digest": "sha256:4b2b1cef31ecd5474bbf0889a7e089a2e934aa1986fc7e3134c0d3f5a48cb981"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/libxslt/libxslt/attrvt.c:106",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/libxslt/libxslt/attrvt.c:106"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-958612767",
+  "chain": "CWE-843->CWE-119",
+  "project": "serenity",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42503652",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/SerenityOS/serenity/commit/c388a879d73633b6ebe8353fd2a0407b908fe26f",
+      "fix_commits": [
+        "c388a879d73633b6ebe8353fd2a0407b908fe26f"
+      ],
+      "repo": "https://github.com/SerenityOS/serenity"
+    },
+    "patch": "diff --git a/AK/Base64.cpp b/AK/Base64.cpp\nindex 11b190ec088732..364425f468eb66 100644\n--- a/AK/Base64.cpp\n+++ b/AK/Base64.cpp\n@@ -48,31 +48,24 @@ size_t calculate_base64_encoded_length(ReadonlyBytes input)\n     return ((4 * input.size() / 3) + 3) & ~3;\n }\n \n-Optional<ByteBuffer> decode_base64(StringView input)\n+ErrorOr<ByteBuffer> decode_base64(StringView input)\n {\n-    auto get = [&](const size_t offset, bool* is_padding) -> Optional<u8> {\n+    auto get = [&](const size_t offset, bool* is_padding) -> ErrorOr<u8> {\n         constexpr auto table = make_lookup_table();\n         if (offset >= input.length())\n             return 0;\n         if (input[offset] == '=') {\n             if (!is_padding)\n-                return {};\n+                return Error::from_string_literal(\"Invalid '=' character outside of padding in base64 data\");\n             *is_padding = true;\n             return 0;\n         }\n         i16 result = table[static_cast<unsigned char>(input[offset])];\n         if (result < 0)\n-            return {};\n+            return Error::from_string_literal(\"Invalid character in base64 data\");\n         VERIFY(result < 256);\n         return { result };\n     };\n-#define TRY_GET(index, is_padding)                       \\\n-    ({                                                   \\\n-        auto _temporary_result = get(index, is_padding); \\\n-        if (!_temporary_result.has_value())              \\\n-            return {};                                   \\\n-        _temporary_result.value();                       \\\n-    })\n \n     Vector<u8> output;\n     output.ensure_capacity(calculate_base64_decoded_length(input));\n@@ -81,10 +74,10 @@ Optional<ByteBuffer> decode_base64(StringView input)\n         bool in2_is_padding = false;\n         bool in3_is_padding = false;\n \n-        const u8 in0 = TRY_GET(i, nullptr);\n-        const u8 in1 = TRY_GET(i + 1, nullptr);\n-        const u8 in2 = TRY_GET(i + 2, &in2_is_padding);\n-        const u8 in3 = TRY_GET(i + 3, &in3_is_padding);\n+        const u8 in0 = TRY(get(i, nullptr));\n+        const u8 in1 = TRY(get(i + 1, nullptr));\n+        const u8 in2 = TRY(get(i + 2, &in2_is_padding));\n+        const u8 in3 = TRY(get(i + 3, &in3_is_padding));\n \n         const u8 out0 = (in0 << 2) | ((in1 >> 4) & 3);\n         const u8 out1 = ((in1 & 0xf) << 4) | ((in2 >> 2) & 0xf);\n@@ -97,7 +90,7 @@ Optional<ByteBuffer> decode_base64(StringView input)\n             output.append(out2);\n     }\n \n-    return ByteBuffer::copy(output).release_value_but_fixme_should_propagate_errors();\n+    return ByteBuffer::copy(output);\n }\n \n String encode_base64(ReadonlyBytes input)\ndiff --git a/AK/Base64.h b/AK/Base64.h\nindex 6b7eae8d8786cc..9493e634e56be1 100644\n--- a/AK/Base64.h\n+++ b/AK/Base64.h\n@@ -17,7 +17,7 @@ size_t calculate_base64_decoded_length(StringView);\n \n size_t calculate_base64_encoded_length(ReadonlyBytes);\n \n-Optional<ByteBuffer> decode_base64(StringView);\n+ErrorOr<ByteBuffer> decode_base64(StringView);\n \n String encode_base64(ReadonlyBytes);\n \ndiff --git a/Tests/AK/TestBase64.cpp b/Tests/AK/TestBase64.cpp\nindex 38767e17412fcd..fcda584a28fe89 100644\n--- a/Tests/AK/TestBase64.cpp\n+++ b/Tests/AK/TestBase64.cpp\n@@ -14,7 +14,7 @@ TEST_CASE(test_decode)\n {\n     auto decode_equal = [&](const char* input, const char* expected) {\n         auto decoded_option = decode_base64(StringView(input));\n-        EXPECT(decoded_option.has_value());\n+        EXPECT(!decoded_option.is_error());\n         auto decoded = decoded_option.release_value();\n         EXPECT(String::copy(decoded) == String(expected));\n         EXPECT(StringView(expected).length() <= calculate_base64_decoded_length(StringView(input).bytes()));\n@@ -31,10 +31,10 @@ TEST_CASE(test_decode)\n \n TEST_CASE(test_decode_invalid)\n {\n-    EXPECT(!decode_base64(StringView(\"asdf\\xffqwe\")).has_value());\n-    EXPECT(!decode_base64(StringView(\"asdf\\x80qwe\")).has_value());\n-    EXPECT(!decode_base64(StringView(\"asdf:qwe\")).has_value());\n-    EXPECT(!decode_base64(StringView(\"asdf=qwe\")).has_value());\n+    EXPECT(decode_base64(StringView(\"asdf\\xffqwe\")).is_error());\n+    EXPECT(decode_base64(StringView(\"asdf\\x80qwe\")).is_error());\n+    EXPECT(decode_base64(StringView(\"asdf:qwe\")).is_error());\n+    EXPECT(decode_base64(StringView(\"asdf=qwe\")).is_error());\n }\n \n TEST_CASE(test_encode)\ndiff --git a/Userland/Applications/Mail/MailWidget.cpp b/Userland/Applications/Mail/MailWidget.cpp\nindex 15c01513f7a6fe..e5e66702333ed8 100644\n--- a/Userland/Applications/Mail/MailWidget.cpp\n+++ b/Userland/Applications/Mail/MailWidget.cpp\n@@ -499,7 +499,9 @@ void MailWidget::selected_email_to_load()\n     if (selected_alternative_encoding.equals_ignoring_case(\"7bit\") || selected_alternative_encoding.equals_ignoring_case(\"8bit\")) {\n         decoded_data = encoded_data;\n     } else if (selected_alternative_encoding.equals_ignoring_case(\"base64\")) {\n-        decoded_data = decode_base64(encoded_data).value_or(ByteBuffer());\n+        auto decoded_base64 = decode_base64(encoded_data);\n+        if (!decoded_base64.is_error())\n+            decoded_data = decoded_base64.release_value();\n     } else if (selected_alternative_encoding.equals_ignoring_case(\"quoted-printable\")) {\n         decoded_data = IMAP::decode_quoted_printable(encoded_data);\n     } else {\ndiff --git a/Userland/Applications/PixelPaint/Image.cpp b/Userland/Applications/PixelPaint/Image.cpp\nindex c16f337d9594f4..b61152a4ae69a5 100644\n--- a/Userland/Applications/PixelPaint/Image.cpp\n+++ b/Userland/Applications/PixelPaint/Image.cpp\n@@ -88,11 +88,8 @@ ErrorOr<NonnullRefPtr<Image>> Image::try_create_from_pixel_paint_json(JsonObject\n         auto name = layer_object.get(\"name\").as_string();\n \n         auto bitmap_base64_encoded = layer_object.get(\"bitmap\").as_string();\n-        auto bitmap_data = decode_base64(bitmap_base64_encoded);\n-        if (!bitmap_data.has_value())\n-            return Error::from_string_literal(\"Base64 decode failed\"sv);\n-\n-        auto bitmap = TRY(try_decode_bitmap(bitmap_data.value()));\n+        auto bitmap_data = TRY(decode_base64(bitmap_base64_encoded));\n+        auto bitmap = TRY(try_decode_bitmap(bitmap_data));\n         auto layer = TRY(Layer::try_create_with_bitmap(*image, move(bitmap), name));\n \n         auto width = layer_object.get(\"width\").to_i32();\ndiff --git a/Userland/Libraries/LibCrypto/ASN1/PEM.cpp b/Userland/Libraries/LibCrypto/ASN1/PEM.cpp\nindex 90f957cfc97138..a23bed08bfa452 100644\n--- a/Userland/Libraries/LibCrypto/ASN1/PEM.cpp\n+++ b/Userland/Libraries/LibCrypto/ASN1/PEM.cpp\n@@ -35,8 +35,8 @@ ByteBuffer decode_pem(ReadonlyBytes data)\n                 break;\n             }\n             auto b64decoded = decode_base64(lexer.consume_line().trim_whitespace(TrimMode::Right));\n-            if (!b64decoded.has_value()) {\n-                dbgln(\"Failed to decode PEM, likely bad Base64\");\n+            if (b64decoded.is_error()) {\n+                dbgln(\"Failed to decode PEM: {}\", b64decoded.error().string_literal());\n                 return {};\n             }\n             if (decoded.try_append(b64decoded.value().data(), b64decoded.value().size()).is_error()) {\ndiff --git a/Userland/Libraries/LibHTTP/HttpRequest.cpp b/Userland/Libraries/LibHTTP/HttpRequest.cpp\nindex fc8e0036944812..034bc567667588 100644\n--- a/Userland/Libraries/LibHTTP/HttpRequest.cpp\n+++ b/Userland/Libraries/LibHTTP/HttpRequest.cpp\n@@ -198,7 +198,7 @@ Optional<HttpRequest::BasicAuthenticationCredentials> HttpRequest::parse_http_ba\n     if (token.is_empty())\n         return {};\n     auto decoded_token_bb = decode_base64(token);\n-    if (!decoded_token_bb.has_value())\n+    if (decoded_token_bb.is_error())\n         return {};\n     auto decoded_token = String::copy(decoded_token_bb.value());\n     auto colon_index = decoded_token.find(':');\ndiff --git a/Userland/Libraries/LibWeb/Bindings/WindowObject.cpp b/Userland/Libraries/LibWeb/Bindings/WindowObject.cpp\nindex 85eaf2632d9de5..88a20ab02aafb0 100644\n--- a/Userland/Libraries/LibWeb/Bindings/WindowObject.cpp\n+++ b/Userland/Libraries/LibWeb/Bindings/WindowObject.cpp\n@@ -340,7 +340,7 @@ JS_DEFINE_NATIVE_FUNCTION(WindowObject::atob)\n         return vm.throw_completion<JS::TypeError>(global_object, JS::ErrorType::BadArgCountOne, \"atob\");\n     auto string = TRY(vm.argument(0).to_string(global_object));\n     auto decoded = decode_base64(StringView(string));\n-    if (!decoded.has_value())\n+    if (decoded.is_error())\n         return vm.throw_completion<JS::TypeError>(global_object, JS::ErrorType::InvalidFormat, \"Base64\");\n \n     // decode_base64() returns a byte string. LibJS uses UTF-8 for strings. Use Latin1Decoder to convert bytes 128-255 to UTF-8.\ndiff --git a/Userland/Libraries/LibWeb/Loader/ResourceLoader.cpp b/Userland/Libraries/LibWeb/Loader/ResourceLoader.cpp\nindex cb41f1ea73be51..818a992bb8314a 100644\n--- a/Userland/Libraries/LibWeb/Loader/ResourceLoader.cpp\n+++ b/Userland/Libraries/LibWeb/Loader/ResourceLoader.cpp\n@@ -162,8 +162,8 @@ void ResourceLoader::load(LoadRequest& request, Function<void(ReadonlyBytes, con\n         ByteBuffer data;\n         if (url.data_payload_is_base64()) {\n             auto data_maybe = decode_base64(url.data_payload());\n-            if (!data_maybe.has_value()) {\n-                auto error_message = \"Base64 data contains an invalid character\"sv;\n+            if (data_maybe.is_error()) {\n+                auto error_message = data_maybe.error().string_literal();\n                 log_failure(request, error_message);\n                 error_callback(error_message, {});\n                 return;\ndiff --git a/Userland/Utilities/base64.cpp b/Userland/Utilities/base64.cpp\nindex 0febee23749811..c612e39cea6357 100644\n--- a/Userland/Utilities/base64.cpp\n+++ b/Userland/Utilities/base64.cpp\n@@ -46,12 +46,8 @@ ErrorOr<int> serenity_main(Main::Arguments arguments)\n     TRY(Core::System::pledge(\"stdio\"));\n \n     if (decode) {\n-        auto decoded = decode_base64(StringView(buffer));\n-        if (!decoded.has_value()) {\n-            warnln(\"base64: invalid input\");\n-            return 1;\n-        }\n-        fwrite(decoded.value().data(), sizeof(u8), decoded.value().size(), stdout);\n+        auto decoded = TRY(decode_base64(StringView(buffer)));\n+        fwrite(decoded.data(), sizeof(u8), decoded.size(), stdout);\n         return 0;\n     }\n \ndiff --git a/Userland/Utilities/telws.cpp b/Userland/Utilities/telws.cpp\nindex 502b13fc8b87a9..7d70d6f68b43e2 100644\n--- a/Userland/Utilities/telws.cpp\n+++ b/Userland/Utilities/telws.cpp\n@@ -119,10 +119,10 @@ int main(int argc, char** argv)\n                 }\n                 auto base64_data = line.substring(8);\n                 auto buffer = decode_base64(base64_data);\n-                if (buffer.has_value()) {\n-                    socket->send(buffer.value(), false);\n+                if (buffer.is_error()) {\n+                    outln(\"Could not send message : {}\", buffer.error().string_literal());\n                 } else {\n-                    outln(\"Could not send message : Base64 string contains an invalid character.\");\n+                    socket->send(buffer.value(), false);\n                 }\n                 continue;\n             }\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42503652-vul",
+      "digest": "sha256:1f639af4d5e57d10c5af1d6a6ced8c1a070143b8556b80efc4abec04c4bd55d2"
+    },
+    "patched": {
+      "ref": "n132/arvo:42503652-fix",
+      "digest": "sha256:f1419d7926d948aae2696f92c2a9d86defea5153839c8134ee88e2e0069e28d4"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "crash_site": "/src/serenity/Meta/Lagom/Fuzzers/FuzzPEM.cpp:13",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 843,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 119,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "site": "/src/serenity/Meta/Lagom/Fuzzers/FuzzPEM.cpp:13"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

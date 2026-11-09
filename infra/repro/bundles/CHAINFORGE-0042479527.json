@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042479527",
+  "chain": "CWE-416->CWE-125",
+  "project": "pcre2",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42479527",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "3f96e07e6b398cfc220a4997b5be20dd308b9381",
+      "fix_commits": [
+        "3f96e07e6b398cfc220a4997b5be20dd308b9381"
+      ],
+      "repo": "https://github.com/PCRE2Project/pcre2"
+    },
+    "patch": "diff --git a/ChangeLog b/ChangeLog\nindex d37ec15c4..942b360ab 100644\n--- a/ChangeLog\n+++ b/ChangeLog\n@@ -171,6 +171,9 @@ one: PCRE2_EXTRA_ALLOW_SURROGATE_ESCAPES.\n \n 34. Implement newline type PCRE2_NEWLINE_NUL.\n \n+35. A lookbehind assertion that had a zero-length branch caused undefined \n+behaviour when processed by pcre2_dfa_match(). This is oss-fuzz issue 1859.\n+\n \n Version 10.23 14-February-2017\n ------------------------------\ndiff --git a/src/pcre2_dfa_match.c b/src/pcre2_dfa_match.c\nindex 5194a8534..f9acba301 100644\n--- a/src/pcre2_dfa_match.c\n+++ b/src/pcre2_dfa_match.c\n@@ -375,14 +375,10 @@ internal_dfa_match(\n {\n stateblock *active_states, *new_states, *temp_states;\n stateblock *next_active_state, *next_new_state;\n-\n const uint8_t *ctypes, *lcc, *fcc;\n PCRE2_SPTR ptr;\n PCRE2_SPTR end_code;\n-PCRE2_SPTR first_op;\n-\n dfa_recursion_info new_recursive;\n-\n int active_count, new_count, match_count;\n \n /* Some fields in the mb block are frequently referenced, so we load them into\n@@ -417,21 +413,15 @@ active_states = (stateblock *)(workspace + 2);\n next_new_state = new_states = active_states + wscount;\n new_count = 0;\n \n-first_op = this_start_code + 1 + LINK_SIZE +\n-  ((*this_start_code == OP_CBRA || *this_start_code == OP_SCBRA ||\n-    *this_start_code == OP_CBRAPOS || *this_start_code == OP_SCBRAPOS)\n-    ? IMM2_SIZE:0);\n-\n /* The first thing in any (sub) pattern is a bracket of some sort. Push all\n the alternative states onto the list, and find out where the end is. This\n makes is possible to use this function recursively, when we want to stop at a\n matching internal ket rather than at the end.\n \n-If the first opcode in the first alternative is OP_REVERSE, we are dealing with\n-a backward assertion. In that case, we have to find out the maximum amount to\n-move back, and set up each alternative appropriately. */\n+If we are dealing with a backward assertion we have to find out the maximum\n+amount to move back, and set up each alternative appropriately. */\n \n-if (*first_op == OP_REVERSE)\n+if (*this_start_code == OP_ASSERTBACK || *this_start_code == OP_ASSERTBACK_NOT)\n   {\n   size_t max_back = 0;\n   size_t gone_back;\n@@ -476,15 +466,17 @@ if (*first_op == OP_REVERSE)\n   if (current_subject < mb->start_used_ptr)\n     mb->start_used_ptr = current_subject;\n \n-  /* Now we can process the individual branches. */\n+  /* Now we can process the individual branches. There will be an OP_REVERSE at\n+  the start of each branch, except when the length of the branch is zero. */\n \n   end_code = this_start_code;\n   do\n     {\n-    size_t back = (size_t)GET(end_code, 2+LINK_SIZE);\n+    uint32_t revlen = (end_code[1+LINK_SIZE] == OP_REVERSE)? 1 + LINK_SIZE : 0;\n+    size_t back = (revlen == 0)? 0 : (size_t)GET(end_code, 2+LINK_SIZE);\n     if (back <= gone_back)\n       {\n-      int bstate = (int)(end_code - start_code + 2 + 2*LINK_SIZE);\n+      int bstate = (int)(end_code - start_code + 1 + LINK_SIZE + revlen);\n       ADD_NEW_DATA(-bstate, 0, (int)(gone_back - back));\n       }\n     end_code += GET(end_code, 1);\n@@ -544,7 +536,7 @@ for (;;)\n   BOOL partial_newline = FALSE;\n   BOOL could_continue = reset_could_continue;\n   reset_could_continue = FALSE;\n-  \n+\n   if (ptr > mb->last_used_ptr) mb->last_used_ptr = ptr;\n \n   /* Make the new state list into the active state list and empty the\n@@ -597,7 +589,7 @@ for (;;)\n     int state_offset = current_state->offset;\n     int rrc;\n     int count;\n-    \n+\n     /* A negative offset is a special case meaning \"hold off going to this\n     (negated) state until the number of characters in the data field have\n     been skipped\". If the could_continue flag was passed over from a previous\n@@ -633,7 +625,7 @@ for (;;)\n \n     code = start_code + state_offset;\n     codevalue = *code;\n-    \n+\n     /* If this opcode inspects a character, but we are at the end of the\n     subject, remember the fact for use when testing for a partial match. */\n \n@@ -3078,13 +3070,13 @@ for (;;)\n   ptr += clen;    /* Advance to next subject character */\n   }               /* Loop to move along the subject string */\n \n-/* Control gets here from \"break\" a few lines above. If we have a match and \n+/* Control gets here from \"break\" a few lines above. If we have a match and\n PCRE2_ENDANCHORED is set, the match fails. */\n \n-if (match_count >= 0 && \n+if (match_count >= 0 &&\n     ((mb->moptions | mb->poptions) & PCRE2_ENDANCHORED) != 0 &&\n     ptr < end_subject)\n-  match_count = PCRE2_ERROR_NOMATCH;    \n+  match_count = PCRE2_ERROR_NOMATCH;\n \n return match_count;\n }\n@@ -3157,12 +3149,12 @@ if (re == NULL || subject == NULL || workspace == NULL || match_data == NULL)\n if (wscount < 20) return PCRE2_ERROR_DFA_WSSIZE;\n if (start_offset > length) return PCRE2_ERROR_BADOFFSET;\n \n-/* Partial matching and PCRE2_ENDANCHORED are currently not allowed at the same \n-time. */ \n-              \n+/* Partial matching and PCRE2_ENDANCHORED are currently not allowed at the same\n+time. */\n+\n if ((options & (PCRE2_PARTIAL_HARD|PCRE2_PARTIAL_SOFT)) != 0 &&\n    ((re->overall_options | options) & PCRE2_ENDANCHORED) != 0)\n-  return PCRE2_ERROR_BADOPTION; \n+  return PCRE2_ERROR_BADOPTION;\n \n /* Check that the first field in the block is the magic number. If it is not,\n return with PCRE2_ERROR_BADMAGIC. */\ndiff --git a/testdata/testinput6 b/testdata/testinput6\nindex dfd78a464..df382496e 100644\n--- a/testdata/testinput6\n+++ b/testdata/testinput6\n@@ -4929,4 +4929,16 @@\n \\= Expect no match\n     X\\x00Y      \n \n+/(?<=abc|)/\n+    abcde\\=aftertext\n+    \n+/(?<=|abc)/ \n+    abcde\\=aftertext\n+\n+/(?<=abc|)/endanchored\n+    abcde\\=aftertext\n+    \n+/(?<=|abc)/endanchored\n+    abcde\\=aftertext\n+\n # End of testinput6\ndiff --git a/testdata/testoutput6 b/testdata/testoutput6\nindex 78f57402c..f0291236c 100644\n--- a/testdata/testoutput6\n+++ b/testdata/testoutput6\n@@ -7746,4 +7746,24 @@ No match\n     X\\x00Y      \n No match\n \n+/(?<=abc|)/\n+    abcde\\=aftertext\n+ 0: \n+ 0+ abcde\n+    \n+/(?<=|abc)/ \n+    abcde\\=aftertext\n+ 0: \n+ 0+ abcde\n+\n+/(?<=abc|)/endanchored\n+    abcde\\=aftertext\n+ 0: \n+ 0+ \n+    \n+/(?<=|abc)/endanchored\n+    abcde\\=aftertext\n+ 0: \n+ 0+ \n+\n # End of testinput6\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42479527-vul",
+      "digest": "sha256:032fa3c100e542b6e5a43feb1dc2dfe21562dfbc6a460f4113304e3a65116f74"
+    },
+    "patched": {
+      "ref": "n132/arvo:42479527-fix",
+      "digest": "sha256:82b28381ee7c7e19dd35b8db1261f9b53553aa6bfdf6221dfe648031590da694"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/pcre2/src/pcre2_dfa_match.c:658",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/pcre2/src/pcre2_dfa_match.c:658"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

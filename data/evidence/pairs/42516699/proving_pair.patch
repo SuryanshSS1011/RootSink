@@ -1,0 +1,34 @@
+diff --git a/src/quicktimevideo.cpp b/src/quicktimevideo.cpp
+index 352fe4b0de..fa567ecaaa 100644
+--- a/src/quicktimevideo.cpp
++++ b/src/quicktimevideo.cpp
+@@ -829,8 +829,8 @@ void QuickTimeVideo::userDataDecoder(size_t size_external) {
+ 
+     else if (equalsQTimeTag(buf, "CNCV") || equalsQTimeTag(buf, "CNFV") || equalsQTimeTag(buf, "CNMN") ||
+              equalsQTimeTag(buf, "NCHD") || equalsQTimeTag(buf, "FFMV")) {
+-      io_->readOrThrow(buf.data(), size - 8);
+-      xmpData_[exvGettext(tv->label_)] = Exiv2::toString(buf.data());
++      enforce(tv, Exiv2::ErrorCode::kerCorruptedMetadata);
++      xmpData_[exvGettext(tv->label_)] = readString(*io_, size - 8);
+     }
+ 
+     else if (equalsQTimeTag(buf, "CMbo") || equalsQTimeTag(buf, "Cmbo")) {
+diff --git a/src/quicktimevideo.cpp b/src/quicktimevideo.cpp
+index 352fe4b0de..fa567ecaaa 100644
+--- a/src/quicktimevideo.cpp
++++ b/src/quicktimevideo.cpp
+@@ -575,6 +575,14 @@ void QuickTimeVideo::decodeBlock(std::string const& entered_from) {
+   tagDecoder(buf, newsize);
+ }  // QuickTimeVideo::decodeBlock
+ 
++static std::string readString(BasicIo& io, size_t size) {
++  enforce(size <= io.size() - io.tell(), Exiv2::ErrorCode::kerCorruptedMetadata);
++  Exiv2::DataBuf str(size + 1);
++  io.readOrThrow(str.data(), size);
++  str.write_uint8(size, 0); // nul-terminate string
++  return Exiv2::toString(str.data());
++}
++
+ void QuickTimeVideo::tagDecoder(Exiv2::DataBuf& buf, size_t size) {
+   assert(buf.size() > 4);
+ 

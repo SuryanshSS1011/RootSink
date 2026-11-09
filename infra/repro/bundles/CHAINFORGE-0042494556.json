@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042494556",
+  "chain": "CWE-1284->CWE-787",
+  "project": "ffmpeg",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42494556",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "f7a515044766426cf3cac20bdc091b700f00a458",
+      "fix_commits": [
+        "f7a515044766426cf3cac20bdc091b700f00a458"
+      ],
+      "repo": "https://git.ffmpeg.org/ffmpeg.git"
+    },
+    "patch": "From f7a515044766426cf3cac20bdc091b700f00a458 Mon Sep 17 00:00:00 2001\nFrom: Michael Niedermayer <michael@niedermayer.cc>\nDate: Tue, 30 Mar 2021 12:47:22 +0200\nSubject: [PATCH] avformat/imx: Check palette chunk size\n\nFixes: out of array write\nFixes: 32116/clusterfuzz-testcase-minimized-ffmpeg_dem_SIMBIOSIS_IMX_fuzzer-6702533894602752\n\nFound-by: continuous fuzzing process https://github.com/google/oss-fuzz/tree/master/projects/ffmpeg\nSigned-off-by: Michael Niedermayer <michael@niedermayer.cc>\n---\n libavformat/imx.c | 2 ++\n 1 file changed, 2 insertions(+)\n\ndiff --git a/libavformat/imx.c b/libavformat/imx.c\nindex d203ed7..22fca0b 100644\n--- a/libavformat/imx.c\n+++ b/libavformat/imx.c\n@@ -113,6 +113,8 @@ retry:\n             imx->first_video_packet_pos = pos;\n         break;\n     case 0xAA98:\n+        if (chunk_size > 256 * 3)\n+            return AVERROR_INVALIDDATA;\n         for (int i = 0; i < chunk_size / 3; i++) {\n             unsigned r = avio_r8(pb) << 18;\n             unsigned g = avio_r8(pb) << 10;\n-- \n2.55.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42494556-vul",
+      "digest": "sha256:a8e7abe2e716e00a4bdf0c37cb309f7fcc1ba95caf5dfe974b09b3a939fdfc3b"
+    },
+    "patched": {
+      "ref": "n132/arvo:42494556-fix",
+      "digest": "sha256:411cab284a7de29b53fff44b32e8bdfa83d4d4c2b3ba29f32b1317849a46cfae"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/ffmpeg/libavformat/imx.c:118",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/ffmpeg/libavformat/imx.c:118"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042508603",
+  "chain": "CWE-416->CWE-125",
+  "project": "gpac",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42508603",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "ee257ba8638aa2fd56a16936ec3069a1823fbc18",
+      "fix_commits": [
+        "ee257ba8638aa2fd56a16936ec3069a1823fbc18"
+      ],
+      "repo": "https://github.com/gpac/gpac"
+    },
+    "patch": "From ee257ba8638aa2fd56a16936ec3069a1823fbc18 Mon Sep 17 00:00:00 2001\nFrom: Aurelien David <aurelien.david@telecom-paristech.fr>\nDate: Mon, 11 Dec 2023 16:24:49 +0100\nSubject: [PATCH] fix use-after-free in audio_sample_entry_read (from oss-fuzz)\n\n---\n src/isomedia/box_code_base.c | 14 +++++++++++++-\n 1 file changed, 13 insertions(+), 1 deletion(-)\n\ndiff --git a/src/isomedia/box_code_base.c b/src/isomedia/box_code_base.c\nindex e46e55c..8f35332 100644\n--- a/src/isomedia/box_code_base.c\n+++ b/src/isomedia/box_code_base.c\n@@ -4217,7 +4217,19 @@ GF_Err audio_sample_entry_box_read(GF_Box *s, GF_BitStream *bs)\n \t\tif (GF_4CC((u32)data[i+4], (u8)data[i+5], (u8)data[i+6], (u8)data[i+7]) == GF_ISOM_BOX_TYPE_ESDS) {\n \t\t\tGF_BitStream *mybs = gf_bs_new(data + i, size - i, GF_BITSTREAM_READ);\n \t\t\tgf_bs_set_cookie(mybs, GF_ISOM_BS_COOKIE_NO_LOGS);\n-\t\t\tif (ptr->esd) gf_isom_box_del_parent(&ptr->child_boxes, (GF_Box *)ptr->esd);\n+\t\t\tif (ptr->esd) {\n+\n+\t\t\t\tgf_list_del_item(ptr->child_boxes, (GF_Box *)ptr->esd);\n+\n+\t\t\t\tfor (u32 i=0; i<gf_list_count(ptr->child_boxes); i++) {\n+\t\t\t\t\tGF_Box *inner_box = (GF_Box *)gf_list_get(ptr->child_boxes, i);\n+\t\t\t\t\tif (inner_box->child_boxes) {\n+\t\t\t\t\t\tgf_list_del_item(inner_box->child_boxes, (GF_Box *)ptr->esd);\n+\t\t\t\t\t}\n+\t\t\t\t}\n+\n+\t\t\t\tgf_isom_box_del((GF_Box *)ptr->esd);\n+\t\t\t}\n \t\t\tptr->esd = NULL;\n \t\t\te = gf_isom_box_parse((GF_Box **)&ptr->esd, mybs);\n \t\t\tgf_bs_del(mybs);\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42508603-vul",
+      "digest": "sha256:f58798bf07cb4da7030ad071acca7fd61295b0156d5cfb3d4893f082c9679c88"
+    },
+    "patched": {
+      "ref": "n132/arvo:42508603-fix",
+      "digest": "sha256:bc519169793d720b467985bb6c75eabf5b439751f2c82d8715bb5e715a558a49"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/gpac/src/isomedia/box_funcs.c:1803",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/gpac/src/isomedia/box_funcs.c:1803"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

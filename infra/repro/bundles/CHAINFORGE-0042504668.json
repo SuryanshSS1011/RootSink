@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042504668",
+  "chain": "CWE-1285->CWE-787",
+  "project": "arrow",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42504668",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "587ce1dc5fcf4172591bdfdcb8882d47507d7daa",
+      "fix_commits": [
+        "587ce1dc5fcf4172591bdfdcb8882d47507d7daa"
+      ],
+      "repo": "https://github.com/apache/arrow"
+    },
+    "patch": "diff --git a/cpp/src/parquet/encoding.cc b/cpp/src/parquet/encoding.cc\nindex 783e8680e8e3..57a718608632 100644\n--- a/cpp/src/parquet/encoding.cc\n+++ b/cpp/src/parquet/encoding.cc\n@@ -2424,8 +2424,11 @@ class DeltaByteArrayDecoder : public DecoderImpl,\n         reinterpret_cast<const int32_t*>(buffered_prefix_length_->data()) +\n         prefix_len_offset_;\n     for (int i = 0; i < max_values; ++i) {\n-      if (AddWithOverflow(data_size, prefix_len_ptr[i], &data_size) ||\n-          AddWithOverflow(data_size, buffer[i].len, &data_size)) {\n+      if (ARROW_PREDICT_FALSE(prefix_len_ptr[i] < 0)) {\n+        throw ParquetException(\"negative prefix length in DELTA_BYTE_ARRAY\");\n+      }\n+      if (ARROW_PREDICT_FALSE(AddWithOverflow(data_size, prefix_len_ptr[i], &data_size) ||\n+                              AddWithOverflow(data_size, buffer[i].len, &data_size))) {\n         throw ParquetException(\"excess expansion in DELTA_BYTE_ARRAY\");\n       }\n     }\n@@ -2435,7 +2438,7 @@ class DeltaByteArrayDecoder : public DecoderImpl,\n     uint8_t* data_ptr = buffered_data_->mutable_data();\n     for (int i = 0; i < max_values; ++i) {\n       if (ARROW_PREDICT_FALSE(static_cast<size_t>(prefix_len_ptr[i]) > prefix.length())) {\n-        throw ParquetException(\"prefix length too large\");\n+        throw ParquetException(\"prefix length too large in DELTA_BYTE_ARRAY\");\n       }\n       memcpy(data_ptr, prefix.data(), prefix_len_ptr[i]);\n       // buffer[i] currently points to the string suffix\n@@ -2461,31 +2464,31 @@ class DeltaByteArrayDecoder : public DecoderImpl,\n                           typename EncodingTraits<ByteArrayType>::Accumulator* out,\n                           int* out_num_values) {\n     ArrowBinaryHelper helper(out);\n-    ::arrow::internal::BitmapReader bit_reader(valid_bits, valid_bits_offset, num_values);\n \n     std::vector<ByteArray> values(num_values);\n-    int num_valid_values = GetInternal(values.data(), num_values - null_count);\n+    const int num_valid_values = GetInternal(values.data(), num_values - null_count);\n     DCHECK_EQ(num_values - null_count, num_valid_values);\n \n     auto values_ptr = reinterpret_cast<const ByteArray*>(values.data());\n     int value_idx = 0;\n \n-    for (int i = 0; i < num_values; ++i) {\n-      bool is_valid = bit_reader.IsSet();\n-      bit_reader.Next();\n+    RETURN_NOT_OK(VisitNullBitmapInline(\n+        valid_bits, valid_bits_offset, num_values, null_count,\n+        [&]() {\n+          const auto& val = values_ptr[value_idx];\n+          if (ARROW_PREDICT_FALSE(!helper.CanFit(val.len))) {\n+            RETURN_NOT_OK(helper.PushChunk());\n+          }\n+          RETURN_NOT_OK(helper.Append(val.ptr, static_cast<int32_t>(val.len)));\n+          ++value_idx;\n+          return Status::OK();\n+        },\n+        [&]() {\n+          RETURN_NOT_OK(helper.AppendNull());\n+          --null_count;\n+          return Status::OK();\n+        }));\n \n-      if (is_valid) {\n-        const auto& val = values_ptr[value_idx];\n-        if (ARROW_PREDICT_FALSE(!helper.CanFit(val.len))) {\n-          RETURN_NOT_OK(helper.PushChunk());\n-        }\n-        RETURN_NOT_OK(helper.Append(val.ptr, static_cast<int32_t>(val.len)));\n-        ++value_idx;\n-      } else {\n-        RETURN_NOT_OK(helper.AppendNull());\n-        --null_count;\n-      }\n-    }\n     DCHECK_EQ(null_count, 0);\n     *out_num_values = num_valid_values;\n     return Status::OK();\ndiff --git a/testing b/testing\nindex 93ef4a7bbf8c..d6c7b9d670f3 160000\n--- a/testing\n+++ b/testing\n@@ -1 +1 @@\n-Subproject commit 93ef4a7bbf8cc629fa1f82bf38bb6e89cda91d40\n+Subproject commit d6c7b9d670f3cc3af4a27e043749300b9d27addf\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42504668-vul",
+      "digest": "sha256:0d526be1bc37826ee5da2030cb1f7ddb13cf47707d752f40419615e89f24be3d"
+    },
+    "patched": {
+      "ref": "n132/arvo:42504668-fix",
+      "digest": "sha256:afbf066cef26ddb886e6717db66fda4c222b4ee375799bd80ad59f9862bbfc0d"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/arrow/cpp/src/parquet/encoding.cc:2429",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/arrow/cpp/src/parquet/encoding.cc:2429"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

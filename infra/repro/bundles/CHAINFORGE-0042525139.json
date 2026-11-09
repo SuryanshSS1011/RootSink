@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042525139",
+  "chain": "CWE-20->CWE-125",
+  "project": "PcapPlusPlus",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42525139",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "6986e81f6fa441a56c4effe2bf2f177ca892255e",
+      "fix_commits": [
+        "6986e81f6fa441a56c4effe2bf2f177ca892255e"
+      ],
+      "repo": "https://github.com/seladb/PcapPlusPlus"
+    },
+    "patch": "diff --git a/Common++/header/GeneralUtils.h b/Common++/header/GeneralUtils.h\nindex 86fccc5f0e..ec5409ee95 100644\n--- a/Common++/header/GeneralUtils.h\n+++ b/Common++/header/GeneralUtils.h\n@@ -50,6 +50,21 @@ namespace pcpp\n \t * @return A pointer to the beginning of the substring, or NULL if the substring is not found\n \t */\n \tchar* cross_platform_memmem(const char* haystack, size_t haystackLen, const char* needle, size_t needleLen);\n+\n+\t/**\n+\t * Calculates alignment.\n+\t * @param[in] number Given number\n+\t * @return The aligned number\n+\t*/\n+\ttemplate <int alignment>\n+\tstatic int align(int number)\n+\t{\n+\t\t// Only works for alignment with power of 2\n+\t\tconstexpr bool isPowerOfTwo = alignment && ((alignment & (alignment - 1)) == 0);\n+\t\tstatic_assert(isPowerOfTwo, \"Alignment must be a power of 2\");\n+\t\tint mask = alignment - 1;\n+\t\treturn (number + mask) & ~mask;\n+\t}\n }\n \n #endif // PCAPPP_GENERAL_UTILS\ndiff --git a/Packet++/header/NflogLayer.h b/Packet++/header/NflogLayer.h\nindex 4df4d5d25a..2fd7804cdc 100644\n--- a/Packet++/header/NflogLayer.h\n+++ b/Packet++/header/NflogLayer.h\n@@ -3,6 +3,7 @@\n \n #include \"Layer.h\"\n #include \"TLVData.h\"\n+#include \"GeneralUtils.h\"\n \n /// @file\n \n@@ -101,7 +102,11 @@ namespace pcpp\n \t\t/**\n \t\t * @return recordLen attribute in NflogTLVRawData\n \t\t */\n-\t\tsize_t getTotalSize() const { return m_Data->recordLen; }\n+\t\tsize_t getTotalSize() const\n+\t\t{\n+\t\t\t// as in https://github.com/the-tcpdump-group/libpcap/blob/766b607d60d8038087b49fc4cf433dac3dcdb49c/pcap-util.c#L371-L374\n+\t\t\treturn align<4>(m_Data->recordLen);\n+\t\t}\n \n \t\t/**\n \t\t * Assign a pointer to the TLV record raw data (byte array)\n@@ -109,15 +114,7 @@ namespace pcpp\n \t\t */\n \t\tvoid assign(uint8_t* recordRawData)\n \t\t{\n-\t\t\tif(recordRawData == nullptr)\n-\t\t\t\tm_Data = nullptr;\n-\t\t\telse\n-\t\t\t{\n-\t\t\t\t// to pass from some unknown paddings after tlv with type NFULA_PREFIX\n-\t\t\t\twhile (*recordRawData == 0)\n-\t\t\t\t\trecordRawData += 1;\n-\t\t\t\tm_Data = (NflogTLVRawData*)recordRawData;\n-\t\t\t}\n+\t\t\tm_Data = (NflogTLVRawData*)recordRawData;\n \t\t}\n \n \t\t/**\ndiff --git a/Tests/Packet++Test/Tests/NflogTests.cpp b/Tests/Packet++Test/Tests/NflogTests.cpp\nindex 0aabea2f04..ec8a5fb1df 100644\n--- a/Tests/Packet++Test/Tests/NflogTests.cpp\n+++ b/Tests/Packet++Test/Tests/NflogTests.cpp\n@@ -38,14 +38,14 @@ PTF_TEST_CASE(NflogPacketParsingTest)\n \t\tpcpp::NflogTlvType::NFULA_PAYLOAD\n \t};\n \n-\tint optSizes[6] = {8, 5, 8, 8, 8, 65};\n+\tint optSizes[6] = {8, 8, 8, 8, 8, 68};\n \tstd::string optDataAsHexString[6] = {\n \t\t\"0800010000000300\",\n-\t\t\"05000a0000\",\n+\t\t\"05000a0000000000\",\n \t\t\"0800050000000002\",\n \t\t\"08000b0000000000\",\n \t\t\"08000e0000000000\",\n-\t\t\"410009004500003d021040004011208f0a00020f0a000203a542003500294156c04e0100000100000000000003777777076578616d706c65036e65740000010001\"\n+\t\t\"410009004500003d021040004011208f0a00020f0a000203a542003500294156c04e0100000100000000000003777777076578616d706c65036e657400000100012f0a31\"\n \t};\n \n \tfor (int i = 0; i < 6; i++) {\n@@ -56,5 +56,5 @@ PTF_TEST_CASE(NflogPacketParsingTest)\n \t}\n \n \t/// sum of all TLVs before payload + size of nflog_header + size of (recordLength + recordType) variables of payload TLV\n-\tPTF_ASSERT_EQUAL(nflogLayer->getHeaderLen(), 45);\n+\tPTF_ASSERT_EQUAL(nflogLayer->getHeaderLen(), 48);\n }\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42525139-vul",
+      "digest": "sha256:862fd8644ec5f5d018def5d3f294693b706ec2c8a0044b7e0587b4909e9c599f"
+    },
+    "patched": {
+      "ref": "n132/arvo:42525139-fix",
+      "digest": "sha256:323eb4a9c8393829726e4d16dc190d2991a7e6667e7538136d7f87f5931fb8e6"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/PcapPlusPlus/Packet++/src/GreLayer.cpp:28",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/PcapPlusPlus/Packet++/src/GreLayer.cpp:28"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

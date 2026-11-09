@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042485155",
+  "chain": "CWE-1285->CWE-125",
+  "project": "usrsctp",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42485155",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "25f4212f48563db7e37c606f04826ffd32b8b198",
+      "fix_commits": [
+        "25f4212f48563db7e37c606f04826ffd32b8b198"
+      ],
+      "repo": "https://github.com/weinrank/usrsctp"
+    },
+    "patch": "From 25f4212f48563db7e37c606f04826ffd32b8b198 Mon Sep 17 00:00:00 2001\nFrom: Michael Tuexen <tuexen@fh-muenster.de>\nDate: Wed, 8 Jul 2020 14:29:17 +0200\nSubject: [PATCH] Improve handling of PKTDROP chunks. This includes the input\n validation to address two issues found by ossfuzz testing the userland stack:\n * https://oss-fuzz.com/testcase-detail/5387560242380800 *\n https://oss-fuzz.com/testcase-detail/4887954068865024 and adding support for\n I-DATA chunks in addition to DATA chunks.\n\n---\n usrsctplib/netinet/sctp_input.c | 199 +++++++++++++++++---------------\n 1 file changed, 106 insertions(+), 93 deletions(-)\n\ndiff --git a/usrsctplib/netinet/sctp_input.c b/usrsctplib/netinet/sctp_input.c\nindex f082ff7..f97ac78 100755\n--- a/usrsctplib/netinet/sctp_input.c\n+++ b/usrsctplib/netinet/sctp_input.c\n@@ -34,7 +34,7 @@\n \n #if defined(__FreeBSD__) && !defined(__Userspace__)\n #include <sys/cdefs.h>\n-__FBSDID(\"$FreeBSD: head/sys/netinet/sctp_input.c 362722 2020-06-28 14:11:36Z tuexen $\");\n+__FBSDID(\"$FreeBSD: head/sys/netinet/sctp_input.c 363008 2020-07-08 12:25:19Z tuexen $\");\n #endif\n \n #include <netinet/sctp_os.h>\n@@ -3475,7 +3475,8 @@ process_chunk_drop(struct sctp_tcb *stcb, struct sctp_chunk_desc *desc,\n {\n \tswitch (desc->chunk_type) {\n \tcase SCTP_DATA:\n-\t\t/* find the tsn to resend (possibly */\n+\tcase SCTP_IDATA:\n+\t\t/* find the tsn to resend (possibly) */\n \t{\n \t\tuint32_t tsn;\n \t\tstruct sctp_tmit_chunk *tp1;\n@@ -3509,8 +3510,6 @@ process_chunk_drop(struct sctp_tcb *stcb, struct sctp_chunk_desc *desc,\n \t\t\tSCTP_STAT_INCR(sctps_pdrptsnnf);\n \t\t}\n \t\tif ((tp1) && (tp1->sent < SCTP_DATAGRAM_ACKED)) {\n-\t\t\tuint8_t *ddp;\n-\n \t\t\tif (((flg & SCTP_BADCRC) == 0) &&\n \t\t\t    ((flg & SCTP_FROM_MIDDLE_BOX) == 0)) {\n \t\t\t\treturn (0);\n@@ -3525,20 +3524,18 @@ process_chunk_drop(struct sctp_tcb *stcb, struct sctp_chunk_desc *desc,\n \t\t\t\tSCTP_STAT_INCR(sctps_pdrpdizrw);\n \t\t\t\treturn (0);\n \t\t\t}\n-\t\t\tddp = (uint8_t *) (mtod(tp1->data, caddr_t) +\n-\t\t\t\t\t   sizeof(struct sctp_data_chunk));\n-\t\t\t{\n-\t\t\t\tunsigned int iii;\n-\n-\t\t\t\tfor (iii = 0; iii < sizeof(desc->data_bytes);\n-\t\t\t\t     iii++) {\n-\t\t\t\t\tif (ddp[iii] != desc->data_bytes[iii]) {\n-\t\t\t\t\t\tSCTP_STAT_INCR(sctps_pdrpbadd);\n-\t\t\t\t\t\treturn (-1);\n-\t\t\t\t\t}\n-\t\t\t\t}\n+\t\t\tif ((uint32_t)SCTP_BUF_LEN(tp1->data) <\n+\t\t\t    SCTP_DATA_CHUNK_OVERHEAD(stcb) + SCTP_NUM_DB_TO_VERIFY) {\n+\t\t\t\t/* Payload not matching. */\n+\t\t\t\tSCTP_STAT_INCR(sctps_pdrpbadd);\n+\t\t\t\treturn (-1);\n+\t\t\t}\n+\t\t\tif (memcmp(mtod(tp1->data, caddr_t) + SCTP_DATA_CHUNK_OVERHEAD(stcb),\n+\t\t\t           desc->data_bytes, SCTP_NUM_DB_TO_VERIFY) != 0) {\n+\t\t\t\t/* Payload not matching. */\n+\t\t\t\tSCTP_STAT_INCR(sctps_pdrpbadd);\n+\t\t\t\treturn (-1);\n \t\t\t}\n-\n \t\t\tif (tp1->do_rtt) {\n \t\t\t\t/*\n \t\t\t\t * this guy had a RTO calculation\n@@ -4557,104 +4554,120 @@ static void\n sctp_handle_packet_dropped(struct sctp_pktdrop_chunk *cp,\n     struct sctp_tcb *stcb, struct sctp_nets *net, uint32_t limit)\n {\n+\tstruct sctp_chunk_desc desc;\n+\tstruct sctp_chunkhdr *chk_hdr;\n+\tstruct sctp_data_chunk *data_chunk;\n+\tstruct sctp_idata_chunk *idata_chunk;\n \tuint32_t bottle_bw, on_queue;\n+\tuint32_t offset, chk_len;\n \tuint16_t trunc_len;\n-\tunsigned int chlen;\n-\tunsigned int at;\n-\tstruct sctp_chunk_desc desc;\n-\tstruct sctp_chunkhdr *ch;\n-\n-\tchlen = ntohs(cp->ch.chunk_length);\n-\tchlen -= sizeof(struct sctp_pktdrop_chunk);\n-\t/* XXX possible chlen underflow */\n-\tif (chlen == 0) {\n-\t\tch = NULL;\n-\t\tif (cp->ch.chunk_flags & SCTP_FROM_MIDDLE_BOX)\n-\t\t\tSCTP_STAT_INCR(sctps_pdrpbwrpt);\n+\tuint16_t pktdrp_len;\n+\tuint8_t pktdrp_flags;\n+\n+\tKASSERT(sizeof(struct sctp_pktdrop_chunk) <= limit,\n+\t        (\"PKTDROP chunk too small\"));\n+\tpktdrp_flags = cp->ch.chunk_flags;\n+\tpktdrp_len = ntohs(cp->ch.chunk_length);\n+\tKASSERT(limit <= pktdrp_len, (\"Inconsistent limit\"));\n+\tif (pktdrp_flags & SCTP_PACKET_TRUNCATED) {\n+\t\ttrunc_len = ntohs(cp->trunc_len);\n+\t\tif (trunc_len <= pktdrp_len - sizeof(struct sctp_pktdrop_chunk)) {\n+\t\t\t/* The peer plays games with us. */\n+\t\t\treturn;\n+\t\t}\n \t} else {\n-\t\tch = (struct sctp_chunkhdr *)(cp->data + sizeof(struct sctphdr));\n-\t\tchlen -= sizeof(struct sctphdr);\n-\t\t/* XXX possible chlen underflow */\n-\t\tmemset(&desc, 0, sizeof(desc));\n+\t\ttrunc_len = 0;\n \t}\n-\ttrunc_len = (uint16_t) ntohs(cp->trunc_len);\n-\tif (trunc_len > limit) {\n-\t\ttrunc_len = limit;\n+\tlimit -= sizeof(struct sctp_pktdrop_chunk);\n+\toffset = 0;\n+\tif (offset == limit) {\n+\t\tif (pktdrp_flags & SCTP_FROM_MIDDLE_BOX) {\n+\t\t\tSCTP_STAT_INCR(sctps_pdrpbwrpt);\n+\t\t}\n+\t} else if (offset + sizeof(struct sctphdr) > limit) {\n+\t\t/* Only a partial SCTP common header. */\n+\t\tSCTP_STAT_INCR(sctps_pdrpcrupt);\n+\t\toffset = limit;\n+\t} else {\n+\t\t/* XXX: Check embedded SCTP common header. */\n+\t\toffset += sizeof(struct sctphdr);\n \t}\n-\n-\t/* now the chunks themselves */\n-\twhile ((ch != NULL) && (chlen >= sizeof(struct sctp_chunkhdr))) {\n-\t\tdesc.chunk_type = ch->chunk_type;\n-\t\t/* get amount we need to move */\n-\t\tat = ntohs(ch->chunk_length);\n-\t\tif (at < sizeof(struct sctp_chunkhdr)) {\n-\t\t\t/* corrupt chunk, maybe at the end? */\n+\t/* Now parse through the chunks themselves. */\n+\twhile (offset < limit) {\n+\t\tif (offset + sizeof(struct sctp_chunkhdr) > limit) {\n \t\t\tSCTP_STAT_INCR(sctps_pdrpcrupt);\n \t\t\tbreak;\n \t\t}\n-\t\tif (trunc_len == 0) {\n-\t\t\t/* we are supposed to have all of it */\n-\t\t\tif (at > chlen) {\n-\t\t\t\t/* corrupt skip it */\n-\t\t\t\tSCTP_STAT_INCR(sctps_pdrpcrupt);\n+\t\tchk_hdr = (struct sctp_chunkhdr *)(cp->data + offset);\n+\t\tdesc.chunk_type = chk_hdr->chunk_type;\n+\t\t/* get amount we need to move */\n+\t\tchk_len = (uint32_t)ntohs(chk_hdr->chunk_length);\n+\t\tif (chk_len < sizeof(struct sctp_chunkhdr)) {\n+\t\t\t/* Someone is lying... */\n+\t\t\tbreak;\n+\t\t}\n+\t\tif (desc.chunk_type == SCTP_DATA) {\n+\t\t\tif (stcb->asoc.idata_supported) {\n+\t\t\t\t/* Some is playing games with us. */\n \t\t\t\tbreak;\n \t\t\t}\n-\t\t} else {\n-\t\t\t/* is there enough of it left ? */\n-\t\t\tif (desc.chunk_type == SCTP_DATA) {\n-\t\t\t\tif (chlen < (sizeof(struct sctp_data_chunk) +\n-\t\t\t\t    sizeof(desc.data_bytes))) {\n-\t\t\t\t\tbreak;\n-\t\t\t\t}\n-\t\t\t} else {\n-\t\t\t\tif (chlen < sizeof(struct sctp_chunkhdr)) {\n-\t\t\t\t\tbreak;\n-\t\t\t\t}\n+\t\t\tif (chk_len <= sizeof(struct sctp_data_chunk)) {\n+\t\t\t\t/* Some is playing games with us. */\n+\t\t\t\tbreak;\n \t\t\t}\n-\t\t}\n-\t\tif (desc.chunk_type == SCTP_DATA) {\n-\t\t\t/* can we get out the tsn? */\n-\t\t\tif ((cp->ch.chunk_flags & SCTP_FROM_MIDDLE_BOX))\n+\t\t\tif (chk_len < sizeof(struct sctp_data_chunk) + SCTP_NUM_DB_TO_VERIFY) {\n+\t\t\t\t/* Not enough data bytes available in the chunk. */\n+\t\t\t\tSCTP_STAT_INCR(sctps_pdrpnedat);\n+\t\t\t\tgoto next_chunk;\n+\t\t\t}\n+\t\t\tif (offset + sizeof(struct sctp_data_chunk) + SCTP_NUM_DB_TO_VERIFY > limit) {\n+\t\t\t\t/* Not enough data in buffer. */\n+\t\t\t\tbreak;\n+\t\t\t}\n+\t\t\tdata_chunk = (struct sctp_data_chunk *)(cp->data + offset);\n+\t\t\tmemcpy(desc.data_bytes, data_chunk + 1, SCTP_NUM_DB_TO_VERIFY);\n+\t\t\tdesc.tsn_ifany = data_chunk->dp.tsn;\n+\t\t\tif (pktdrp_flags & SCTP_FROM_MIDDLE_BOX) {\n \t\t\t\tSCTP_STAT_INCR(sctps_pdrpmbda);\n-\n-\t\t\tif (chlen >= (sizeof(struct sctp_data_chunk) + sizeof(uint32_t))) {\n-\t\t\t\t/* yep */\n-\t\t\t\tstruct sctp_data_chunk *dcp;\n-\t\t\t\tuint8_t *ddp;\n-\t\t\t\tunsigned int iii;\n-\n-\t\t\t\tdcp = (struct sctp_data_chunk *)ch;\n-\t\t\t\tddp = (uint8_t *) (dcp + 1);\n-\t\t\t\tfor (iii = 0; iii < sizeof(desc.data_bytes); iii++) {\n-\t\t\t\t\tdesc.data_bytes[iii] = ddp[iii];\n-\t\t\t\t}\n-\t\t\t\tdesc.tsn_ifany = dcp->dp.tsn;\n-\t\t\t} else {\n-\t\t\t\t/* nope we are done. */\n+\t\t\t}\n+\t\t} else if (desc.chunk_type == SCTP_IDATA) {\n+\t\t\tif (!stcb->asoc.idata_supported) {\n+\t\t\t\t/* Some is playing games with us. */\n+\t\t\t\tbreak;\n+\t\t\t}\n+\t\t\tif (chk_len <= sizeof(struct sctp_idata_chunk)) {\n+\t\t\t\t/* Some is playing games with us. */\n+\t\t\t\tbreak;\n+\t\t\t}\n+\t\t\tif (chk_len < sizeof(struct sctp_idata_chunk) + SCTP_NUM_DB_TO_VERIFY) {\n+\t\t\t\t/* Not enough data bytes available in the chunk. */\n \t\t\t\tSCTP_STAT_INCR(sctps_pdrpnedat);\n+\t\t\t\tgoto next_chunk;\n+\t\t\t}\n+\t\t\tif (offset + sizeof(struct sctp_idata_chunk) + SCTP_NUM_DB_TO_VERIFY > limit) {\n+\t\t\t\t/* Not enough data in buffer. */\n \t\t\t\tbreak;\n \t\t\t}\n+\t\t\tidata_chunk = (struct sctp_idata_chunk *)(cp->data + offset);\n+\t\t\tmemcpy(desc.data_bytes, idata_chunk + 1, SCTP_NUM_DB_TO_VERIFY);\n+\t\t\tdesc.tsn_ifany = idata_chunk->dp.tsn;\n+\t\t\tif (pktdrp_flags & SCTP_FROM_MIDDLE_BOX) {\n+\t\t\t\tSCTP_STAT_INCR(sctps_pdrpmbda);\n+\t\t\t}\n \t\t} else {\n-\t\t\tif ((cp->ch.chunk_flags & SCTP_FROM_MIDDLE_BOX))\n+\t\t\tif (pktdrp_flags & SCTP_FROM_MIDDLE_BOX) {\n \t\t\t\tSCTP_STAT_INCR(sctps_pdrpmbct);\n+\t\t\t}\n \t\t}\n-\n-\t\tif (process_chunk_drop(stcb, &desc, net, cp->ch.chunk_flags)) {\n+\t\tif (process_chunk_drop(stcb, &desc, net, pktdrp_flags)) {\n \t\t\tSCTP_STAT_INCR(sctps_pdrppdbrk);\n \t\t\tbreak;\n \t\t}\n-\t\tif (SCTP_SIZE32(at) > chlen) {\n-\t\t\tbreak;\n-\t\t}\n-\t\tchlen -= SCTP_SIZE32(at);\n-\t\tif (chlen < sizeof(struct sctp_chunkhdr)) {\n-\t\t\t/* done, none left */\n-\t\t\tbreak;\n-\t\t}\n-\t\tch = (struct sctp_chunkhdr *)((caddr_t)ch + SCTP_SIZE32(at));\n+next_chunk:\n+\t\toffset += SCTP_SIZE32(chk_len);\n \t}\n \t/* Now update any rwnd --- possibly */\n-\tif ((cp->ch.chunk_flags & SCTP_FROM_MIDDLE_BOX) == 0) {\n+\tif ((pktdrp_flags & SCTP_FROM_MIDDLE_BOX) == 0) {\n \t\t/* From a peer, we get a rwnd report */\n \t\tuint32_t a_rwnd;\n \n@@ -4690,7 +4703,7 @@ sctp_handle_packet_dropped(struct sctp_pktdrop_chunk *cp,\n \t}\n \n \t/* now middle boxes in sat networks get a cwnd bump */\n-\tif ((cp->ch.chunk_flags & SCTP_FROM_MIDDLE_BOX) &&\n+\tif ((pktdrp_flags & SCTP_FROM_MIDDLE_BOX) &&\n \t    (stcb->asoc.sat_t3_loss_recovery == 0) &&\n \t    (stcb->asoc.sat_network)) {\n \t\t/*\n-- \n2.55.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42485155-vul",
+      "digest": "sha256:827d2c1d92305492c3d9aabcf20d9d535ade231ed7837ba102e3f793d1a69e1a"
+    },
+    "patched": {
+      "ref": "n132/arvo:42485155-fix",
+      "digest": "sha256:be785697692543352b5ef39d3e1502dd72352dae3106b65be2c2f3a864c6ae9d"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/usrsctp/usrsctplib/netinet/sctp_input.c:4587",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/usrsctp/usrsctplib/netinet/sctp_input.c:4587"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

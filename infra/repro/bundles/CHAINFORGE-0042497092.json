@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042497092",
+  "chain": "CWE-20->CWE-125",
+  "project": "json",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42497092",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "f0edab2363ae7dd50ee04bfacdb56f47ed6e7fb7",
+      "fix_commits": [
+        "f0edab2363ae7dd50ee04bfacdb56f47ed6e7fb7"
+      ],
+      "repo": "https://github.com/nlohmann/json"
+    },
+    "patch": "diff --git a/src/json.hpp b/src/json.hpp\nindex aab3b34f42..f8d948f155 100644\n--- a/src/json.hpp\n+++ b/src/json.hpp\n@@ -6879,27 +6879,6 @@ class basic_json\n         }\n     }\n \n-    /*!\n-    @brief checks if a given length does not exceed the size of a given vector\n-\n-    To secure the access to the byte vector during CBOR/MessagePack\n-    deserialization, bytes are copied from the vector into buffers. This\n-    function checks if the number of bytes to copy (@a len) does not exceed the\n-    size of the given vector @a vec.\n-\n-    @param[in] vec  byte vector\n-    @param[in] len  length\n-\n-    @throws out_of_range if `len > v.size()`\n-    */\n-    static void check_length(const std::vector<uint8_t>& vec, const size_t& len)\n-    {\n-        if (len > vec.size())\n-        {\n-            throw std::out_of_range(\"len out of range\");\n-        }\n-    }\n-\n     /*!\n     @brief create a JSON value from a given MessagePack vector\n \n@@ -6916,6 +6895,9 @@ class basic_json\n     */\n     static basic_json from_msgpack_internal(const std::vector<uint8_t>& v, size_t& idx)\n     {\n+        // make sure reading 1 byte is safe\n+        check_length(v.size(), 1, idx);\n+\n         // store and increment index\n         const size_t current_idx = idx++;\n \n@@ -7153,6 +7135,9 @@ class basic_json\n     */\n     static basic_json from_cbor_internal(const std::vector<uint8_t>& v, size_t& idx)\n     {\n+        // make sure reading 1 byte is safe\n+        check_length(v.size(), 1, idx);\n+\n         // store and increment index\n         const size_t current_idx = idx++;\n \n@@ -7674,11 +7659,6 @@ class basic_json\n     */\n     static basic_json from_msgpack(const std::vector<uint8_t>& v)\n     {\n-        if (v.empty())\n-        {\n-            throw std::invalid_argument(\"empty vector\");\n-        }\n-\n         size_t i = 0;\n         return from_msgpack_internal(v, i);\n     }\n@@ -7736,11 +7716,6 @@ class basic_json\n     */\n     static basic_json from_cbor(const std::vector<uint8_t>& v)\n     {\n-        if (v.empty())\n-        {\n-            throw std::invalid_argument(\"empty vector\");\n-        }\n-\n         size_t i = 0;\n         return from_cbor_internal(v, i);\n     }\ndiff --git a/src/json.hpp.re2c b/src/json.hpp.re2c\nindex 7b6b7ec4a2..2faf3858f1 100644\n--- a/src/json.hpp.re2c\n+++ b/src/json.hpp.re2c\n@@ -6879,27 +6879,6 @@ class basic_json\n         }\n     }\n \n-    /*!\n-    @brief checks if a given length does not exceed the size of a given vector\n-\n-    To secure the access to the byte vector during CBOR/MessagePack\n-    deserialization, bytes are copied from the vector into buffers. This\n-    function checks if the number of bytes to copy (@a len) does not exceed the\n-    size of the given vector @a vec.\n-\n-    @param[in] vec  byte vector\n-    @param[in] len  length\n-\n-    @throws out_of_range if `len > v.size()`\n-    */\n-    static void check_length(const std::vector<uint8_t>& vec, const size_t& len)\n-    {\n-        if (len > vec.size())\n-        {\n-            throw std::out_of_range(\"len out of range\");\n-        }\n-    }\n-\n     /*!\n     @brief create a JSON value from a given MessagePack vector\n \n@@ -6916,6 +6895,9 @@ class basic_json\n     */\n     static basic_json from_msgpack_internal(const std::vector<uint8_t>& v, size_t& idx)\n     {\n+        // make sure reading 1 byte is safe\n+        check_length(v.size(), 1, idx);\n+\n         // store and increment index\n         const size_t current_idx = idx++;\n \n@@ -7153,6 +7135,9 @@ class basic_json\n     */\n     static basic_json from_cbor_internal(const std::vector<uint8_t>& v, size_t& idx)\n     {\n+        // make sure reading 1 byte is safe\n+        check_length(v.size(), 1, idx);\n+\n         // store and increment index\n         const size_t current_idx = idx++;\n \n@@ -7674,11 +7659,6 @@ class basic_json\n     */\n     static basic_json from_msgpack(const std::vector<uint8_t>& v)\n     {\n-        if (v.empty())\n-        {\n-            throw std::invalid_argument(\"empty vector\");\n-        }\n-\n         size_t i = 0;\n         return from_msgpack_internal(v, i);\n     }\n@@ -7736,11 +7716,6 @@ class basic_json\n     */\n     static basic_json from_cbor(const std::vector<uint8_t>& v)\n     {\n-        if (v.empty())\n-        {\n-            throw std::invalid_argument(\"empty vector\");\n-        }\n-\n         size_t i = 0;\n         return from_cbor_internal(v, i);\n     }\ndiff --git a/test/src/unit-regression.cpp b/test/src/unit-regression.cpp\nindex 6123352d78..421a386c0f 100644\n--- a/test/src/unit-regression.cpp\n+++ b/test/src/unit-regression.cpp\n@@ -570,4 +570,44 @@ TEST_CASE(\"regression tests\")\n         std::vector<uint8_t> vec5 {0xfb, 0x8f, 0x0a};\n         CHECK_THROWS_AS(json::from_cbor(vec5), std::out_of_range);\n     }\n+\n+    SECTION(\"issue #408 - Heap-buffer-overflow (OSS-Fuzz issue 344)\")\n+    {\n+        // original test case\n+        std::vector<uint8_t> vec1 {0x87};\n+        CHECK_THROWS_AS(json::from_msgpack(vec1), std::out_of_range);\n+\n+        // more test cases for MessagePack\n+        for (uint8_t b :\n+                {\n+                    0x81, 0x82, 0x83, 0x84, 0x85, 0x86, 0x87, 0x88, 0x89, 0x8a, 0x8b, 0x8c, 0x8d, 0x8e, 0x8f, // fixmap\n+                    0x91, 0x92, 0x93, 0x94, 0x95, 0x96, 0x97, 0x98, 0x99, 0x9a, 0x9b, 0x9c, 0x9d, 0x9e, 0x9f, // fixarray\n+                    0xa1, 0xa2, 0xa3, 0xa4, 0xa5, 0xa6, 0xa7, 0xa8, 0xa9, 0xaa, 0xab, 0xac, 0xad, 0xae, 0xaf, // fixstr\n+                    0xb0, 0xb1, 0xb2, 0xb3, 0xb4, 0xb5, 0xb6, 0xb7, 0xb8, 0xb9, 0xba, 0xbb, 0xbc, 0xbd, 0xbe, 0xbf\n+                })\n+        {\n+            std::vector<uint8_t> vec(1, b);\n+            CHECK_THROWS_AS(json::from_msgpack(vec), std::out_of_range);\n+        }\n+\n+        // more test cases for CBOR\n+        for (uint8_t b :\n+                {\n+                    0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 0x67, 0x68, 0x69, 0x6a, 0x6b, 0x6c, 0x6d, 0x6e, 0x6f,\n+                    0x70, 0x71, 0x72, 0x73, 0x74, 0x75, 0x76, 0x77, // UTF-8 string\n+                    0x81, 0x82, 0x83, 0x84, 0x85, 0x86, 0x87, 0x88, 0x89, 0x8a, 0x8b, 0x8c, 0x8d, 0x8e, 0x8f,\n+                    0x90, 0x91, 0x92, 0x93, 0x94, 0x95, 0x96, 0x97, // array\n+                    0xa1, 0xa2, 0xa3, 0xa4, 0xa5, 0xa6, 0xa7, 0xa8, 0xa9, 0xaa, 0xab, 0xac, 0xad, 0xae, 0xaf,\n+                    0xb0, 0xb1, 0xb2, 0xb3, 0xb4, 0xb5, 0xb6, 0xb7 // map\n+                })\n+        {\n+            std::vector<uint8_t> vec(1, b);\n+            CHECK_THROWS_AS(json::from_cbor(vec), std::out_of_range);\n+        }\n+\n+        // special case: empty input\n+        std::vector<uint8_t> vec2;\n+        CHECK_THROWS_AS(json::from_cbor(vec2), std::out_of_range);\n+        CHECK_THROWS_AS(json::from_msgpack(vec2), std::out_of_range);\n+    }\n }\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42497092-vul",
+      "digest": "sha256:bf85d2cec26047aeadb17344db36c9a57517aa21fba7fc477d4a1ba3bfafc065"
+    },
+    "patched": {
+      "ref": "n132/arvo:42497092-fix",
+      "digest": "sha256:e647550f186206cfe86a0d9fea999c2a9fb8c6d79c8c7ec7681602c8c3a99eaa"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/json/src/json.hpp:6916",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/json/src/json.hpp:6916"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

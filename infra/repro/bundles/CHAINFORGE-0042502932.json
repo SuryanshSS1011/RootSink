@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042502932",
+  "chain": "CWE-1285->CWE-125",
+  "project": "freeradius-server",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42502932",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "8ac5bbfbbc5dff69d0344c9aa815669e9a3fa105",
+      "fix_commits": [
+        "8ac5bbfbbc5dff69d0344c9aa815669e9a3fa105"
+      ],
+      "repo": "https://github.com/FreeRADIUS/freeradius-server"
+    },
+    "patch": "diff --git a/src/lib/util/struct.c b/src/lib/util/struct.c\nindex 4ff7ffa7a5b1..b74876aa9e73 100644\n--- a/src/lib/util/struct.c\n+++ b/src/lib/util/struct.c\n@@ -114,6 +114,11 @@ ssize_t fr_struct_from_network(TALLOC_CTX *ctx, fr_dcursor_t *cursor,\n \tif (da_is_length_field(parent)) {\n \t\tsize_t struct_len;\n \n+\t\tif ((end - p) < 2) {\n+\t\t\tFR_PROTO_TRACE(\"Insufficient room for length header\");\n+\t\t\tgoto unknown;\n+\t\t}\n+\n \t\tstruct_len = (p[0] << 8) | p[1];\n \t\tif ((p + struct_len + 2) > end) {\n \t\t\tFR_PROTO_TRACE(\"Length header is larger than remaining data\");\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42502932-vul",
+      "digest": "sha256:f851cf122dca5443c39d76263eab6402834887b6a364008a7e92e62f9b4ae03c"
+    },
+    "patched": {
+      "ref": "n132/arvo:42502932-fix",
+      "digest": "sha256:23900ff82b8d359944271d5c488ee48a185672a75983a34e320f383dbd52f702"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/freeradius-server/src/lib/util/struct.c:110",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/freeradius-server/src/lib/util/struct.c:110"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

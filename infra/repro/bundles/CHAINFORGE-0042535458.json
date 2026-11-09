@@ -1,0 +1,77 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042535458",
+  "chain": "CWE-190->CWE-787",
+  "project": "poppler",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42535458",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "e6f279ca1db6f6364dd44d46a6d3edf02c98f5b5",
+      "fix_commits": [
+        "e6f279ca1db6f6364dd44d46a6d3edf02c98f5b5"
+      ],
+      "repo": "https://gitlab.freedesktop.org/poppler/poppler.git"
+    },
+    "patch": "From e6f279ca1db6f6364dd44d46a6d3edf02c98f5b5 Mon Sep 17 00:00:00 2001\nFrom: Albert Astals Cid <aacid@kde.org>\nDate: Fri, 14 Jun 2024 10:17:11 +0200\nSubject: [PATCH] We have maxUtf8 so pass it along to be safer\n\n---\n poppler/UTF.cc                     | 4 ++--\n poppler/UTF.h                      | 2 +-\n qt5/tests/check_utf_conversion.cpp | 2 +-\n qt6/tests/check_utf_conversion.cpp | 2 +-\n 4 files changed, 5 insertions(+), 5 deletions(-)\n\ndiff --git a/poppler/UTF.cc b/poppler/UTF.cc\nindex 78dac2c..2269a37 100644\n--- a/poppler/UTF.cc\n+++ b/poppler/UTF.cc\n@@ -487,12 +487,12 @@ int utf16ToUtf8(const uint16_t *utf16, char *utf8, int maxUtf8, int maxUtf16)\n // Allocate utf8 string and convert utf16 into it.\n char *utf16ToUtf8(const uint16_t *utf16, int *len)\n {\n-    int n = utf16CountUtf8Bytes(utf16);\n+    const int n = utf16CountUtf8Bytes(utf16);\n     if (len) {\n         *len = n;\n     }\n     char *utf8 = (char *)gmalloc(n + 1);\n-    utf16ToUtf8(utf16, utf8);\n+    utf16ToUtf8(utf16, utf8, n + 1, INT_MAX);\n     return utf8;\n }\n \ndiff --git a/poppler/UTF.h b/poppler/UTF.h\nindex a51e2e3..eaa656b 100644\n--- a/poppler/UTF.h\n+++ b/poppler/UTF.h\n@@ -131,7 +131,7 @@ int POPPLER_PRIVATE_EXPORT utf16CountUtf8Bytes(const uint16_t *utf16);\n //  maxUtf16 - maximum number of UTF-16 code units to convert. Conversion stops when\n //            either this count is reached or a null is encountered.\n // Returns number of UTF-8 bytes written (excluding NULL).\n-int POPPLER_PRIVATE_EXPORT utf16ToUtf8(const uint16_t *utf16, char *utf8, int maxUtf8 = INT_MAX, int maxUtf16 = INT_MAX);\n+int POPPLER_PRIVATE_EXPORT utf16ToUtf8(const uint16_t *utf16, char *utf8, int maxUtf8, int maxUtf16);\n \n // Allocate utf8 string and convert utf16 into it.\n char POPPLER_PRIVATE_EXPORT *utf16ToUtf8(const uint16_t *utf16, int *len = nullptr);\ndiff --git a/qt5/tests/check_utf_conversion.cpp b/qt5/tests/check_utf_conversion.cpp\nindex 93bae4a..e3933e8 100644\n--- a/qt5/tests/check_utf_conversion.cpp\n+++ b/qt5/tests/check_utf_conversion.cpp\n@@ -113,7 +113,7 @@ void TestUTFConversion::testUTF()\n     QCOMPARE(len, (int)strlen(str));\n     Q_ASSERT(len < (int)sizeof(utf8Buf)); // if this fails, make utf8Buf larger\n \n-    len = utf16ToUtf8(s.utf16(), utf8Buf);\n+    len = utf16ToUtf8(s.utf16(), utf8Buf, sizeof(utf8Buf), INT_MAX);\n     QVERIFY(compare(utf8Buf, str));\n     QCOMPARE(len, (int)strlen(str));\n \ndiff --git a/qt6/tests/check_utf_conversion.cpp b/qt6/tests/check_utf_conversion.cpp\nindex d5fb0e2..943c553 100644\n--- a/qt6/tests/check_utf_conversion.cpp\n+++ b/qt6/tests/check_utf_conversion.cpp\n@@ -111,7 +111,7 @@ void TestUTFConversion::testUTF()\n     QCOMPARE(len, (int)strlen(str));\n     Q_ASSERT(len < (int)sizeof(utf8Buf)); // if this fails, make utf8Buf larger\n \n-    len = utf16ToUtf8(s.utf16(), utf8Buf);\n+    len = utf16ToUtf8(s.utf16(), utf8Buf, sizeof(utf8Buf), INT_MAX);\n     QVERIFY(compare(utf8Buf, str));\n     QCOMPARE(len, (int)strlen(str));\n \n-- \n2.55.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42535458-vul",
+      "digest": "sha256:f8b3676a201bd3556312c493d793b6c744163d1573a115a0bdf9a0bce03151a9"
+    },
+    "patched": {
+      "ref": "n132/arvo:42535458-fix",
+      "digest": "sha256:caf52a709ae0ff71a52c2d715cc563186c335c8e9bcf89fd862d868f2886fffd"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/poppler/poppler/UnicodeMapFuncs.cc:48",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 190,
+      "role": "source",
+      "witness": {
+        "method": "ubsan-rebuild",
+        "recipe": "SANITIZER=undefined compile && $ENTRYPOINT",
+        "ubsan_options": "print_stacktrace=1:halt_on_error=0:silence_unsigned_overflow=0:symbolize=1"
+      },
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/poppler/poppler/UnicodeMapFuncs.cc:48"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

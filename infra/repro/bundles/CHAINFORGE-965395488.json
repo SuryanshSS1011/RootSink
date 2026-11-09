@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-965395488",
+  "chain": "CWE-456->CWE-457",
+  "project": "leptonica",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42489638",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/DanBloomberg/leptonica/commit/989e05e68f3006d7c4356b0050f0faf64445f4bf",
+      "fix_commits": [
+        "989e05e68f3006d7c4356b0050f0faf64445f4bf"
+      ],
+      "repo": "https://github.com/DanBloomberg/leptonica"
+    },
+    "patch": "diff --git a/prog/fuzzing/dewarp_fuzzer.cc b/prog/fuzzing/dewarp_fuzzer.cc\nindex 9ea815a49..37098a9fc 100644\n--- a/prog/fuzzing/dewarp_fuzzer.cc\n+++ b/prog/fuzzing/dewarp_fuzzer.cc\n@@ -15,7 +15,8 @@ LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)\n     pixs = pixReadMemSpix(data, size);\n     if(pixs==NULL) return 0;\n     \n-    dewarpSinglePage(pixs, 0, 1, 1, 0, &pixd, NULL, 1);\n+    // Don't use debug, because it requires writing to /tmp\n+    dewarpSinglePage(pixs, 0, 1, 1, 0, &pixd, NULL, 0);\n \t\n     pixac = pixacompReadMem(data, size);\n     dewa1 = dewarpaCreateFromPixacomp(pixac, 1, 0, 10, -1);\ndiff --git a/src/sarray1.c b/src/sarray1.c\nindex f67c14cf6..76f66906b 100644\n--- a/src/sarray1.c\n+++ b/src/sarray1.c\n@@ -1884,7 +1884,7 @@ SARRAY *\n getFilenamesInDirectory(const char  *dirname)\n {\n char            dir[PATH_MAX + 1];\n-char           *realdir, *stat_path, *ignore;\n+char           *realdir, *stat_path;\n size_t          size;\n SARRAY         *safiles;\n DIR            *pdir;\n@@ -1896,12 +1896,26 @@ struct stat     st;\n \n     if (!dirname)\n         return (SARRAY *)ERROR_PTR(\"dirname not defined\", procName, NULL);\n-\n-        /* It's nice to ignore directories.  fstatat() works with relative\n-           directory paths, but stat() requires using the absolute path.\n-           Also, do not pass NULL as the second parameter to realpath();\n-           use a buffer of sufficient size. */\n-    ignore = realpath(dirname, dir);  /* see note above */\n+    if (dirname[0] == '\\0')\n+        return (SARRAY *)ERROR_PTR(\"dirname is empty\", procName, NULL);\n+\n+        /* Who would have thought it was this fiddly to open a directory\n+           and get the files inside?  fstatat() works with relative\n+           directory paths, and stat() requires using the absolute path.\n+           realpath works as follows for files and directories:\n+            * If the file or directory exists, realpath returns its path;\n+              else it returns NULL.\n+            * If the second arg to realpath is passed in, the canonical path\n+              is returned there.  Use a buffer of sufficient size.  If the\n+              second arg is NULL, the path is malloc'd and returned if the\n+              file or directory exists.\n+           We pass in a buffer for the second arg, and check that the canonical\n+           directory path was made.  The existence of the directory is checked\n+           later, after its actual path is returned by genPathname().  */\n+    dir[0] = '\\0';  /* init empty in case realpath() fails to write it */\n+    realpath(dirname, dir);\n+    if (dir[0] == '\\0')\n+        return (SARRAY *)ERROR_PTR(\"dir not made\", procName, NULL);\n     realdir = genPathname(dir, NULL);\n     if ((pdir = opendir(realdir)) == NULL) {\n         LEPT_FREE(realdir);\ndiff --git a/version-notes.html b/version-notes.html\nindex 983d81404..057b9d7b2 100644\n--- a/version-notes.html\n+++ b/version-notes.html\n@@ -102,6 +102,8 @@ <h2 align=center>  <IMG SRC=\"moller52.jpg\" border=1 ALIGN_MIDDLE> </h2>\n         * Simplified fpixCopy() and dpixCopy(), and functions that use them.\n         * Check input for bilateral transforms.\n         * Add function for splitting a file evenly by lines. \n+        * Check input for getFilenamesInDirectory()\n+        * Many new fuzzers.\n \n 1.80.0  28 July 2020\n         * Improve bmp handling of 1 bpp images and sanity checking of params.\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42489638-vul",
+      "digest": "sha256:f7510f4cfd96899352d9661b8c639ffd1c3cad05ab7a472905896ab0860024e9"
+    },
+    "patched": {
+      "ref": "n132/arvo:42489638-fix",
+      "digest": "sha256:7d042a880cecd2a81d9d2a69e0b5036ef9467a0221c8d445c2dea219db9bb1d9"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/leptonica/src/utils2.c:3070",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/leptonica/src/utils2.c:3070"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

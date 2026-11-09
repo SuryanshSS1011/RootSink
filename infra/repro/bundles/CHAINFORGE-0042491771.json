@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042491771",
+  "chain": "CWE-416->CWE-787",
+  "project": "lua",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42491771",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "2bfa13e520e53210b96ead88f49a9ca20c5a5d18",
+      "fix_commits": [
+        "2bfa13e520e53210b96ead88f49a9ca20c5a5d18"
+      ],
+      "repo": "https://github.com/lua/lua"
+    },
+    "patch": "From 2bfa13e520e53210b96ead88f49a9ca20c5a5d18 Mon Sep 17 00:00:00 2001\nFrom: Roberto Ierusalimschy <roberto@inf.puc-rio.br>\nDate: Fri, 5 Feb 2021 11:00:28 -0300\nSubject: [PATCH] Fixed some bugs around stack reallocation\n\nLong time without using HARDSTACKTESTS...\n---\n lapi.c  | 1 +\n ldo.c   | 2 +-\n lfunc.c | 2 ++\n lvm.c   | 2 ++\n 4 files changed, 6 insertions(+), 1 deletion(-)\n\ndiff --git a/lapi.c b/lapi.c\nindex 163533a..27bf23d 100644\n--- a/lapi.c\n+++ b/lapi.c\n@@ -207,6 +207,7 @@ LUA_API void lua_closeslot (lua_State *L, int idx) {\n                uplevel(L->openupval) == level,\n      \"no variable to close at given level\");\n   luaF_close(L, level, CLOSEKTOP, 0);\n+  level = index2stack(L, idx);  /* stack may be moved */\n   setnilvalue(s2v(level));\n   lua_unlock(L);\n }\ndiff --git a/ldo.c b/ldo.c\nindex e8ccccc..65f0a7b 100644\n--- a/ldo.c\n+++ b/ldo.c\n@@ -412,12 +412,12 @@ static void moveresults (lua_State *L, StkId res, int nres, int wanted) {\n       if (hastocloseCfunc(wanted)) {  /* to-be-closed variables? */\n         ptrdiff_t savedres = savestack(L, res);\n         luaF_close(L, res, CLOSEKTOP, 0);  /* may change the stack */\n-        res = restorestack(L, savedres);\n         wanted = codeNresults(wanted);  /* correct value */\n         if (wanted == LUA_MULTRET)\n           wanted = nres;\n         if (L->hookmask)  /* if needed, call hook after '__close's */\n           rethook(L, L->ci, nres);\n+        res = restorestack(L, savedres);  /* close and hook can move stack */\n       }\n       break;\n   }\ndiff --git a/lfunc.c b/lfunc.c\nindex 81ac9f0..105590f 100644\n--- a/lfunc.c\n+++ b/lfunc.c\n@@ -190,9 +190,11 @@ void luaF_close (lua_State *L, StkId level, int status, int yy) {\n   UpVal *uv;\n   StkId upl;  /* stack index pointed by 'uv' */\n   if (unlikely(status == LUA_ERRMEM && L->ptbc != NULL)) {\n+    ptrdiff_t levelrel = savestack(L, level);\n     upl = L->ptbc;\n     L->ptbc = NULL;  /* remove from \"list\" before closing */\n     prepcallclosemth(L, upl, status, yy);\n+    level = restorestack(L, levelrel);\n   }\n   else\n     lua_assert(L->ptbc == NULL);  /* must be empty for other status */\ndiff --git a/lvm.c b/lvm.c\nindex d6c05bb..e9b1dcd 100644\n--- a/lvm.c\n+++ b/lvm.c\n@@ -1150,6 +1150,8 @@ void luaV_execute (lua_State *L, CallInfo *ci) {\n     Instruction i;  /* instruction being executed */\n     StkId ra;  /* instruction's A register */\n     vmfetch();\n+// low-level line tracing for debugging Lua\n+// printf(\"line: %d\\n\", luaG_getfuncline(cl->p, pcRel(pc, cl->p)));\n     lua_assert(base == ci->func + 1);\n     lua_assert(base <= L->top && L->top < L->stack_last);\n     /* invalidate top for instructions not expecting it */\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42491771-vul",
+      "digest": "sha256:5d164908e846b2492fdfefe933d45f6cb6d18249c5ff549233312a1575835485"
+    },
+    "patched": {
+      "ref": "n132/arvo:42491771-fix",
+      "digest": "sha256:1b950b711215488c3f486fcc4416028729b5355b9825fe748e015559c2f282f4"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "WRITE",
+        "crash_site": "/src/lua/lapi.c:209",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "WRITE",
+        "site": "/src/lua/lapi.c:209"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042488418",
+  "chain": "CWE-1284->CWE-125",
+  "project": "fluent-bit",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42488418",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "c2e33ae40af02fabe59b51637501a5be73583a15",
+      "fix_commits": [
+        "c2e33ae40af02fabe59b51637501a5be73583a15"
+      ],
+      "repo": "https://github.com/fluent/fluent-bit"
+    },
+    "patch": "diff --git a/src/flb_utils.c b/src/flb_utils.c\nindex 8f46f025c07..ab0bcc737b7 100644\n--- a/src/flb_utils.c\n+++ b/src/flb_utils.c\n@@ -471,6 +471,9 @@ int flb_utils_time_to_seconds(const char *time)\n     size_t val;\n \n     len = strlen(time);\n+    if (len == 0) {\n+        return 0;\n+    }\n     val = atoi(time);\n \n     /* String time to seconds */\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42488418-vul",
+      "digest": "sha256:519e6728d76cc386f5de1868b7778ed5f9b884ee3c1011da49dbf3a880f8a482"
+    },
+    "patched": {
+      "ref": "n132/arvo:42488418-fix",
+      "digest": "sha256:7b5e098ea0ccfe4ddd660d9c5c9d25c3d35119ebfdbc9dcc6337a4eaf4eb05b0"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/fluent-bit/src/flb_utils.c:477",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/fluent-bit/src/flb_utils.c:477"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-968892052",
+  "chain": "CWE-456->CWE-457",
+  "project": "ndpi",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42529693",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/ntop/nDPI/commit/cd59485f7e2b99889f279b0dff7daca857079fa3",
+      "fix_commits": [
+        "cd59485f7e2b99889f279b0dff7daca857079fa3"
+      ],
+      "repo": "https://github.com/ntop/nDPI"
+    },
+    "patch": "diff --git a/src/lib/ndpi_main.c b/src/lib/ndpi_main.c\nindex 781fc1e2988..5447c03e0e5 100644\n--- a/src/lib/ndpi_main.c\n+++ b/src/lib/ndpi_main.c\n@@ -4151,13 +4151,15 @@ int ndpi_add_ip_risk_mask(struct ndpi_detection_module_struct *ndpi_str,\n   if(!is_ipv6 && ndpi_str->ip_risk_mask_ptree) {\n     struct in_addr pin;\n \n-    pin.s_addr = inet_addr(addr);\n+    if(inet_pton(AF_INET, addr, &pin) != 1)\n+      return(-1);\n     node = add_to_ptree(ndpi_str->ip_risk_mask_ptree, AF_INET,\n \t\t\t&pin, cidr ? atoi(cidr) : 32 /* bits */);\n   } else if(is_ipv6 && ndpi_str->ip_risk_mask_ptree6) {\n     struct in6_addr pin6;\n \n-    inet_pton(AF_INET6, addr, &pin6);\n+    if(inet_pton(AF_INET6, addr, &pin6) != 1)\n+      return(-1);\n     node = add_to_ptree(ndpi_str->ip_risk_mask_ptree6, AF_INET6,\n \t\t\t&pin6, cidr ? atoi(cidr) : 128 /* bits */);\n   } else {\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42529693-vul",
+      "digest": "sha256:bdc1acf8c616a60e492223331c5917f7fbf8c3dea51dbb5c6ac4dc85df86ea67"
+    },
+    "patched": {
+      "ref": "n132/arvo:42529693-fix",
+      "digest": "sha256:33d52707c7556b0c2239a0db59585f22466b8f85ea092788d42357e677bc5706"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/ndpi/src/lib/third_party/src/ndpi_patricia.c:739",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/ndpi/src/lib/third_party/src/ndpi_patricia.c:739"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

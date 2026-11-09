@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042521457",
+  "chain": "CWE-20->CWE-125",
+  "project": "flac",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42521457",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "e2faeb80ec7757391a7c913532e69a96607fdcf6",
+      "fix_commits": [
+        "e2faeb80ec7757391a7c913532e69a96607fdcf6"
+      ],
+      "repo": "https://github.com/xiph/flac"
+    },
+    "patch": "diff --git a/src/flac/analyze.c b/src/flac/analyze.c\nindex 053c773158..ff1b170dc6 100644\n--- a/src/flac/analyze.c\n+++ b/src/flac/analyze.c\n@@ -152,18 +152,20 @@ void flac__analyze_frame(const FLAC__Frame *frame, uint32_t frame_number, FLAC__\n \t\t\t\tupdate_stats(&all_, stats.buckets[i].residual, stats.buckets[i].count);\n \t\t\t}\n \n-\t\t\t/* write the subframe */\n-\t\t\tflac_snprintf(outfilename, sizeof (outfilename), \"f%06u.s%u.gp\", frame_number, channel);\n-\t\t\tcompute_stats(&stats);\n+\t\t\tif(stats.nsamples > 0) {\n+\t\t\t\t/* write the subframe */\n+\t\t\t\tflac_snprintf(outfilename, sizeof (outfilename), \"f%06u.s%u.gp\", frame_number, channel);\n+\t\t\t\tcompute_stats(&stats);\n \n-\t\t\t(void)dump_stats(&stats, outfilename);\n+\t\t\t\t(void)dump_stats(&stats, outfilename);\n+\t\t\t}\n \t\t}\n \t}\n }\n \n void flac__analyze_finish(analysis_options aopts)\n {\n-\tif(aopts.do_residual_gnuplot) {\n+\tif(aopts.do_residual_gnuplot && all_.nsamples > 0) {\n \t\tcompute_stats(&all_);\n \t\t(void)dump_stats(&all_, \"all\");\n \t}\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42521457-vul",
+      "digest": "sha256:edcdb50a294c2fe771f987204e728686ab1374edfbe081e2dec1c1ca119ee245"
+    },
+    "patched": {
+      "ref": "n132/arvo:42521457-fix",
+      "digest": "sha256:ea5946aafecaca23ff0dc9202b9d164494c73fc5f560955a6b3caa152fe91e76"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "ABRT",
+        "direction": null,
+        "crash_site": "/src/flac/oss-fuzz/tool_flac.c:75",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "ABRT",
+        "direction": null,
+        "site": "/src/flac/oss-fuzz/tool_flac.c:75"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

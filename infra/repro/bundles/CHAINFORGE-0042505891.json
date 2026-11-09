@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042505891",
+  "chain": "CWE-20->CWE-125",
+  "project": "ghostpdl",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42505891",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "436cb8a1958642e7bc0d3ca4c44288674dcd590c",
+      "fix_commits": [
+        "436cb8a1958642e7bc0d3ca4c44288674dcd590c"
+      ],
+      "repo": "https://cgit.ghostscript.com/ghostpdl.git"
+    },
+    "patch": "From 436cb8a1958642e7bc0d3ca4c44288674dcd590c Mon Sep 17 00:00:00 2001\nFrom: Chris Liddell <chris.liddell@artifex.com>\nDate: Tue, 14 Dec 2021 14:05:25 +0000\nSubject: [PATCH] oss-fuzz 42322: CFF: validate the number of the various blue\n values\n\nbefore writing to the (fixed size) arrays.\n---\n pdf/pdf_font1C.c | 4 ++++\n 1 file changed, 4 insertions(+)\n\ndiff --git a/pdf/pdf_font1C.c b/pdf/pdf_font1C.c\nindex 5605106..215200e 100644\n--- a/pdf/pdf_font1C.c\n+++ b/pdf/pdf_font1C.c\n@@ -946,6 +946,7 @@ pdfi_read_cff_dict(byte *p, byte *e, pdfi_gs_cff_font_priv *ptpriv, cff_font_off\n                 ptpriv->type1data.initialRandomSeed = args[0].ival;\n \n             if (b0 == 6) {\n+                if (n > max_BlueValues * 2) n = max_BlueValues * 2;\n                 ptpriv->type1data.BlueValues.count = n;\n                 ptpriv->type1data.BlueValues.values[0] = args[0].fval;\n                 for (i = 1; i < n; i++) {\n@@ -954,6 +955,7 @@ pdfi_read_cff_dict(byte *p, byte *e, pdfi_gs_cff_font_priv *ptpriv, cff_font_off\n             }\n \n             if (b0 == 7) {\n+                if (n > max_OtherBlues * 2) n = max_OtherBlues * 2;\n                 ptpriv->type1data.OtherBlues.count = n;\n                 ptpriv->type1data.OtherBlues.values[0] = args[0].fval;\n                 for (i = 1; i < n; i++) {\n@@ -962,6 +964,7 @@ pdfi_read_cff_dict(byte *p, byte *e, pdfi_gs_cff_font_priv *ptpriv, cff_font_off\n             }\n \n             if (b0 == 8) {\n+                if (n > max_FamilyBlues * 2) n = max_FamilyBlues * 2;\n                 ptpriv->type1data.FamilyBlues.count = n;\n                 ptpriv->type1data.FamilyBlues.values[0] = args[0].fval;\n                 for (i = 1; i < n; i++) {\n@@ -970,6 +973,7 @@ pdfi_read_cff_dict(byte *p, byte *e, pdfi_gs_cff_font_priv *ptpriv, cff_font_off\n             }\n \n             if (b0 == 9) {\n+                if (n > max_FamilyOtherBlues * 2) n = max_FamilyOtherBlues * 2;\n                 ptpriv->type1data.FamilyOtherBlues.count = n;\n                 ptpriv->type1data.FamilyOtherBlues.values[0] = args[0].fval;\n                 for (i = 1; i < n; i++) {\n-- \n2.55.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42505891-vul",
+      "digest": "sha256:4f8d5720ca980ac2a79e5de2082d32bb2a6810950830afa7b9fdb4b17b1caabb"
+    },
+    "patched": {
+      "ref": "n132/arvo:42505891-fix",
+      "digest": "sha256:ae85aa6e1c4ae29c34020c375aa3785e4127dd055bd091aea44413a6045cd4ff"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/ghostpdl/./pdf/pdf_fapi.c:212",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/ghostpdl/./pdf/pdf_fapi.c:212"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

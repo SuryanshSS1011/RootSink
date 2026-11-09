@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042474899",
+  "chain": "CWE-416->CWE-125",
+  "project": "openh264",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42474899",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "901b92c7f3a8295a7335f9be447e667a7eec8075",
+      "fix_commits": [
+        "901b92c7f3a8295a7335f9be447e667a7eec8075"
+      ],
+      "repo": "https://github.com/cisco/openh264"
+    },
+    "patch": "From 901b92c7f3a8295a7335f9be447e667a7eec8075 Mon Sep 17 00:00:00 2001\nFrom: xiaotiansf <xiaotianshimail@gmail.com>\nDate: Tue, 23 Jul 2019 09:07:36 -0700\nSubject: [PATCH] re-fix oss-buzz bug 14423.\n\n---\n codec/decoder/core/src/decoder.cpp | 14 ++------------\n 1 file changed, 2 insertions(+), 12 deletions(-)\n\ndiff --git a/codec/decoder/core/src/decoder.cpp b/codec/decoder/core/src/decoder.cpp\nindex 93645f6..ef2ca23 100644\n--- a/codec/decoder/core/src/decoder.cpp\n+++ b/codec/decoder/core/src/decoder.cpp\n@@ -210,22 +210,12 @@ static int32_t DecreasePicBuff (PWelsDecoderContext pCtx, PPicBuff* ppPicBuf, co\n   }\n \n   //update references due to allocation changes\n+  //all references' references have to be reset oss-buzz 14423\n   for (int32_t i = 0; i < kiNewSize; i++) {\n     for (int32_t listIdx = LIST_0; listIdx < LIST_A; ++listIdx) {\n       int32_t j = -1;\n       while (++j < MAX_DPB_COUNT && pPicNewBuf->ppPic[i]->pRefPic[listIdx][j] != NULL) {\n-        unsigned long long uiTimeStamp = pPicNewBuf->ppPic[i]->pRefPic[listIdx][j]->uiTimeStamp;\n-        bool foundThePic = false;\n-        for (int32_t k = 0; k < kiNewSize; k++) {\n-          if (pPicNewBuf->ppPic[k]->uiTimeStamp == uiTimeStamp) {\n-            pPicNewBuf->ppPic[i]->pRefPic[listIdx][j] = pPicNewBuf->ppPic[k];\n-            foundThePic = true;\n-            break;\n-          }\n-        }\n-        if (!foundThePic) {\n-          pPicNewBuf->ppPic[i]->pRefPic[listIdx][j] = NULL;\n-        }\n+        pPicNewBuf->ppPic[i]->pRefPic[listIdx][j] = NULL;\n       }\n     }\n   }\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42474899-vul",
+      "digest": "sha256:d8ba595b66c17d0547632ba5ec0df9306d886077ec9216897856f7fd8f828a15"
+    },
+    "patched": {
+      "ref": "n132/arvo:42474899-fix",
+      "digest": "sha256:781791847f6383ac1c60b113bdf41fe140a94c40f224f64e198cf5df3522cbf9"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/openh264/codec/decoder/core/src/decoder.cpp:217",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/openh264/codec/decoder/core/src/decoder.cpp:217"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

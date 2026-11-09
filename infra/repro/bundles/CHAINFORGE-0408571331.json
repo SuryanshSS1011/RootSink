@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0408571331",
+  "chain": "CWE-416->CWE-787",
+  "project": "tarantool",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "408571331",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "ad2f3014e66e3ecec06b7d683edb5ea105c22d9b",
+      "fix_commits": [
+        "ad2f3014e66e3ecec06b7d683edb5ea105c22d9b"
+      ],
+      "repo": "https://github.com/tarantool/luajit"
+    },
+    "patch": "diff --git a/src/lj_record.c b/src/lj_record.c\nindex d83fa38f8b..1dd22dac72 100644\n--- a/src/lj_record.c\n+++ b/src/lj_record.c\n@@ -889,7 +889,8 @@ void lj_record_ret(jit_State *J, BCReg rbase, ptrdiff_t gotresults)\n       lj_trace_err(J, LJ_TRERR_LLEAVE);\n     } else if (J->needsnap) {  /* Tailcalled to ff with side-effects. */\n       lj_trace_err(J, LJ_TRERR_NYIRETL);  /* No way to insert snapshot here. */\n-    } else if (1 + pt->framesize >= LJ_MAX_JSLOTS) {\n+    } else if (1 + pt->framesize >= LJ_MAX_JSLOTS ||\n+\t       J->baseslot + J->maxslot >= LJ_MAX_JSLOTS) {\n       lj_trace_err(J, LJ_TRERR_STACKOV);\n     } else {  /* Return to lower frame. Guard for the target we return to. */\n       TRef trpt = lj_ir_kgc(J, obj2gco(pt), IRT_PROTO);\ndiff --git a/test/tarantool-tests/lj-1358-jslot-overflow-uprecursion.test.lua b/test/tarantool-tests/lj-1358-jslot-overflow-uprecursion.test.lua\nnew file mode 100644\nindex 0000000000..1b151b5621\n--- /dev/null\n+++ b/test/tarantool-tests/lj-1358-jslot-overflow-uprecursion.test.lua\n@@ -0,0 +1,82 @@\n+local tap = require('tap')\n+\n+-- The test file to demonstrate JIT slots overflow when compiling\n+-- the return from the trace with up-recursion.\n+-- See also: https://github.com/LuaJIT/LuaJIT/issues/1358.\n+\n+local test = tap.test('lj-1358-jslot-overflow-uprecursion'):skipcond({\n+  ['Test requires JIT enabled'] = not jit.status(),\n+})\n+\n+test:plan(1)\n+\n+-- The test generates the functions with the following workload:\n+--\n+-- | local uprec_func()\n+-- |   if cond then return end\n+-- |   return 'x', --[[...]] 'x', uprec_func()\n+-- | end\n+-- |\n+-- | local function empty() end\n+-- | empty('x', --[[...]] 'x', uprec_func())\n+--\n+-- The recording of the return from `uprec_func()` before the call\n+-- to `empty()` causes the assertion failure in the\n+-- `rec_check_slots()`.\n+\n+-- Generate a function with many return values plus up-recursion.\n+local function generate_uprec_payload(n_returns)\n+  local str_func = [[\n+  local counter = 0\n+  local function payload_f()\n+    counter = counter + 1\n+    if counter > 5 then return end\n+    return\n+  ]]\n+  for _ = 1, n_returns do\n+    str_func = str_func .. '\"x\", '\n+  end\n+  str_func = str_func .. [[\n+    payload_f()\n+  end\n+  return payload_f\n+  ]]\n+  local f = assert(loadstring(str_func))\n+  return f()\n+end\n+\n+-- Generate the necessary number of locals for a huge enough\n+-- `cbase`.\n+local function generate_nloc_payload(n_locals)\n+  local str_func = [[\n+  -- Function to be called after return with all stack slots used.\n+  local function empty() end\n+  empty(\n+  ]]\n+  for _ = 1, n_locals do\n+    str_func = str_func .. '\"x\", '\n+  end\n+  str_func = str_func .. [[\n+    _G.uprec_func()\n+  )\n+  ]]\n+  local f = assert(loadstring(str_func))\n+  return f\n+end\n+\n+-- Avoid an unrelated JIT output.\n+jit.off()\n+-- 30 * 5 = 150 returned values for the first call.\n+_G.uprec_func = generate_uprec_payload(30)\n+-- Plus 100 slots for locals, plus a slot for the function to be\n+-- called causes JIT stack slots overflow.\n+local test_func = generate_nloc_payload(100)\n+\n+jit.on()\n+jit.opt.start('hotloop=1', 'hotexit=1', 'recunroll=1')\n+\n+test_func()\n+\n+test:ok(true, 'no assertion on JIT slots overflow')\n+\n+test:done(true)\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:408571331-vul",
+      "digest": "sha256:d91536d1de2303976769414b3756fb81fc8e1e3096105b8f2ae03b4f44b0f908"
+    },
+    "patched": {
+      "ref": "n132/arvo:408571331-fix",
+      "digest": "sha256:f9fab485452ab006290128f02d779b90e85da79cc201349e94fd24a099ff20d9"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/tarantool/third_party/luajit/src/lj_snap.c:219",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/tarantool/third_party/luajit/src/lj_snap.c:219"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

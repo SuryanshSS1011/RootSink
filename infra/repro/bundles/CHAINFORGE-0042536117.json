@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042536117",
+  "chain": "CWE-1284->CWE-125",
+  "project": "PcapPlusPlus",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42536117",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "0fc73bffe881eb5c3d0e160697ac2de7c9d5dc34",
+      "fix_commits": [
+        "0fc73bffe881eb5c3d0e160697ac2de7c9d5dc34"
+      ],
+      "repo": "https://github.com/seladb/PcapPlusPlus"
+    },
+    "patch": "diff --git a/Packet++/header/Asn1Codec.h b/Packet++/header/Asn1Codec.h\nindex 7b5bffef97..57db3ae258 100644\n--- a/Packet++/header/Asn1Codec.h\n+++ b/Packet++/header/Asn1Codec.h\n@@ -225,8 +225,8 @@ namespace pcpp\n \t\tvirtual void decodeValue(uint8_t* data, bool lazy) = 0;\n \t\tvirtual std::vector<uint8_t> encodeValue() const = 0;\n \n-\t\tstatic Asn1Record* decodeTagAndCreateRecord(const uint8_t* data, size_t dataLen, int& tagLen);\n-\t\tint decodeLength(const uint8_t* data, size_t dataLen);\n+\t\tstatic Asn1Record* decodeTagAndCreateRecord(const uint8_t* data, size_t dataLen, uint8_t& tagLen);\n+\t\tuint8_t decodeLength(const uint8_t* data, size_t dataLen);\n \t\tvoid decodeValueIfNeeded();\n \n \t\tuint8_t encodeTag();\ndiff --git a/Packet++/src/Asn1Codec.cpp b/Packet++/src/Asn1Codec.cpp\nindex f048bb06b1..277ef028c4 100644\n--- a/Packet++/src/Asn1Codec.cpp\n+++ b/Packet++/src/Asn1Codec.cpp\n@@ -176,10 +176,10 @@ namespace pcpp\n \n \tAsn1Record* Asn1Record::decodeInternal(const uint8_t* data, size_t dataLen, bool lazy)\n \t{\n-\t\tint tagLen;\n+\t\tuint8_t tagLen;\n \t\tauto decodedRecord = decodeTagAndCreateRecord(data, dataLen, tagLen);\n \n-\t\tint lengthLen;\n+\t\tuint8_t lengthLen;\n \t\ttry\n \t\t{\n \t\t\tlengthLen = decodedRecord->decodeLength(data + tagLen, dataLen - tagLen);\n@@ -190,14 +190,14 @@ namespace pcpp\n \t\t\tthrow;\n \t\t}\n \n-\t\tif (static_cast<int>(dataLen) - tagLen - lengthLen - static_cast<int>(decodedRecord->m_ValueLength) < 0)\n+\t\tdecodedRecord->m_TotalLength = tagLen + lengthLen + decodedRecord->m_ValueLength;\n+\t\tif (decodedRecord->m_TotalLength < decodedRecord->m_ValueLength ||  // check for overflow\n+\t\t    decodedRecord->m_TotalLength > dataLen)\n \t\t{\n \t\t\tdelete decodedRecord;\n \t\t\tthrow std::invalid_argument(\"Cannot decode ASN.1 record, data doesn't contain the entire record\");\n \t\t}\n \n-\t\tdecodedRecord->m_TotalLength = tagLen + lengthLen + decodedRecord->m_ValueLength;\n-\n \t\tif (!lazy)\n \t\t{\n \t\t\ttry\n@@ -228,7 +228,7 @@ namespace pcpp\n \t\treturn Asn1UniversalTagType::NotApplicable;\n \t}\n \n-\tAsn1Record* Asn1Record::decodeTagAndCreateRecord(const uint8_t* data, size_t dataLen, int& tagLen)\n+\tAsn1Record* Asn1Record::decodeTagAndCreateRecord(const uint8_t* data, size_t dataLen, uint8_t& tagLen)\n \t{\n \t\tif (dataLen < 1)\n \t\t{\n@@ -360,7 +360,7 @@ namespace pcpp\n \t\treturn newRecord;\n \t}\n \n-\tint Asn1Record::decodeLength(const uint8_t* data, size_t dataLen)\n+\tuint8_t Asn1Record::decodeLength(const uint8_t* data, size_t dataLen)\n \t{\n \t\tif (dataLen < 1)\n \t\t{\n@@ -370,30 +370,35 @@ namespace pcpp\n \t\t// Check 8th bit\n \t\tauto lengthForm = data[0] & 0x80;\n \n-\t\tauto numberLengthBytes = 1;\n-\n \t\t// Check if the tag is using more than one byte\n \t\t// 8th bit at 0 means the length only uses one byte\n \t\t// 8th bit at 1 means the length uses more than one byte. The number of bytes is encoded in the other 7 bits\n-\t\tif (lengthForm != 0)\n+\t\tif (lengthForm == 0)\n+\t\t{\n+\t\t\tm_ValueLength = data[0];\n+\t\t\treturn 1;\n+\t\t}\n+\n+\t\tuint8_t actualLengthBytes = data[0] & 0x7F;\n+\t\tconst uint8_t* actualLengthData = data + 1;\n+\n+\t\tif (dataLen < static_cast<size_t>(actualLengthBytes) + 1)\n+\t\t{\n+\t\t\tthrow std::invalid_argument(\"Cannot decode ASN.1 record length\");\n+\t\t}\n+\n+\t\tfor (int i = 0; i < actualLengthBytes; i++)\n \t\t{\n-\t\t\tauto additionalLengthBytes = data[0] & 0x7F;\n-\t\t\tif (static_cast<int>(dataLen) < additionalLengthBytes + 1)\n+\t\t\tsize_t partialValueLength = m_ValueLength << 8;\n+\t\t\tif (partialValueLength < m_ValueLength)  // check for overflow\n \t\t\t{\n \t\t\t\tthrow std::invalid_argument(\"Cannot decode ASN.1 record length\");\n \t\t\t}\n-\t\t\tfor (auto index = additionalLengthBytes; index > 0; --index)\n-\t\t\t{\n-\t\t\t\tm_ValueLength += data[index] * static_cast<int>(std::pow(256, (additionalLengthBytes - index)));\n-\t\t\t}\n-\t\t\tnumberLengthBytes += additionalLengthBytes;\n-\t\t}\n-\t\telse\n-\t\t{\n-\t\t\tm_ValueLength = data[0];\n+\n+\t\t\tm_ValueLength = partialValueLength | actualLengthData[i];\n \t\t}\n \n-\t\treturn numberLengthBytes;\n+\t\treturn 1 + actualLengthBytes;\n \t}\n \n \tvoid Asn1Record::decodeValueIfNeeded()\ndiff --git a/Tests/Fuzzers/RegressionTests/regression_samples/crash-invalid-asn-record-len b/Tests/Fuzzers/RegressionTests/regression_samples/crash-invalid-asn-record-len\nnew file mode 100644\nindex 0000000000..497a75f5e9\nBinary files /dev/null and b/Tests/Fuzzers/RegressionTests/regression_samples/crash-invalid-asn-record-len differ\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42536117-vul",
+      "digest": "sha256:607f1c94f7c7d5a53186f77604153428f0d85bb9e4420680d7c4a96b3e901fc6"
+    },
+    "patched": {
+      "ref": "n132/arvo:42536117-fix",
+      "digest": "sha256:900f8db2b7c0bf7ffe8a6f4c52cd8919c4684ed865891b3b8059b10c8928432c"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/PcapPlusPlus/Packet++/src/Asn1Codec.cpp:235",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/PcapPlusPlus/Packet++/src/Asn1Codec.cpp:235"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

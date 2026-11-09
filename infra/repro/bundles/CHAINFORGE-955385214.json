@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-955385214",
+  "chain": "CWE-129->CWE-125",
+  "project": "ffmpeg",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42475813",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://git.ffmpeg.org/gitweb/ffmpeg.git/commitdiff/930cdef80ab695132d3de2128c3c23f2d698918b",
+      "fix_commits": [
+        "930cdef80ab695132d3de2128c3c23f2d698918b"
+      ],
+      "repo": "https://git.ffmpeg.org/gitweb/ffmpeg.git/commitdiff"
+    },
+    "patch": "From 930cdef80ab695132d3de2128c3c23f2d698918b Mon Sep 17 00:00:00 2001\nFrom: Michael Niedermayer <michael@niedermayer.cc>\nDate: Sat, 15 Jun 2019 21:08:31 +0200\nSubject: [PATCH] avcodec/motionpixels: Check for vlc error in mp_get_vlc()\n\nFixes: 15246/clusterfuzz-testcase-minimized-ffmpeg_AV_CODEC_ID_MOTIONPIXELS_fuzzer-5168534407086080\nFixes: runtime error: index -1 out of bounds for type 'HuffCode [16]'\n\nFound-by: continuous fuzzing process https://github.com/google/oss-fuzz/tree/master/projects/ffmpeg\nSigned-off-by: Michael Niedermayer <michael@niedermayer.cc>\n---\n libavcodec/motionpixels.c | 2 ++\n 1 file changed, 2 insertions(+)\n\ndiff --git a/libavcodec/motionpixels.c b/libavcodec/motionpixels.c\nindex a88b837..7397766 100644\n--- a/libavcodec/motionpixels.c\n+++ b/libavcodec/motionpixels.c\n@@ -201,6 +201,8 @@ static int mp_get_vlc(MotionPixelsContext *mp, GetBitContext *gb)\n     int i;\n \n     i = (mp->codes_count == 1) ? 0 : get_vlc2(gb, mp->vlc.table, mp->max_codes_bits, 1);\n+    if (i < 0)\n+        return i;\n     return mp->codes[i].delta;\n }\n \n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42475813-vul",
+      "digest": "sha256:ba86a7a0360cdfb3c3d0147411f0826b39788401ce9a5c1bb9b51652a9e529ae"
+    },
+    "patched": {
+      "ref": "n132/arvo:42475813-fix",
+      "digest": "sha256:0534d95f7a240bc789829137c2fb671079971ca1c382f69a3e072e2d2035c25e"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "crash_site": "/src/ffmpeg/libavcodec/motionpixels.c:204",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 129,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "site": "/src/ffmpeg/libavcodec/motionpixels.c:204"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,89 @@
+Accepting input from '/tmp/poc'
+Usage for fuzzing: honggfuzz -P [flags] -- /out/pdf_fuzzer
+=================================================================
+==472318==ERROR: AddressSanitizer: heap-use-after-free on address 0x6080000076c8 at pc 0x000000623532 bp 0x7ffffe9919e0 sp 0x7ffffe9919d8
+WRITE of size 4 at 0x6080000076c8 thread T0
+SCARINESS: 46 (4-byte-write-heap-use-after-free)
+    #0 0x623531 in int std::__1::__cxx_atomic_fetch_sub<int>(std::__1::__cxx_atomic_base_impl<int>*, int, std::__1::memory_order) /usr/local/bin/../include/c++/v1/atomic:1036:12
+    #1 0x623464 in std::__1::__atomic_base<int, true>::operator--() /usr/local/bin/../include/c++/v1/atomic:1616:57
+    #2 0x622a0d in Object::free() /src/poppler/poppler/Object.cc:110:16
+    #3 0x6d20cc in ObjectStream::~ObjectStream() /src/poppler/poppler/XRef.cc:211:3
+    #4 0x6dfaf9 in std::__1::default_delete<ObjectStream>::operator()(ObjectStream*) const /usr/local/bin/../include/c++/v1/memory:2378:5
+    #5 0x6df861 in std::__1::__vector_base<std::__1::pair<long long, std::__1::unique_ptr<ObjectStream, std::__1::default_delete<ObjectStream> > >, std::__1::allocator<std::__1::pair<long long, std::__1::unique_ptr<ObjectStream, std::__1::default_delete<ObjectStream> > > > >::__destruct_at_end(std::__1::pair<long long, std::__1::unique_ptr<ObjectStream, std::__1::default_delete<ObjectStream> > >*) /usr/local/bin/../include/c++/v1/vector:426:9
+    #6 0x6df4b0 in std::__1::__vector_base<std::__1::pair<long long, std::__1::unique_ptr<ObjectStream, std::__1::default_delete<ObjectStream> > >, std::__1::allocator<std::__1::pair<long long, std::__1::unique_ptr<ObjectStream, std::__1::default_delete<ObjectStream> > > > >::~__vector_base() /usr/local/bin/../include/c++/v1/vector:463:9
+    #7 0x6d530f in XRef::~XRef() /src/poppler/poppler/XRef.cc:338:1
+    #8 0x63c30f in PDFDoc::~PDFDoc() /src/poppler/poppler/PDFDoc.cc:335:5
+    #9 0x4d4d2c in poppler::document_private::~document_private() /src/poppler/cpp/poppler-document.cpp:100:5
+    #10 0x4d509d in poppler::document::~document() /src/poppler/cpp/poppler-document.cpp:173:5
+    #11 0x4ca647 in LLVMFuzzerTestOneInput /src/fuzz/pdf_fuzzer.cc:48:3
+    #12 0x4cb8ec in main (/out/pdf_fuzzer+0x4cb8ec)
+    #13 0x14f59f2b182f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+    #14 0x41f078 in _start (/out/pdf_fuzzer+0x41f078)
+
+DEDUP_TOKEN: int std::__1::__cxx_atomic_fetch_sub<int>(std::__1::__cxx_atomic_base_impl<int>*, int, std::__1::memory_order)--std::__1::__atomic_base<int, true>::operator--()--Object::free()
+0x6080000076c8 is located 40 bytes inside of 88-byte region [0x6080000076a0,0x6080000076f8)
+freed by thread T0 here:
+    #0 0x4c82ed in operator delete(void*) /src/llvm-project/compiler-rt/lib/asan/asan_new_delete.cpp:160:3
+    #1 0x622add in Object::free() /src/poppler/poppler/Object.cc
+    #2 0x53d23a in FormFieldButton::~FormFieldButton() /src/poppler/poppler/Form.cc:1148:1
+    #3 0x62f76e in Page::~Page() /src/poppler/poppler/Page.cc:325:5
+    #4 0x5227e9 in std::__1::default_delete<Page>::operator()(Page*) const /usr/local/bin/../include/c++/v1/memory:2378:5
+    #5 0x519d01 in std::__1::__vector_base<std::__1::pair<std::__1::unique_ptr<Page, std::__1::default_delete<Page> >, Ref>, std::__1::allocator<std::__1::pair<std::__1::unique_ptr<Page, std::__1::default_delete<Page> >, Ref> > >::__destruct_at_end(std::__1::pair<std::__1::unique_ptr<Page, std::__1::default_delete<Page> >, Ref>*) /usr/local/bin/../include/c++/v1/vector:426:9
+    #6 0x5199b0 in std::__1::__vector_base<std::__1::pair<std::__1::unique_ptr<Page, std::__1::default_delete<Page> >, Ref>, std::__1::allocator<std::__1::pair<std::__1::unique_ptr<Page, std::__1::default_delete<Page> >, Ref> > >::~__vector_base() /usr/local/bin/../include/c++/v1/vector:463:9
+    #7 0x50ca30 in Catalog::~Catalog() /src/poppler/poppler/Catalog.cc:152:1
+    #8 0x63c2c9 in PDFDoc::~PDFDoc() /src/poppler/poppler/PDFDoc.cc:332:5
+    #9 0x4d4d2c in poppler::document_private::~document_private() /src/poppler/cpp/poppler-document.cpp:100:5
+    #10 0x4d509d in poppler::document::~document() /src/poppler/cpp/poppler-document.cpp:173:5
+    #11 0x4ca647 in LLVMFuzzerTestOneInput /src/fuzz/pdf_fuzzer.cc:48:3
+    #12 0x4cb8ec in main (/out/pdf_fuzzer+0x4cb8ec)
+
+DEDUP_TOKEN: operator delete(void*)--Object::free()--FormFieldButton::~FormFieldButton()
+previously allocated by thread T0 here:
+    #0 0x4c7a8d in operator new(unsigned long) /src/llvm-project/compiler-rt/lib/asan/asan_new_delete.cpp:99:3
+    #1 0x637cf1 in Parser::getObj(bool, unsigned char const*, CryptAlgorithm, int, int, int, int, bool) /src/poppler/poppler/Parser.cc:109:18
+    #2 0x6d0e23 in ObjectStream::ObjectStream(XRef*, int, int) /src/poppler/poppler/XRef.cc:201:23
+    #3 0x6d1a53 in XRef::fetch(int, int, int) /src/poppler/poppler/XRef.cc:1179:20
+    #4 0x6d9de5 in XRef::getCatalog() /src/poppler/poppler/XRef.cc:1091:20
+    #5 0x50ba31 in Catalog::Catalog(PDFDoc*) /src/poppler/poppler/Catalog.cc:95:26
+    #6 0x63a0e7 in PDFDoc::setup(GooString const*, GooString const*) /src/poppler/poppler/PDFDoc.cc:293:17
+    #7 0x63a6b0 in PDFDoc::PDFDoc(BaseStream*, GooString const*, GooString const*, void*) /src/poppler/poppler/PDFDoc.cc:241:8
+    #8 0x4d4bbc in poppler::document_private::document_private(char const*, int, std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char> > const&, std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char> > const&) /src/poppler/cpp/poppler-document.cpp:84:15
+    #9 0x4db172 in poppler::document::load_from_raw_data(char const*, int, std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char> > const&, std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char> > const&) /src/poppler/cpp/poppler-document.cpp:1132:33
+    #10 0x4ca4c8 in LLVMFuzzerTestOneInput /src/fuzz/pdf_fuzzer.cc:31:28
+    #11 0x4cb8ec in main (/out/pdf_fuzzer+0x4cb8ec)
+
+DEDUP_TOKEN: operator new(unsigned long)--Parser::getObj(bool, unsigned char const*, CryptAlgorithm, int, int, int, int, bool)--ObjectStream::ObjectStream(XRef*, int, int)
+SUMMARY: AddressSanitizer: heap-use-after-free /usr/local/bin/../include/c++/v1/atomic:1036:12 in int std::__1::__cxx_atomic_fetch_sub<int>(std::__1::__cxx_atomic_base_impl<int>*, int, std::__1::memory_order)
+Shadow bytes around the buggy address:
+  0x0c107fff8e80: fa fa fa fa fd fd fd fd fd fd fd fd fd fd fd fa
+  0x0c107fff8e90: fa fa fa fa fd fd fd fd fd fd fd fd fd fd fd fa
+  0x0c107fff8ea0: fa fa fa fa fd fd fd fd fd fd fd fd fd fd fd fa
+  0x0c107fff8eb0: fa fa fa fa fd fd fd fd fd fd fd fd fd fd fd fa
+  0x0c107fff8ec0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+=>0x0c107fff8ed0: fa fa fa fa fd fd fd fd fd[fd]fd fd fd fd fd fa
+  0x0c107fff8ee0: fa fa fa fa fd fd fd fd fd fd fd fd fd fd fd fa
+  0x0c107fff8ef0: fa fa fa fa fd fd fd fd fd fd fd fd fd fd fd fa
+  0x0c107fff8f00: fa fa fa fa fd fd fd fd fd fd fd fd fd fd fd fa
+  0x0c107fff8f10: fa fa fa fa fd fd fd fd fd fd fd fd fd fd fd fa
+  0x0c107fff8f20: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+  Shadow gap:              cc
+==472318==ABORTING

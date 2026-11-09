@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042522627",
+  "chain": "CWE-20->CWE-125",
+  "project": "php-src",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42522627",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "c5fe6c2eb9a73c83c417b797d7312566b27200f4",
+      "fix_commits": [
+        "c5fe6c2eb9a73c83c417b797d7312566b27200f4"
+      ],
+      "repo": "https://github.com/php/php-src"
+    },
+    "patch": "diff --git a/NEWS b/NEWS\nindex dd33ea598c34..4c8f00d13a19 100644\n--- a/NEWS\n+++ b/NEWS\n@@ -71,6 +71,8 @@ PHP                                                                        NEWS\n   . Fixed bug GH-10885 (stream_socket_server context leaks). (ilutov)\n   . Fixed bug GH-10052 (Browscap crashes PHP 8.1.12 on request shutdown\n     (apache2)). (nielsdos)\n+  . Fixed oss-fuzz #57392 (Buffer-overflow in php_fgetcsv() with \\0 delimiter\n+    and enclosure). (ilutov)\n \n 16 Mar 2023, PHP 8.2.4\n \ndiff --git a/ext/standard/file.c b/ext/standard/file.c\nindex 1f3b6b2cf582..f40579dde595 100644\n--- a/ext/standard/file.c\n+++ b/ext/standard/file.c\n@@ -1970,7 +1970,7 @@ PHPAPI HashTable *php_fgetcsv(php_stream *stream, char delimiter, char enclosure\n \t\t\twhile ((*tmp != delimiter) && isspace((int)*(unsigned char *)tmp)) {\n \t\t\t\ttmp++;\n \t\t\t}\n-\t\t\tif (*tmp == enclosure) {\n+\t\t\tif (*tmp == enclosure && tmp < limit) {\n \t\t\t\tbptr = tmp;\n \t\t\t}\n \t\t}\ndiff --git a/ext/standard/tests/oss_fuzz_57392.phpt b/ext/standard/tests/oss_fuzz_57392.phpt\nnew file mode 100644\nindex 000000000000..5a7e5b28d1ca\n--- /dev/null\n+++ b/ext/standard/tests/oss_fuzz_57392.phpt\n@@ -0,0 +1,17 @@\n+--TEST--\n+oss-fuzz #57392: Buffer-overflow in php_fgetcsv() with \\0 delimiter and enclosure\n+--FILE--\n+<?php\n+var_dump(str_getcsv(\n+    \"aaaaaaaaaaaa\\0  \",\n+    \"\\0\",\n+    \"\\0\",\n+));\n+?>\n+--EXPECT--\n+array(2) {\n+  [0]=>\n+  string(12) \"aaaaaaaaaaaa\"\n+  [1]=>\n+  string(2) \"  \"\n+}\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42522627-vul",
+      "digest": "sha256:19a39a175e7b4276be00c3e8e423ac5bc1ea37f9329505ffeca4c5674a1a3093"
+    },
+    "patched": {
+      "ref": "n132/arvo:42522627-fix",
+      "digest": "sha256:22a6cc49805cc04dd31d832d1a55e4459afa72762cc953ee93142784c5c0252d"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/php-src/ext/standard/file.c:2195",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/php-src/ext/standard/file.c:2195"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

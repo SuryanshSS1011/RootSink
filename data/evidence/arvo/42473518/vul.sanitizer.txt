@@ -1,0 +1,82 @@
+======================= INFO =========================
+This binary is built for AFL-fuzz.
+To run the target function on individual input(s) execute this:
+  /out/ping_ptif_fuzzer < INPUT_FILE
+or
+  /out/ping_ptif_fuzzer INPUT_FILE1 [INPUT_FILE2 ... ]
+To fuzz with afl-fuzz execute this:
+  afl-fuzz [afl-flags] /out/ping_ptif_fuzzer [-N]
+afl-fuzz will run N iterations before re-spawning the process (default: 1000)
+======================================================
+Reading 94 bytes from /tmp/poc
+=================================================================
+==2586473==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x602000002ed0 at pc 0x000000a81c2c bp 0x7ffe2f487db0 sp 0x7ffe2f487da8
+READ of size 8 at 0x602000002ed0 thread T0
+SCARINESS: 23 (8-byte-read-heap-buffer-overflow)
+    #0 0xa81c2b in TIFFGetProperties /src/imagemagick/coders/tiff.c:796:64
+    #1 0xa7660d in ReadTIFFImage /src/imagemagick/coders/tiff.c:1494:5
+    #2 0x646a76 in ReadImage /src/imagemagick/MagickCore/constitute.c:500:13
+    #3 0x821fbb in ReadStream /src/imagemagick/MagickCore/stream.c:1043:9
+    #4 0x5f2d46 in PingBlob /src/imagemagick/MagickCore/blob.c:3579:13
+    #5 0x5535e4 in Magick::Image::ping(Magick::Blob const&) /src/imagemagick/Magick++/lib/Image.cpp:3861:12
+    #6 0x530feb in LLVMFuzzerTestOneInput /src/imagemagick/Magick++/fuzz/ping_fuzzer.cc:43:11
+    #7 0x53172f in ExecuteFilesOnyByOne(int, char**) /src/libfuzzer/afl/afl_driver.cpp:301:5
+    #8 0x531cde in main /src/libfuzzer/afl/afl_driver.cpp:339:12
+    #9 0x15100a69482f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+    #10 0x4202d8 in _start (/out/ping_ptif_fuzzer+0x4202d8)
+
+DEDUP_TOKEN: TIFFGetProperties--ReadTIFFImage--ReadImage
+0x602000002ed1 is located 0 bytes to the right of 1-byte region [0x602000002ed0,0x602000002ed1)
+allocated by thread T0 here:
+    #0 0x4ee5be in realloc /src/llvm/projects/compiler-rt/lib/asan/asan_malloc_linux.cc:140
+    #1 0xb679af in _TIFFCheckRealloc /src/libtiff/libtiff/tif_aux.c:71:8
+    #2 0xb731f9 in _TIFFVSetField /src/libtiff/libtiff/tif_dir.c:601:16
+    #3 0xb6d18a in TIFFSetField /src/libtiff/libtiff/tif_dir.c:796:11
+    #4 0xb88ca8 in TIFFFetchNormalTag /src/libtiff/libtiff/tif_dirread.c:5421:8
+    #5 0xb82e78 in TIFFReadDirectory /src/libtiff/libtiff/tif_dirread.c:3985:12
+    #6 0xbef32d in TIFFClientOpen /src/libtiff/libtiff/tif_open.c:464:8
+    #7 0xa75ac8 in ReadTIFFImage /src/imagemagick/coders/tiff.c:1323:8
+    #8 0x646a76 in ReadImage /src/imagemagick/MagickCore/constitute.c:500:13
+    #9 0x821fbb in ReadStream /src/imagemagick/MagickCore/stream.c:1043:9
+    #10 0x5f2d46 in PingBlob /src/imagemagick/MagickCore/blob.c:3579:13
+    #11 0x5535e4 in Magick::Image::ping(Magick::Blob const&) /src/imagemagick/Magick++/lib/Image.cpp:3861:12
+    #12 0x530feb in LLVMFuzzerTestOneInput /src/imagemagick/Magick++/fuzz/ping_fuzzer.cc:43:11
+    #13 0x53172f in ExecuteFilesOnyByOne(int, char**) /src/libfuzzer/afl/afl_driver.cpp:301:5
+    #14 0x531cde in main /src/libfuzzer/afl/afl_driver.cpp:339:12
+    #15 0x15100a69482f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+
+DEDUP_TOKEN: realloc--_TIFFCheckRealloc--_TIFFVSetField
+SUMMARY: AddressSanitizer: heap-buffer-overflow /src/imagemagick/coders/tiff.c:796:64 in TIFFGetProperties
+Shadow bytes around the buggy address:
+  0x0c047fff8580: fa fa 00 00 fa fa 00 01 fa fa 06 fa fa fa 00 00
+  0x0c047fff8590: fa fa 00 01 fa fa 04 fa fa fa 00 00 fa fa 00 01
+  0x0c047fff85a0: fa fa 04 fa fa fa 03 fa fa fa 00 00 fa fa 00 01
+  0x0c047fff85b0: fa fa 04 fa fa fa 00 00 fa fa 00 01 fa fa 04 fa
+  0x0c047fff85c0: fa fa 00 00 fa fa 00 00 fa fa 00 00 fa fa 00 00
+=>0x0c047fff85d0: fa fa 00 00 fa fa fd fa fa fa[01]fa fa fa fd fa
+  0x0c047fff85e0: fa fa 00 fa fa fa 00 00 fa fa 00 fa fa fa 00 fa
+  0x0c047fff85f0: fa fa 00 04 fa fa 04 fa fa fa fa fa fa fa fa fa
+  0x0c047fff8600: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c047fff8610: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c047fff8620: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+  Shadow gap:              cc
+==2586473==ABORTING

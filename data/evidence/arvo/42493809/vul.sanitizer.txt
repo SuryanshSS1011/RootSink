@@ -1,0 +1,80 @@
+INFO: Seed: 312638500
+INFO: Loaded 1 modules   (49662 inline 8-bit counters): 49662 [0x12ad420, 0x12b961e), 
+INFO: Loaded 1 PC tables (49662 PCs): 49662 [0x12b9620,0x137b600), 
+/out/file-fuzzer: Running 1 inputs 1 time(s) each.
+Running: /tmp/poc
+=================================================================
+==1346751==ERROR: AddressSanitizer: stack-buffer-overflow on address 0x14b534782318 at pc 0x0000007301c5 bp 0x14b532f77a90 sp 0x14b532f77a88
+READ of size 4 at 0x14b534782318 thread T2
+SCARINESS: 32 (4-byte-read-stack-buffer-overflow)
+    #0 0x7301c4 in void apply_sao_internal<unsigned short>(de265_image*, int, int, slice_segment_header const*, int, int, int, unsigned short const*, int, unsigned short*, int) /src/libde265/libde265/sao.cc:240:27
+    #1 0x72c970 in void apply_sao<unsigned char>(de265_image*, int, int, slice_segment_header const*, int, int, int, unsigned char const*, int, unsigned char*, int) /src/libde265/libde265/sao.cc:264:5
+    #2 0x72d564 in thread_task_sao::work() /src/libde265/libde265/sao.cc:435:9
+    #3 0x75c423 in worker_thread(void*) /src/libde265/libde265/threads.cc:231:11
+    #4 0x14b537b026b9 in start_thread (/lib/x86_64-linux-gnu/libpthread.so.0+0x76b9)
+    #5 0x14b53762241c in clone (/lib/x86_64-linux-gnu/libc.so.6+0x10741c)
+
+DEDUP_TOKEN: void apply_sao_internal<unsigned short>(de265_image*, int, int, slice_segment_header const*, int, int, int, unsigned short const*, int, unsigned short*, int)--void apply_sao<unsigned char>(de265_image*, int, int, slice_segment_header const*, int, int, int, unsigned char const*, int, unsigned char*, int)--thread_task_sao::work()
+Address 0x14b534782318 is located in stack of thread T2 at offset 280 in frame
+    #0 0x72e66f in void apply_sao_internal<unsigned short>(de265_image*, int, int, slice_segment_header const*, int, int, int, unsigned short const*, int, unsigned short*, int) /src/libde265/libde265/sao.cc:33
+
+DEDUP_TOKEN: void apply_sao_internal<unsigned short>(de265_image*, int, int, slice_segment_header const*, int, int, int, unsigned short const*, int, unsigned short*, int)
+  This frame has 4 object(s):
+    [32, 40) 'hPos' (line 79)
+    [64, 72) 'vPos' (line 79)
+    [96, 101) 'saoOffsetVal' (line 95)
+    [128, 256) 'bandTable' (line 186) <== Memory access at offset 280 overflows this variable
+HINT: this may be a false positive if your program uses some custom stack unwind mechanism, swapcontext or vfork
+      (longjmp and C++ exceptions *are* supported)
+Thread T2 created by T0 here:
+    #0 0x4454ed in pthread_create /src/llvm/projects/compiler-rt/lib/asan/asan_interceptors.cc:209
+    #1 0x75c1de in start_thread_pool(thread_pool*, int) /src/libde265/libde265/threads.cc:269:15
+    #2 0x6d4153 in decoder_context::start_thread_pool(int) /src/libde265/libde265/decctx.cc:346:3
+    #3 0x6d064b in de265_start_worker_threads /src/libde265/libde265/de265.cc:258:28
+    #4 0x6445e6 in libde265_new_decoder(void**) /src/libheif/libheif/heif_decoder_libde265.cc:152:3
+    #5 0x60db14 in heif::HeifContext::decode_image(unsigned int, std::__1::shared_ptr<heif::HeifPixelImage>&, heif_decoding_options const*) const /src/libheif/libheif/heif_context.cc:890:29
+    #6 0x60d27d in heif::HeifContext::Image::decode_image(std::__1::shared_ptr<heif::HeifPixelImage>&, heif_colorspace, heif_chroma, heif_decoding_options const*) const /src/libheif/libheif/heif_context.cc:840:31
+    #7 0x5f1ebd in heif_decode_image /src/libheif/libheif/heif.cc:576:33
+    #8 0x64ccb4 in TestDecodeImage(heif_context*, heif_image_handle const*) /src/libheif/libheif/file_fuzzer.cc:39:9
+    #9 0x64c7d8 in LLVMFuzzerTestOneInput /src/libheif/libheif/file_fuzzer.cc:70:5
+    #10 0x685e16 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/libfuzzer/FuzzerLoop.cpp:529:15
+    #11 0x64d896 in fuzzer::RunOneTest(fuzzer::Fuzzer*, char const*, unsigned long) /src/libfuzzer/FuzzerDriver.cpp:286:6
+    #12 0x6593c3 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/libfuzzer/FuzzerDriver.cpp:715:9
+    #13 0x64cf0c in main /src/libfuzzer/FuzzerMain.cpp:19:10
+    #14 0x14b53753b82f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+
+DEDUP_TOKEN: pthread_create--start_thread_pool(thread_pool*, int)--decoder_context::start_thread_pool(int)
+SUMMARY: AddressSanitizer: stack-buffer-overflow /src/libde265/libde265/sao.cc:240:27 in void apply_sao_internal<unsigned short>(de265_image*, int, int, slice_segment_header const*, int, int, int, unsigned short const*, int, unsigned short*, int)
+Shadow bytes around the buggy address:
+  0x0297268e8410: f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5
+  0x0297268e8420: f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5
+  0x0297268e8430: f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5
+  0x0297268e8440: f1 f1 f1 f1 f8 f2 f2 f2 f8 f2 f2 f2 f8 f2 f2 f2
+  0x0297268e8450: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x0297268e8460: f3 f3 f3[f3]00 00 00 00 00 00 00 00 00 00 00 00
+  0x0297268e8470: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0297268e8480: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0297268e8490: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0297268e84a0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0297268e84b0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+  Shadow gap:              cc
+==1346751==ABORTING

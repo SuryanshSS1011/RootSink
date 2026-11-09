@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-957139366",
+  "chain": "CWE-129->CWE-125",
+  "project": "opensc",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42488715",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/OpenSC/OpenSC/commit/65461e4eb5aff766b3137022d3af61e2b66a6076",
+      "fix_commits": [
+        "65461e4eb5aff766b3137022d3af61e2b66a6076"
+      ],
+      "repo": "https://github.com/OpenSC/OpenSC"
+    },
+    "patch": "diff --git a/src/libopensc/card-authentic.c b/src/libopensc/card-authentic.c\nindex 4d47b05bd0..f8525a5a71 100644\n--- a/src/libopensc/card-authentic.c\n+++ b/src/libopensc/card-authentic.c\n@@ -672,12 +672,12 @@ authentic_reduce_path(struct sc_card *card, struct sc_path *path)\n \tcur_path = card->cache.current_df->path;\n \n \tif (!memcmp(cur_path.value, \"\\x3F\\x00\", 2) && memcmp(in_path.value, \"\\x3F\\x00\", 2))   {\n-\t\tmemmove(in_path.value + 2, in_path.value, in_path.len);\n+\t\tmemmove(in_path.value + 2, in_path.value, (in_path.len - 2));\n \t\tmemcpy(in_path.value, \"\\x3F\\x00\", 2);\n \t\tin_path.len += 2;\n \t}\n \n-\tfor (offs=0; offs < in_path.len && offs < cur_path.len; offs += 2)   {\n+\tfor (offs = 0; (offs + 1) < in_path.len && (offs + 1) < cur_path.len; offs += 2)   {\n \t\tif (cur_path.value[offs] != in_path.value[offs])\n \t\t\tbreak;\n \t\tif (cur_path.value[offs + 1] != in_path.value[offs + 1])\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42488715-vul",
+      "digest": "sha256:2ef0e25200a67d8a26e346414e43aa66469b60a98a311b1816ee06ca1afc0fe8"
+    },
+    "patched": {
+      "ref": "n132/arvo:42488715-fix",
+      "digest": "sha256:120feaabbdea5b3f654b512c9ab2d9a9b3f5d9a2f90726ee4881b9d7db95a320"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "crash_site": "/src/opensc/src/libopensc/sc.c:436",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 129,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "site": "/src/opensc/src/libopensc/sc.c:436"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

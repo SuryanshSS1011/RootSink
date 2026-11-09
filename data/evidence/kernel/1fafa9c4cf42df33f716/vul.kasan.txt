@@ -1,0 +1,127 @@
+[    0.000000] Linux version 4.17.0-rc1+ (@44c7b49632fc) (gcc version 8.5.0 (GCC)) #1 SMP Thu Oct 22 23:20:00 UTC 2026
+[init] environment up, running reproducer
+[    4.252940] ==================================================================
+[    4.255344] BUG: KASAN: slab-out-of-bounds in crypto_morus640_decrypt_chunk+0x13a0/0x1920
+[    4.257976] Read of size 4 at addr ffff880119066e08 by task repro/2104
+[    4.260014] 
+[    4.260508] CPU: 3 PID: 2104 Comm: repro Not tainted 4.17.0-rc1+ #1
+[    4.262546] Hardware name: QEMU Standard PC (i440FX + PIIX, 1996), BIOS 1.16.3-debian-1.16.3-2 04/01/2014
+[    4.265577] Call Trace:
+[    4.266383]  dump_stack+0x162/0x21a
+[    4.267493]  ? dump_stack_print_info.cold.2+0x48/0x48
+[    4.269130]  ? printk+0x91/0xab
+[    4.270158]  ? kmsg_dump_rewind_nolock+0xdf/0xdf
+[    4.271605]  print_address_description+0x6c/0x20b
+[    4.273157]  ? crypto_morus640_decrypt_chunk+0x13a0/0x1920
+[    4.274895]  kasan_report.cold.7+0x242/0x2fe
+[    4.276238]  __asan_report_load4_noabort+0x14/0x20
+[    4.277804]  crypto_morus640_decrypt_chunk+0x13a0/0x1920
+[    4.279470]  ? save_stack+0x43/0xd0
+[    4.280579]  ? skcipher_walk_first+0x129/0x3b0
+[    4.282065]  ? crypto_morus640_encrypt_chunk+0x1860/0x1860
+[    4.283765]  ? skcipher_walk_aead_common+0x833/0xd50
+[    4.285399]  ? do_raw_spin_trylock+0x1b0/0x1b0
+[    4.286798]  ? skcipher_walk_aead_decrypt+0xba/0x120
+[    4.288362]  crypto_morus640_process_crypt.isra.12+0x128/0x220
+[    4.290268]  ? crypto_morus640_decrypt_chunk+0x1920/0x1920
+[    4.291988]  ? crypto_morus640_process_ad+0xa00/0xa00
+[    4.293637]  ? crypto_morus640_exit_tfm+0x10/0x10
+[    4.295122]  ? kfree+0x111/0x260
+[    4.296148]  ? crypto_morus640_update+0xbf/0xd0
+[    4.297636]  crypto_morus640_crypt+0x3c5/0xab0
+[    4.299043]  ? crypto_morus640_load+0x130/0x130
+[    4.300476]  ? scatterwalk_ffwd+0x390/0x390
+[    4.301882]  ? rcu_read_lock_sched_held+0x108/0x120
+[    4.303410]  crypto_morus640_decrypt+0x1fa/0x3d0
+[    4.304870]  ? af_alg_make_sg+0x620/0x620
+[    4.306211]  ? sock_kmalloc+0x12d/0x1c0
+[    4.307418]  ? crypto_morus640_encrypt+0x2f0/0x2f0
+[    4.308928]  ? __sk_mem_schedule+0xc0/0xc0
+[    4.310339]  ? trace_hardirqs_on+0xd/0x10
+[    4.311601]  aead_recvmsg+0x6f4/0x2040
+[    4.312785]  ? aead_release+0x50/0x50
+[    4.314036]  ? selinux_socket_recvmsg+0x31/0x40
+[    4.315456]  ? security_socket_recvmsg+0x5c/0xa0
+[    4.316910]  ? aead_release+0x50/0x50
+[    4.318140]  sock_recvmsg+0xb9/0xf0
+[    4.319249]  ___sys_recvmsg+0x257/0x710
+[    4.320469]  ? aead_sendmsg+0xff/0x1b0
+[    4.321734]  ? ___sys_sendmsg+0x9d0/0x9d0
+[    4.323017]  ? __fd_install+0x258/0x6f0
+[    4.324223]  ? sock_sendmsg+0xf0/0xf0
+[    4.325453]  ? __fget_light+0xc5/0x3b0
+[    4.326641]  ? fget_raw+0x10/0x10
+[    4.327694]  ? __vfs_write+0x533/0xd10
+[    4.328892]  ? rcu_note_context_switch+0x710/0x710
+[    4.330471]  ? kernel_read+0x130/0x130
+[    4.331659]  ? _cond_resched+0x14/0x30
+[    4.332857]  ? __fdget+0xe/0x10
+[    4.333941]  __sys_recvmsg+0xd9/0x230
+[    4.335096]  ? __ia32_sys_sendmmsg+0xf0/0xf0
+[    4.336433]  ? vfs_write+0x379/0x480
+[    4.337635]  ? ksys_write+0xef/0x240
+[    4.338770]  __x64_sys_recvmsg+0x73/0xb0
+[    4.340027]  do_syscall_64+0x17b/0x6e0
+[    4.341291]  ? trace_event_raw_event_sys_exit+0x1e0/0x1e0
+[    4.342989]  ? syscall_return_slowpath+0x4c0/0x4c0
+[    4.344481]  ? syscall_return_slowpath+0x20c/0x4c0
+[    4.346065]  ? entry_SYSCALL_64_after_hwframe+0x59/0xbe
+[    4.347694]  ? trace_hardirqs_off_thunk+0x1a/0x1c
+[    4.349256]  entry_SYSCALL_64_after_hwframe+0x49/0xbe
+[    4.350918] RIP: 0033:0x41203d
+[    4.351895] RSP: 002b:00007ffcfd334818 EFLAGS: 00000207 ORIG_RAX: 000000000000002f
+[    4.354305] RAX: ffffffffffffffda RBX: 0000000000000001 RCX: 000000000041203d
+[    4.356514] RDX: 0000000000000000 RSI: 0000000020002840 RDI: 0000000000000004
+[    4.358797] RBP: 00007ffcfd3348e0 R08: 0000000000000000 R09: 0000000000000000
+[    4.361062] R10: 0000000000000000 R11: 0000000000000207 R12: 00007ffcfd334958
+[    4.363328] R13: 00007ffcfd334968 R14: 00000000004a5f68 R15: 0000000000000001
+[    4.365608] 
+[    4.366118] Allocated by task 2104:
+[    4.367225]  save_stack+0x43/0xd0
+[    4.368280]  kasan_kmalloc+0xc4/0xe0
+[    4.369495]  __kmalloc+0x14e/0x760
+[    4.370584]  skcipher_walk_next+0x605/0x17c0
+[    4.371939]  skcipher_walk_first+0x129/0x3b0
+[    4.373364]  skcipher_walk_aead_common+0x833/0xd50
+[    4.374873]  skcipher_walk_aead_decrypt+0xba/0x120
+[    4.376364]  crypto_morus640_process_crypt.isra.12+0x8c/0x220
+[    4.378226]  crypto_morus640_crypt+0x3c5/0xab0
+[    4.379619]  crypto_morus640_decrypt+0x1fa/0x3d0
+[    4.381121]  aead_recvmsg+0x6f4/0x2040
+[    4.382333]  sock_recvmsg+0xb9/0xf0
+[    4.383440]  ___sys_recvmsg+0x257/0x710
+[    4.384648]  __sys_recvmsg+0xd9/0x230
+[    4.385930]  __x64_sys_recvmsg+0x73/0xb0
+[    4.387172]  do_syscall_64+0x17b/0x6e0
+[    4.388357]  entry_SYSCALL_64_after_hwframe+0x49/0xbe
+[    4.390028] 
+[    4.390520] Freed by task 29:
+[    4.391475]  save_stack+0x43/0xd0
+[    4.392524]  __kasan_slab_free+0x11a/0x170
+[    4.393897]  kasan_slab_free+0xe/0x10
+[    4.395059]  kfree+0xd9/0x260
+[    4.396006]  selinux_cred_free+0x39/0x50
+[    4.397309]  security_cred_free+0x40/0x70
+[    4.398575]  put_cred_rcu+0x102/0x400
+[    4.399734]  rcu_process_callbacks+0x941/0x15f0
+[    4.401242]  __do_softirq+0x2de/0xaee
+[    4.402397] 
+[    4.402901] The buggy address belongs to the object at ffff880119066e00
+[    4.402901]  which belongs to the cache kmalloc-32 of size 32
+[    4.406757] The buggy address is located 8 bytes inside of
+[    4.406757]  32-byte region [ffff880119066e00, ffff880119066e20)
+[    4.410365] The buggy address belongs to the page:
+[    4.411866] page:ffffea0004641980 count:1 mapcount:0 mapping:ffff880119066000 index:0xffff880119066fc1
+[    4.414795] flags: 0x2fffc0000000100(slab)
+[    4.416157] raw: 02fffc0000000100 ffff880119066000 ffff880119066fc1 000000010000003f
+[    4.418625] raw: ffffea0004654aa0 ffffea000465e360 ffff88011a4001c0 0000000000000000
+[    4.421152] page dumped because: kasan: bad access detected
+[    4.422911] 
+[    4.423405] Memory state around the buggy address:
+[    4.424926]  ffff880119066d00: 00 00 fc fc fc fc fc fc fb fb fb fb fc fc fc fc
+[    4.427239]  ffff880119066d80: fb fb fb fb fc fc fc fc fb fb fb fb fc fc fc fc
+[    4.429542] >ffff880119066e00: 00 fc fc fc fc fc fc fc fb fb fb fb fc fc fc fc
+[    4.431781]                       ^
+[    4.432895]  ffff880119066e80: fb fb fb fb fc fc fc fc fb fb fb fb fc fc fc fc
+[    4.435212]  ffff880119066f00: 00 02 fc fc fc fc fc fc fb fb fb fb fc fc fc fc
+[    4.437578] ==================================================================

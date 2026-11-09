@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042493571",
+  "chain": "CWE-416->CWE-125",
+  "project": "gdal",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42493571",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "95547907db125e5a2e91e3e2362d1aabc78e91bc",
+      "fix_commits": [
+        "95547907db125e5a2e91e3e2362d1aabc78e91bc"
+      ],
+      "repo": "https://github.com/OSGeo/gdal"
+    },
+    "patch": "From 95547907db125e5a2e91e3e2362d1aabc78e91bc Mon Sep 17 00:00:00 2001\nFrom: Even Rouault <even.rouault@mines-paris.org>\nDate: Tue, 22 Aug 2017 22:14:23 +0000\nSubject: [PATCH] OGR_VRT: avoid crash on cyclic VRT. Fixes\n https://bugs.chromium.org/p/oss-fuzz/issues/detail?id=3123. Credit to OSS\n Fuzz\n\ngit-svn-id: https://svn.osgeo.org/gdal/trunk@39908 f0d54148-0727-0410-94bb-9a71ac55c965\n---\n autotest/ogr/ogr_vrt.py                       | 37 ++++++++++++++++++-\n gdal/ogr/ogrsf_frmts/vrt/ogrvrtdatasource.cpp |  2 +\n 2 files changed, 38 insertions(+), 1 deletion(-)\n\ndiff --git a/autotest/ogr/ogr_vrt.py b/autotest/ogr/ogr_vrt.py\nindex eb84af4..07548ec 100755\n--- a/autotest/ogr/ogr_vrt.py\n+++ b/autotest/ogr/ogr_vrt.py\n@@ -1366,7 +1366,42 @@ def ogr_vrt_23(shared_ds_flag = ''):\n \n def ogr_vrt_24():\n \n-    return ogr_vrt_23(' shared=\"1\"')\n+    ret = ogr_vrt_23(' shared=\"1\"')\n+    if ret != 'success':\n+        return ret\n+\n+    rec1 = \"\"\"<OGRVRTDataSource>\n+    <OGRVRTLayer name=\"test\">\n+        <SrcDataSource shared=\"1\">/vsimem/rec2.vrt</SrcDataSource>\n+    </OGRVRTLayer>\n+</OGRVRTDataSource>\"\"\"\n+\n+    rec2 = \"\"\"<OGRVRTDataSource>\n+    <OGRVRTLayer name=\"test\">\n+        <SrcDataSource shared=\"1\">/vsimem/rec2.vrt</SrcDataSource>\n+    </OGRVRTLayer>\n+</OGRVRTDataSource>\"\"\"\n+\n+    gdal.FileFromMemBuffer('/vsimem/rec1.vrt', rec1)\n+    gdal.FileFromMemBuffer('/vsimem/rec2.vrt', rec2)\n+\n+    ds = ogr.Open('/vsimem/rec1.vrt')\n+    if ds is None:\n+        return 'fail'\n+\n+    gdal.ErrorReset()\n+    gdal.PushErrorHandler('CPLQuietErrorHandler')\n+    ds.GetLayer(0).GetLayerDefn()\n+    ds.GetLayer(0).GetFeatureCount()\n+    gdal.PopErrorHandler()\n+    if gdal.GetLastErrorMsg() == '':\n+        gdaltest.post_reason('error expected !')\n+        return 'fail'\n+\n+    gdal.Unlink('/vsimem/rec1.vrt')\n+    gdal.Unlink('/vsimem/rec2.vrt')\n+\n+    return 'success'\n \n \n ###############################################################################\ndiff --git a/gdal/ogr/ogrsf_frmts/vrt/ogrvrtdatasource.cpp b/gdal/ogr/ogrsf_frmts/vrt/ogrvrtdatasource.cpp\nindex f493d70..1028089 100644\n--- a/gdal/ogr/ogrsf_frmts/vrt/ogrvrtdatasource.cpp\n+++ b/gdal/ogr/ogrsf_frmts/vrt/ogrvrtdatasource.cpp\n@@ -800,6 +800,8 @@ bool OGRVRTDataSource::Initialize( CPLXMLNode *psTreeIn, const char *pszNewName,\n {\n     CPLAssert(nLayers == 0);\n \n+    AddForbiddenNames(pszNewName);\n+\n     psTree = psTreeIn;\n \n     // Set name, and capture the directory path so we can use it\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42493571-vul",
+      "digest": "sha256:ee6955460e8ce989fff4b0000e626b8ba4c8a1184f382eda0ed535e8eb6dc417"
+    },
+    "patched": {
+      "ref": "n132/arvo:42493571-fix",
+      "digest": "sha256:f9a787847c229dcaacc1161fa723212a99d7236882295a26915b4ecd998e9e84"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/gdal/gdal/ogr/ogrsf_frmts/vrt/ogrvrtlayer.cpp:1042",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/gdal/gdal/ogr/ogrsf_frmts/vrt/ogrvrtlayer.cpp:1042"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

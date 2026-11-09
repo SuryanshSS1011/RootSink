@@ -1,0 +1,74 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042522585",
+  "chain": "CWE-20->CWE-787",
+  "project": "flac",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42522585",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "3e3b4407aed70d5bf83e72b303d0a989096bdbca\n01fb06103d21c199915f0926db44e896f58c07fb\n147cfc8df424b3b4fe6cc15a37d8ab9f3320dcd6",
+      "fix_commits": [
+        "3e3b4407aed70d5bf83e72b303d0a989096bdbca",
+        "01fb06103d21c199915f0926db44e896f58c07fb",
+        "147cfc8df424b3b4fe6cc15a37d8ab9f3320dcd6"
+      ],
+      "repo": "https://github.com/xiph/flac"
+    },
+    "patch": "diff --git a/src/libFLAC/stream_decoder.c b/src/libFLAC/stream_decoder.c\nindex 8ce6d6050d..104d0d5dd2 100644\n--- a/src/libFLAC/stream_decoder.c\n+++ b/src/libFLAC/stream_decoder.c\n@@ -2157,10 +2157,20 @@ FLAC__bool read_frame_(FLAC__StreamDecoder *decoder, FLAC__bool *got_a_frame, FL\n \t\t\t   decoder->private_->last_frame.header.channels == decoder->private_->frame.header.channels &&\n \t\t\t   decoder->private_->last_frame.header.bits_per_sample == decoder->private_->frame.header.bits_per_sample &&\n \t\t\t   decoder->private_->last_frame.header.blocksize >= 16) {\n-\n \t\t\t\tFLAC__Frame empty_frame;\n+\t\t\t\tFLAC__int32 * empty_buffer[FLAC__MAX_CHANNELS] = {NULL};\n \t\t\t\tempty_frame.header = decoder->private_->last_frame.header;\n \t\t\t\tempty_frame.footer.crc = 0;\n+\t\t\t\tfor(i = 0; i < empty_frame.header.channels; i++) {\n+\t\t\t\t\tempty_buffer[i] = safe_calloc_(empty_frame.header.blocksize, sizeof(FLAC__int32));\n+\t\t\t\t\tif(empty_buffer[i] == NULL) {\n+\t\t\t\t\t\tfor(i = 0; i < empty_frame.header.channels; i++)\n+\t\t\t\t\t\t\tif(empty_buffer[i] != NULL)\n+\t\t\t\t\t\t\t\tfree(empty_buffer[i]);\n+\t\t\t\t\t\tdecoder->protected_->state = FLAC__STREAM_DECODER_MEMORY_ALLOCATION_ERROR;\n+\t\t\t\t\t\treturn false;\n+\t\t\t\t\t}\n+\t\t\t\t}\n \t\t\t\t/* No repairs larger than 5 seconds or 50 frames are made, to not\n \t\t\t\t * unexpectedly create enormous files when one of the headers was\n \t\t\t\t * corrupt after all */\n@@ -2178,21 +2188,24 @@ FLAC__bool read_frame_(FLAC__StreamDecoder *decoder, FLAC__bool *got_a_frame, FL\n \t\t\t\t\tFLAC__ASSERT(empty_frame.header.number_type == FLAC__FRAME_NUMBER_TYPE_SAMPLE_NUMBER);\n \t\t\t\t\tdecoder->private_->samples_decoded = empty_frame.header.number.sample_number + empty_frame.header.blocksize;\n \n-\t\t\t\t\tif(!allocate_output_(decoder, empty_frame.header.blocksize, empty_frame.header.channels, empty_frame.header.bits_per_sample))\n-\t\t\t\t\t\treturn false;\n-\n \t\t\t\t\tfor(channel = 0; channel < empty_frame.header.channels; channel++) {\n \t\t\t\t\t\tempty_frame.subframes[channel].type = FLAC__SUBFRAME_TYPE_CONSTANT;\n \t\t\t\t\t\tempty_frame.subframes[channel].data.constant.value = 0;\n \t\t\t\t\t\tempty_frame.subframes[channel].wasted_bits = 0;\n-\t\t\t\t\t\tmemset(decoder->private_->output[channel], 0, sizeof(FLAC__int32) * empty_frame.header.blocksize);\n \t\t\t\t\t}\n \n-\t\t\t\t\tif(write_audio_frame_to_client_(decoder, &empty_frame, (const FLAC__int32 * const *)decoder->private_->output) != FLAC__STREAM_DECODER_WRITE_STATUS_CONTINUE) {\n+\t\t\t\t\tif(write_audio_frame_to_client_(decoder, &empty_frame, (const FLAC__int32 * const *)empty_buffer) != FLAC__STREAM_DECODER_WRITE_STATUS_CONTINUE) {\n \t\t\t\t\t\tdecoder->protected_->state = FLAC__STREAM_DECODER_ABORTED;\n+\t\t\t\t\t\tfor(i = 0; i < empty_frame.header.channels; i++)\n+\t\t\t\t\t\t\tif(empty_buffer[i] != NULL)\n+\t\t\t\t\t\t\t\tfree(empty_buffer[i]);\n \t\t\t\t\t\treturn false;\n \t\t\t\t\t}\n \t\t\t\t}\n+\t\t\t\tfor(i = 0; i < empty_frame.header.channels; i++)\n+\t\t\t\t\tif(empty_buffer[i] != NULL)\n+\t\t\t\t\t\tfree(empty_buffer[i]);\n+\n \t\t\t}\n \t\t}\n \t}\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42522585-vul",
+      "digest": "sha256:b8e7e7723a73e9b9ed4bf065eab774cb6bcabac202b7bbb28393a036904f3004"
+    },
+    "patched": {
+      "ref": "n132/arvo:42522585-fix",
+      "digest": "sha256:facce5c282fdfea1dab42cb8aaa2811beef3754f17c381addd2cffceba4c5198"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "ABRT",
+        "direction": null,
+        "crash_site": "/src/flac/oss-fuzz/tool_flac.c:76",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "ABRT",
+        "direction": null,
+        "site": "/src/flac/oss-fuzz/tool_flac.c:76"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

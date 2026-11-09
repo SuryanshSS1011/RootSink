@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042482840",
+  "chain": "CWE-456->CWE-457",
+  "project": "jbig2dec",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42482840",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "778862c21165b485302010beb5fb0765f8338b96",
+      "fix_commits": [
+        "778862c21165b485302010beb5fb0765f8338b96"
+      ],
+      "repo": "git://git.ghostscript.com/jbig2dec.git"
+    },
+    "patch": "From 778862c21165b485302010beb5fb0765f8338b96 Mon Sep 17 00:00:00 2001\nFrom: Sebastian Rasmussen <sebras@gmail.com>\nDate: Sun, 5 Apr 2020 12:24:36 +0800\nSubject: [PATCH] jbig2dec: Initiate variable before avoids using uninited data\n during cleanup.\n\nFixes OSS-fuzz issue 21571.\nAlso fixes Coverity CID 355467.\n\nThanks to OSS-fuzz for reporting.\n---\n jbig2_text.c | 6 +++---\n 1 file changed, 3 insertions(+), 3 deletions(-)\n\ndiff --git a/jbig2_text.c b/jbig2_text.c\nindex 61dc815..d49303a 100644\n--- a/jbig2_text.c\n+++ b/jbig2_text.c\n@@ -593,6 +593,9 @@ jbig2_text_region(Jbig2Ctx *ctx, Jbig2Segment *segment, const byte *segment_data\n     uint32_t table_index = 0;\n     const Jbig2HuffmanParams *huffman_params = NULL;\n \n+    /* zero params to ease cleanup later */\n+    memset(&params, 0, sizeof(Jbig2TextRegionParams));\n+\n     /* 7.4.1 */\n     if (segment->data_length < 17) {\n         code = jbig2_error(ctx, JBIG2_SEVERITY_FATAL, segment->number, \"segment too short\");\n@@ -614,9 +617,6 @@ jbig2_text_region(Jbig2Ctx *ctx, Jbig2Segment *segment, const byte *segment_data\n \n     jbig2_error(ctx, JBIG2_SEVERITY_DEBUG, segment->number, \"text region header flags 0x%04x\", flags);\n \n-    /* zero params to ease cleanup later */\n-    memset(&params, 0, sizeof(Jbig2TextRegionParams));\n-\n     params.SBHUFF = flags & 0x0001;\n     params.SBREFINE = flags & 0x0002;\n     params.LOGSBSTRIPS = (flags & 0x000c) >> 2;\n-- \n2.55.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42482840-vul",
+      "digest": "sha256:e435f411997899b55f9ade1763f0a640b6f35e42c1920d1b6cdfd73a13f7305e"
+    },
+    "patched": {
+      "ref": "n132/arvo:42482840-fix",
+      "digest": "sha256:d1f1a420cd9c4a1b4f6b827a4aaae10130e44efc6144d312e2c39e0ab28c19a5"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/jbig2dec/jbig2_text.c:1030",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/jbig2dec/jbig2_text.c:1030"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,82 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-30042528680",
+  "chain": "CWE-1284->CWE-190->CWE-125",
+  "project": "libdwarf",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42528680",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "e8df98c5c6629b75402b8ea5e5a44797fb3ae4b3",
+      "fix_commits": [
+        "e8df98c5c6629b75402b8ea5e5a44797fb3ae4b3"
+      ],
+      "repo": "https://github.com/davea42/libdwarf-code"
+    },
+    "patch": "diff --git a/src/lib/libdwarf/dwarf_machoread.c b/src/lib/libdwarf/dwarf_machoread.c\nindex 549d8cfdd..a442c6b2e 100644\n--- a/src/lib/libdwarf/dwarf_machoread.c\n+++ b/src/lib/libdwarf/dwarf_machoread.c\n@@ -455,15 +455,6 @@ load_segment_command_content32(\n     ASNAR(mfp->mo_copy_word,msp->initprot,sc.initprot);\n     ASNAR(mfp->mo_copy_word,msp->nsects,sc.nsects);\n     if (msp->nsects >= mfp->mo_filesize) {\n-#if 0\n-        printf(\"Reading sections macho32 fails,\"\n-            \" mmp_offset %lu,\"\n-            \" number of sections %lu,\"\n-            \" filesize %lu\\n\",\n-            (unsigned long)segoffset,\n-            (unsigned long)msp->nsects,\n-            (unsigned long)mfp->mo_filesize);\n-#endif\n         *errcode = DW_DLE_MACHO_CORRUPT_COMMAND;\n         return DW_DLV_ERROR;\n     }\n@@ -521,15 +512,6 @@ load_segment_command_content64(\n     ASNAR(mfp->mo_copy_word,msp->initprot,sc.initprot);\n     ASNAR(mfp->mo_copy_word,msp->nsects,sc.nsects);\n     if (msp->nsects >= mfp->mo_filesize) {\n-#if 0\n-        printf(\"Reading sections macho 64 fails,\"\n-            \" mmp_offset %lu,\"\n-            \" number of sections %lu,\"\n-            \" filesize %lu\\n\",\n-            (unsigned long)segoffset,\n-            (unsigned long)msp->nsects,\n-            (unsigned long)mfp->mo_filesize);\n-#endif\n         *errcode = DW_DLE_MACHO_CORRUPT_COMMAND;\n         return DW_DLV_ERROR;\n     }\n@@ -628,19 +610,11 @@ _dwarf_macho_load_dwarf_section_details32(\n         endoffset = curoff + sizeof(mosec);\n         if (curoff >=  mfp->mo_filesize ||\n             endoffset > mfp->mo_filesize) {\n-#if 0\n-            printf(\"Reading sections details32 fails,\"\n-                \" fileoffset %lu,\"\n-                \" end-read offset %lu,\"\n-                \" filesize %lu\\n\",\n-                (unsigned long)curoff,\n-                (unsigned long)endoffset,\n-                (unsigned long)mfp->mo_filesize);\n-#endif\n             *errcode  = DW_DLE_MACHO_CORRUPT_SECTIONDETAILS;\n             return DW_DLV_ERROR;\n         }\n-        res = RRMOA(mfp->mo_fd, &mosec, (off_t)(inner+curoff), sizeof(mosec),\n+        res = RRMOA(mfp->mo_fd, &mosec, \n+            (off_t)(inner+curoff), sizeof(mosec),\n             (off_t)(inner+mfp->mo_filesize), errcode);\n         if (res != DW_DLV_OK) {\n             return res;\n@@ -717,15 +691,6 @@ _dwarf_macho_load_dwarf_section_details64(\n         endoffset = curoff + sizeof(mosec);\n         if (curoff >=  mfp->mo_filesize ||\n             endoffset > mfp->mo_filesize) {\n-#if 0\n-            printf(\"Reading sections details64 fails,\"\n-                \" fileoffset %lu,\"\n-                \" end-read offset %lu,\"\n-                \" filesize %lu\\n\",\n-                (unsigned long)curoff,\n-                (unsigned long)endoffset,\n-                (unsigned long)mfp->mo_filesize);\n-#endif\n             *errcode = DW_DLE_MACHO_CORRUPT_SECTIONDETAILS;\n             return DW_DLV_ERROR;\n         }\n@@ -1239,8 +1204,6 @@ _dwarf_object_detector_universal_head_fd(\n     /*  A universal head is always at offset zero. */\n     res = RRMOA(fd,&fh,0,sizeof(fh), dw_filesize,errcode);\n     if (res != DW_DLV_OK) {\n-        printf(\"Reading struct for universal binary \"\n-            \"header failed\\n\");\n         return res;\n     }\n     duhd.au_magic = magic_copy((unsigned char *)&fh.magic[0],4);\n@@ -1257,7 +1220,6 @@ _dwarf_object_detector_universal_head_fd(\n         locendian = DW_END_little;\n         locoffsetsize = 64;\n     } else {\n-printf(\"Reading magic number universal compare failed \" \"Inconsistent\\n\");\n         *errcode = DW_DLE_FILE_WRONG_TYPE;\n         return DW_DLV_ERROR;\n     }\n@@ -1298,6 +1260,13 @@ printf(\"Reading magic number universal compare failed \" \"Inconsistent\\n\");\n             free(fa);\n             return res;\n         }\n+        if (duhd.au_count*sizeof(*fa) >= dw_filesize) {\n+            free(duhd.au_arches);\n+            duhd.au_arches = 0;\n+            free(fa);\n+            *errcode = DW_DLE_FILE_OFFSET_BAD;\n+            return DW_DLV_ERROR;\n+        }\n         res = RRMOA(fd,fa,/*offset=*/sizeof(fh),\n             duhd.au_count*sizeof(*fa),\n             dw_filesize,errcode);\n@@ -1326,6 +1295,13 @@ printf(\"Reading magic number universal compare failed \" \"Inconsistent\\n\");\n             duhd.au_arches = 0;\n             return res;\n         }\n+        if (duhd.au_count*sizeof(*fa) >= dw_filesize) {\n+            free(duhd.au_arches);\n+            duhd.au_arches = 0;\n+            free(fa);\n+            *errcode = DW_DLE_FILE_OFFSET_BAD ;\n+            return DW_DLV_ERROR;\n+        }\n         res = RRMOA(fd,fa,/*offset*/sizeof(fh),\n             duhd.au_count*sizeof(fa),\n             dw_filesize,errcode);\n@@ -1387,17 +1363,10 @@ _dwarf_object_detector_universal_instance(\n     struct  Dwarf_Universal_Arch_s* arch = 0;\n \n     if (!dw_head) {\n-        printf(\"Missing argument to \"\n-            \"dwarf_object_detector_universal_instance\");\n         *errcode = DW_DLE_UNIVERSAL_BINARY_ERROR;\n         return DW_DLV_ERROR;\n     }\n     if (dw_index_of >= dw_head->au_count){\n-printf(\"Requested index 0x%lu\"\n-\" to specific binary \"\n-\"is too larg: valid: 0 to 0x%lu\\n\",\n-(unsigned long)dw_index_of,\n-(unsigned long)dw_head->au_count);\n         return DW_DLV_NO_ENTRY;\n     }\n     arch =  dw_head->au_arches +dw_index_of;\n@@ -1406,9 +1375,6 @@ printf(\"Requested index 0x%lu\"\n     *dw_offset = arch->au_offset;\n     *dw_size = arch->au_size;\n     *dw_align = arch->au_align;\n-#if 0\n-    print_arch_item(dw_index_of,arch);\n-#endif\n     return DW_DLV_OK;\n }\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42528680-vul",
+      "digest": "sha256:86311ce9f84a41dd608d0b332f67ff15a6229bec642d7031ba8345b07a9eb090"
+    },
+    "patched": {
+      "ref": "n132/arvo:42528680-fix",
+      "digest": "sha256:8af2b437d57f845b693d4f373ee7526dc5de129fb46d2300a1cef6805c19d82f"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/libdwarf/src/lib/libdwarf/dwarf_memcpy_swap.c:70",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 190,
+      "role": "intermediate",
+      "witness": {
+        "method": "ubsan-rebuild",
+        "recipe": "SANITIZER=undefined compile && $ENTRYPOINT",
+        "ubsan_options": "print_stacktrace=1:halt_on_error=0:silence_unsigned_overflow=0:symbolize=1"
+      },
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/libdwarf/src/lib/libdwarf/dwarf_memcpy_swap.c:70"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042475377",
+  "chain": "CWE-1284->CWE-787",
+  "project": "openthread",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42475377",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "bcfa791912dd7bd3dd7432f9f6313b6dd5ca358b",
+      "fix_commits": [
+        "bcfa791912dd7bd3dd7432f9f6313b6dd5ca358b"
+      ],
+      "repo": "https://github.com/openthread/openthread"
+    },
+    "patch": "diff --git a/src/core/net/ip6.cpp b/src/core/net/ip6.cpp\nindex ee6eb3abcbf..1ab0a5a7cb7 100644\n--- a/src/core/net/ip6.cpp\n+++ b/src/core/net/ip6.cpp\n@@ -364,6 +364,8 @@ otError Ip6::RemoveMplOption(Message &aMessage)\n             mplOffset = offset;\n             mplLength = option.GetLength();\n \n+            VerifyOrExit(mplLength <= sizeof(OptionMpl) - sizeof(OptionHeader), error = OT_ERROR_PARSE);\n+\n             if (mplOffset == sizeof(ip6Header) + sizeof(hbh) && hbh.GetLength() == 0)\n             {\n                 // first and only IPv6 Option, remove IPv6 HBH Option header\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42475377-vul",
+      "digest": "sha256:1b02a7f923dd5f3a0f82aab7b1fdabba642c71d9914c65e4f4208b3af0dbf3a9"
+    },
+    "patched": {
+      "ref": "n132/arvo:42475377-fix",
+      "digest": "sha256:4e21cc708686a47203baacf77361d5b22ff72050a1d0863ae3625798e4cfb34e"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/openthread/src/core/./net/ip6_headers.hpp:500",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/openthread/src/core/./net/ip6_headers.hpp:500"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

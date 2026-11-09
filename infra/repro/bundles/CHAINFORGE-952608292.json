@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-952608292",
+  "chain": "CWE-129->CWE-787",
+  "project": "yara",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42479919",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/VirusTotal/yara/commit/b28de684d9263ce61dcb2516e9ddbd9c7a59c39c",
+      "fix_commits": [
+        "b28de684d9263ce61dcb2516e9ddbd9c7a59c39c"
+      ],
+      "repo": "https://github.com/VirusTotal/yara"
+    },
+    "patch": "diff --git a/libyara/modules/pe/pe.c b/libyara/modules/pe/pe.c\nindex a270cb34b2..23659b93fe 100644\n--- a/libyara/modules/pe/pe.c\n+++ b/libyara/modules/pe/pe.c\n@@ -240,7 +240,8 @@ static void pe_parse_rich_signature(\n   memcpy(raw_data, rich_signature, rich_len);\n \n   set_integer(\n-      base_address + ((uint8_t*) rich_signature - pe->data), pe->object, \"rich_signature.offset\");\n+      base_address + ((uint8_t*) rich_signature - pe->data),\n+      pe->object, \"rich_signature.offset\");\n \n   set_integer(rich_len, pe->object, \"rich_signature.length\");\n \ndiff --git a/tests/BUILD.bazel b/tests/BUILD.bazel\nindex 4f1a270300..310ed757a2 100644\n--- a/tests/BUILD.bazel\n+++ b/tests/BUILD.bazel\n@@ -90,6 +90,7 @@ cc_test(\n         \"data/tiny-idata-51ff\",\n         \"data/tiny-idata-5200\",\n         \"data/tiny-overlay\",\n+        \"data/weird_rich\",\n     ],\n     deps = [\n         \":util\",\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42479919-vul",
+      "digest": "sha256:30fdce04743185dee787a478d6bad1d8fffc24960e7a6ac65b047c76b2a865a5"
+    },
+    "patched": {
+      "ref": "n132/arvo:42479919-fix",
+      "digest": "sha256:4bd4cf978516d2f7f84284666083dd94e842f90a884e7fbe9190b340c89a9345"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "crash_site": "/src/yara/libyara/grammar.y:1289",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 129,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "site": "/src/yara/libyara/grammar.y:1289"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

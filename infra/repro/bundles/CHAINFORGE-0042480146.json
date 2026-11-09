@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042480146",
+  "chain": "CWE-456->CWE-457",
+  "project": "zstd",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42480146",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "49c6d492479227644e60c2caa15a6334f302f6ea",
+      "fix_commits": [
+        "49c6d492479227644e60c2caa15a6334f302f6ea"
+      ],
+      "repo": "https://github.com/facebook/zstd"
+    },
+    "patch": "From 49c6d492479227644e60c2caa15a6334f302f6ea Mon Sep 17 00:00:00 2001\nFrom: Bimba Shrestha <bimbashrestha@fb.com>\nDate: Wed, 4 Dec 2019 10:02:17 -0800\nSubject: [PATCH] [fuzz] msan uninitialized unsigned value (#1908)\n\nFixes new fuzz issue\n\nCredit to OSS-Fuzz\n\n* Initializing unsigned value\n\n* Initialilzing to 1 instead of 0 because its more conservative\n\n* Unconditionoally setting to check first and then checking zero\n\n* Moving bool to before block for c90\n\n* Move check set before block\n---\n lib/compress/zstd_compress.c | 4 ++--\n 1 file changed, 2 insertions(+), 2 deletions(-)\n\ndiff --git a/lib/compress/zstd_compress.c b/lib/compress/zstd_compress.c\nindex 682c9c0..16476f6 100644\n--- a/lib/compress/zstd_compress.c\n+++ b/lib/compress/zstd_compress.c\n@@ -2858,9 +2858,10 @@ size_t ZSTD_loadCEntropy(ZSTD_compressedBlockState_t* bs, void* workspace,\n     const BYTE* dictPtr = (const BYTE*)dict;    /* skip magic num and dict ID */\n     const BYTE* const dictEnd = dictPtr + dictSize;\n     dictPtr += 8;\n+    bs->entropy.huf.repeatMode = HUF_repeat_check;\n \n     {   unsigned maxSymbolValue = 255;\n-        unsigned hasZeroWeights;\n+        unsigned hasZeroWeights = 1;\n         size_t const hufHeaderSize = HUF_readCTable((HUF_CElt*)bs->entropy.huf.CTable, &maxSymbolValue, dictPtr,\n             dictEnd-dictPtr, &hasZeroWeights);\n \n@@ -2868,7 +2869,6 @@ size_t ZSTD_loadCEntropy(ZSTD_compressedBlockState_t* bs, void* workspace,\n          * weights. Otherwise, we set it to check */\n         if (!hasZeroWeights)\n             bs->entropy.huf.repeatMode = HUF_repeat_valid;\n-        else bs->entropy.huf.repeatMode = HUF_repeat_check;\n \n         RETURN_ERROR_IF(HUF_isError(hufHeaderSize), dictionary_corrupted);\n         RETURN_ERROR_IF(maxSymbolValue < 255, dictionary_corrupted);\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42480146-vul",
+      "digest": "sha256:912a5dbf27aba30a81da0ca02b6df8d5a89300fb33d23b0875fa2694f7ca6a7f"
+    },
+    "patched": {
+      "ref": "n132/arvo:42480146-fix",
+      "digest": "sha256:7ddb8789f34b9d64a0403011634e0ec474774ff88c49d5c59c0fd599168fb242"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/zstd/tests/fuzz/../../lib/compress/zstd_compress.c:2869",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/zstd/tests/fuzz/../../lib/compress/zstd_compress.c:2869"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

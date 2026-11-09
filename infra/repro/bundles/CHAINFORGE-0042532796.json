@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042532796",
+  "chain": "CWE-1284->CWE-125",
+  "project": "jq",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42532796",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "dc849e9bb74a7a164a3ea52f661cc712b1ffbd43",
+      "fix_commits": [
+        "dc849e9bb74a7a164a3ea52f661cc712b1ffbd43"
+      ],
+      "repo": "https://github.com/jqlang/jq"
+    },
+    "patch": "diff --git a/src/builtin.c b/src/builtin.c\nindex 06cd213d4d..0757a86b41 100644\n--- a/src/builtin.c\n+++ b/src/builtin.c\n@@ -343,21 +343,10 @@ jv binop_multiply(jv a, jv b) {\n       str = b;\n       num = a;\n     }\n-    jv res;\n     double d = jv_number_value(num);\n-    if (d < 0 || isnan(d)) {\n-      res = jv_null();\n-    } else {\n-      int n = d;\n-      size_t alen = jv_string_length_bytes(jv_copy(str));\n-      res = jv_string_empty(alen * n);\n-      for (; n > 0; n--) {\n-        res = jv_string_append_buf(res, jv_string_value(str), alen);\n-      }\n-    }\n-    jv_free(str);\n     jv_free(num);\n-    return res;\n+    return jv_string_repeat(str,\n+        d < 0 || isnan(d) ? -1 : d > INT_MAX ? INT_MAX : (int)d);\n   } else if (ak == JV_KIND_OBJECT && bk == JV_KIND_OBJECT) {\n     return jv_object_merge_recursive(a, b);\n   } else {\ndiff --git a/src/jv.c b/src/jv.c\nindex 3e9920ed77..fd6cfcabc3 100644\n--- a/src/jv.c\n+++ b/src/jv.c\n@@ -1324,6 +1324,32 @@ jv jv_string_indexes(jv j, jv k) {\n   return a;\n }\n \n+jv jv_string_repeat(jv j, int n) {\n+  assert(JVP_HAS_KIND(j, JV_KIND_STRING));\n+  if (n < 0) {\n+    jv_free(j);\n+    return jv_null();\n+  }\n+  int len = jv_string_length_bytes(jv_copy(j));\n+  int64_t res_len = (int64_t)len * n;\n+  if (res_len >= INT_MAX) {\n+    jv_free(j);\n+    return jv_invalid_with_msg(jv_string(\"Repeat string result too long\"));\n+  }\n+  if (res_len == 0) {\n+    jv_free(j);\n+    return jv_string(\"\");\n+  }\n+  jv res = jv_string_empty(res_len);\n+  res = jvp_string_append(res, jv_string_value(j), len);\n+  for (int curr = len, grow; curr < res_len; curr += grow) {\n+    grow = MIN(res_len - curr, curr);\n+    res = jvp_string_append(res, jv_string_value(res), grow);\n+  }\n+  jv_free(j);\n+  return res;\n+}\n+\n jv jv_string_split(jv j, jv sep) {\n   assert(JVP_HAS_KIND(j, JV_KIND_STRING));\n   assert(JVP_HAS_KIND(sep, JV_KIND_STRING));\ndiff --git a/src/jv.h b/src/jv.h\nindex 5d4197cfbd..b9710610d3 100644\n--- a/src/jv.h\n+++ b/src/jv.h\n@@ -136,6 +136,7 @@ jv jv_string_fmt(const char*, ...) JV_PRINTF_LIKE(1, 2);\n jv jv_string_append_codepoint(jv a, uint32_t c);\n jv jv_string_append_buf(jv a, const char* buf, int len);\n jv jv_string_append_str(jv a, const char* str);\n+jv jv_string_repeat(jv j, int n);\n jv jv_string_split(jv j, jv sep);\n jv jv_string_explode(jv j);\n jv jv_string_implode(jv j);\ndiff --git a/tests/jq.test b/tests/jq.test\nindex 959895c42d..2e3c1e8bd7 100644\n--- a/tests/jq.test\n+++ b/tests/jq.test\n@@ -1460,6 +1460,18 @@ indices(\"o\")\n \"abc\"\n [null,null]\n \n+. * 100000 | [.[:10],.[-10:]]\n+\"abc\"\n+[\"abcabcabca\",\"cabcabcabc\"]\n+\n+. * 1000000000\n+\"\"\n+\"\"\n+\n+try (. * 1000000000) catch .\n+\"abc\"\n+\"Repeat string result too long\"\n+\n [.[] / \",\"]\n [\"a, bc, def, ghij, jklmn, a,b, c,d, e,f\", \"a,b,c,d, e,f,g,h\"]\n [[\"a\",\" bc\",\" def\",\" ghij\",\" jklmn\",\" a\",\"b\",\" c\",\"d\",\" e\",\"f\"],[\"a\",\"b\",\"c\",\"d\",\" e\",\"f\",\"g\",\"h\"]]\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42532796-vul",
+      "digest": "sha256:c94df8f796a6df9a5178dd67acbfb751ec32bdd92234d46e3cc88acf42df73a3"
+    },
+    "patched": {
+      "ref": "n132/arvo:42532796-fix",
+      "digest": "sha256:fa170352efa167e4663e9a38040edc4417c44a808f873d13740eb70816d1c681"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/jq/src/linker.c:96",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/jq/src/linker.c:96"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

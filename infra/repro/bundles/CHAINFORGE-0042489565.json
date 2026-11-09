@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042489565",
+  "chain": "CWE-416->CWE-787",
+  "project": "matio",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42489565",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "1ce8f2d1845ecdde19a35605cabdbb884776d52d",
+      "fix_commits": [
+        "1ce8f2d1845ecdde19a35605cabdbb884776d52d"
+      ],
+      "repo": "https://github.com/tbeu/matio"
+    },
+    "patch": "diff --git a/ossfuzz/build.sh b/ossfuzz/build.sh\nindex a50a6044..864119cc 100755\n--- a/ossfuzz/build.sh\n+++ b/ossfuzz/build.sh\n@@ -15,26 +15,37 @@\n #\n ################################################################################\n \n-# build szip\n-tar -xvf szip.tar.gz\n-cd szip-2.1.1\n-./configure --disable-shared CFLAGS=\"-w\"\n-make -C src\n-cd ..\n+# build zlib\n+pushd \"$SRC/zlib\"\n+./configure --static --prefix=\"$WORK\"\n+make -j$(nproc) CFLAGS=\"$CFLAGS -fPIC\"\n+make install\n+popd\n \n-# build project\n+#build hdf5\n+pushd \"$SRC\"\n+tar -xvf hdf5-1.12.0.tar.gz\n+cd hdf5-1.12.0\n+./configure --disable-shared --disable-deprecated-symbols --disable-hl --disable-parallel --disable-trace --disable-internal-debug --disable-asserts --disable-tests --disable-tools --with-pic --with-zlib=\"$WORK\" --prefix=\"$WORK\"\n+make -j$(nproc)\n+make install\n+popd\n+\n+# build matio\n ./autogen.sh\n-./configure --with-hdf5=$HDF5_DIR\n+./configure --prefix=\"$WORK\" --disable-shared --with-hdf5=\"$WORK\" --with-zlib=\"$WORK\"\n make -j$(nproc)\n make install\n \n+MATIO_INCLUDE=\"$WORK/include\"\n+MATIO_LIBS_NO_FUZZ=\"$WORK/lib/libmatio.a $WORK/lib/libhdf5.a $WORK/lib/libz.a\"\n+MATIO_LIBS=\"$LIB_FUZZING_ENGINE $MATIO_LIBS_NO_FUZZ\"\n+\n # build fuzzers\n cd ./ossfuzz\n for fuzzers in $(find . -name '*_fuzzer.cpp'); do\n   base=$(basename -s .cpp $fuzzers)\n-  $CXX $CXXFLAGS -std=c++11 -I../include \\\n-    $fuzzers ../getopt/.libs/libgetopt.a \\\n-    ../src/.libs/libmatio.a -o $OUT/$base $LIB_FUZZING_ENGINE $HDF5_DIR/libhdf5.a ../szip-2.1.1/src/.libs/libsz.a -lz\n+  $CXX $CXXFLAGS -std=c++11 -I$MATIO_INCLUDE $fuzzers -o $OUT/$base $MATIO_LIBS\n   zip -q -r ${base}_seed_corpus.zip ../share\n done\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42489565-vul",
+      "digest": "sha256:bd391c451bedfbb2b5cdc2864a39e544bc243b754a3a6f7bece4d7bcdb5cfe30"
+    },
+    "patched": {
+      "ref": "n132/arvo:42489565-fix",
+      "digest": "sha256:571a47bb366dcae983a4c72f192aa0b637d9de16d38b0f1ff11eab169a96f52f"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "ABRT",
+        "direction": null,
+        "crash_site": "/src/fuzzer_temp_file.h:70",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "ABRT",
+        "direction": null,
+        "site": "/src/fuzzer_temp_file.h:70"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042511527",
+  "chain": "CWE-416->CWE-125",
+  "project": "ffmpeg",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42511527",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "b418ad75c2238d36b1d28050e7f37911b9ae64d4",
+      "fix_commits": [
+        "b418ad75c2238d36b1d28050e7f37911b9ae64d4"
+      ],
+      "repo": "https://git.ffmpeg.org/ffmpeg.git"
+    },
+    "patch": "From b418ad75c2238d36b1d28050e7f37911b9ae64d4 Mon Sep 17 00:00:00 2001\nFrom: Michael Niedermayer <michael@niedermayer.cc>\nDate: Thu, 9 Jun 2022 01:59:34 +0200\nSubject: [PATCH] avcodec/flashsv: Clear pointers\n\nFixes: Use after free\nFixes: 47399/clusterfuzz-testcase-minimized-ffmpeg_AV_CODEC_ID_FLASHSV2_fuzzer-5718646686613504\n\nFound-by: continuous fuzzing process https://github.com/google/oss-fuzz/tree/master/projects/ffmpeg\nSigned-off-by: Michael Niedermayer <michael@niedermayer.cc>\n---\n libavcodec/flashsv.c | 4 ++++\n 1 file changed, 4 insertions(+)\n\ndiff --git a/libavcodec/flashsv.c b/libavcodec/flashsv.c\nindex d8943d9..4357b25 100644\n--- a/libavcodec/flashsv.c\n+++ b/libavcodec/flashsv.c\n@@ -350,6 +350,9 @@ static int flashsv_decode_frame(AVCodecContext *avctx, AVFrame *rframe,\n         if (err < 0)\n             return err;\n         s->keyframedata = avpkt->data;\n+        if (s->blocks)\n+            memset(s->blocks, 0, (v_blocks + !!v_part) * (h_blocks + !!h_part) *\n+                                 sizeof(s->blocks[0]));\n     }\n     if(s->ver == 2 && !s->blocks)\n         s->blocks = av_mallocz((v_blocks + !!v_part) * (h_blocks + !!h_part) *\n@@ -558,6 +561,7 @@ static av_cold int flashsv2_decode_end(AVCodecContext *avctx)\n     FlashSVContext *s = avctx->priv_data;\n \n     av_buffer_unref(&s->keyframedata_buf);\n+    s->keyframedata = NULL;\n     av_freep(&s->blocks);\n     av_freep(&s->keyframe);\n     flashsv_decode_end(avctx);\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42511527-vul",
+      "digest": "sha256:43bd93c61e9f4525a58aa5de7b8501411156f4535aa552a962ca8983b4ade474"
+    },
+    "patched": {
+      "ref": "n132/arvo:42511527-fix",
+      "digest": "sha256:22721aaa9a5280a159c6af4b6018736578b233706d6ded092612a10c3b003e51"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/ffmpeg/libavcodec/flashsv.c:157",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/ffmpeg/libavcodec/flashsv.c:157"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

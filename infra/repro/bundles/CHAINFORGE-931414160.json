@@ -1,0 +1,82 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-931414160",
+  "chain": "CWE-1284->CWE-190->CWE-119",
+  "project": "hdf5",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42534286",
+    "commit_range": {
+      "introduced": null,
+      "fixed": null,
+      "fix_commits": [
+        "c0192e236122f483c71723d66dddee2cdc80ed5a"
+      ],
+      "repo": "https://github.com/HDFGroup/hdf5"
+    },
+    "patch": "diff --git a/src/H5Ocache.c b/src/H5Ocache.c\nindex a5bf35aa7ba..8d06f282077 100644\n--- a/src/H5Ocache.c\n+++ b/src/H5Ocache.c\n@@ -781,6 +781,10 @@ H5O__cache_chk_serialize(const H5F_t *f, void *image, size_t len, void *_thing)\n     /* copy the chunk into the image -- this is potentially expensive.\n      * Can we rework things so that the chunk and the cache share a buffer?\n      */\n+    /* Ensure len does not exceed the size of the source buffer */\n+    if (len > chk_proxy->oh->chunk[chk_proxy->chunkno].size)\n+        HGOTO_ERROR(H5E_OHDR, H5E_OVERFLOW, FAIL, \"buffer overflow detected\");\n+\n     H5MM_memcpy(image, chk_proxy->oh->chunk[chk_proxy->chunkno].image, len);\n \n done:\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42534286-vul",
+      "digest": "sha256:0e24f364c3310acbc0a5067727de82d4b4ad99732caf50aabd30f5ab0c6e2a8d"
+    },
+    "patched": {
+      "ref": "n132/arvo:42534286-fix",
+      "digest": "sha256:48c0ad9596a0b821ae75cbe123b14ef13da5d468845973b21e3e4b545a4b124e"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "crash_site": "/src/hdf5/src/H5Iint.c:549",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 190,
+      "role": "intermediate",
+      "witness": {
+        "method": "ubsan-rebuild",
+        "recipe": "SANITIZER=undefined compile && $ENTRYPOINT",
+        "ubsan_options": "print_stacktrace=1:halt_on_error=0:silence_unsigned_overflow=0:symbolize=1"
+      },
+      "witnessed": false
+    },
+    {
+      "cwe_id": 119,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "site": "/src/hdf5/src/H5Iint.c:549"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

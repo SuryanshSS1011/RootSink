@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042477573",
+  "chain": "CWE-1285->CWE-125",
+  "project": "libspng",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42477573",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "d7d4cced14f6107d05b52b5e7758207f79aa3465",
+      "fix_commits": [
+        "d7d4cced14f6107d05b52b5e7758207f79aa3465"
+      ],
+      "repo": "https://gitlab.com/randy408/libspng.git"
+    },
+    "patch": "diff --git a/spng.c b/spng.c\nindex a7f8dca1f8e614141282634306d4872eb14bec18..4bbe003552248bf1894e2428180d0b9ce06b74e0 100644\n--- a/spng.c\n+++ b/spng.c\n@@ -2057,16 +2057,15 @@ int spng_decode_image(spng_ctx *ctx, unsigned char *out, size_t out_size, int fm\n \n         for(scanline_idx=0; scanline_idx < sub[pass].height; scanline_idx++)\n         {\n-            /* The last scanline is 1 byte \"shorter\" */\n-            if(scanline_idx == (sub[pass].height - 1))\n-                ret = read_scanline_bytes(ctx, &stream, scanline, scanline_width - 1);\n-            else\n+            if(scanline_idx < (sub[pass].height - 1))\n+            {\n                 ret = read_scanline_bytes(ctx, &stream, scanline, scanline_width);\n+                memcpy(&next_filter, scanline + scanline_width - 1, 1);\n+            }\n+            else ret = read_scanline_bytes(ctx, &stream, scanline, scanline_width - 1);\n \n             if(ret) goto decode_err;\n \n-            memcpy(&next_filter, scanline + scanline_width - 1, 1);\n-\n             if(ctx->ihdr.bit_depth == 16) u16_row_to_host(scanline, scanline_width - 1);\n \n             ret = defilter_scanline(prev_scanline, scanline, scanline_width - 1, bytes_per_pixel, filter);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42477573-vul",
+      "digest": "sha256:5ab199404ad85ea14bdab7626bd5689cbcbd517d1e8847468c60403b3484746e"
+    },
+    "patched": {
+      "ref": "n132/arvo:42477573-fix",
+      "digest": "sha256:7fd3cb994c49b0759dd81579191cf3bd07ddd3be80b56991513315b01a972593"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/libspng/build/../spng.c:2068",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/libspng/build/../spng.c:2068"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

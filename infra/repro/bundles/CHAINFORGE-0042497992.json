@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042497992",
+  "chain": "CWE-1284->CWE-787",
+  "project": "zstd",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42497992",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "05b6773fbcce1075edbe498a821f9a41249cf384",
+      "fix_commits": [
+        "05b6773fbcce1075edbe498a821f9a41249cf384"
+      ],
+      "repo": "https://github.com/facebook/zstd"
+    },
+    "patch": "diff --git a/lib/compress/huf_compress.c b/lib/compress/huf_compress.c\nindex 485906e678a..e9cb0bd5f55 100644\n--- a/lib/compress/huf_compress.c\n+++ b/lib/compress/huf_compress.c\n@@ -133,6 +133,7 @@ size_t HUF_writeCTable_wksp(void* dst, size_t maxDstSize,\n         wksp->huffWeight[n] = wksp->bitsToWeight[CTable[n].nbBits];\n \n     /* attempt weights compression by FSE */\n+    if (maxDstSize < 1) return ERROR(dstSize_tooSmall);\n     {   CHECK_V_F(hSize, HUF_compressWeights(op+1, maxDstSize-1, wksp->huffWeight, maxSymbolValue, &wksp->wksp, sizeof(wksp->wksp)) );\n         if ((hSize>1) & (hSize < maxSymbolValue/2)) {   /* FSE compressed */\n             op[0] = (BYTE)hSize;\ndiff --git a/lib/compress/zstd_compress.c b/lib/compress/zstd_compress.c\nindex 70f1693574b..9e814e31d1d 100644\n--- a/lib/compress/zstd_compress.c\n+++ b/lib/compress/zstd_compress.c\n@@ -3486,6 +3486,7 @@ static size_t ZSTD_compressSeqStore_singleBlock(ZSTD_CCtx* zc, seqStore_t* const\n     if (isPartition)\n         ZSTD_seqStore_resolveOffCodes(dRep, cRep, seqStore, (U32)(seqStore->sequences - seqStore->sequencesStart));\n \n+    RETURN_ERROR_IF(dstCapacity < ZSTD_blockHeaderSize, dstSize_tooSmall, \"Block header doesn't fit\");\n     cSeqsSize = ZSTD_entropyCompressSeqStore(seqStore,\n                 &zc->blockState.prevCBlock->entropy, &zc->blockState.nextCBlock->entropy,\n                 &zc->appliedParams,\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42497992-vul",
+      "digest": "sha256:a047adbf9916890b25008c21e10db11bda495cc64d73dcc1d6fdccc292091d14"
+    },
+    "patched": {
+      "ref": "n132/arvo:42497992-fix",
+      "digest": "sha256:f2974e9d2806b56d46bc4f11aaa35ee0a0f501297df5670cdc373069d9556668"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/zstd/tests/fuzz/../../lib/compress/fse_compress.c:270",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/zstd/tests/fuzz/../../lib/compress/fse_compress.c:270"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

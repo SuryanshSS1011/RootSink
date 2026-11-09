@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042471639",
+  "chain": "CWE-416->CWE-125",
+  "project": "open62541",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42471639",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "f4f8cdc4c344ad75051f3785a53a956a644cba05",
+      "fix_commits": [
+        "f4f8cdc4c344ad75051f3785a53a956a644cba05"
+      ],
+      "repo": "https://github.com/open62541/open62541"
+    },
+    "patch": "From f4f8cdc4c344ad75051f3785a53a956a644cba05 Mon Sep 17 00:00:00 2001\nFrom: Stefan Profanter <git@s.profanter.me>\nDate: Wed, 28 Nov 2018 14:24:40 +0100\nSubject: [PATCH] Stack: Fix heap use after free\n\nFixes https://bugs.chromium.org/p/oss-fuzz/issues/detail?id=11484\n\nCredit to oss-fuzz\n---\n src/ua_types.c | 1 +\n 1 file changed, 1 insertion(+)\n\ndiff --git a/src/ua_types.c b/src/ua_types.c\nindex 19b3ee9..641afa7 100644\n--- a/src/ua_types.c\n+++ b/src/ua_types.c\n@@ -408,6 +408,7 @@ Variant_clear(UA_Variant *p, const UA_DataType *_) {\n         if(p->arrayLength == 0)\n             p->arrayLength = 1;\n         UA_Array_delete(p->data, p->arrayLength, p->type);\n+        p->data = NULL;\n     }\n     if((void*)p->arrayDimensions > UA_EMPTY_ARRAY_SENTINEL)\n         UA_free(p->arrayDimensions);\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42471639-vul",
+      "digest": "sha256:ee6c7d88a6ee8428ba0a927ebefb84c15333b3342a96b65f32fadac6ad5452da"
+    },
+    "patched": {
+      "ref": "n132/arvo:42471639-fix",
+      "digest": "sha256:735bc37dbf0b7a8a10ee2afb7d89c72cba86348402022658914b6438a66e5517"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/open62541/src/ua_types.c:405",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/open62541/src/ua_types.c:405"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042507973",
+  "chain": "CWE-1285->CWE-125",
+  "project": "libplist",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42507973",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "924ba961d68f6833f617fd3ad03c40f63f287142",
+      "fix_commits": [
+        "924ba961d68f6833f617fd3ad03c40f63f287142"
+      ],
+      "repo": "https://github.com/libimobiledevice/libplist"
+    },
+    "patch": "diff --git a/src/jplist.c b/src/jplist.c\nindex 88cce2803..2182079b4 100644\n--- a/src/jplist.c\n+++ b/src/jplist.c\n@@ -418,16 +418,21 @@ PLIST_API int plist_to_json(plist_t plist, char **json, uint32_t* length, int pr\n     return PLIST_ERR_SUCCESS;\n }\n \n-static plist_t parse_primitive(const char* js, jsmntok_t* tokens, int* index)\n+typedef struct {\n+    jsmntok_t* tokens;\n+    int count;\n+} jsmntok_info_t;\n+\n+static plist_t parse_primitive(const char* js, jsmntok_info_t* ti, int* index)\n {\n-    if (tokens[*index].type != JSMN_PRIMITIVE) {\n+    if (ti->tokens[*index].type != JSMN_PRIMITIVE) {\n         PLIST_JSON_ERR(\"%s: token type != JSMN_PRIMITIVE\\n\", __func__);\n         return NULL;\n     }\n     plist_t val = NULL;\n-    const char* str_val = js + tokens[*index].start;\n-    const char* str_end = js + tokens[*index].end;\n-    size_t str_len = tokens[*index].end - tokens[*index].start;\n+    const char* str_val = js + ti->tokens[*index].start;\n+    const char* str_end = js + ti->tokens[*index].end;\n+    size_t str_len = ti->tokens[*index].end - ti->tokens[*index].start;\n     if (!strncmp(\"false\", str_val, str_len)) {\n         val = plist_new_bool(0);\n     } else if (!strncmp(\"true\", str_val, str_len)) {\n@@ -540,15 +545,15 @@ static char* unescape_string(const char* str_val, size_t str_len, size_t *new_le\n     return strval;\n }\n \n-static plist_t parse_string(const char* js, jsmntok_t* tokens, int* index)\n+static plist_t parse_string(const char* js, jsmntok_info_t* ti, int* index)\n {\n-    if (tokens[*index].type != JSMN_STRING) {\n+    if (ti->tokens[*index].type != JSMN_STRING) {\n         PLIST_JSON_ERR(\"%s: token type != JSMN_STRING\\n\", __func__);\n         return NULL;\n     }\n \n     size_t str_len = 0; ;\n-    char* strval = unescape_string(js + tokens[*index].start, tokens[*index].end - tokens[*index].start, &str_len);\n+    char* strval = unescape_string(js + ti->tokens[*index].start, ti->tokens[*index].end - ti->tokens[*index].start, &str_len);\n     if (!strval) {\n         return NULL;\n     }\n@@ -564,32 +569,36 @@ static plist_t parse_string(const char* js, jsmntok_t* tokens, int* index)\n     return node;\n }\n \n-static plist_t parse_object(const char* js, jsmntok_t* tokens, int* index);\n+static plist_t parse_object(const char* js, jsmntok_info_t* ti, int* index);\n \n-static plist_t parse_array(const char* js, jsmntok_t* tokens, int* index)\n+static plist_t parse_array(const char* js, jsmntok_info_t* ti, int* index)\n {\n-    if (tokens[*index].type != JSMN_ARRAY) {\n+    if (ti->tokens[*index].type != JSMN_ARRAY) {\n         PLIST_JSON_ERR(\"%s: token type != JSMN_ARRAY\\n\", __func__);\n         return NULL;\n     }\n     plist_t arr = plist_new_array();\n-    int num_tokens = tokens[*index].size;\n+    int num_tokens = ti->tokens[*index].size;\n     int num;\n     int j = (*index)+1;\n     for (num = 0; num < num_tokens; num++) {\n+        if (j >= ti->count) {\n+            PLIST_JSON_ERR(\"%s: token index out of valid range\\n\", __func__);\n+            return NULL;\n+        }\n         plist_t val = NULL;\n-        switch (tokens[j].type) {\n+        switch (ti->tokens[j].type) {\n             case JSMN_OBJECT:\n-                val = parse_object(js, tokens, &j);\n+                val = parse_object(js, ti, &j);\n                 break;\n             case JSMN_ARRAY:\n-                val = parse_array(js, tokens, &j);\n+                val = parse_array(js, ti, &j);\n                 break;\n             case JSMN_STRING:\n-                val = parse_string(js, tokens, &j);\n+                val = parse_string(js, ti, &j);\n                 break;\n             case JSMN_PRIMITIVE:\n-                val = parse_primitive(js, tokens, &j);\n+                val = parse_primitive(js, ti, &j);\n                 break;\n             default:\n                 break;\n@@ -605,19 +614,23 @@ static plist_t parse_array(const char* js, jsmntok_t* tokens, int* index)\n     return arr;\n }\n \n-static plist_t parse_object(const char* js, jsmntok_t* tokens, int* index)\n+static plist_t parse_object(const char* js, jsmntok_info_t* ti, int* index)\n {\n-    if (tokens[*index].type != JSMN_OBJECT) {\n+    if (ti->tokens[*index].type != JSMN_OBJECT) {\n         PLIST_JSON_ERR(\"%s: token type != JSMN_OBJECT\\n\", __func__);\n         return NULL;\n     }\n     plist_t obj = plist_new_dict();\n-    int num_tokens = tokens[*index].size;\n+    int num_tokens = ti->tokens[*index].size;\n     int num;\n     int j = (*index)+1;\n     for (num = 0; num < num_tokens; num++) {\n-        if (tokens[j].type == JSMN_STRING) {\n-            char* key = unescape_string(js + tokens[j].start, tokens[j].end - tokens[j].start, NULL);\n+        if (j >= ti->count) {\n+            PLIST_JSON_ERR(\"%s: token index out of valid range\\n\", __func__);\n+            return NULL;\n+        }\n+        if (ti->tokens[j].type == JSMN_STRING) {\n+            char* key = unescape_string(js + ti->tokens[j].start, ti->tokens[j].end - ti->tokens[j].start, NULL);\n             if (!key) {\n                 plist_free(obj);\n                 return NULL;\n@@ -625,24 +638,27 @@ static plist_t parse_object(const char* js, jsmntok_t* tokens, int* index)\n             plist_t val = NULL;\n             j++;\n             num++;\n-            switch (tokens[j].type) {\n+            switch (ti->tokens[j].type) {\n                 case JSMN_OBJECT:\n-                    val = parse_object(js, tokens, &j);\n+                    val = parse_object(js, ti, &j);\n                     break;\n                 case JSMN_ARRAY:\n-                    val = parse_array(js, tokens, &j);\n+                    val = parse_array(js, ti, &j);\n                     break;\n                 case JSMN_STRING:\n-                    val = parse_string(js, tokens, &j);\n+                    val = parse_string(js, ti, &j);\n                     break;\n                 case JSMN_PRIMITIVE:\n-                    val = parse_primitive(js, tokens, &j);\n+                    val = parse_primitive(js, ti, &j);\n                     break;\n                 default:\n                     break;\n             }\n             if (val) {\n                 plist_dict_set_item(obj, key, val);\n+            } else {\n+                plist_free(obj);\n+                return NULL;\n             }\n             free(key);\n         } else {\n@@ -707,18 +723,19 @@ PLIST_API int plist_from_json(const char *json, uint32_t length, plist_t * plist\n     }\n \n     int startindex = 0;\n+    jsmntok_info_t ti = { tokens, parser.toknext };\n     switch (tokens[startindex].type) {\n         case JSMN_PRIMITIVE:\n-            *plist = parse_primitive(json, tokens, &startindex);\n+            *plist = parse_primitive(json, &ti, &startindex);\n             break;\n         case JSMN_STRING:\n-            *plist = parse_string(json, tokens, &startindex);\n+            *plist = parse_string(json, &ti, &startindex);\n             break;\n         case JSMN_ARRAY:\n-            *plist = parse_array(json, tokens, &startindex);\n+            *plist = parse_array(json, &ti, &startindex);\n             break;\n         case JSMN_OBJECT:\n-            *plist = parse_object(json, tokens, &startindex);\n+            *plist = parse_object(json, &ti, &startindex);\n             break;\n         default:\n             break;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42507973-vul",
+      "digest": "sha256:08f9d36769d392fbc39a9b1fc4742cfb77c22e9fe71c2d973ff69104b5e4ef06"
+    },
+    "patched": {
+      "ref": "n132/arvo:42507973-fix",
+      "digest": "sha256:f030a38852929ad58e1751c7b40897c285fe54d28445c99393f808d639594351"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/libplist/src/jplist.c:613",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/libplist/src/jplist.c:613"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

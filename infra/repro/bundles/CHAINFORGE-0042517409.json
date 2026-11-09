@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042517409",
+  "chain": "CWE-1284->CWE-125",
+  "project": "libraw",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42517409",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "59721b08cfcec3d425d4a9ae5a53bbc8e938fedd",
+      "fix_commits": [
+        "59721b08cfcec3d425d4a9ae5a53bbc8e938fedd"
+      ],
+      "repo": "https://github.com/libraw/libraw"
+    },
+    "patch": "diff --git a/src/preprocessing/raw2image.cpp b/src/preprocessing/raw2image.cpp\nindex c11fe32a4..e65e2ad73 100644\n--- a/src/preprocessing/raw2image.cpp\n+++ b/src/preprocessing/raw2image.cpp\n@@ -116,7 +116,7 @@ int LibRaw::raw2image(void)\n               r = IO.fuji_width - 1 + row - (col >> 1);\n               c = row + ((col + 1) >> 1);\n             }\n-            if (r < S.height && c < S.width)\n+            if (r < S.height && c < S.width && col + int(S.left_margin) < int(S.raw_width))\n               imgdata.image[((r) >> IO.shrink) * S.iwidth + ((c) >> IO.shrink)]\n                            [FC(r, c)] =\n                   imgdata.rawdata\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42517409-vul",
+      "digest": "sha256:f4534366f6f9c742b445459f611e02322ae4f2b74eec1cbd4d5e98d435bbbf53"
+    },
+    "patched": {
+      "ref": "n132/arvo:42517409-fix",
+      "digest": "sha256:5ed666d55b6ad023162229fc251ae151ad7e4b6d9a5c6be096f92f4cbe9843aa"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/libraw/src/preprocessing/raw2image.cpp:122",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/libraw/src/preprocessing/raw2image.cpp:122"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042470393",
+  "chain": "CWE-456->CWE-457",
+  "project": "skia",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42470393",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "f026d896dce856dd3c757c4c341b2df6876e1d28",
+      "fix_commits": [
+        "f026d896dce856dd3c757c4c341b2df6876e1d28"
+      ],
+      "repo": "https://skia.googlesource.com/skia.git"
+    },
+    "patch": "diff --git a/src/core/SkPath.cpp b/src/core/SkPath.cpp\nindex 2808c12..bfe9cc2 100644\n--- a/src/core/SkPath.cpp\n+++ b/src/core/SkPath.cpp\n@@ -1716,10 +1716,10 @@\n         src = tmp.set(srcPath);\n     }\n \n-    SkPathRef::Editor ed(&fPathRef, src->fPathRef->countPoints(), src->fPathRef->countVerbs());\n+    SkPathRef::Editor ed(&fPathRef, src->countVerbs(), src->countPoints());\n \n     const SkPoint* pts = src->fPathRef->pointsEnd();\n-    // we will iterator through src's verbs backwards\n+    // we will iterate through src's verbs backwards\n     const uint8_t* verbs = src->fPathRef->verbsMemBegin(); // points at the last verb\n     const uint8_t* verbsEnd = src->fPathRef->verbs(); // points just past the first verb\n     const SkScalar* conicWeights = src->fPathRef->conicWeightsEnd();\n@@ -1840,6 +1840,7 @@\n         SkPathRef::CreateTransformedCopy(&dst->fPathRef, *fPathRef.get(), matrix);\n \n         if (this != dst) {\n+            dst->fLastMoveToIndex = fLastMoveToIndex;\n             dst->fFillType = fFillType;\n             dst->fConvexity.store(fConvexity);\n             dst->fIsVolatile = fIsVolatile;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42470393-vul",
+      "digest": "sha256:a4b66753b4f1cb6f6409b95289c626ac79c3fa72f188e4b0c608e3527ff51aee"
+    },
+    "patched": {
+      "ref": "n132/arvo:42470393-fix",
+      "digest": "sha256:069569c44f3dacd28955bdcca6b38663556866b3c9a4d278daa76f0e7412565f"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/skia/out/Fuzz_mem_constraints/../../src/core/../opts/SkNx_sse.h:217",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/skia/out/Fuzz_mem_constraints/../../src/core/../opts/SkNx_sse.h:217"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

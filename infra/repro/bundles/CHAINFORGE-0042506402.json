@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042506402",
+  "chain": "CWE-1284->CWE-787",
+  "project": "ghostpdl",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42506402",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "efd5f9a71af7bd5ab3816ba49edc8c3f7c370bae",
+      "fix_commits": [
+        "efd5f9a71af7bd5ab3816ba49edc8c3f7c370bae"
+      ],
+      "repo": "https://cgit.ghostscript.com/ghostpdl.git"
+    },
+    "patch": "From efd5f9a71af7bd5ab3816ba49edc8c3f7c370bae Mon Sep 17 00:00:00 2001\nFrom: Ken Sharp <ken.sharp@artifex.com>\nDate: Wed, 22 Dec 2021 10:17:57 +0000\nSubject: [PATCH] OSS-fuzz #42783 - limit debug string copying to destination\n buffer size\n\nA debug message copied a potentially large string, if it exceeded the\ndestination buffer size we would overrun. Prevent that (can only happen\nfor broken files) and check other similar constructs because this isn't\nthe first one we've seen. Found one more.\n---\n pdf/pdf_annot.c | 8 ++++----\n 1 file changed, 4 insertions(+), 4 deletions(-)\n\ndiff --git a/pdf/pdf_annot.c b/pdf/pdf_annot.c\nindex f1cd9d6..09bbb8d 100644\n--- a/pdf/pdf_annot.c\n+++ b/pdf/pdf_annot.c\n@@ -1446,8 +1446,8 @@ static int pdfi_annot_draw_LE_one(pdf_context *ctx, pdf_dict *annot, pdf_name *L\n     }\n     if (!dispatch_ptr->name) {\n         char str[100];\n-        memcpy(str, (const char *)LE->data, LE->length);\n-        str[LE->length] = '\\0';\n+        memcpy(str, (const char *)LE->data, LE->length < 100 ? LE->length : 99);\n+        str[LE->length < 100 ? LE->length : 99] = '\\0';\n         dbgmprintf1(ctx->memory, \"ANNOT: WARNING No handler for LE %s\\n\", str);\n     }\n \n@@ -3712,8 +3712,8 @@ static int pdfi_annot_draw_NotImplemented(pdf_context *ctx, pdf_dict *annot, pdf\n     code = pdfi_dict_get_type(ctx, annot, \"Subtype\", PDF_NAME, (pdf_obj **)&Subtype);\n     if (code < 0) goto exit;\n \n-    memcpy(str, (const char *)Subtype->data, Subtype->length);\n-    str[Subtype->length] = '\\0';\n+    memcpy(str, (const char *)Subtype->data, Subtype->length < 100 ? Subtype->length : 99);\n+    str[Subtype->length < 100 ? Subtype->length : 99] = '\\0';\n     dbgmprintf1(ctx->memory, \"ANNOT: No AP, default appearance for Subtype %s Not Implemented\\n\", str);\n \n  exit:\n-- \n2.55.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42506402-vul",
+      "digest": "sha256:9d7fd06e89e6761a2a6205ecbbc47bc6be23a018ef3494eace47048fdbe99c2e"
+    },
+    "patched": {
+      "ref": "n132/arvo:42506402-fix",
+      "digest": "sha256:15d0573d08c9d37f977a7bd3dd557292d975b1e4e3ebb4fb962f7c29a48f3892"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/ghostpdl/./pdf/pdf_annot.c:1449",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/ghostpdl/./pdf/pdf_annot.c:1449"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

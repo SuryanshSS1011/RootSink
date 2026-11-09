@@ -1,0 +1,81 @@
+======================= INFO =========================
+This binary is built for AFL-fuzz.
+To run the target function on individual input(s) execute this:
+  /out/njs_process_script_fuzzer < INPUT_FILE
+or
+  /out/njs_process_script_fuzzer INPUT_FILE1 [INPUT_FILE2 ... ]
+To fuzz with afl-fuzz execute this:
+  afl-fuzz [afl-flags] /out/njs_process_script_fuzzer [-N]
+afl-fuzz will run N iterations before re-spawning the process (default: 1000)
+======================================================
+Reading 5294 bytes from /tmp/poc
+=================================================================
+==2749428==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x6250000fe900 at pc 0x00000053c958 bp 0x7ffdb62e85d0 sp 0x7ffdb62e85c8
+WRITE of size 1 at 0x6250000fe900 thread T0
+SCARINESS: 31 (1-byte-write-heap-buffer-overflow)
+    #0 0x53c957 in njs_json_append_string /src/njs/src/njs_json.c:1548:20
+    #1 0x5346ac in njs_dump_value /src/njs/src/njs_json.c:1742:13
+    #2 0x532ef9 in njs_vm_value_dump /src/njs/src/njs_json.c:2108:19
+    #3 0x4ccf2d in njs_ext_console_log /src/njs/src/njs_shell.c:1068:13
+    #4 0x53fcf6 in njs_function_native_call /src/njs/src/njs_function.c:681:11
+    #5 0x4e32b4 in njs_function_frame_invoke /src/njs/src/njs_function.h:180:16
+    #6 0x4e32b4 in njs_vmcode_interpreter /src/njs/src/njs_vmcode.c:773:23
+    #7 0x4cc209 in njs_process_script /src/njs/src/njs_shell.c:805:15
+    #8 0x4cbba5 in LLVMFuzzerTestOneInput /src/njs/src/njs_shell.c:594:16
+    #9 0x4ca07e in ExecuteFilesOnyByOne /src/libfuzzer/afl/afl_driver.cpp:216:5
+    #10 0x4ca07e in main /src/libfuzzer/afl/afl_driver.cpp:253:12
+    #11 0x15510709d82f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+    #12 0x41e978 in _start (/out/njs_process_script_fuzzer+0x41e978)
+
+DEDUP_TOKEN: njs_json_append_string--njs_dump_value--njs_vm_value_dump
+0x6250000fe900 is located 0 bytes to the right of 8192-byte region [0x6250000fc900,0x6250000fe900)
+allocated by thread T0 here:
+    #0 0x497ff7 in posix_memalign /src/llvm-project/compiler-rt/lib/asan/asan_malloc_linux.cpp:226:3
+    #1 0x590b26 in njs_memalign /src/njs/src/njs_malloc.c:39:11
+    #2 0x4d3b37 in njs_mp_alloc_cluster /src/njs/src/njs_mp.c:523:22
+    #3 0x4d3977 in njs_mp_alloc_page /src/njs/src/njs_mp.c:490:19
+    #4 0x4d2628 in njs_mp_alloc_small /src/njs/src/njs_mp.c:404:20
+    #5 0x58c695 in njs_arr_create /src/njs/src/njs_arr.c:16:11
+    #6 0x5727fa in njs_generate_scope /src/njs/src/njs_generator.c:2449:21
+    #7 0x4de5c6 in njs_vm_compile /src/njs/src/njs_vm.c:182:11
+    #8 0x4cc1e4 in njs_process_script /src/njs/src/njs_shell.c:802:11
+    #9 0x4cbba5 in LLVMFuzzerTestOneInput /src/njs/src/njs_shell.c:594:16
+    #10 0x4ca07e in ExecuteFilesOnyByOne /src/libfuzzer/afl/afl_driver.cpp:216:5
+    #11 0x4ca07e in main /src/libfuzzer/afl/afl_driver.cpp:253:12
+    #12 0x15510709d82f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+
+DEDUP_TOKEN: posix_memalign--njs_memalign--njs_mp_alloc_cluster
+SUMMARY: AddressSanitizer: heap-buffer-overflow /src/njs/src/njs_json.c:1548:20 in njs_json_append_string
+Shadow bytes around the buggy address:
+  0x0c4a80017cd0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c4a80017ce0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c4a80017cf0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c4a80017d00: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c4a80017d10: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x0c4a80017d20:[fa]fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c4a80017d30: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c4a80017d40: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c4a80017d50: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c4a80017d60: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c4a80017d70: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+  Shadow gap:              cc
+==2749428==ABORTING

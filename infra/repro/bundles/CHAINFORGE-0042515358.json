@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042515358",
+  "chain": "CWE-1284->CWE-125",
+  "project": "ghostpdl",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42515358",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "361febcf961baa853f34909cd3925ffa7f90e7ea",
+      "fix_commits": [
+        "361febcf961baa853f34909cd3925ffa7f90e7ea"
+      ],
+      "repo": "https://cgit.ghostscript.com/ghostpdl.git"
+    },
+    "patch": "From 361febcf961baa853f34909cd3925ffa7f90e7ea Mon Sep 17 00:00:00 2001\nFrom: Chris Liddell <chris.liddell@artifex.com>\nDate: Thu, 1 Sep 2022 10:10:55 +0100\nSubject: [PATCH] oss-fuzz 50847: Bounds check points indices in\n ttfOutliner__BuildGlyphOutlineAux()\n\n---\n base/ttfmain.c | 11 +++++++++--\n 1 file changed, 9 insertions(+), 2 deletions(-)\n\ndiff --git a/base/ttfmain.c b/base/ttfmain.c\nindex 94f2eb8..498cc92 100644\n--- a/base/ttfmain.c\n+++ b/base/ttfmain.c\n@@ -650,8 +650,15 @@ retry:\n                 e->m.tx = Scale_X( &exec->metrics, e->arg1 ) << 10;\n                 e->m.ty = Scale_Y( &exec->metrics, e->arg2 ) << 10;\n             } else {\n-                e->m.tx = (pts->org_x[e->arg1] - pts->org_x[gOutline->pointCount + e->arg2]) << 10;\n-                e->m.ty = (pts->org_y[e->arg1] - pts->org_y[gOutline->pointCount + e->arg2]) << 10;\n+                if (e->arg1 < 0 || e->arg1 > pts->n_points\n+                 || (gOutline->pointCount + e->arg2) < 0 || (gOutline->pointCount + e->arg2) > pts->n_points) {\n+                    error = fBadFontData;\n+                    goto ex;\n+                }\n+                else {\n+                    e->m.tx = (pts->org_x[e->arg1] - pts->org_x[gOutline->pointCount + e->arg2]) << 10;\n+                    e->m.ty = (pts->org_y[e->arg1] - pts->org_y[gOutline->pointCount + e->arg2]) << 10;\n+                }\n             }\n             MoveGlyphOutline(pts, nPointsStored, &out, &e->m);\n             for (j = nContoursStored; j < out.contourCount + nContoursStored; j++)\n-- \n2.55.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42515358-vul",
+      "digest": "sha256:2c7e8a64b538e576c2ea5dd19a7beb520669c5edef149b3b1e6d9153c08ff411"
+    },
+    "patched": {
+      "ref": "n132/arvo:42515358-fix",
+      "digest": "sha256:2057cc73a8d83797c9a6e4bb6ef3c841126a5e49934046a380bc424b8fafe0b6"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/ghostpdl/./base/ttfmain.c:653",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/ghostpdl/./base/ttfmain.c:653"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

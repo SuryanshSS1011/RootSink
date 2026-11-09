@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042499415",
+  "chain": "CWE-416->CWE-787",
+  "project": "libjxl",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42499415",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "48e2a0ba25a7bac9ec510c48e322e5199de0583e",
+      "fix_commits": [
+        "48e2a0ba25a7bac9ec510c48e322e5199de0583e"
+      ],
+      "repo": "https://github.com/libjxl/libjxl"
+    },
+    "patch": "diff --git a/lib/jxl/dec_modular.cc b/lib/jxl/dec_modular.cc\nindex 244f705cd6a..4abc3d68673 100644\n--- a/lib/jxl/dec_modular.cc\n+++ b/lib/jxl/dec_modular.cc\n@@ -51,6 +51,7 @@ void RgbFromSingle(const size_t xsize,\n                    const pixel_type* const JXL_RESTRICT row_in,\n                    const float factor, Image3F* decoded, size_t /*c*/, size_t y,\n                    Rect& rect) {\n+  JXL_DASSERT(xsize <= rect.xsize());\n   const HWY_FULL(float) df;\n   const Rebind<pixel_type, HWY_FULL(float)> di;  // assumes pixel_type <= float\n \n@@ -73,6 +74,7 @@ void SingleFromSingle(const size_t xsize,\n                       const pixel_type* const JXL_RESTRICT row_in,\n                       const float factor, Image3F* decoded, size_t c, size_t y,\n                       Rect& rect) {\n+  JXL_DASSERT(xsize <= rect.xsize());\n   const HWY_FULL(float) df;\n   const Rebind<pixel_type, HWY_FULL(float)> di;  // assumes pixel_type <= float\n \n@@ -307,7 +309,7 @@ Status ModularFrameDecoder::DecodeGroup(const Rect& rect, BitReader* reader,\n     }\n     if (!use_full_image) {\n       JXL_RETURN_IF_ERROR(ModularImageToDecodedRect(\n-          gi, dec_state, nullptr, output, rect.Crop(*output)));\n+          gi, dec_state, nullptr, output, rect.Crop(dec_state->decoded)));\n       return true;\n     }\n   }\n@@ -459,6 +461,10 @@ Status ModularFrameDecoder::ModularImageToDecodedRect(\n   const auto* metadata = frame_header.nonserialized_metadata;\n   size_t xsize = rect.xsize();\n   size_t ysize = rect.ysize();\n+  if (!xsize || !ysize) {\n+    return true;\n+  }\n+  JXL_DASSERT(rect.IsInside(decoded));\n \n   int c = 0;\n   if (do_color) {\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42499415-vul",
+      "digest": "sha256:e56012b40a8189753a27d21baaeec999e4e3d1d34530315d98f2eb43b5b28b7f"
+    },
+    "patched": {
+      "ref": "n132/arvo:42499415-fix",
+      "digest": "sha256:ec1a308bae6bf913d4dc2e81297edf0a48af3fa24798bf873aacd4c5a74fe5b5"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/libjxl/third_party/highway/hwy/base.h:638",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/libjxl/third_party/highway/hwy/base.h:638"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

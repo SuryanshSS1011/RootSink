@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042477708",
+  "chain": "CWE-456->CWE-457",
+  "project": "skia",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42477708",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "2caecd2a430fc83f2227ef3e0b1cc70b560198ff",
+      "fix_commits": [
+        "2caecd2a430fc83f2227ef3e0b1cc70b560198ff"
+      ],
+      "repo": "https://skia.googlesource.com/skia.git"
+    },
+    "patch": "diff --git a/src/gpu/ops/GrAAConvexPathRenderer.cpp b/src/gpu/ops/GrAAConvexPathRenderer.cpp\nindex 4aa860f..59a0871 100644\n--- a/src/gpu/ops/GrAAConvexPathRenderer.cpp\n+++ b/src/gpu/ops/GrAAConvexPathRenderer.cpp\n@@ -219,21 +219,25 @@\n     }\n }\n \n-static inline SkPathPriv::FirstDirection get_direction(const SkPath& path, const SkMatrix& m) {\n+static inline bool get_direction(const SkPath& path, const SkMatrix& m,\n+                                 SkPathPriv::FirstDirection* dir) {\n     // At this point, we've already returned true from canDraw(), which checked that the path's\n     // direction could be determined, so this should just be fetching the cached direction.\n-    SkPathPriv::FirstDirection dir;\n-    SkAssertResult(SkPathPriv::CheapComputeFirstDirection(path, &dir));\n+    // However, if perspective is involved, we're operating on a transformed path, which may no\n+    // longer have a computable direction.\n+    if (!SkPathPriv::CheapComputeFirstDirection(path, dir)) {\n+        return false;\n+    }\n \n     // check whether m reverses the orientation\n     SkASSERT(!m.hasPerspective());\n     SkScalar det2x2 = m.get(SkMatrix::kMScaleX) * m.get(SkMatrix::kMScaleY) -\n                       m.get(SkMatrix::kMSkewX)  * m.get(SkMatrix::kMSkewY);\n     if (det2x2 < 0) {\n-        dir = SkPathPriv::OppositeFirstDirection(dir);\n+        *dir = SkPathPriv::OppositeFirstDirection(*dir);\n     }\n \n-    return dir;\n+    return true;\n }\n \n static inline void add_line_to_segment(const SkPoint& pt,\n@@ -283,7 +287,10 @@\n     // line paths. We detect paths that are very close to a line (zero area) and\n     // draw nothing.\n     DegenerateTestData degenerateData;\n-    SkPathPriv::FirstDirection dir = get_direction(path, m);\n+    SkPathPriv::FirstDirection dir;\n+    if (!get_direction(path, m, &dir)) {\n+        return false;\n+    }\n \n     for (;;) {\n         SkPoint pts[4];\ndiff --git a/tests/GpuDrawPathTest.cpp b/tests/GpuDrawPathTest.cpp\nindex d650d84..22fecd7 100644\n--- a/tests/GpuDrawPathTest.cpp\n+++ b/tests/GpuDrawPathTest.cpp\n@@ -89,6 +89,31 @@\n     }\n }\n \n+DEF_GPUTEST_FOR_ALL_CONTEXTS(GrDrawCollapsedPath, reporter, ctxInfo) {\n+    // From https://bugs.fuchsia.dev/p/fuchsia/issues/detail?id=37330, it's possible for a convex\n+    // path to be accepted by AAConvexPathRenderer, then be transformed to something without a\n+    // computable first direction by a perspective matrix.\n+    SkImageInfo info = SkImageInfo::MakeN32Premul(100, 100);\n+    auto surface(SkSurface::MakeRenderTarget(ctxInfo.grContext(), SkBudgeted::kNo, info));\n+\n+    SkPaint paint;\n+    paint.setAntiAlias(true);\n+\n+    SkPath path;\n+    path.moveTo(0, 0);\n+    path.lineTo(50, 0);\n+    path.lineTo(0, 50);\n+    path.close();\n+\n+    SkMatrix m;\n+    m.setAll( 0.966006875f   , -0.125156224f  , 72.0899811f,\n+             -0.00885376986f , -0.112347461f  , 64.7121124f,\n+             -8.94321693e-06f, -0.00173384184f, 0.998692870f);\n+    surface->getCanvas()->setMatrix(m);\n+    surface->getCanvas()->drawPath(path, paint);\n+    surface->flush();\n+}\n+\n DEF_GPUTEST(GrPathKeys, reporter, /* options */) {\n     SkPaint strokePaint;\n     strokePaint.setStyle(SkPaint::kStroke_Style);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42477708-vul",
+      "digest": "sha256:ee8ad6e895603acd7e4c773ac881e0468909a650545c9542566f71ce8c818b7f"
+    },
+    "patched": {
+      "ref": "n132/arvo:42477708-fix",
+      "digest": "sha256:45c125bd40be0b003cc43bc747e95964d24ff1f68cf7fd4347fdcaff415c2181"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/skia/out/Fuzz_mem_constraints/../../src/gpu/ops/GrAAConvexPathRenderer.cpp:128",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/skia/out/Fuzz_mem_constraints/../../src/gpu/ops/GrAAConvexPathRenderer.cpp:128"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

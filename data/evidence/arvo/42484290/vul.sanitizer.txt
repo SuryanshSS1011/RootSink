@@ -1,0 +1,74 @@
+INFO: Seed: 3321309187
+INFO: Loaded 1 modules   (66415 inline 8-bit counters): 66415 [0x1000a70, 0x1010ddf), 
+INFO: Loaded 1 PC tables (66415 PCs): 66415 [0x1010de0,0x11144d0), 
+/out/curl_fuzzer_ftp: Running 1 inputs 1 time(s) each.
+Running: /tmp/poc
+=================================================================
+==2987017==ERROR: AddressSanitizer: stack-buffer-overflow on address 0x14f40e5ca420 at pc 0x00000051d6da bp 0x7ffd6104bd10 sp 0x7ffd6104b4d8
+WRITE of size 1025 at 0x14f40e5ca420 thread T0
+SCARINESS: 60 (multi-byte-write-stack-buffer-overflow)
+    #0 0x51d6d9 in __asan_memcpy /src/llvm-project/compiler-rt/lib/asan/asan_interceptors_memintrinsics.cpp:22:3
+    #1 0x5c37df in Curl_pp_readresp /src/curl/lib/pingpong.c:310:7
+    #2 0x65a772 in ftp_readresp /src/curl/lib/ftp.c:558:21
+    #3 0x65afb6 in ftp_statemach_act /src/curl/lib/ftp.c:2614:12
+    #4 0x5c2ab0 in Curl_pp_statemach /src/curl/lib/pingpong.c:134:14
+    #5 0x66a0ae in ftp_block_statemach /src/curl/lib/ftp.c:3074:14
+    #6 0x669ff0 in ftp_quit /src/curl/lib/ftp.c:4031:14
+    #7 0x659e42 in ftp_disconnect /src/curl/lib/ftp.c:4060:9
+    #8 0x55c96d in Curl_disconnect /src/curl/lib/url.c:817:5
+    #9 0x632c54 in Curl_conncache_close_all_connections /src/curl/lib/conncache.c:552:11
+    #10 0x5ba85b in curl_multi_cleanup /src/curl/lib/multi.c:2476:5
+    #11 0x5519c8 in fuzz_handle_transfer(fuzz_data*) /src/curl_fuzzer/curl_fuzzer.cc:391:3
+    #12 0x5508ee in LLVMFuzzerTestOneInput /src/curl_fuzzer/curl_fuzzer.cc:93:3
+    #13 0x459271 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:558:15
+    #14 0x4445a2 in fuzzer::RunOneTest(fuzzer::Fuzzer*, char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:296:6
+    #15 0x44a6fe in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:796:9
+    #16 0x4725c2 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:19:10
+    #17 0x14f40d54082f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+    #18 0x41ec98 in _start (/out/curl_fuzzer_ftp+0x41ec98)
+
+DEDUP_TOKEN: __asan_memcpy--Curl_pp_readresp--ftp_readresp
+Address 0x14f40e5ca420 is located in stack of thread T0 at offset 1056 in frame
+    #0 0x6329df in Curl_conncache_close_all_connections /src/curl/lib/conncache.c:535
+
+DEDUP_TOKEN: Curl_conncache_close_all_connections
+  This frame has 3 object(s):
+    [32, 1056) 'buffer' (line 537)
+    [1184, 1344) 'pipe_st' (line 545) <== Memory access at offset 1056 partially underflows this variable
+    [1408, 1568) 'pipe_st17' (line 560) <== Memory access at offset 1056 partially underflows this variable
+HINT: this may be a false positive if your program uses some custom stack unwind mechanism, swapcontext or vfork
+      (longjmp and C++ exceptions *are* supported)
+SUMMARY: AddressSanitizer: stack-buffer-overflow /src/llvm-project/compiler-rt/lib/asan/asan_interceptors_memintrinsics.cpp:22:3 in __asan_memcpy
+Shadow bytes around the buggy address:
+  0x029f01cb1430: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x029f01cb1440: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x029f01cb1450: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x029f01cb1460: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x029f01cb1470: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x029f01cb1480: 00 00 00 00[f2]f2 f2 f2 f2 f2 f2 f2 f2 f2 f2 f2
+  0x029f01cb1490: f2 f2 f2 f2 00 00 00 00 00 00 00 00 00 00 00 00
+  0x029f01cb14a0: 00 00 00 00 00 00 00 00 f2 f2 f2 f2 f2 f2 f2 f2
+  0x029f01cb14b0: f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8
+  0x029f01cb14c0: f8 f8 f8 f8 f3 f3 f3 f3 f3 f3 f3 f3 00 00 00 00
+  0x029f01cb14d0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+  Shadow gap:              cc
+==2987017==ABORTING

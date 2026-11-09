@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-950099400",
+  "chain": "CWE-129->CWE-125",
+  "project": "unicorn",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42481124",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/unicorn-engine/unicorn/commit/ec2e4544819b2ef0ecd297ba331d4f2172b77245",
+      "fix_commits": [
+        "ec2e4544819b2ef0ecd297ba331d4f2172b77245"
+      ],
+      "repo": "https://github.com/unicorn-engine/unicorn"
+    },
+    "patch": "diff --git a/qemu/fpu/softfloat-macros.h b/qemu/fpu/softfloat-macros.h\nindex 2e3c967dca..2892b4fe09 100644\n--- a/qemu/fpu/softfloat-macros.h\n+++ b/qemu/fpu/softfloat-macros.h\n@@ -301,9 +301,9 @@ static inline void\n      uint64_t a0, uint64_t a1, int_fast16_t count, uint64_t *z0Ptr, uint64_t *z1Ptr)\n {\n \n-    *z1Ptr = a1<<count;\n+    *z1Ptr = a1<<(count & 0x3f);\n     *z0Ptr =\n-        ( count == 0 ) ? a0 : ( a0<<count ) | ( a1>>( ( - count ) & 63 ) );\n+        ( count == 0 ) ? a0 : ( a0<<(count & 0x3f) ) | ( a1>>( ( - count ) & 63 ) );\n \n }\n \ndiff --git a/qemu/target-arm/neon_helper.c b/qemu/target-arm/neon_helper.c\nindex f2c05cb45b..1426decd2f 100644\n--- a/qemu/target-arm/neon_helper.c\n+++ b/qemu/target-arm/neon_helper.c\n@@ -867,7 +867,7 @@ uint64_t HELPER(neon_qshl_u64)(CPUARMState *env, uint64_t val, uint64_t shiftop)\n     } else if (tmp < 0) { \\\n         dest = src1 >> -tmp; \\\n     } else { \\\n-        dest = src1 << tmp; \\\n+        dest = (uint32_t)src1 << tmp; \\\n         if ((dest >> tmp) != src1) { \\\n             SET_QC(); \\\n             dest = (uint32_t)(1 << (sizeof(src1) * 8 - 1)); \\\n@@ -1170,7 +1170,7 @@ NEON_VOP(sub_u8, neon_u8, 4)\n NEON_VOP(sub_u16, neon_u16, 2)\n #undef NEON_FN\n \n-#define NEON_FN(dest, src1, src2) dest = src1 * src2\n+#define NEON_FN(dest, src1, src2) dest = (int64_t)src1 * src2\n NEON_VOP(mul_u8, neon_u8, 4)\n NEON_VOP(mul_u16, neon_u16, 2)\n #undef NEON_FN\ndiff --git a/qemu/target-arm/translate.c b/qemu/target-arm/translate.c\nindex db7aec5990..31f0327a23 100644\n--- a/qemu/target-arm/translate.c\n+++ b/qemu/target-arm/translate.c\n@@ -132,7 +132,7 @@ static void load_reg_var(DisasContext *s, TCGv_i32 var, int reg)\n             addr = (long)s->pc + 4;\n         tcg_gen_movi_i32(tcg_ctx, var, addr);\n     } else {\n-        tcg_gen_mov_i32(tcg_ctx, var, tcg_ctx->cpu_R[(reg & 0x0f)]);\n+        tcg_gen_mov_i32(tcg_ctx, var, tcg_ctx->cpu_R[reg & 0x0f]);\n     }\n }\n \n@@ -154,7 +154,7 @@ static void store_reg(DisasContext *s, int reg, TCGv_i32 var)\n         tcg_gen_andi_i32(tcg_ctx, var, var, ~1);\n         s->is_jmp = DISAS_JUMP;\n     }\n-    tcg_gen_mov_i32(tcg_ctx, tcg_ctx->cpu_R[reg], var);\n+    tcg_gen_mov_i32(tcg_ctx, tcg_ctx->cpu_R[reg & 0x0f], var);\n     tcg_temp_free_i32(tcg_ctx, var);\n }\n \ndiff --git a/qemu/target-i386/ops_sse.h b/qemu/target-i386/ops_sse.h\nindex 5c0301d8a1..2b009c714d 100644\n--- a/qemu/target-i386/ops_sse.h\n+++ b/qemu/target-i386/ops_sse.h\n@@ -876,7 +876,7 @@ static inline uint64_t helper_insertq(uint64_t src, int shift, int len)\n     } else {\n         mask = (1ULL << (len & 0x3f)) - 1;\n     }\n-    return (src & ~(mask << shift)) | ((src & mask) << shift);\n+    return (src & ~(mask << (shift & 0x3f))) | ((src & mask) << (shift & 0x3f));\n }\n \n void helper_insertq_r(CPUX86State *env, XMMReg *d, XMMReg *s)\ndiff --git a/qemu/target-mips/cpu.h b/qemu/target-mips/cpu.h\nindex 819b944773..df4ec2b584 100644\n--- a/qemu/target-mips/cpu.h\n+++ b/qemu/target-mips/cpu.h\n@@ -113,8 +113,8 @@ struct CPUMIPSFPUContext {\n #define FCR0_REV 0\n     /* fcsr */\n     uint32_t fcr31;\n-#define SET_FP_COND(num,env)     do { ((env).fcr31) |= ((num) ? ((int)(1U << ((num) + 24))) : (1 << 23)); } while(0)\n-#define CLEAR_FP_COND(num,env)   do { ((env).fcr31) &= ~((num) ? ((int)(1U << ((num) + 24))) : (1 << 23)); } while(0)\n+#define SET_FP_COND(num,env)     do { ((env).fcr31) |= ((num) ? ((int)(1U << (((num) + 24) & 0x1f))) : (1 << 23)); } while(0)\n+#define CLEAR_FP_COND(num,env)   do { ((env).fcr31) &= ~((num) ? ((int)(1U << (((num) + 24) & 0x1f))) : (1 << 23)); } while(0)\n #define GET_FP_COND(env)         ((((env).fcr31 >> 24) & 0xfe) | (((env).fcr31 >> 23) & 0x1))\n #define GET_FP_CAUSE(reg)        (((reg) >> 12) & 0x3f)\n #define GET_FP_ENABLE(reg)       (((reg) >>  7) & 0x1f)\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42481124-vul",
+      "digest": "sha256:bc33b7e140c56cb0e1a08c4357b1edb48b6492318ba70426adef484270b95181"
+    },
+    "patched": {
+      "ref": "n132/arvo:42481124-fix",
+      "digest": "sha256:f8b4ff430f8ddd2715bac2d97f323fcd452c545b1b99adf4392ffb598caa06e7"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "crash_site": "/src/unicorn/qemu/target-arm/translate.c:157",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 129,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "site": "/src/unicorn/qemu/target-arm/translate.c:157"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

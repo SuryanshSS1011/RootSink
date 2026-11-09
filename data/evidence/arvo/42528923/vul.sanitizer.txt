@@ -1,0 +1,59 @@
+Running LLVMFuzzerInitialize ...
+continue...
+Reading 146 bytes from /tmp/poc
+20/Oct/2026 05:22:14 [NetworkInterface.cpp:2421] WARNING: If TSO/GRO is enabled, please disable it for best accuracy
+20/Oct/2026 05:22:14 [NetworkInterface.cpp:2426] WARNING: using: sudo ethtool -K custom gro off gso off tso off
+=================================================================
+==7==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x606000eabee0 at pc 0x0000008b0381 bp 0x7ffda9cc9710 sp 0x7ffda9cc9708
+READ of size 2 at 0x606000eabee0 thread T0
+SCARINESS: 14 (2-byte-read-heap-buffer-overflow)
+    #0 0x8b0380 in Flow::dissectMDNS(unsigned char*, unsigned short) /src/ntopng/src/Flow.cpp:6004:5
+    #1 0x631114 in NetworkInterface::processPacket(unsigned int, bool, timeval const*, unsigned long, ndpi_ethhdr*, unsigned short, ndpi_iphdr*, ndpi_ipv6hdr*, unsigned short, unsigned short, unsigned int, pcap_pkthdr const*, unsigned char const*, unsigned short*, Host**, Host**, Flow**) /src/ntopng/src/NetworkInterface.cpp:2205:15
+    #2 0x63bbd3 in NetworkInterface::dissectPacket(unsigned int, bool, unsigned char*, pcap_pkthdr const*, unsigned char const*, unsigned short*, Host**, Host**, Flow**) /src/ntopng/src/NetworkInterface.cpp:2820:26
+    #3 0x4e9445 in LLVMFuzzerTestOneInput /src/ntopng/fuzz/fuzz_dissect_packet.cpp:197:16
+    #4 0x4e834a in ExecuteFilesOnyByOne /src/aflplusplus/utils/aflpp_driver/aflpp_driver.c:234:7
+    #5 0x4e811c in main /src/aflplusplus/utils/aflpp_driver/aflpp_driver.c:318:12
+    #6 0x7f08d13e3082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 1878e6b475720c7c51969e69ab2d276fae6d1dee)
+    #7 0x4294cd in _start (/out/fuzz_dissect_packet+0x4294cd)
+
+DEDUP_TOKEN: Flow::dissectMDNS(unsigned char*, unsigned short)--NetworkInterface::processPacket(unsigned int, bool, timeval const*, unsigned long, ndpi_ethhdr*, unsigned short, ndpi_iphdr*, ndpi_ipv6hdr*, unsigned short, unsigned short, unsigned int, pcap_pkthdr const*, unsigned char const*, unsigned short*, Host**, Host**, Flow**)--NetworkInterface::dissectPacket(unsigned int, bool, unsigned char*, pcap_pkthdr const*, unsigned char const*, unsigned short*, Host**, Host**, Flow**)
+0x606000eabee0 is located 0 bytes to the right of 64-byte region [0x606000eabea0,0x606000eabee0)
+allocated by thread T0 here:
+    #0 0x4aad0c in __interceptor_realloc /src/llvm-project/compiler-rt/lib/asan/asan_malloc_linux.cpp:85:3
+    #1 0x9bc1e1 in grow_buffer /src/libpcap-1.9.1/./sf-pcap.c:426:18
+    #2 0x9bc1e1 in pcap_next_packet /src/libpcap-1.9.1/./sf-pcap.c:604:9
+
+DEDUP_TOKEN: __interceptor_realloc--grow_buffer--pcap_next_packet
+SUMMARY: AddressSanitizer: heap-buffer-overflow /src/ntopng/src/Flow.cpp:6004:5 in Flow::dissectMDNS(unsigned char*, unsigned short)
+Shadow bytes around the buggy address:
+  0x0c0c801cd780: 00 00 00 00 00 00 00 00 fa fa fa fa 00 00 00 00
+  0x0c0c801cd790: 00 00 00 00 fa fa fa fa 00 00 00 00 00 00 00 00
+  0x0c0c801cd7a0: fa fa fa fa 00 00 00 00 00 00 00 00 fa fa fa fa
+  0x0c0c801cd7b0: fd fd fd fd fd fd fd fa fa fa fa fa fd fd fd fd
+  0x0c0c801cd7c0: fd fd fd fa fa fa fa fa fd fd fd fd fd fd fd fd
+=>0x0c0c801cd7d0: fa fa fa fa 00 00 00 00 00 00 00 00[fa]fa fa fa
+  0x0c0c801cd7e0: 00 00 00 00 00 00 00 fa fa fa fa fa 00 00 00 00
+  0x0c0c801cd7f0: 00 00 00 fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c0c801cd800: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c0c801cd810: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c0c801cd820: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+==7==ABORTING

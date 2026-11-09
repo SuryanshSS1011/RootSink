@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042531848",
+  "chain": "CWE-1284->CWE-787",
+  "project": "arrow",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42531848",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "6aa33210ecd9773f18ceb775306b79de132b6c6f",
+      "fix_commits": [
+        "6aa33210ecd9773f18ceb775306b79de132b6c6f"
+      ],
+      "repo": "https://github.com/apache/arrow"
+    },
+    "patch": "diff --git a/cpp/src/arrow/util/formatting.h b/cpp/src/arrow/util/formatting.h\nindex 6125f792ff98..dd9af907ecc3 100644\n--- a/cpp/src/arrow/util/formatting.h\n+++ b/cpp/src/arrow/util/formatting.h\n@@ -126,8 +126,10 @@ namespace detail {\n ARROW_EXPORT extern const char digit_pairs[];\n \n // Based on fmtlib's format_int class:\n-// Write digits from right to left into a stack allocated buffer\n-inline void FormatOneChar(char c, char** cursor) { *--*cursor = c; }\n+// Write digits from right to left into a stack allocated buffer.\n+// \\pre *cursor points to the byte after the one that will be written.\n+// \\post *cursor points to the byte that was written.\n+inline void FormatOneChar(char c, char** cursor) { *(--(*cursor)) = c; }\n \n template <typename Int>\n void FormatOneDigit(Int value, char** cursor) {\n@@ -326,6 +328,7 @@ class StringFormatter<DoubleType> : public FloatToStringFormatterMixin<DoubleTyp\n namespace detail {\n \n constexpr size_t BufferSizeYYYY_MM_DD() {\n+  // \"-\"? \"99999-12-31\"\n   return 1 + detail::Digits10(99999) + 1 + detail::Digits10(12) + 1 +\n          detail::Digits10(31);\n }\n@@ -352,6 +355,7 @@ inline void FormatYYYY_MM_DD(arrow_vendored::date::year_month_day ymd, char** cu\n \n template <typename Duration>\n constexpr size_t BufferSizeHH_MM_SS() {\n+  // \"23:59:59\" (\".\" \"9\"+)?\n   return detail::Digits10(23) + 1 + detail::Digits10(59) + 1 + detail::Digits10(59) + 1 +\n          detail::Digits10(Duration::period::den) - 1;\n }\n@@ -505,8 +509,9 @@ class StringFormatter<TimestampType> {\n       timepoint_days -= days(1);\n     }\n \n+    // YYYY_MM_DD \" \" HH_MM_SS \"Z\"?\n     constexpr size_t buffer_size =\n-        detail::BufferSizeYYYY_MM_DD() + 1 + detail::BufferSizeHH_MM_SS<Duration>();\n+        detail::BufferSizeYYYY_MM_DD() + 1 + detail::BufferSizeHH_MM_SS<Duration>() + 1;\n \n     std::array<char, buffer_size> buffer;\n     char* cursor = buffer.data() + buffer_size;\ndiff --git a/cpp/src/arrow/util/formatting_util_test.cc b/cpp/src/arrow/util/formatting_util_test.cc\nindex 13f57a495d63..fcbeec347d32 100644\n--- a/cpp/src/arrow/util/formatting_util_test.cc\n+++ b/cpp/src/arrow/util/formatting_util_test.cc\n@@ -533,6 +533,14 @@ TEST(Formatting, Timestamp) {\n     }\n   }\n \n+  {\n+    constexpr int64_t kMillisInDay = 24 * 60 * 60 * 1000;\n+    auto ty = timestamp(TimeUnit::MILLI, \"+01:00\");\n+    StringFormatter<TimestampType> formatter(ty.get());\n+    AssertFormatting(formatter, -15000 * 365 * kMillisInDay + 1,\n+                     \"-13021-12-17 00:00:00.001Z\");\n+  }\n+\n   {\n     auto ty = timestamp(TimeUnit::MILLI, \"Pacific/Maruesas\");\n     StringFormatter<TimestampType> formatter(ty.get());\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42531848-vul",
+      "digest": "sha256:966bd6741d12dffa2010272760e633bcc9ec526ebf974c98fc1babf6a485eed6"
+    },
+    "patched": {
+      "ref": "n132/arvo:42531848-fix",
+      "digest": "sha256:40892e855bbcad70b53a8b53d3e0b2b7eebe004fd272fa663c03b7e65b81452a"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/arrow/cpp/src/arrow/util/formatting.h:130",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/arrow/cpp/src/arrow/util/formatting.h:130"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

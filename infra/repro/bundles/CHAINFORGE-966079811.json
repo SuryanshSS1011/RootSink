@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-966079811",
+  "chain": "CWE-456->CWE-457",
+  "project": "librawspeed",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42540841",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/darktable-org/rawspeed/commit/77a1a1f0b7b7367b345afd484a22d5585ee410d6",
+      "fix_commits": [
+        "77a1a1f0b7b7367b345afd484a22d5585ee410d6"
+      ],
+      "repo": "https://github.com/darktable-org/rawspeed"
+    },
+    "patch": "diff --git a/src/librawspeed/decoders/ArwDecoder.cpp b/src/librawspeed/decoders/ArwDecoder.cpp\nindex ff9736053..b2b1e903e 100644\n--- a/src/librawspeed/decoders/ArwDecoder.cpp\n+++ b/src/librawspeed/decoders/ArwDecoder.cpp\n@@ -418,7 +418,8 @@ void ArwDecoder::GetWB() {\n     uint32 off = sony_offset->getU32();\n \n     assert(sony_length != nullptr);\n-    uint32 len = sony_length->getU32();\n+    // The Decryption is done in blocks of 4 bytes.\n+    uint32 len = roundDown(sony_length->getU32(), 4);\n \n     assert(sony_key != nullptr);\n     uint32 key = getU32LE(sony_key->getData(4));\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42540841-vul",
+      "digest": "sha256:b3325a71d18da066d14d835aa74c05b8d6a05c8e60cc313a3a4339154c8cc2e4"
+    },
+    "patched": {
+      "ref": "n132/arvo:42540841-fix",
+      "digest": "sha256:16115d5acab77d881ee3c849346d86e3a3655440cbe14c3dd104bdf97ccc0afa"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/librawspeed/src/librawspeed/io/Buffer.h:127",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/librawspeed/src/librawspeed/io/Buffer.h:127"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042485228",
+  "chain": "CWE-20->CWE-787",
+  "project": "ffmpeg",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42485228",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "c8de8dfba6b2706f22214489b1779fb0d27e7e65",
+      "fix_commits": [
+        "c8de8dfba6b2706f22214489b1779fb0d27e7e65"
+      ],
+      "repo": "https://git.ffmpeg.org/ffmpeg.git"
+    },
+    "patch": "From c8de8dfba6b2706f22214489b1779fb0d27e7e65 Mon Sep 17 00:00:00 2001\nFrom: Michael Niedermayer <michael@niedermayer.cc>\nDate: Wed, 1 Jul 2020 23:31:47 +0200\nSubject: [PATCH] avcodec/scpr3: Fix out of array access with dectab\n\nFixes: 23721/clusterfuzz-testcase-minimized-ffmpeg_AV_CODEC_ID_SCPR_fuzzer-5914074721550336\n\nFound-by: continuous fuzzing process https://github.com/google/oss-fuzz/tree/master/projects/ffmpeg\nSigned-off-by: Michael Niedermayer <michael@niedermayer.cc>\n---\n libavcodec/scpr3.c | 17 ++++++++++++++---\n 1 file changed, 14 insertions(+), 3 deletions(-)\n\ndiff --git a/libavcodec/scpr3.c b/libavcodec/scpr3.c\nindex b4d2e21..1ed764b 100644\n--- a/libavcodec/scpr3.c\n+++ b/libavcodec/scpr3.c\n@@ -234,6 +234,8 @@ static int update_model6_to_7(PixelModel3 *m)\n         }\n         p = (e + 127) >> 7;\n         k = ((f + e - 1) >> 7) + 1;\n+        if (k > FF_ARRAY_ELEMS(n.dectab))\n+            return AVERROR_INVALIDDATA;\n         for (i = 0; i < k - p; i++)\n             n.dectab[p + i] = j;\n         e += f;\n@@ -702,7 +704,11 @@ static int update_model3_to_7(PixelModel3 *m, uint8_t value)\n         e = d;\n         n.cntsum += n.cnts[e];\n         n.freqs1[e] = c;\n-        for (g = n.freqs[e], q = c + 128 - 1 >> 7, f = (c + g - 1 >> 7) + 1; q < f; q++) {\n+        g = n.freqs[e];\n+        f = (c + g - 1 >> 7) + 1;\n+        if (f > FF_ARRAY_ELEMS(n.dectab))\n+            return AVERROR_INVALIDDATA;\n+        for (q = c + 128 - 1 >> 7; q < f; q++) {\n             n.dectab[q] = e;\n         }\n         c += g;\n@@ -837,6 +843,7 @@ static int decode_unit3(SCPRContext *s, PixelModel3 *m, uint32_t code, uint32_t\n     uint16_t a = 0, b = 0;\n     uint32_t param;\n     int type;\n+    int ret;\n \n     type = m->type;\n     switch (type) {\n@@ -859,7 +866,9 @@ static int decode_unit3(SCPRContext *s, PixelModel3 *m, uint32_t code, uint32_t\n         break;\n     case 3:\n         *value = bytestream2_get_byte(&s->gb);\n-        decode_static3(m, *value);\n+        ret = decode_static3(m, *value);\n+        if (ret < 0)\n+            return AVERROR_INVALIDDATA;\n         sync_code3(gb, rc);\n         break;\n     case 4:\n@@ -877,7 +886,9 @@ static int decode_unit3(SCPRContext *s, PixelModel3 *m, uint32_t code, uint32_t\n         break;\n     case 6:\n         if (!decode_adaptive6(m, code, value, &a, &b)) {\n-            update_model6_to_7(m);\n+            ret = update_model6_to_7(m);\n+            if (ret < 0)\n+                return AVERROR_INVALIDDATA;\n         }\n         decode3(gb, rc, a, b);\n         sync_code3(gb, rc);\n-- \n2.55.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42485228-vul",
+      "digest": "sha256:e668b9e83896150dff05932cfd004224714742bf11dfc8e04729da931a2d2679"
+    },
+    "patched": {
+      "ref": "n132/arvo:42485228-fix",
+      "digest": "sha256:fbbf4faccbb5e63d60f1f64102f5a56251a2fcc4ba299bbe293705c0171947e6"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/ffmpeg/libavcodec/scpr3.c:238",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/ffmpeg/libavcodec/scpr3.c:238"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

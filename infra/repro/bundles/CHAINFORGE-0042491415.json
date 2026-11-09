@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042491415",
+  "chain": "CWE-456->CWE-457",
+  "project": "kimageformats",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42491415",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "8ad43638ad55cf9bfc12af35aa3c33bd255dd375",
+      "fix_commits": [
+        "8ad43638ad55cf9bfc12af35aa3c33bd255dd375"
+      ],
+      "repo": "https://invent.kde.org/frameworks/kimageformats.git"
+    },
+    "patch": "From 8ad43638ad55cf9bfc12af35aa3c33bd255dd375 Mon Sep 17 00:00:00 2001\nFrom: Albert Astals Cid <aacid@kde.org>\nDate: Tue, 5 Jan 2021 20:48:29 +0100\nSubject: [PATCH] Fix crash with malformed files\n\noss-fuzz/29284\n---\n src/imageformats/ani.cpp | 3 +++\n 1 file changed, 3 insertions(+)\n\ndiff --git a/src/imageformats/ani.cpp b/src/imageformats/ani.cpp\nindex 72eb09e..13a0a07 100644\n--- a/src/imageformats/ani.cpp\n+++ b/src/imageformats/ani.cpp\n@@ -109,6 +109,9 @@ bool ANIHandler::read(QImage *outImage)\n     if (!m_imageSequence.isEmpty()) {\n         if (m_currentImageNumber < m_imageSequence.count()) {\n             const int nextFrame = m_imageSequence.at(m_currentImageNumber);\n+            if (nextFrame < 0 || nextFrame >= m_frameOffsets.count()) {\n+                return false;\n+            }\n             const auto nextOffset = m_frameOffsets.at(nextFrame);\n             device()->seek(nextOffset);\n         } else if (m_currentImageNumber == m_imageSequence.count()) {\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42491415-vul",
+      "digest": "sha256:b869308e175d024dc043c917950cac6a09c64bc477808a598e203e4d6c19f5ad"
+    },
+    "patched": {
+      "ref": "n132/arvo:42491415-fix",
+      "digest": "sha256:a7c1f3770166d701254ca0528dc38e48bf1e6a89c9f4a3d9b0fc66f34941e39f"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/kimageformats/src/imageformats/ani.cpp:337",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/kimageformats/src/imageformats/ani.cpp:337"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

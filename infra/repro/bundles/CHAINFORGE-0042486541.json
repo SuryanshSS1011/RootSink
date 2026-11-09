@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042486541",
+  "chain": "CWE-1285->CWE-125",
+  "project": "sleuthkit",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42486541",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "4d379cb12e67f5bc690d2e2e4d6ce752c2b41e67",
+      "fix_commits": [
+        "4d379cb12e67f5bc690d2e2e4d6ce752c2b41e67"
+      ],
+      "repo": "https://github.com/sleuthkit/sleuthkit"
+    },
+    "patch": "diff --git a/tsk/fs/ntfs.c b/tsk/fs/ntfs.c\nindex 631fe2ff38..d225e5c996 100755\n--- a/tsk/fs/ntfs.c\n+++ b/tsk/fs/ntfs.c\n@@ -375,9 +375,20 @@ ntfs_dinode_lookup(NTFS_INFO * a_ntfs, char *a_buf, TSK_INUM_T a_mftnum)\n             (\"dinode_lookup: More Update Sequence Entries than MFT size\");\n         return TSK_COR;\n     }\n-    if (tsk_getu16(fs->endian, mft->upd_off) + \n-            sizeof(ntfs_upd) + \n-            2*(tsk_getu16(fs->endian, mft->upd_cnt) - 1) > a_ntfs->mft_rsize_b) {\n+    uint16_t upd_cnt = tsk_getu16(fs->endian, mft->upd_cnt);\n+    uint16_t upd_off = tsk_getu16(fs->endian, mft->upd_off);\n+\n+    // Make sure upd_cnt > 0 to prevent an integer wrap around.\n+    if ((upd_cnt == 0) || (upd_cnt > (((a_ntfs->mft_rsize_b) / 2) + 1))) {\n+        tsk_error_reset();\n+        tsk_error_set_errno(TSK_ERR_FS_INODE_COR);\n+        tsk_error_set_errstr\n+            (\"dinode_lookup: Invalid update count value out of bounds\");\n+        return TSK_COR;\n+    }\n+    size_t mft_rsize_b = ((size_t) upd_cnt - 1) * 2;\n+\n+    if ((size_t) upd_off + sizeof(ntfs_upd) > (a_ntfs->mft_rsize_b - mft_rsize_b)) {\n         tsk_error_reset();\n         tsk_error_set_errno(TSK_ERR_FS_INODE_COR);\n         tsk_error_set_errstr\n@@ -386,9 +397,8 @@ ntfs_dinode_lookup(NTFS_INFO * a_ntfs, char *a_buf, TSK_INUM_T a_mftnum)\n     }\n \n     /* Apply the update sequence structure template */\n-    upd =\n-        (ntfs_upd *) ((uintptr_t) a_buf + tsk_getu16(fs->endian,\n-            mft->upd_off));\n+\n+    upd = (ntfs_upd *) ((uintptr_t) a_buf + upd_off);\n     /* Get the sequence value that each 16-bit value should be */\n     sig_seq = tsk_getu16(fs->endian, upd->upd_val);\n     /* cycle through each sector */\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42486541-vul",
+      "digest": "sha256:ada85237c14673bf9a0438d73aa37e467b7eac7e72cfaf7ba0b53898732c68fa"
+    },
+    "patched": {
+      "ref": "n132/arvo:42486541-fix",
+      "digest": "sha256:708d29218e7d633d9a553115214bbd2cb57d39bd67ef9f7930bbd3fbc2be5b2c"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/sleuthkit/tsk/fs/ntfs.c:393",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/sleuthkit/tsk/fs/ntfs.c:393"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

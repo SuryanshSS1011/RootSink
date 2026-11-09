@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042538148",
+  "chain": "CWE-1285->CWE-125",
+  "project": "llama.cpp",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42538148",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "dea5e86051aadcdf42f7db7a8855a78d8f5ff3d6",
+      "fix_commits": [
+        "dea5e86051aadcdf42f7db7a8855a78d8f5ff3d6"
+      ],
+      "repo": "https://github.com/ggerganov/llama.cpp"
+    },
+    "patch": "diff --git a/ggml/src/ggml.c b/ggml/src/ggml.c\nindex 0d99b0791cb..149d8f9709e 100644\n--- a/ggml/src/ggml.c\n+++ b/ggml/src/ggml.c\n@@ -22102,18 +22102,46 @@ static size_t gguf_type_size(enum gguf_type type) {\n     return GGUF_TYPE_SIZE[type];\n }\n \n-static void gguf_tensor_info_sanitize(struct gguf_tensor_info * info) {\n-    GGML_ASSERT(info->n_dims <= GGML_MAX_DIMS);\n-    GGML_ASSERT(0 <= info->type && info->type < GGML_TYPE_COUNT);\n+static bool gguf_tensor_info_sanitize(struct gguf_tensor_info * info) {\n+    if (info->n_dims > GGML_MAX_DIMS) {\n+        fprintf(stderr, \"%s: invalid number of dimensions (%\" PRIu32 \")\\n\", __func__, info->n_dims);\n+        return false;\n+    }\n+\n+    if (info->type < 0 || info->type >= GGML_TYPE_COUNT) {\n+        fprintf(stderr, \"%s: invalid type (%d)\\n\", __func__, info->type);\n+        return false;\n+    }\n+\n+    if (strlen(info->name.data) >= GGML_MAX_NAME) {\n+        fprintf(stderr, \"%s: tensor '%s' name is too long\\n\", __func__, info->name.data);\n+        return false;\n+    }\n \n     for (uint32_t i = 0; i < info->n_dims; ++i) {\n-        GGML_ASSERT(info->ne[i] > 0);\n+        if (info->ne[i] <= 0) {\n+            fprintf(stderr, \"%s: invalid number of elements (%\" PRIu64 \")\\n\", __func__, info->ne[i]);\n+            return false;\n+        }\n     }\n \n     // prevent overflow for total number of elements\n-    GGML_ASSERT(INT64_MAX/info->ne[1] > info->ne[0]);\n-    GGML_ASSERT(INT64_MAX/info->ne[2] > info->ne[0]*info->ne[1]);\n-    GGML_ASSERT(INT64_MAX/info->ne[3] > info->ne[0]*info->ne[1]*info->ne[2]);\n+    if (INT64_MAX/info->ne[1] <= info->ne[0]) {\n+        fprintf(stderr, \"%s: invalid number of elements (%\" PRIu64 \")\\n\", __func__, info->ne[1]);\n+        return false;\n+    }\n+\n+    if (INT64_MAX/info->ne[2] <= info->ne[0]*info->ne[1]) {\n+        fprintf(stderr, \"%s: invalid number of elements (%\" PRIu64 \")\\n\", __func__, info->ne[2]);\n+        return false;\n+    }\n+\n+    if (INT64_MAX/info->ne[3] <= info->ne[0]*info->ne[1]*info->ne[2]) {\n+        fprintf(stderr, \"%s: invalid number of elements (%\" PRIu64 \")\\n\", __func__, info->ne[3]);\n+        return false;\n+    }\n+\n+    return true;\n }\n \n static bool gguf_fread_el(FILE * file, void * dst, size_t size, size_t * offset) {\n@@ -22414,8 +22442,7 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p\n             ok = ok && gguf_fread_el (file, &info->type,   sizeof(info->type),    &offset);\n             ok = ok && gguf_fread_el (file, &info->offset, sizeof(info->offset),  &offset);\n \n-            // TODO: return an error instead of crashing with GGML_ASSERT\n-            gguf_tensor_info_sanitize(info);\n+            ok = ok && gguf_tensor_info_sanitize(info);\n \n             // make sure there is no duplicated tensor names\n             for (uint64_t j = 0; j < i && ok; ++j) {\ndiff --git a/src/llama.cpp b/src/llama.cpp\nindex ef1b8ee5970..60a0db29c7b 100644\n--- a/src/llama.cpp\n+++ b/src/llama.cpp\n@@ -4273,8 +4273,11 @@ struct llama_model_loader {\n \n         llama_tensor_weight(const llama_file * file, uint16_t idx, const char * name, const struct gguf_context * gguf_ctx, ggml_tensor * tensor) : idx(idx), tensor(tensor) {\n             const int tensor_idx = gguf_find_tensor(gguf_ctx, name);\n-            offs = gguf_get_data_offset(gguf_ctx) + gguf_get_tensor_offset(gguf_ctx, tensor_idx);\n+            if (tensor_idx < 0) {\n+                throw std::runtime_error(format(\"tensor '%s' not found in the model\", name));\n+            }\n \n+            offs = gguf_get_data_offset(gguf_ctx) + gguf_get_tensor_offset(gguf_ctx, tensor_idx);\n             if (offs + ggml_nbytes(tensor) < offs || offs + ggml_nbytes(tensor) > file->size) {\n                 throw std::runtime_error(format(\"tensor '%s' data is not within the file bounds, model is corrupted or incomplete\", name));\n             }\n@@ -7426,7 +7429,7 @@ static bool llm_load_tensors(\n                 if (flags & llama_model_loader::TENSOR_NOT_REQUIRED) {\n                     return nullptr;\n                 }\n-                throw std::runtime_error(format(\"missing tensor %s\", tn.str().c_str()));\n+                throw std::runtime_error(format(\"missing tensor '%s'\", tn.str().c_str()));\n             }\n \n             // some models use the token embedding tensor as the output, but since these are used in different layers and with different ops\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42538148-vul",
+      "digest": "sha256:106eed0f6fb3ed98c2df432affd8a6a9b37174e198add48b8fda2d232e8d161c"
+    },
+    "patched": {
+      "ref": "n132/arvo:42538148-fix",
+      "digest": "sha256:ee9c509ac387166c51d60bd5139c4c28869459d394f16d26455a88a3974197c1"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/llama.cpp/ggml/src/ggml.c:22436",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/llama.cpp/ggml/src/ggml.c:22436"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

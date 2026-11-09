@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-956018894",
+  "chain": "CWE-129->CWE-125",
+  "project": "ffmpeg",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42477020",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://git.ffmpeg.org/gitweb/ffmpeg.git/commitdiff/12b909ba319d32ed100d9b26021aa9b6976424d7",
+      "fix_commits": [
+        "12b909ba319d32ed100d9b26021aa9b6976424d7"
+      ],
+      "repo": "https://git.ffmpeg.org/gitweb/ffmpeg.git/commitdiff"
+    },
+    "patch": "From 12b909ba319d32ed100d9b26021aa9b6976424d7 Mon Sep 17 00:00:00 2001\nFrom: Michael Niedermayer <michael@niedermayer.cc>\nDate: Thu, 29 Aug 2019 21:26:43 +0200\nSubject: [PATCH] avcodec/qdm2: Check frame size\n\nFixes: index 2304 out of bounds for type 'float [2304]'\nFixes: 16332/clusterfuzz-testcase-minimized-ffmpeg_AV_CODEC_ID_QDM2_fuzzer-5679142481166336\n\nFound-by: continuous fuzzing process https://github.com/google/oss-fuzz/tree/master/projects/ffmpeg\nSigned-off-by: Michael Niedermayer <michael@niedermayer.cc>\n---\n libavcodec/qdm2.c | 5 +++++\n 1 file changed, 5 insertions(+)\n\ndiff --git a/libavcodec/qdm2.c b/libavcodec/qdm2.c\nindex eaffb36..ac8ae8c 100644\n--- a/libavcodec/qdm2.c\n+++ b/libavcodec/qdm2.c\n@@ -1727,6 +1727,11 @@ static av_cold int qdm2_decode_init(AVCodecContext *avctx)\n     s->sub_sampling = s->fft_order - 7;\n     s->frequency_range = 255 / (1 << (2 - s->sub_sampling));\n \n+    if (s->frame_size * 4 >> s->sub_sampling > MPA_FRAME_SIZE) {\n+        avpriv_request_sample(avctx, \"large frames\");\n+        return AVERROR_PATCHWELCOME;\n+    }\n+\n     switch ((s->sub_sampling * 2 + s->channels - 1)) {\n         case 0: tmp = 40; break;\n         case 1: tmp = 48; break;\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42477020-vul",
+      "digest": "sha256:d0ab0645c72ca745e18896ba6c210bc17384d3d22c12d83efea54481281f419d"
+    },
+    "patched": {
+      "ref": "n132/arvo:42477020-fix",
+      "digest": "sha256:46308ae9de150b5e40a1608d8322f8450150a400600c19c22b54ed6513e72530"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "crash_site": "/src/ffmpeg/libavcodec/qdm2.c:1580",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 129,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "site": "/src/ffmpeg/libavcodec/qdm2.c:1580"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

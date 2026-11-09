@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042494796",
+  "chain": "CWE-456->CWE-457",
+  "project": "php-src",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42494796",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "fd6291773012aedcf5566ba93a522024ccd56845",
+      "fix_commits": [
+        "fd6291773012aedcf5566ba93a522024ccd56845"
+      ],
+      "repo": "https://github.com/php/php-src"
+    },
+    "patch": "diff --git a/ext/session/session.c b/ext/session/session.c\nindex b2c05f04bda3..286d108d64a5 100644\n--- a/ext/session/session.c\n+++ b/ext/session/session.c\n@@ -1952,12 +1952,23 @@ static int save_handler_check_session() {\n \treturn SUCCESS;\n }\n \n+static inline void set_user_save_handler_ini(void) {\n+\tzend_string *ini_name, *ini_val;\n+\n+\tini_name = zend_string_init(\"session.save_handler\", sizeof(\"session.save_handler\") - 1, 0);\n+\tini_val = zend_string_init(\"user\", sizeof(\"user\") - 1, 0);\n+\tPS(set_handler) = 1;\n+\tzend_alter_ini_entry(ini_name, ini_val, PHP_INI_USER, PHP_INI_STAGE_RUNTIME);\n+\tPS(set_handler) = 0;\n+\tzend_string_release_ex(ini_val, 0);\n+\tzend_string_release_ex(ini_name, 0);\n+}\n+\n /* {{{ Sets user-level functions */\n PHP_FUNCTION(session_set_save_handler)\n {\n \tzval *args = NULL;\n \tint i, num_args, argc = ZEND_NUM_ARGS();\n-\tzend_string *ini_name, *ini_val;\n \n \tif (argc > 0 && argc <= 2) {\n \t\tzval *obj = NULL;\n@@ -2052,13 +2063,7 @@ PHP_FUNCTION(session_set_save_handler)\n \t\t}\n \n \t\tif (PS(session_status) != php_session_active && (!PS(mod) || PS(mod) != &ps_mod_user)) {\n-\t\t\tini_name = zend_string_init(\"session.save_handler\", sizeof(\"session.save_handler\") - 1, 0);\n-\t\t\tini_val = zend_string_init(\"user\", sizeof(\"user\") - 1, 0);\n-\t\t\tPS(set_handler) = 1;\n-\t\t\tzend_alter_ini_entry(ini_name, ini_val, PHP_INI_USER, PHP_INI_STAGE_RUNTIME);\n-\t\t\tPS(set_handler) = 0;\n-\t\t\tzend_string_release_ex(ini_val, 0);\n-\t\t\tzend_string_release_ex(ini_name, 0);\n+\t\t\tset_user_save_handler_ini();\n \t\t}\n \n \t\tRETURN_TRUE;\n@@ -2090,14 +2095,8 @@ PHP_FUNCTION(session_set_save_handler)\n \t/* remove shutdown function */\n \tremove_user_shutdown_function(\"session_shutdown\", sizeof(\"session_shutdown\") - 1);\n \n-\tif (PS(mod) && PS(mod) != &ps_mod_user) {\n-\t\tini_name = zend_string_init(\"session.save_handler\", sizeof(\"session.save_handler\") - 1, 0);\n-\t\tini_val = zend_string_init(\"user\", sizeof(\"user\") - 1, 0);\n-\t\tPS(set_handler) = 1;\n-\t\tzend_alter_ini_entry(ini_name, ini_val, PHP_INI_USER, PHP_INI_STAGE_RUNTIME);\n-\t\tPS(set_handler) = 0;\n-\t\tzend_string_release_ex(ini_val, 0);\n-\t\tzend_string_release_ex(ini_name, 0);\n+\tif (!PS(mod) || PS(mod) != &ps_mod_user) {\n+\t\tset_user_save_handler_ini();\n \t}\n \n \tfor (i = 0; i < argc; i++) {\ndiff --git a/ext/session/tests/bug80889a.phpt b/ext/session/tests/bug80889a.phpt\nnew file mode 100644\nindex 000000000000..ff0c0253823a\n--- /dev/null\n+++ b/ext/session/tests/bug80889a.phpt\n@@ -0,0 +1,35 @@\n+--TEST--\n+Bug #80889 (Cannot set save handler when save_handler is invalid)\n+--SKIPIF--\n+<?php include('skipif.inc'); ?>\n+--INI--\n+session.save_handler=whatever\n+--FILE--\n+<?php\n+$initHandler = ini_get('session.save_handler');\n+session_set_save_handler(\n+    function ($savePath, $sessionName) {\n+        return true;\n+    },\n+    function () {\n+        return true;\n+    },\n+    function ($id) {\n+        return '';\n+    },\n+    function ($id, $data) {\n+        return true;\n+    },\n+    function ($id) {\n+        return true;\n+    },\n+    function ($maxlifetime) {\n+        return true;\n+    }\n+);\n+$setHandler = ini_get('session.save_handler');\n+var_dump($initHandler, $setHandler);\n+?>\n+--EXPECT--\n+string(8) \"whatever\"\n+string(4) \"user\"\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42494796-vul",
+      "digest": "sha256:0481ccd242df85e8a287503bc9d163e339a5d1a7ca2d5b9317044e469a347f13"
+    },
+    "patched": {
+      "ref": "n132/arvo:42494796-fix",
+      "digest": "sha256:5601b4d459b99391c230f09ba14811f2d376258410cfda63f1c5da1bee4f60f1"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/php-src/oniguruma/src/utf8.c:73",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/php-src/oniguruma/src/utf8.c:73"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

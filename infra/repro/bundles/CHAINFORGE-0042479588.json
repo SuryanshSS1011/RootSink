@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042479588",
+  "chain": "CWE-416->CWE-787",
+  "project": "openh264",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42479588",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "2c13955d0649b2afc575bc5416dcedeffc8c01ec",
+      "fix_commits": [
+        "2c13955d0649b2afc575bc5416dcedeffc8c01ec"
+      ],
+      "repo": "https://github.com/cisco/openh264"
+    },
+    "patch": "From 2c13955d0649b2afc575bc5416dcedeffc8c01ec Mon Sep 17 00:00:00 2001\nFrom: xiaotiansf <xiaotianshimail@gmail.com>\nDate: Fri, 1 Nov 2019 11:41:06 -0700\nSubject: [PATCH] fix issue 3193 (fuzz 18644) by adding missing initialization\n of PPicture's refPic lists\n\n---\n codec/decoder/core/src/decoder_core.cpp | 2 ++\n 1 file changed, 2 insertions(+)\n\ndiff --git a/codec/decoder/core/src/decoder_core.cpp b/codec/decoder/core/src/decoder_core.cpp\nindex d4532c5..29a90bd 100644\n--- a/codec/decoder/core/src/decoder_core.cpp\n+++ b/codec/decoder/core/src/decoder_core.cpp\n@@ -2614,6 +2614,8 @@ int32_t DecodeCurrentAccessUnit (PWelsDecoderContext pCtx, uint8_t** ppDst, SBuf\n         memset (pCtx->sMb.pSliceIdc[i], 0xff, (pCtx->sMb.iMbWidth * pCtx->sMb.iMbHeight * sizeof (int32_t)));\n       memset (pCtx->pCurDqLayer->pMbCorrectlyDecodedFlag, 0, pCtx->pSps->iMbWidth * pCtx->pSps->iMbHeight * sizeof (bool));\n       memset (pCtx->pCurDqLayer->pMbRefConcealedFlag, 0, pCtx->pSps->iMbWidth * pCtx->pSps->iMbHeight * sizeof (bool));\n+      memset (pCtx->pDec->pRefPic[LIST_0], 0, sizeof (PPicture) * 17);\n+      memset (pCtx->pDec->pRefPic[LIST_1], 0, sizeof (PPicture) * 17);\n       pCtx->pDec->iMbNum = pCtx->pSps->iMbWidth * pCtx->pSps->iMbHeight;\n       pCtx->pDec->iMbEcedNum = 0;\n       pCtx->pDec->iMbEcedPropNum = 0;\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42479588-vul",
+      "digest": "sha256:9a20c8d8c2264a69473d7fa149f1463262cb423439ad56538304f18d9a901e72"
+    },
+    "patched": {
+      "ref": "n132/arvo:42479588-fix",
+      "digest": "sha256:b08d356ef863d80ca75394616a023242bc67eb88982dcae5a0f09811a159678f"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "WRITE",
+        "crash_site": "/src/openh264/codec/decoder/core/src/manage_dec_ref.cpp:89",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "WRITE",
+        "site": "/src/openh264/codec/decoder/core/src/manage_dec_ref.cpp:89"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042482063",
+  "chain": "CWE-20->CWE-125",
+  "project": "pcre2",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42482063",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "68f9c495178a04e055cf1b25e63edd0e59461183",
+      "fix_commits": [
+        "68f9c495178a04e055cf1b25e63edd0e59461183"
+      ],
+      "repo": "https://github.com/PCRE2Project/pcre2"
+    },
+    "patch": "diff --git a/src/pcre2_study.c b/src/pcre2_study.c\nindex 02d1c08dd..fc2996946 100644\n--- a/src/pcre2_study.c\n+++ b/src/pcre2_study.c\n@@ -824,7 +824,7 @@ if (caseless)\n       (void)PRIV(ord2utf)(c, buff);\n       SET_BIT(buff[0]);\n       }\n-    else SET_BIT(c);    \n+    else if (c < 256) SET_BIT(c);    \n #else  /* 16-bit or 32-bit mode */\n     if (c > 0xff) SET_BIT(0xff); else SET_BIT(c);\n #endif\ndiff --git a/testdata/testinput5 b/testdata/testinput5\nindex d90b66d96..b3fcfef93 100644\n--- a/testdata/testinput5\n+++ b/testdata/testinput5\n@@ -2179,4 +2179,6 @@\n \n /\\p{Any}*xyz/I\n \n+/(|\ufffd)7/caseless,ucp\n+\n # End of testinput5\ndiff --git a/testdata/testoutput5 b/testdata/testoutput5\nindex ecf01fb49..5bdf873d2 100644\n--- a/testdata/testoutput5\n+++ b/testdata/testoutput5\n@@ -4938,4 +4938,6 @@ Overall options: anchored\n Last code unit = 'z'\n Subject length lower bound = 3\n \n+/(|\ufffd)7/caseless,ucp\n+\n # End of testinput5\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42482063-vul",
+      "digest": "sha256:71463e6ad4484b87730ebbb36d333bc38836f1909528653aaf9947c959b503a1"
+    },
+    "patched": {
+      "ref": "n132/arvo:42482063-fix",
+      "digest": "sha256:ef1a3525bafd18b43008962f363c59e1cf541526b65f00e5dfa6aa208b63c20b"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/pcre2/src/pcre2_study.c:1131",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/pcre2/src/pcre2_study.c:1131"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

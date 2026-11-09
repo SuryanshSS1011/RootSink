@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042494152",
+  "chain": "CWE-1284->CWE-787",
+  "project": "ffmpeg",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42494152",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "462b8261aa3c4f9844b2e050c74b9a2018e3649d",
+      "fix_commits": [
+        "462b8261aa3c4f9844b2e050c74b9a2018e3649d"
+      ],
+      "repo": "https://git.ffmpeg.org/ffmpeg.git"
+    },
+    "patch": "From 462b8261aa3c4f9844b2e050c74b9a2018e3649d Mon Sep 17 00:00:00 2001\nFrom: Michael Niedermayer <michael@niedermayer.cc>\nDate: Wed, 17 Mar 2021 13:14:39 +0100\nSubject: [PATCH] avcodec/speedhq: Width < 8 is not supported\n\nFixes: out of array access\nFixes: 31733/clusterfuzz-testcase-minimized-ffmpeg_AV_CODEC_ID_SPEEDHQ_fuzzer-4704307963363328\nFixes: 31736/clusterfuzz-testcase-minimized-ffmpeg_AV_CODEC_ID_SPEEDHQ_fuzzer-6190960292790272\n\nFound-by: continuous fuzzing process https://github.com/google/oss-fuzz/tree/master/projects/ffmpeg\nSigned-off-by: Michael Niedermayer <michael@niedermayer.cc>\n---\n libavcodec/speedhq.c | 2 +-\n 1 file changed, 1 insertion(+), 1 deletion(-)\n\ndiff --git a/libavcodec/speedhq.c b/libavcodec/speedhq.c\nindex 5861b7f..711bcd6 100644\n--- a/libavcodec/speedhq.c\n+++ b/libavcodec/speedhq.c\n@@ -498,7 +498,7 @@ static int speedhq_decode_frame(AVCodecContext *avctx,\n     uint32_t second_field_offset;\n     int ret;\n \n-    if (buf_size < 4)\n+    if (buf_size < 4 || avctx->width < 8)\n         return AVERROR_INVALIDDATA;\n \n     quality = buf[0];\n-- \n2.55.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42494152-vul",
+      "digest": "sha256:19f678fe66432e819f8ce21c0aad3e1ded4eecf7cf0732e302c201ff6f53fc55"
+    },
+    "patched": {
+      "ref": "n132/arvo:42494152-fix",
+      "digest": "sha256:3dd89ed19da4296624e0a7605d1262cbf7623d14053aec654e5ac2f0cb6e97dd"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/ffmpeg/libavcodec/speedhq.c:215",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/ffmpeg/libavcodec/speedhq.c:215"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

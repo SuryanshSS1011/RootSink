@@ -1,0 +1,84 @@
+======================= INFO =========================
+This binary is built for AFL-fuzz.
+To run the target function on individual input(s) execute this:
+  /out/openexr_scanlines_fuzzer < INPUT_FILE
+or
+  /out/openexr_scanlines_fuzzer INPUT_FILE1 [INPUT_FILE2 ... ]
+To fuzz with afl-fuzz execute this:
+  afl-fuzz [afl-flags] /out/openexr_scanlines_fuzzer [-N]
+afl-fuzz will run N iterations before re-spawning the process (default: 1000)
+======================================================
+Reading 391 bytes from /tmp/poc
+=================================================================
+==595767==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x612000002cc0 at pc 0x0000006b8d54 bp 0x7ffc5363f1b0 sp 0x7ffc5363f1a8
+READ of size 1 at 0x612000002cc0 thread T0
+SCARINESS: 12 (1-byte-read-heap-buffer-overflow)
+    #0 0x6b8d53 in readBits /src/openexr/OpenEXR/IlmImf/ImfFastHuf.cpp:576:34
+    #1 0x6b8d53 in Imf_2_5::FastHufDecoder::FastHufDecoder(char const*&, int, int, int, int) /src/openexr/OpenEXR/IlmImf/ImfFastHuf.cpp:143:25
+    #2 0x65f954 in Imf_2_5::hufUncompress(char const*, int, unsigned short*, int) /src/openexr/OpenEXR/IlmImf/ImfHuf.cpp:1110:24
+    #3 0x52a493 in Imf_2_5::PizCompressor::uncompress(char const*, int, Imath_2_5::Box<Imath_2_5::Vec2<int> >, char const*&) /src/openexr/OpenEXR/IlmImf/ImfPizCompressor.cpp:603:5
+    #4 0x528f90 in Imf_2_5::PizCompressor::uncompress(char const*, int, int, char const*&) /src/openexr/OpenEXR/IlmImf/ImfPizCompressor.cpp:285:12
+    #5 0x67da7a in Imf_2_5::(anonymous namespace)::LineBufferTask::execute() /src/openexr/OpenEXR/IlmImf/ImfScanLineInputFile.cpp:551:66
+    #6 0x72594d in IlmThread_2_5::(anonymous namespace)::NullThreadPoolProvider::addTask(IlmThread_2_5::Task*) /src/openexr/IlmBase/IlmThread/IlmThreadPool.cpp:456:12
+    #7 0x725779 in addTask /src/openexr/IlmBase/IlmThread/IlmThreadPool.cpp:838:28
+    #8 0x725779 in IlmThread_2_5::ThreadPool::addGlobalTask(IlmThread_2_5::Task*) /src/openexr/IlmBase/IlmThread/IlmThreadPool.cpp:858:24
+    #9 0x66e0cd in Imf_2_5::ScanLineInputFile::readPixels(int, int) /src/openexr/OpenEXR/IlmImf/ImfScanLineInputFile.cpp:1705:17
+    #10 0x63d985 in Imf_2_5::InputFile::readPixels(int, int) /src/openexr/OpenEXR/IlmImf/ImfInputFile.cpp:830:23
+    #11 0x4cecda in (anonymous namespace)::readSingle(Imf_2_5::IStream&) /src/openexr_scanlines_fuzzer.cc:47:51
+    #12 0x4ce82b in LLVMFuzzerTestOneInput /src/openexr_scanlines_fuzzer.cc:103:3
+    #13 0x4d2b7e in ExecuteFilesOnyByOne /src/libfuzzer/afl/afl_driver.cpp:217:5
+    #14 0x4d2b7e in main /src/libfuzzer/afl/afl_driver.cpp:254:12
+    #15 0x14d28ae3083f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2083f)
+    #16 0x420978 in _start (/out/openexr_scanlines_fuzzer+0x420978)
+
+DEDUP_TOKEN: readBits--Imf_2_5::FastHufDecoder::FastHufDecoder(char const*&, int, int, int, int)--Imf_2_5::hufUncompress(char const*, int, unsigned short*, int)
+0x612000002cc0 is located 0 bytes to the right of 256-byte region [0x612000002bc0,0x612000002cc0)
+allocated by thread T0 here:
+    #0 0x49c917 in posix_memalign /src/llvm-project/compiler-rt/lib/asan/asan_malloc_linux.cpp:226:3
+    #1 0x666690 in EXRAllocAligned /src/openexr/OpenEXR/IlmImf/ImfSystemSpecific.h:68:10
+    #2 0x666690 in Imf_2_5::ScanLineInputFile::initialize(Imf_2_5::Header const&) /src/openexr/OpenEXR/IlmImf/ImfScanLineInputFile.cpp:1175:58
+    #3 0x667a8f in Imf_2_5::ScanLineInputFile::ScanLineInputFile(Imf_2_5::Header const&, Imf_2_5::IStream*, int) /src/openexr/OpenEXR/IlmImf/ImfScanLineInputFile.cpp:1246:9
+    #4 0x638c76 in Imf_2_5::InputFile::initialize() /src/openexr/OpenEXR/IlmImf/ImfInputFile.cpp:567:32
+    #5 0x63a557 in Imf_2_5::InputFile::InputFile(Imf_2_5::IStream&, int) /src/openexr/OpenEXR/IlmImf/ImfInputFile.cpp:456:13
+    #6 0x51c213 in Imf_2_5::RgbaInputFile::RgbaInputFile(Imf_2_5::IStream&, int) /src/openexr/OpenEXR/IlmImf/ImfRgbaFile.cpp:1189:21
+    #7 0x4cebd5 in (anonymous namespace)::readSingle(Imf_2_5::IStream&) /src/openexr_scanlines_fuzzer.cc:35:19
+    #8 0x4ce82b in LLVMFuzzerTestOneInput /src/openexr_scanlines_fuzzer.cc:103:3
+    #9 0x4d2b7e in ExecuteFilesOnyByOne /src/libfuzzer/afl/afl_driver.cpp:217:5
+    #10 0x4d2b7e in main /src/libfuzzer/afl/afl_driver.cpp:254:12
+    #11 0x14d28ae3083f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2083f)
+
+DEDUP_TOKEN: posix_memalign--EXRAllocAligned--Imf_2_5::ScanLineInputFile::initialize(Imf_2_5::Header const&)
+SUMMARY: AddressSanitizer: heap-buffer-overflow /src/openexr/OpenEXR/IlmImf/ImfFastHuf.cpp:576:34 in readBits
+Shadow bytes around the buggy address:
+  0x0c247fff8540: fa fa fa fa fa fa fa fa 00 00 00 00 00 00 00 00
+  0x0c247fff8550: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c247fff8560: 00 00 00 00 00 00 00 00 00 00 00 00 00 fa fa fa
+  0x0c247fff8570: fa fa fa fa fa fa fa fa 00 00 00 00 00 00 00 00
+  0x0c247fff8580: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x0c247fff8590: 00 00 00 00 00 00 00 00[fa]fa fa fa fa fa fa fa
+  0x0c247fff85a0: fa fa fa fa fa fa fa fa 00 00 00 00 00 00 00 00
+  0x0c247fff85b0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c247fff85c0: 00 00 00 00 00 00 00 00 00 00 00 fa fa fa fa fa
+  0x0c247fff85d0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c247fff85e0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+  Shadow gap:              cc
+==595767==ABORTING

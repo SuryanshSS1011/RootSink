@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042486531",
+  "chain": "CWE-1284->CWE-125",
+  "project": "sleuthkit",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42486531",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "d4fe8a8130b77b3601fbd167a7a4884d097aa97d",
+      "fix_commits": [
+        "d4fe8a8130b77b3601fbd167a7a4884d097aa97d"
+      ],
+      "repo": "https://github.com/sleuthkit/sleuthkit"
+    },
+    "patch": "diff --git a/tsk/fs/hfs.c b/tsk/fs/hfs.c\nindex 003db5a950..8f9e0d9453 100644\n--- a/tsk/fs/hfs.c\n+++ b/tsk/fs/hfs.c\n@@ -3894,6 +3894,12 @@ hfs_load_extended_attrs(TSK_FS_FILE * fs_file,\n         return 0;\n     }\n \n+    if (attrFile.nodeSize < sizeof(hfs_btree_node)) {\n+        error_returned\n+            (\"hfs_load_extended_attrs: node size too small\");\n+        return 1;\n+    }\n+\n     // A place to hold one node worth of data\n     nodeData = (uint8_t *) malloc(attrFile.nodeSize);\n     if (nodeData == NULL) {\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42486531-vul",
+      "digest": "sha256:1b7440d963c510b96a94d7447bc67ce3c734b5e8d9fd52302e756ba20560260e"
+    },
+    "patched": {
+      "ref": "n132/arvo:42486531-fix",
+      "digest": "sha256:6e36ef676df32f06e2b7a8c9034d991a28513959d74fa5a74f3646fdba6109fd"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/sleuthkit/tsk/fs/hfs.c:3920",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/sleuthkit/tsk/fs/hfs.c:3920"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

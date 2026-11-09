@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042473419",
+  "chain": "CWE-20->CWE-787",
+  "project": "ffmpeg",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42473419",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://git.ffmpeg.org/gitweb/ffmpeg.git/commitdiff/1f686d023b95219db933394a7704ad9aa5f01cbb",
+      "fix_commits": [
+        "1f686d023b95219db933394a7704ad9aa5f01cbb"
+      ],
+      "repo": "https://git.ffmpeg.org/gitweb/ffmpeg.git/commitdiff"
+    },
+    "patch": "From 1f686d023b95219db933394a7704ad9aa5f01cbb Mon Sep 17 00:00:00 2001\nFrom: Michael Niedermayer <michael@niedermayer.cc>\nDate: Fri, 15 Feb 2019 01:57:09 +0100\nSubject: [PATCH] avcodec/mpeg4videodec: Clear interlaced_dct for studio\n profile\n\nFixes: Out of array access\nFixes: 13090/clusterfuzz-testcase-minimized-ffmpeg_AV_CODEC_ID_MPEG4_fuzzer-5408668986638336\n\nFound-by: continuous fuzzing process https://github.com/google/oss-fuzz/tree/master/projects/ffmpeg\nReviewed-by: Kieran Kunhya <kierank@obe.tv>\nSigned-off-by: Michael Niedermayer <michael@niedermayer.cc>\n---\n libavcodec/mpeg4videodec.c | 1 +\n 1 file changed, 1 insertion(+)\n\ndiff --git a/libavcodec/mpeg4videodec.c b/libavcodec/mpeg4videodec.c\nindex f44ee76..ecd028a 100644\n--- a/libavcodec/mpeg4videodec.c\n+++ b/libavcodec/mpeg4videodec.c\n@@ -3057,6 +3057,7 @@ static int decode_studio_vop_header(Mpeg4DecContext *ctx, GetBitContext *gb)\n         return 0;\n \n     s->partitioned_frame = 0;\n+    s->interlaced_dct = 0;\n     s->decode_mb = mpeg4_decode_studio_mb;\n \n     decode_smpte_tc(ctx, gb);\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42473419-vul",
+      "digest": "sha256:c6f121d57a84f979ebe8563110038b9924249cce7005326073015bb40f91c211"
+    },
+    "patched": {
+      "ref": "n132/arvo:42473419-fix",
+      "digest": "sha256:9c687c42b834472102d59edb34b1109d17017ae0fcb6bd05efb74ff84474c2b6"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/ffmpeg/libavcodec/mpegvideo.c:2172",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/ffmpeg/libavcodec/mpegvideo.c:2172"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042516976",
+  "chain": "CWE-20->CWE-125",
+  "project": "openbabel",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42516976",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "b3edf3ad6ee5069fd6b4234e3748308b557c937b",
+      "fix_commits": [
+        "b3edf3ad6ee5069fd6b4234e3748308b557c937b"
+      ],
+      "repo": "https://github.com/openbabel/openbabel"
+    },
+    "patch": "diff --git a/.github/workflows/build_bindings.yml b/.github/workflows/build_bindings.yml\nindex 0caba72af7..1f6da93d76 100644\n--- a/.github/workflows/build_bindings.yml\n+++ b/.github/workflows/build_bindings.yml\n@@ -46,7 +46,7 @@ jobs:\n       working-directory: ${{ runner.workspace }}\n \n     - name: Upload\n-      uses: actions/upload-artifact@v2-preview\n+      uses: actions/upload-artifact@v4\n       with:\n         path: ${{ runner.workspace }}/openbabel-latest.tar.bz2\n         name: openbabel.tar.bz2\ndiff --git a/.github/workflows/build_cmake.yml b/.github/workflows/build_cmake.yml\nindex b5b224a761..e4dffda257 100644\n--- a/.github/workflows/build_cmake.yml\n+++ b/.github/workflows/build_cmake.yml\n@@ -103,7 +103,7 @@ jobs:\n \n     - name: Upload\n       if: matrix.config.artifact != 0\n-      uses: actions/upload-artifact@v1\n+      uses: actions/upload-artifact@v4\n       with:\n         path: ${{ runner.workspace }}/instdir/../${{ matrix.config.artifact }}\n         name: ${{ matrix.config.artifact }}\ndiff --git a/.github/workflows/cifuzz.yml b/.github/workflows/cifuzz.yml\nindex 7f673e30fa..4689216f38 100644\n--- a/.github/workflows/cifuzz.yml\n+++ b/.github/workflows/cifuzz.yml\n@@ -19,7 +19,7 @@ jobs:\n         dry-run: false\n         language: c++\n     - name: Upload Crash\n-      uses: actions/upload-artifact@v3\n+      uses: actions/upload-artifact@v4\n       if: failure() && steps.build.outcome == 'success'\n       with:\n         name: artifacts\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42516976-vul",
+      "digest": "sha256:dbd3f90056660c19a6e95bb7fd397c5ad9273922c6341a44891424c0fd9e4daf"
+    },
+    "patched": {
+      "ref": "n132/arvo:42516976-fix",
+      "digest": "sha256:e5c1fe25b79fbbe4196e46fff08ec5b34a21024d173f6b53673a7cba692cacec"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "global-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/openbabel/src/data.cpp:700",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "global-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/openbabel/src/data.cpp:700"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

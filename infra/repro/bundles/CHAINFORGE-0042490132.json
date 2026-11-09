@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042490132",
+  "chain": "CWE-1284->CWE-125",
+  "project": "libucl",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42490132",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "852f752708ae0aca40c50976931cbab5277d236c",
+      "fix_commits": [
+        "852f752708ae0aca40c50976931cbab5277d236c"
+      ],
+      "repo": "https://github.com/vstakhov/libucl"
+    },
+    "patch": "diff --git a/src/ucl_util.c b/src/ucl_util.c\nindex 17cd5e4..a0fdcc9 100644\n--- a/src/ucl_util.c\n+++ b/src/ucl_util.c\n@@ -2177,7 +2177,7 @@ ucl_strnstr (const char *s, const char *find, int len)\n \t\tmlen = strlen (find);\n \t\tdo {\n \t\t\tdo {\n-\t\t\t\tif ((sc = *s++) == 0 || len-- == 0)\n+\t\t\t\tif ((sc = *s++) == 0 || len-- < mlen)\n \t\t\t\t\treturn (NULL);\n \t\t\t} while (sc != c);\n \t\t} while (strncmp (s, find, mlen) != 0);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42490132-vul",
+      "digest": "sha256:c30ee80e83fb4a10a06b69acb5aca29e4b2415499ad14b2eccae648a786e392b"
+    },
+    "patched": {
+      "ref": "n132/arvo:42490132-fix",
+      "digest": "sha256:25b13d6b8782dd67acbfa7527e23a719a2847c325abb81652db4aaa14235f5a1"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/libucl/src/ucl_util.c:2183",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/libucl/src/ucl_util.c:2183"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

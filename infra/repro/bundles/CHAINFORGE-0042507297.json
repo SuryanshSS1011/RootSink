@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042507297",
+  "chain": "CWE-20->CWE-125",
+  "project": "md4c",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42507297",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "62b60979f6a281b2b3cf883abc84299431fe2f76",
+      "fix_commits": [
+        "62b60979f6a281b2b3cf883abc84299431fe2f76"
+      ],
+      "repo": "https://github.com/mity/md4c"
+    },
+    "patch": "diff --git a/CHANGELOG.md b/CHANGELOG.md\nindex ccf7c74b..eccf9016 100644\n--- a/CHANGELOG.md\n+++ b/CHANGELOG.md\n@@ -49,9 +49,9 @@ Fixes:\n    Fix quadratic time behavior caused by unnecessary lookup for link reference\n    definition even if the potential label contains nested brackets.\n \n- * [#173](https://github.com/mity/md4c/issues/173):\n-   Fix broken internal state invoked by devilish combination of syntax\n-   constructions.\n+ * [#173](https://github.com/mity/md4c/issues/173),\n+   [#174](https://github.com/mity/md4c/issues/174):\n+   Multiple bugs identified with oss-fuzz were fixed.\n \n \n ## Version 0.4.8\ndiff --git a/src/md4c.c b/src/md4c.c\nindex 779f808c..5cdffe16 100644\n--- a/src/md4c.c\n+++ b/src/md4c.c\n@@ -192,7 +192,7 @@ struct MD_CTX_tag {\n #define TILDE_OPENERS_2                         (ctx->mark_chains[10])\n #define BRACKET_OPENERS                         (ctx->mark_chains[11])\n #define DOLLAR_OPENERS                          (ctx->mark_chains[12])\n-#define OPENERS_CHAIN_FIRST                     2\n+#define OPENERS_CHAIN_FIRST                     1\n #define OPENERS_CHAIN_LAST                      12\n \n     int n_table_cell_boundaries;\n@@ -2650,6 +2650,10 @@ md_rollback(MD_CTX* ctx, int opener_index, int closer_index, int how)\n     int i;\n     int mark_index;\n \n+    fprintf(stderr, \"md_rollback: %d ... %d [%s]\\n\",\n+            ctx->marks[opener_index].beg, ctx->marks[closer_index].beg,\n+            (how == MD_ROLLBACK_ALL ? \"all\" : \"crossing\"));\n+\n     /* Cut all unresolved openers at the mark index. */\n     for(i = OPENERS_CHAIN_FIRST; i < OPENERS_CHAIN_LAST+1; i++) {\n         MD_MARKCHAIN* chain = &ctx->mark_chains[i];\n@@ -3439,6 +3443,8 @@ md_resolve_links(MD_CTX* ctx, const MD_LINE* lines, int n_lines)\n         MD_LINK_ATTR attr;\n         int is_link = FALSE;\n \n+        fprintf(stderr, \"md_resolve_links: %d ... %d\\n\", opener->beg, closer->beg);\n+\n         if(next_index >= 0) {\n             next_opener = &ctx->marks[next_index];\n             next_closer = &ctx->marks[next_opener->next];\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42507297-vul",
+      "digest": "sha256:737c94f0d9e558bdb759dbcab9c4c6f4df471279e13a936c02e4f6bccc59205f"
+    },
+    "patched": {
+      "ref": "n132/arvo:42507297-fix",
+      "digest": "sha256:189d89b31cf860d725c54571ee53f172050401dd5a8e6dbda6a129bb617a03b1"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/md4c/src/md4c.c:817",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/md4c/src/md4c.c:817"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

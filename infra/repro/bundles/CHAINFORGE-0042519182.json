@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042519182",
+  "chain": "CWE-20->CWE-787",
+  "project": "imagemagick",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42519182",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "bb4e7e8919573caf70bd5af3330e991ddbad0c92",
+      "fix_commits": [
+        "bb4e7e8919573caf70bd5af3330e991ddbad0c92"
+      ],
+      "repo": "https://github.com/imagemagick/imagemagick"
+    },
+    "patch": "diff --git a/MagickCore/quantize.c b/MagickCore/quantize.c\nindex ca27477176d..56903d33959 100644\n--- a/MagickCore/quantize.c\n+++ b/MagickCore/quantize.c\n@@ -3318,8 +3318,12 @@ static MagickBooleanType SetGrayscaleImage(Image *image,\n   assert(image->signature == MagickCoreSignature);\n   if (image->type != GrayscaleType)\n     (void) TransformImageColorspace(image,GRAYColorspace,exception);\n-  colormap_index=(ssize_t *) AcquireQuantumMemory(MaxColormapSize,\n-    sizeof(*colormap_index));\n+  if (image->storage_class == PseudoClass)\n+    colormap_index=(ssize_t *) AcquireQuantumMemory(image->colors,\n+      sizeof(*colormap_index));\n+  else\n+    colormap_index=(ssize_t *) AcquireQuantumMemory(MaxColormapSize,\n+      sizeof(*colormap_index));\n   if (colormap_index == (ssize_t *) NULL)\n     ThrowBinaryException(ResourceLimitError,\"MemoryAllocationFailed\",\n       image->filename);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42519182-vul",
+      "digest": "sha256:8938a0c14eb9156b1cb0deceb6dfe6eedab5a05450d1ac30cbfb19204760f975"
+    },
+    "patched": {
+      "ref": "n132/arvo:42519182-fix",
+      "digest": "sha256:211db2eedea803800f48e28254045f0918b9ab566eaa3f20165747d5de067e54"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/imagemagick/MagickCore/quantize.c:3411",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/imagemagick/MagickCore/quantize.c:3411"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

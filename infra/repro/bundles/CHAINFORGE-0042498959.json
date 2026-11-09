@@ -1,0 +1,74 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042498959",
+  "chain": "CWE-416->CWE-787",
+  "project": "libpng",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42498959",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "357af1f095320c76f7c9d2bcf7de48dd809358e4\n12384eae6fa138b528647cdf350b005509e95b6b\na3d1057a735d923626f1f6bdc0f662a13d0cba6f",
+      "fix_commits": [
+        "357af1f095320c76f7c9d2bcf7de48dd809358e4",
+        "12384eae6fa138b528647cdf350b005509e95b6b",
+        "a3d1057a735d923626f1f6bdc0f662a13d0cba6f"
+      ],
+      "repo": "https://github.com/glennrp/libpng"
+    },
+    "patch": "diff --git a/contrib/oss-fuzz/libpng_read_fuzzer.cc b/contrib/oss-fuzz/libpng_read_fuzzer.cc\nindex bfce5bc985..64c870fb0f 100644\n--- a/contrib/oss-fuzz/libpng_read_fuzzer.cc\n+++ b/contrib/oss-fuzz/libpng_read_fuzzer.cc\n@@ -169,7 +169,7 @@ extern \"C\" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {\n   int passes = png_set_interlace_handling(png_handler.png_ptr);\n   png_start_read_image(png_handler.png_ptr);\n \n-  png_read_update_info(png_handler.png_ptr, png_handler.png_info_ptr);\n+  png_read_update_info(png_handler.png_ptr, png_handler.info_ptr);\n \n   png_handler.row_ptr = png_malloc(\n       png_handler.png_ptr, png_get_rowbytes(png_handler.png_ptr,\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42498959-vul",
+      "digest": "sha256:4741982dc29d4fcbd02dee8092c5741096dd7c392b1b68bdd42190b179b6a802"
+    },
+    "patched": {
+      "ref": "n132/arvo:42498959-fix",
+      "digest": "sha256:7c61157a94ad9f00937489a9e7943470897b2d82f4a675223d983c61a6b9158f"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/libpng/pngrutil.c:3655",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/libpng/pngrutil.c:3655"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

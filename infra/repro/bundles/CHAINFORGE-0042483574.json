@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042483574",
+  "chain": "CWE-1284->CWE-125",
+  "project": "htslib",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42483574",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "382867a850b74e7285166a67ee3243560cd974ac",
+      "fix_commits": [
+        "382867a850b74e7285166a67ee3243560cd974ac"
+      ],
+      "repo": "https://github.com/samtools/htslib"
+    },
+    "patch": "diff --git a/cram/cram_decode.c b/cram/cram_decode.c\nindex 6d77f67f6..520be1f7a 100644\n--- a/cram/cram_decode.c\n+++ b/cram/cram_decode.c\n@@ -2211,7 +2211,7 @@ int cram_decode_slice(cram_fd *fd, cram_container *c, cram_slice *s,\n             s->ref = (char *)BLOCK_DATA(b);\n             s->ref_start = s->hdr->ref_seq_start;\n             s->ref_end   = s->hdr->ref_seq_start + s->hdr->ref_seq_span-1;\n-            if (s->ref_end - s->ref_start > b->uncomp_size) {\n+            if (s->hdr->ref_seq_span > b->uncomp_size) {\n                 hts_log_error(\"Embedded reference is too small at #%d:%d-%d\",\n                               ref_id, s->ref_start, s->ref_end);\n                 return -1;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42483574-vul",
+      "digest": "sha256:8c940e20099c64600f94e8f2a6fdd531e4d28178eb778ab0347c49c565cb414c"
+    },
+    "patched": {
+      "ref": "n132/arvo:42483574-fix",
+      "digest": "sha256:8eec56ff2b969e22ebc9434a45f232931e54b5ff66452f641b8a9b0c2d38cdd0"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/htslib/cram/cram_decode.c:2292",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/htslib/cram/cram_decode.c:2292"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

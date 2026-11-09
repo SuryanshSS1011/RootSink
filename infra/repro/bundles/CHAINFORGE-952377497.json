@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-952377497",
+  "chain": "CWE-129->CWE-787",
+  "project": "ffmpeg",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42479262",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://git.ffmpeg.org/gitweb/ffmpeg.git/commitdiff/de5102fd92de8d353fdf060375ed3ce859c83977",
+      "fix_commits": [
+        "de5102fd92de8d353fdf060375ed3ce859c83977"
+      ],
+      "repo": "https://git.ffmpeg.org/gitweb/ffmpeg.git/commitdiff"
+    },
+    "patch": "From de5102fd92de8d353fdf060375ed3ce859c83977 Mon Sep 17 00:00:00 2001\nFrom: Michael Niedermayer <michael@niedermayer.cc>\nDate: Tue, 22 Oct 2019 22:02:32 +0200\nSubject: [PATCH] avcodec/atrac3plus: Check split point in fill mode 3\n\nFixes: index 32 out of bounds for type 'int [32]'\nFixes: 18350/clusterfuzz-testcase-minimized-ffmpeg_AV_CODEC_ID_ATRAC3P_fuzzer-5643794862571520\n\nFound-by: continuous fuzzing process https://github.com/google/oss-fuzz/tree/master/projects/ffmpeg\nSigned-off-by: Michael Niedermayer <michael@niedermayer.cc>\n---\n libavcodec/atrac3plus.c | 4 ++++\n 1 file changed, 4 insertions(+)\n\ndiff --git a/libavcodec/atrac3plus.c b/libavcodec/atrac3plus.c\nindex 9f964ef..8d17889 100644\n--- a/libavcodec/atrac3plus.c\n+++ b/libavcodec/atrac3plus.c\n@@ -456,6 +456,10 @@ static int decode_channel_wordlen(GetBitContext *gb, Atrac3pChanUnitCtx *ctx,\n     } else if (chan->fill_mode == 3) {\n         pos = ch_num ? chan->num_coded_vals + chan->split_point\n                      : ctx->num_quant_units - chan->split_point;\n+        if (pos > FF_ARRAY_ELEMS(chan->qu_wordlen)) {\n+            av_log(avctx, AV_LOG_ERROR, \"Split point beyond array\\n\");\n+            pos = FF_ARRAY_ELEMS(chan->qu_wordlen);\n+        }\n         for (i = chan->num_coded_vals; i < pos; i++)\n             chan->qu_wordlen[i] = 1;\n     }\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42479262-vul",
+      "digest": "sha256:95a16603b2f1af35ca8333ff5c6c4c2ec3159f3e44c52cfb5c8b12732779ed37"
+    },
+    "patched": {
+      "ref": "n132/arvo:42479262-fix",
+      "digest": "sha256:5c2e0f506e01c78c4e75428b2331cd16433c12bf1073b8fe7970576e07a1bf2b"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "crash_site": "/src/ffmpeg/libavcodec/atrac3plus.c:460",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 129,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "site": "/src/ffmpeg/libavcodec/atrac3plus.c:460"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

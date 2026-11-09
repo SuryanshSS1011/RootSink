@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042489430",
+  "chain": "CWE-20->CWE-787",
+  "project": "libsndfile",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42489430",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "949c89122d1081d69260a16a56350624c4db5916",
+      "fix_commits": [
+        "949c89122d1081d69260a16a56350624c4db5916"
+      ],
+      "repo": "https://github.com/libsndfile/libsndfile"
+    },
+    "patch": "diff --git a/src/ALAC/alac_decoder.c b/src/ALAC/alac_decoder.c\nindex 52b7a4868..46d333060 100644\n--- a/src/ALAC/alac_decoder.c\n+++ b/src/ALAC/alac_decoder.c\n@@ -554,7 +554,7 @@ alac_decode (ALAC_DECODER *p, struct BitBuffer * bits, int32_t * sampleBuffer, u\n \t\t\t}\n \t\t}\n \n-#if 0 // ! DEBUG\n+#if 1 // ! DEBUG\n \t\t// if we've decoded all of our channels, bail (but not in debug b/c we want to know if we're seeing bad bits)\n \t\t// - this also protects us if the config does not match the bitstream or crap data bits follow the audio bits\n \t\tif (channelIndex >= numChannels)\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42489430-vul",
+      "digest": "sha256:11d620293a84473ca65e0ee99c016fbfdcf18407c4277c4ffef6f7c42da1e4ae"
+    },
+    "patched": {
+      "ref": "n132/arvo:42489430-fix",
+      "digest": "sha256:84cd9bbf6efe3169277a11050a528d039e82385f7415dc936e6715f019087fdf"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/libsndfile/src/ALAC/matrix_dec.c:268",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/libsndfile/src/ALAC/matrix_dec.c:268"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

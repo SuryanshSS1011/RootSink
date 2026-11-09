@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042534528",
+  "chain": "CWE-20->CWE-125",
+  "project": "fwupd",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42534528",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "8e1d4d749731aa3d42df90d4af40bb7b1d464080",
+      "fix_commits": [
+        "8e1d4d749731aa3d42df90d4af40bb7b1d464080"
+      ],
+      "repo": "https://github.com/fwupd/fwupd"
+    },
+    "patch": "diff --git a/contrib/ci/check-source.py b/contrib/ci/check-source.py\nindex 8fccc2c036f9..176e95953f61 100755\n--- a/contrib/ci/check-source.py\n+++ b/contrib/ci/check-source.py\n@@ -29,6 +29,9 @@ def test_files() -> int:\n                 if line.find(\"nocheck\") != -1:\n                     continue\n                 for token, msg in {\n+                    \"cbor_get_uint8(\": \"Use cbor_get_int() instead\",\n+                    \"cbor_get_uint16(\": \"Use cbor_get_int() instead\",\n+                    \"cbor_get_uint32(\": \"Use cbor_get_int() instead\",\n                     \"g_error(\": \"Use GError instead\",\n                     \"g_byte_array_free_to_bytes(\": \"Use g_bytes_new() instead\",\n                 }.items():\ndiff --git a/libfwupdplugin/fu-coswid-common.c b/libfwupdplugin/fu-coswid-common.c\nindex db6955d14150..7dc91c1aed0a 100644\n--- a/libfwupdplugin/fu-coswid-common.c\n+++ b/libfwupdplugin/fu-coswid-common.c\n@@ -64,6 +64,8 @@ fu_coswid_read_string(cbor_item_t *item, GError **error)\n gboolean\n fu_coswid_read_tag(cbor_item_t *item, FuCoswidTag *value, GError **error)\n {\n+\tguint64 tmp;\n+\n \tg_return_val_if_fail(item != NULL, FALSE);\n \tg_return_val_if_fail(value != NULL, FALSE);\n \tg_return_val_if_fail(error == NULL || *error == NULL, FALSE);\n@@ -75,7 +77,16 @@ fu_coswid_read_tag(cbor_item_t *item, FuCoswidTag *value, GError **error)\n \t\t\t\t    \"tag item is not a uint\");\n \t\treturn FALSE;\n \t}\n-\t*value = cbor_get_uint8(item);\n+\ttmp = cbor_get_int(item);\n+\tif (tmp > G_MAXUINT8) {\n+\t\tg_set_error(error,\n+\t\t\t    FWUPD_ERROR,\n+\t\t\t    FWUPD_ERROR_INVALID_DATA,\n+\t\t\t    \"0x%x is too large for tag\",\n+\t\t\t    (guint)tmp);\n+\t\treturn FALSE;\n+\t}\n+\t*value = (FuCoswidTag)tmp;\n \treturn TRUE;\n }\n \n@@ -105,7 +116,7 @@ fu_coswid_read_version_scheme(cbor_item_t *item, FuCoswidVersionScheme *value, G\n \t\t\t\t    \"version-scheme item is not a uint\");\n \t\treturn FALSE;\n \t}\n-\t*value = cbor_get_uint16(item);\n+\t*value = (FuCoswidVersionScheme)cbor_get_int(item);\n \treturn TRUE;\n }\n \n@@ -124,6 +135,8 @@ fu_coswid_read_version_scheme(cbor_item_t *item, FuCoswidVersionScheme *value, G\n gboolean\n fu_coswid_read_u8(cbor_item_t *item, guint8 *value, GError **error)\n {\n+\tguint64 tmp;\n+\n \tg_return_val_if_fail(item != NULL, FALSE);\n \tg_return_val_if_fail(value != NULL, FALSE);\n \tg_return_val_if_fail(error == NULL || *error == NULL, FALSE);\n@@ -135,7 +148,57 @@ fu_coswid_read_u8(cbor_item_t *item, guint8 *value, GError **error)\n \t\t\t\t    \"value item is not a uint\");\n \t\treturn FALSE;\n \t}\n-\t*value = cbor_get_uint8(item);\n+\ttmp = cbor_get_int(item);\n+\tif (tmp > G_MAXUINT8) {\n+\t\tg_set_error(error,\n+\t\t\t    FWUPD_ERROR,\n+\t\t\t    FWUPD_ERROR_INVALID_DATA,\n+\t\t\t    \"0x%x is too large for u8\",\n+\t\t\t    (guint)tmp);\n+\t\treturn FALSE;\n+\t}\n+\t*value = (guint8)tmp;\n+\treturn TRUE;\n+}\n+\n+/**\n+ * fu_coswid_read_s8:\n+ * @item: a #cbor_item_t\n+ * @value: read value\n+ * @error: (nullable): optional return location for an error\n+ *\n+ * Reads a #gint8 value.\n+ *\n+ * Returns: %TRUE for success\n+ *\n+ * Since: 1.9.17\n+ **/\n+gboolean\n+fu_coswid_read_s8(cbor_item_t *item, gint8 *value, GError **error)\n+{\n+\tguint64 tmp;\n+\n+\tg_return_val_if_fail(item != NULL, FALSE);\n+\tg_return_val_if_fail(value != NULL, FALSE);\n+\tg_return_val_if_fail(error == NULL || *error == NULL, FALSE);\n+\n+\tif (!cbor_is_int(item)) {\n+\t\tg_set_error_literal(error,\n+\t\t\t\t    FWUPD_ERROR,\n+\t\t\t\t    FWUPD_ERROR_INVALID_DATA,\n+\t\t\t\t    \"value item is not a int\");\n+\t\treturn FALSE;\n+\t}\n+\ttmp = cbor_get_int(item);\n+\tif (tmp > 127) {\n+\t\tg_set_error(error,\n+\t\t\t    FWUPD_ERROR,\n+\t\t\t    FWUPD_ERROR_INVALID_DATA,\n+\t\t\t    \"0x%x is too large for s8\",\n+\t\t\t    (guint)tmp);\n+\t\treturn FALSE;\n+\t}\n+\t*value = cbor_isa_negint(item) ? (gint8)((-1) - tmp) : (gint8)tmp;\n \treturn TRUE;\n }\n \n@@ -165,7 +228,7 @@ fu_coswid_read_u64(cbor_item_t *item, guint64 *value, GError **error)\n \t\t\t\t    \"value item is not a uint\");\n \t\treturn FALSE;\n \t}\n-\t*value = cbor_get_uint64(item);\n+\t*value = cbor_get_int(item);\n \treturn TRUE;\n }\n \ndiff --git a/libfwupdplugin/fu-coswid-common.h b/libfwupdplugin/fu-coswid-common.h\nindex 987865526c38..ad0625cb0fc1 100644\n--- a/libfwupdplugin/fu-coswid-common.h\n+++ b/libfwupdplugin/fu-coswid-common.h\n@@ -24,6 +24,8 @@ fu_coswid_read_version_scheme(cbor_item_t *item, FuCoswidVersionScheme *value, G\n gboolean\n fu_coswid_read_u8(cbor_item_t *item, guint8 *value, GError **error) G_GNUC_NON_NULL(1, 2);\n gboolean\n+fu_coswid_read_s8(cbor_item_t *item, gint8 *value, GError **error) G_GNUC_NON_NULL(1, 2);\n+gboolean\n fu_coswid_read_u64(cbor_item_t *item, guint64 *value, GError **error) G_GNUC_NON_NULL(1, 2);\n \n void\ndiff --git a/libfwupdplugin/fu-coswid-firmware.c b/libfwupdplugin/fu-coswid-firmware.c\nindex 59ec1b8515b1..c4e63ed5e60d 100644\n--- a/libfwupdplugin/fu-coswid-firmware.c\n+++ b/libfwupdplugin/fu-coswid-firmware.c\n@@ -173,18 +173,12 @@ fu_coswid_firmware_parse_link(cbor_item_t *item, gpointer user_data, GError **er\n \t\t\t\treturn FALSE;\n \t\t\t}\n \t\t} else if (tag_id == FU_COSWID_TAG_REL) {\n-\t\t\tif (cbor_isa_negint(pairs[i].value)) {\n-\t\t\t\tlink->rel = (-1) - cbor_get_uint8(pairs[i].value);\n-\t\t\t} else if (cbor_isa_uint(item)) {\n-\t\t\t\tlink->rel = cbor_get_uint8(pairs[i].value);\n-\t\t\t} else {\n-\t\t\t\tg_set_error_literal(\n-\t\t\t\t    error,\n-\t\t\t\t    FWUPD_ERROR,\n-\t\t\t\t    FWUPD_ERROR_INVALID_DATA,\n-\t\t\t\t    \"failed to parse link rel: item is not a integer\");\n+\t\t\tgint8 tmp = 0;\n+\t\t\tif (!fu_coswid_read_s8(pairs[i].value, &tmp, error)) {\n+\t\t\t\tg_prefix_error(error, \"failed to parse link rel: \");\n \t\t\t\treturn FALSE;\n \t\t\t}\n+\t\t\tlink->rel = tmp;\n \t\t} else {\n \t\t\tg_debug(\"unhandled tag %s from %s\",\n \t\t\t\tfu_coswid_tag_to_string(tag_id),\n@@ -202,6 +196,7 @@ static gboolean\n fu_coswid_firmware_parse_hash(cbor_item_t *item, gpointer user_data, GError **error)\n {\n \tFuCoswidFirmwarePayload *payload = (FuCoswidFirmwarePayload *)user_data;\n+\tguint8 alg_id8 = 0;\n \tg_autoptr(FuCoswidFirmwareHash) hash = g_new0(FuCoswidFirmwareHash, 1);\n \tg_autoptr(cbor_item_t) hash_item_alg_id = NULL;\n \tg_autoptr(cbor_item_t) hash_item_value = NULL;\n@@ -223,16 +218,13 @@ fu_coswid_firmware_parse_hash(cbor_item_t *item, gpointer user_data, GError **er\n \t\t\t\t    \"invalid hash item\");\n \t\treturn FALSE;\n \t}\n-\tif (!cbor_isa_uint(hash_item_alg_id)) {\n-\t\tg_set_error_literal(error,\n-\t\t\t\t    FWUPD_ERROR,\n-\t\t\t\t    FWUPD_ERROR_INVALID_DATA,\n-\t\t\t\t    \"hash alg-id item is not a uint\");\n+\tif (!fu_coswid_read_u8(hash_item_alg_id, &alg_id8, error)) {\n+\t\tg_prefix_error(error, \"failed to parse hash alg-id: \");\n \t\treturn FALSE;\n \t}\n \n \t/* success */\n-\thash->alg_id = cbor_get_uint8(hash_item_alg_id);\n+\thash->alg_id = alg_id8;\n \thash->value = g_byte_array_new();\n \tg_byte_array_append(hash->value,\n \t\t\t    cbor_bytestring_handle(hash_item_value),\n@@ -429,10 +421,15 @@ fu_coswid_firmware_parse_entity(cbor_item_t *item, gpointer user_data, GError **\n \t\t\t}\n \t\t} else if (tag_id == FU_COSWID_TAG_ROLE) {\n \t\t\tif (cbor_isa_uint(pairs[i].value)) {\n-\t\t\t\tFuCoswidEntityRole role = cbor_get_uint8(pairs[i].value);\n-\t\t\t\tentity->roles[entity_role_cnt++] = role;\n+\t\t\t\tguint8 role8 = 0;\n+\t\t\t\tif (!fu_coswid_read_u8(pairs[i].value, &role8, error)) {\n+\t\t\t\t\tg_prefix_error(error, \"failed to parse entity role: \");\n+\t\t\t\t\treturn FALSE;\n+\t\t\t\t}\n+\t\t\t\tentity->roles[entity_role_cnt++] = role8;\n \t\t\t} else if (cbor_isa_array(pairs[i].value)) {\n \t\t\t\tfor (guint j = 0; j < cbor_array_size(pairs[i].value); j++) {\n+\t\t\t\t\tguint8 role8 = 0;\n \t\t\t\t\tg_autoptr(cbor_item_t) value =\n \t\t\t\t\t    cbor_array_get(pairs[i].value, j);\n \t\t\t\t\tif (!cbor_isa_uint(value)) {\n@@ -449,7 +446,12 @@ fu_coswid_firmware_parse_entity(cbor_item_t *item, gpointer user_data, GError **\n \t\t\t\t\t\t\t\t    \"too many roles\");\n \t\t\t\t\t\treturn FALSE;\n \t\t\t\t\t}\n-\t\t\t\t\tentity->roles[entity_role_cnt++] = cbor_get_uint8(value);\n+\t\t\t\t\tif (!fu_coswid_read_u8(value, &role8, error)) {\n+\t\t\t\t\t\tg_prefix_error(error,\n+\t\t\t\t\t\t\t       \"failed to parse entity role: \");\n+\t\t\t\t\t\treturn FALSE;\n+\t\t\t\t\t}\n+\t\t\t\t\tentity->roles[entity_role_cnt++] = role8;\n \t\t\t\t}\n \t\t\t} else {\n \t\t\t\tg_set_error_literal(error,\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42534528-vul",
+      "digest": "sha256:4d597e71d1c1bab943cfb6b6887531a991f1c40c81c4e30045fd24965a080f80"
+    },
+    "patched": {
+      "ref": "n132/arvo:42534528-fix",
+      "digest": "sha256:505ef37c829bca8e49143bfd6ca112ba571193f9c855cef3ed8180827942d48c"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/libcbor/src/cbor/ints.c:24",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/libcbor/src/cbor/ints.c:24"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

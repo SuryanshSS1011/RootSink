@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042532942",
+  "chain": "CWE-416->CWE-125",
+  "project": "libxml2",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42532942",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "9835ec2b9721f839af5a4e337e3cd588e0ad0208",
+      "fix_commits": [
+        "9835ec2b9721f839af5a4e337e3cd588e0ad0208"
+      ],
+      "repo": "https://gitlab.gnome.org/GNOME/libxml2.git"
+    },
+    "patch": "From 9835ec2b9721f839af5a4e337e3cd588e0ad0208 Mon Sep 17 00:00:00 2001\nFrom: Nick Wellnhofer <wellnhofer@aevum.de>\nDate: Tue, 13 Feb 2024 10:58:19 +0100\nSubject: [PATCH] valid: Fix xmlAddIDSafe in \"streaming\" mode\n\nMake sure that IDs and attributes never reference each other in\nstreaming (XML reader) mode, even when attributes are copied from an\nentity.\n\nAlso update lineno.\n\nFixes a short-lived use-after-free.\n---\n valid.c | 13 +++++++------\n 1 file changed, 7 insertions(+), 6 deletions(-)\n\ndiff --git a/valid.c b/valid.c\nindex b1b0001..ada36a6 100644\n--- a/valid.c\n+++ b/valid.c\n@@ -2322,15 +2322,16 @@ xmlAddIDSafe(xmlDocPtr doc, const xmlChar *value, xmlAttrPtr attr,\n         ret = xmlHashLookup(table, value);\n         if (ret != NULL) {\n             /*\n-             * Update the attribute to make entities work.\n+             * Update the attribute unless we are parsing in streaming\n+             * mode. If the attribute is copied from an entity we want\n+             * the ID reference the copy.\n              */\n-            if (!streaming) {\n-                if (ret->attr != NULL) {\n-                    ret->attr->id = NULL;\n-                    ret->attr = attr;\n-                }\n+            if (ret->attr != NULL) {\n+                ret->attr->id = NULL;\n+                ret->attr = attr;\n                 attr->id = ret;\n             }\n+            ret->lineno = xmlGetLineNo(attr->parent);\n \t    attr->atype = XML_ATTRIBUTE_ID;\n             return(0);\n         }\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42532942-vul",
+      "digest": "sha256:61c8728c4cc31218ccdab970559d026113c35a2b0851b93c82966b7a02e7ee6f"
+    },
+    "patched": {
+      "ref": "n132/arvo:42532942-fix",
+      "digest": "sha256:06719e182a8c9eaf4d71580c3fa63aaab464a21a07369c99dfdf59ce4db07db0"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/libxml2/valid.c:2745",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/libxml2/valid.c:2745"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

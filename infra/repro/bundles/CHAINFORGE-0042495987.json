@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042495987",
+  "chain": "CWE-476->CWE-787",
+  "project": "wasm3",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42495987",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "715a8d04df0a4b07de08213999037f3a028f2ab2",
+      "fix_commits": [
+        "715a8d04df0a4b07de08213999037f3a028f2ab2"
+      ],
+      "repo": "https://github.com/wasm3/wasm3"
+    },
+    "patch": "diff --git a/source/m3_compile.c b/source/m3_compile.c\nindex 1b277991..c34865c5 100644\n--- a/source/m3_compile.c\n+++ b/source/m3_compile.c\n@@ -110,10 +110,6 @@ i16  GetStackTopIndex  (IM3Compilation o)\n     return o->stackIndex - 1;\n }\n \n-//u16  GetStackHeight (IM3Compilation o)\n-//{\n-//    return o->stackIndex - o->stackFirstDynamicIndex;\n-//}\n \n u16  GetNumBlockValuesOnStack  (IM3Compilation o)\n {\n@@ -158,15 +154,6 @@ bool IsStackIndexInRegister  (IM3Compilation o, i32 i_stackIndex)\n }\n \n \n-//bool  IsStackTopIndexInRegister  (IM3Compilation o, i16 i_stackTopOffset)\n-//{                                                                           d_m3Assert (i_stackTopOffset >= 0 or IsStackPolymorphic (o));\n-//    if (i_stackTopOffset >= 0)\n-//        return IsStackIndexInRegister (o, (u16) i_stackTopOffset);\n-//    else\n-//        return false;\n-//}\n-\n-\n bool  IsStackTopInRegister          (IM3Compilation o)  { return IsStackIndexInRegister (o, (i32) GetStackTopIndex (o));       }\n bool  IsStackTopMinus1InRegister    (IM3Compilation o)  { return IsStackIndexInRegister (o, (i32) GetStackTopIndex (o) - 1);   }\n bool  IsStackTopMinus2InRegister    (IM3Compilation o)  { return IsStackIndexInRegister (o, (i32) GetStackTopIndex (o) - 2);   }\n@@ -321,25 +308,19 @@ bool  IsRegisterTypeAllocated  (IM3Compilation o, u8 i_type)\n }\n \n void  AllocateRegister  (IM3Compilation o, u32 i_register, u16 i_stackIndex)\n-{\n-    d_m3Assert (not IsRegisterAllocated (o, i_register));\n-\n+{\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\td_m3Assert (not IsRegisterAllocated (o, i_register));\n     o->regStackIndexPlusOne [i_register] = i_stackIndex + 1;\n }\n \n \n void  DeallocateRegister  (IM3Compilation o, u32 i_register)\n-{\n-    d_m3Assert (IsRegisterAllocated (o, i_register));\n-\n+{\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\td_m3Assert (IsRegisterAllocated (o, i_register));\n     o->regStackIndexPlusOne [i_register] = c_m3RegisterUnallocated;\n }\n \n \n u16  GetRegisterStackIndex  (IM3Compilation o, u32 i_register)\n-{\n-    d_m3Assert (IsRegisterAllocated (o, i_register));\n-\n+{\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\td_m3Assert (IsRegisterAllocated (o, i_register));\n     return o->regStackIndexPlusOne [i_register] - 1;\n }\n \n@@ -833,27 +814,6 @@ _           (PushRegister (o, type));\n }\n \n \n-\n-//M3Result  ReturnStackTop  (IM3Compilation o)  // NoPushPop\n-//{\n-//    M3Result result = m3Err_none;\n-//\n-//    i16 top = GetStackTopIndex (o);\n-//\n-//    if (top >= 0)\n-//    {\n-//        const u16 returnSlot = 0;\n-//\n-//        if (o->wasmStack [top] != returnSlot)\n-//_           (CopyStackTopToSlot (o, returnSlot))\n-//    }\n-//    else if (not IsStackPolymorphic (o))\n-//        _throw (m3Err_functionStackUnderrun);\n-//\n-//_catch:\n-//    return result;\n-//}\n-\n M3Result  ReturnStackTop  (IM3Compilation o, u16 i_returnSlot, u8 i_type)\n {\n \tM3Result result = m3Err_none;\n@@ -873,7 +833,6 @@ _\t\t(PopType (o, i_type))\n }\n \n \n-\n // if local is unreferenced, o_preservedSlotNumber will be equal to localIndex on return\n M3Result  FindReferencedLocalWithinCurrentBlock  (IM3Compilation o, u16 * o_preservedSlotNumber, u32 i_localSlot)\n {\n@@ -1063,16 +1022,6 @@ _           (CopyStackTopToRegister (o, false));\n \t\t\n \t\tif (d_m3LogWasmStack) dump_type_stack (o);\n \t}\n-\t\n-//    if (numResults)\n-//    {\n-//\t\tu8 type = GetFuncTypeResultType (i_targetBlock->type, 0);\n-//\n-//        if (IsFpType (type))\n-//_           (CopyStackTopToRegister (o, i_doPushPop))\n-//        else\n-//_           (MoveStackTopToSlot (o, slot, i_doPushPop))\n-//    }\n     \n     _catch: return result;\n }\n@@ -1759,6 +1708,7 @@ static\n M3Result  ReadBlockType  (IM3Compilation o, IM3FuncType * o_blockType)\n {\n     M3Result result;\n+\t\n     i64 type;\n _   (ReadLebSigned (& type, 33, & o->wasm, o->wasmEnd));\n \n@@ -1999,7 +1949,7 @@ _   (EmitOp (o, op_Unreachable));\n }\n \n \n-// TODO OPTZ: currently all stack slot indices take up a full word, but\n+// OPTZ: currently all stack slot indices take up a full word, but\n // dual stack source operands could be packed together\n M3Result  Compile_Operator  (IM3Compilation o, m3opcode_t i_opcode)\n {\n@@ -2580,12 +2530,12 @@ void  SetupCompilation (IM3Compilation o)\n \n M3Result  CompileFunction  (IM3Function io_function)\n {\n+\tM3Result result = m3Err_none;\n+\t\n     if (!io_function->wasm) return \"function body is missing\";\n \n-    IM3FuncType funcType = io_function->funcType;\n-\n-    M3Result result = m3Err_none;                                   m3log (compile, \"compiling: [%d] %s %s; wasm-size: %d\",\n-                                                                           io_function->index, m3_GetFunctionName (io_function), SPrintFuncTypeSignature (io_function->funcType), (u32) (io_function->wasmEnd - io_function->wasm));\n+    IM3FuncType funcType = io_function->funcType;\t\t\t\t\tm3log (compile, \"compiling: [%d] %s %s; wasm-size: %d\",\n+\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\tio_function->index, m3_GetFunctionName (io_function), SPrintFuncTypeSignature (funcType), (u32) (io_function->wasmEnd - io_function->wasm));\n     IM3Runtime runtime = io_function->module->runtime;\n \n     IM3Compilation o = & runtime->compilation;                      d_m3Assert (d_m3MaxFunctionSlots >= d_m3MaxFunctionStackHeight * (d_m3Use32BitSlots + 1))  // need twice as many slots in 32-bit mode\ndiff --git a/source/m3_info.c b/source/m3_info.c\nindex 25815599..15b19c25 100644\n--- a/source/m3_info.c\n+++ b/source/m3_info.c\n@@ -69,6 +69,9 @@ cstr_t  GetTypeName  (u8 i_m3Type)\n }\n \n \n+// TODO: these 'static char string []' aren't thread-friendly.  though these functions are\n+// mainly for simple diagnostics during development, it'd be nice if they were fully reliable.\n+\n cstr_t  SPrintFuncTypeSignature  (IM3FuncType i_funcType)\n {\n     static char string [256];\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42495987-vul",
+      "digest": "sha256:865c5382701e90496648d5353b45bf862b5a26dbe03489d8e30631ff77e0b943"
+    },
+    "patched": {
+      "ref": "n132/arvo:42495987-fix",
+      "digest": "sha256:4e04e9d91389ccd6a71e4475ec1b3da971ea77a31b9aac679ca0daf8b738cbec"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "undefined",
+        "bug_class": "SEGV",
+        "direction": "READ",
+        "crash_site": null,
+        "implies_sink_cwe": 476
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 476,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "undefined",
+        "bug_class": "SEGV",
+        "direction": "READ",
+        "site": null
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

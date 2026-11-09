@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042537325",
+  "chain": "CWE-456->CWE-457",
+  "project": "mpv",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42537325",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "25f441b74019febecdbc097e0cb87b4570b918bc",
+      "fix_commits": [
+        "25f441b74019febecdbc097e0cb87b4570b918bc"
+      ],
+      "repo": "https://github.com/mpv-player/mpv"
+    },
+    "patch": "From 25f441b74019febecdbc097e0cb87b4570b918bc Mon Sep 17 00:00:00 2001\nFrom: =?UTF-8?q?Kacper=20Michaj=C5=82ow?= <kasper93@gmail.com>\nDate: Sat, 3 Aug 2024 11:09:51 +0200\nSubject: [PATCH] fuzzer_set_property: ensure idle is enabled\n\nIt is used in play loop to check if playback ended cleanly. Don't allow\nset_property to disable idle.\n---\n fuzzers/fuzzer_set_property.c | 1 +\n 1 file changed, 1 insertion(+)\n\ndiff --git a/fuzzers/fuzzer_set_property.c b/fuzzers/fuzzer_set_property.c\nindex c18fd48..210b36d 100644\n--- a/fuzzers/fuzzer_set_property.c\n+++ b/fuzzers/fuzzer_set_property.c\n@@ -84,6 +84,7 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)\n     check_error(mpv_set_option_string(ctx, \"pause\", \"no\"));\n     check_error(mpv_set_option_string(ctx, \"untimed\", \"yes\"));\n     check_error(mpv_set_option_string(ctx, \"sstep\", \"0\"));\n+    check_error(mpv_set_option_string(ctx, \"idle\", \"yes\"));\n \n     mpv_node node = {\n         .format = MPV_FORMAT_NODE_ARRAY,\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42537325-vul",
+      "digest": "sha256:d57ddec4d74db010dde23531dc0c4ad95e8231c3fc0762b8d682e531317707b7"
+    },
+    "patched": {
+      "ref": "n132/arvo:42537325-fix",
+      "digest": "sha256:ef4ba0537cda66c7c122c9f3001df0dbb05a1f7c14d813a8ec0b5a8a48105945"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/ffmpeg/libavcodec/jpegxl_parse.c:66",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/ffmpeg/libavcodec/jpegxl_parse.c:66"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

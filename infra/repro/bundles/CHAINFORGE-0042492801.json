@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042492801",
+  "chain": "CWE-416->CWE-787",
+  "project": "relic",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42492801",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "707708d83188b04ea0b7b0ae2487aa8ac7e62f41",
+      "fix_commits": [
+        "707708d83188b04ea0b7b0ae2487aa8ac7e62f41"
+      ],
+      "repo": "https://github.com/relic-toolkit/relic"
+    },
+    "patch": "diff --git a/src/bn/relic_bn_mul.c b/src/bn/relic_bn_mul.c\nindex 25edfe85f..f8902cf8b 100644\n--- a/src/bn/relic_bn_mul.c\n+++ b/src/bn/relic_bn_mul.c\n@@ -48,11 +48,10 @@\n  * @param[in] level\t\t\t- the number of Karatsuba steps to apply.\n  */\n static void bn_mul_karat_imp(bn_t c, const bn_t a, const bn_t b, int level) {\n-\tint h;\n-\tbn_t a0, a1, b0, b1, a0b0, a1b1;\n-\tbn_t t;\n-\tconst dig_t *tmpa, *tmpb;\n-\tdig_t *t0;\n+\tbn_t a0, a1, b0, b1, a0b0, a1b1, t;\n+\n+\t/* Compute half the digits of a or b. */\n+\tint h = RLC_MIN(a->used, b->used) >> 1;\n \n \tbn_null(a0);\n \tbn_null(a1);\n@@ -62,42 +61,24 @@ static void bn_mul_karat_imp(bn_t c, const bn_t a, const bn_t b, int level) {\n \tbn_null(a1b1);\n \tbn_null(t);\n \n-\t/* Compute half the digits of a or b. */\n-\th = RLC_MIN(a->used, b->used) >> 1;\n-\n \tRLC_TRY {\n \t\t/* Allocate the temp variables. */\n-\t\tbn_new(a0);\n-\t\tbn_new(a1);\n-\t\tbn_new(b0);\n-\t\tbn_new(b1);\n+\t\tbn_new_size(a0, h);\n+\t\tbn_new_size(a1, h);\n+\t\tbn_new_size(b0, a->used - h);\n+\t\tbn_new_size(b1, b->used - h);\n \t\tbn_new(a0b0);\n \t\tbn_new(a1b1);\n \t\tbn_new(t);\n \n+\t\t/* a = a1 || a0, b = b1 || b0 */\n \t\ta0->used = b0->used = h;\n \t\ta1->used = a->used - h;\n \t\tb1->used = b->used - h;\n-\n-\t\ttmpa = a->dp;\n-\t\ttmpb = b->dp;\n-\n-\t\t/* a = a1 || a0 */\n-\t\tt0 = a0->dp;\n-\t\tfor (int i = 0; i < h; i++, t0++, tmpa++)\n-\t\t\t*t0 = *tmpa;\n-\t\tt0 = a1->dp;\n-\t\tfor (int i = 0; i < a1->used; i++, t0++, tmpa++)\n-\t\t\t*t0 = *tmpa;\n-\n-\t\t/* b = b1 || b0 */\n-\t\tt0 = b0->dp;\n-\t\tfor (int i = 0; i < h; i++, t0++, tmpb++)\n-\t\t\t*t0 = *tmpb;\n-\t\tt0 = b1->dp;\n-\t\tfor (int i = 0; i < b1->used; i++, t0++, tmpb++)\n-\t\t\t*t0 = *tmpb;\n-\n+\t\tdv_copy(a0->dp, a->dp, h);\n+\t\tdv_copy(a1->dp, a->dp + h, a->used - h);\n+\t\tdv_copy(b0->dp, b->dp, h);\n+\t\tdv_copy(b1->dp, b->dp + h, b->used - h);\n \t\tbn_trim(a0);\n \t\tbn_trim(b0);\n \t\tbn_trim(a1);\ndiff --git a/src/bn/relic_bn_sqr.c b/src/bn/relic_bn_sqr.c\nindex 940acc75f..a510add99 100644\n--- a/src/bn/relic_bn_sqr.c\n+++ b/src/bn/relic_bn_sqr.c\n@@ -48,10 +48,8 @@\n  * @param[in] level\t\t\t- the number of Karatsuba steps to apply.\n  */\n static void bn_sqr_karat_imp(bn_t c, const bn_t a, int level) {\n-\tint h;\n \tbn_t a0, a1, a0a0, a1a1, t;\n-\tconst dig_t *tmpa;\n-\tdig_t *t0;\n+\tint h = a->used >> 1;\n \n \tbn_null(a0);\n \tbn_null(a1);\n@@ -59,31 +57,21 @@ static void bn_sqr_karat_imp(bn_t c, const bn_t a, int level) {\n \tbn_null(a1a1);\n \tbn_null(t);\n \n-\t/* Compute half the digits of a or b. */\n-\th = a->used >> 1;\n-\n \tRLC_TRY {\n \t\t/* Allocate the temp variables. */\n-\t\tbn_new(a0);\n-\t\tbn_new(a1);\n+\t\tbn_new_size(a0, h);\n+\t\tbn_new_size(a1, a->used - h);\n \t\tbn_new(a0a0);\n \t\tbn_new(a1a1);\n \t\tbn_new(t);\n \n+\t\t/* a = a1 || a0 */\n \t\ta0->used = h;\n \t\ta1->used = a->used - h;\n-\n-\t\ttmpa = a->dp;\n-\n-\t\t/* a = a1 || a0 */\n-\t\tt0 = a0->dp;\n-\t\tfor (int i = 0; i < h; i++, t0++, tmpa++)\n-\t\t\t*t0 = *tmpa;\n-\t\tt0 = a1->dp;\n-\t\tfor (int i = 0; i < a1->used; i++, t0++, tmpa++)\n-\t\t\t*t0 = *tmpa;\n-\n+\t\tdv_copy(a0->dp, a->dp, h);\n+\t\tdv_copy(a1->dp, a->dp + h, a->used - h);\n \t\tbn_trim(a0);\n+\t\tbn_trim(a1);\n \n \t\tif (level <= 1) {\n \t\t\t/* a0a0 = a0 * a0 and a1a1 = a1 * a1 */\ndiff --git a/src/low/gmp_sec/relic_bn_shift_low.c b/src/low/gmp_sec/relic_bn_shift_low.c\nindex aba348ea9..cc41a8950 100644\n--- a/src/low/gmp_sec/relic_bn_shift_low.c\n+++ b/src/low/gmp_sec/relic_bn_shift_low.c\n@@ -49,22 +49,6 @@ dig_t bn_lshb_low(dig_t *c, const dig_t *a, int size, int bits) {\n \treturn mpn_lshift(c, a, size, bits);\n }\n \n-void dv_lshd(dig_t *c, const dig_t *a, int size, int digits) {\n-\tdig_t *top;\n-\tconst dig_t *bot;\n-\tint i;\n-\n-\ttop = c + size + digits - 1;\n-\tbot = a + size - 1;\n-\n-\tfor (i = 0; i < size; i++, top--, bot--) {\n-\t\t*top = *bot;\n-\t}\n-\tfor (i = 0; i < digits; i++, c++) {\n-\t\t*c = 0;\n-\t}\n-}\n-\n dig_t bn_rsh1_low(dig_t *c, const dig_t *a, int size) {\n \treturn mpn_rshift(c, a, size, 1);\n }\n@@ -72,16 +56,3 @@ dig_t bn_rsh1_low(dig_t *c, const dig_t *a, int size) {\n dig_t bn_rshb_low(dig_t *c, const dig_t *a, int size, int bits) {\n \treturn mpn_rshift(c, a, size, bits);\n }\n-\n-void dv_rshd(dig_t *c, const dig_t *a, int size, int digits) {\n-\tconst dig_t *top;\n-\tdig_t *bot;\n-\tint i;\n-\n-\ttop = a + digits;\n-\tbot = c;\n-\n-\tfor (i = 0; i < size - digits; i++, top++, bot++) {\n-\t\t*bot = *top;\n-\t}\n-}\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42492801-vul",
+      "digest": "sha256:91d1e933447212a7be0944a1f0085d62acfdf3c9b886aa53c84d280495066a68"
+    },
+    "patched": {
+      "ref": "n132/arvo:42492801-fix",
+      "digest": "sha256:e93425a30597d24c922ade23589fde0606a34cfc788779b067ed56a070676e3f"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/relic/src/bn/relic_bn_sqr.c:81",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/relic/src/bn/relic_bn_sqr.c:81"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

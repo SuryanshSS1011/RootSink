@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042485744",
+  "chain": "CWE-456->CWE-457",
+  "project": "stb",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42485744",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "9f22cc900810d93ed7808f31b90ade0c7c915e6a",
+      "fix_commits": [
+        "9f22cc900810d93ed7808f31b90ade0c7c915e6a"
+      ],
+      "repo": "https://github.com/nothings/stb"
+    },
+    "patch": "From 9f22cc900810d93ed7808f31b90ade0c7c915e6a Mon Sep 17 00:00:00 2001\nFrom: Neil Bickford <nbickford@nvidia.com>\nDate: Fri, 15 Oct 2021 11:04:41 -0700\nSubject: [PATCH] stb_image PNG: Checks for invalid DEFLATE codes.\n\nSpecifically, this rejects length codes 286 and 287, and distance codes 30 and 31.\nThis avoids a scenario in which a file could contain a table in which\n0 corresponded to length code 287, which would result in writing 0 bits.\n\nSigned-off-by: Neil Bickford <nbickford@nvidia.com>\n---\n stb_image.h | 3 ++-\n 1 file changed, 2 insertions(+), 1 deletion(-)\n\ndiff --git a/stb_image.h b/stb_image.h\nindex d60371b..ab616c5 100644\n--- a/stb_image.h\n+++ b/stb_image.h\n@@ -4256,11 +4256,12 @@ static int stbi__parse_huffman_block(stbi__zbuf *a)\n             a->zout = zout;\n             return 1;\n          }\n+         if (z >= 286) return stbi__err(\"bad huffman code\",\"Corrupt PNG\"); // per DEFLATE, length codes 286 and 287 must not appear in compressed data\n          z -= 257;\n          len = stbi__zlength_base[z];\n          if (stbi__zlength_extra[z]) len += stbi__zreceive(a, stbi__zlength_extra[z]);\n          z = stbi__zhuffman_decode(a, &a->z_distance);\n-         if (z < 0) return stbi__err(\"bad huffman code\",\"Corrupt PNG\");\n+         if (z < 0 || z >= 30) return stbi__err(\"bad huffman code\",\"Corrupt PNG\"); // per DEFLATE, distance codes 30 and 31 must not appear in compressed data\n          dist = stbi__zdist_base[z];\n          if (stbi__zdist_extra[z]) dist += stbi__zreceive(a, stbi__zdist_extra[z]);\n          if (zout - a->zout_start < dist) return stbi__err(\"bad dist\",\"Corrupt PNG\");\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42485744-vul",
+      "digest": "sha256:ea9e6fdc87f2bc368676afb99241041e0476917b17033039fd933e3c667deb37"
+    },
+    "patched": {
+      "ref": "n132/arvo:42485744-fix",
+      "digest": "sha256:c5ae4de922f3dcaa222a7a503819ac54180b31452da587073ab957d54542ed46"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/stb/tests/../stb_image.h:4776",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/stb/tests/../stb_image.h:4776"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

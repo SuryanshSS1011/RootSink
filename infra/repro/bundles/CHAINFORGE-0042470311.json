@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042470311",
+  "chain": "CWE-456->CWE-457",
+  "project": "graphicsmagick",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42470311",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "dfe0ac275b84fe5eaa2db36bfd64f88265a9644c",
+      "fix_commits": [
+        "dfe0ac275b84fe5eaa2db36bfd64f88265a9644c"
+      ],
+      "repo": "https://foss.heptapod.net/graphicsmagick/graphicsmagick"
+    },
+    "patch": "diff --git a/ChangeLog b/ChangeLog\nindex a7cab7312da462d72a0e7706c2d0621b2d0e5567_Q2hhbmdlTG9n..dfe0ac275b84fe5eaa2db36bfd64f88265a9644c_Q2hhbmdlTG9n 100644\n--- a/ChangeLog\n+++ b/ChangeLog\n@@ -1,5 +1,8 @@\n 2018-09-09  Bob Friesenhahn  <bfriesen@simple.dallas.tx.us>\n \n+\t* coders/sfw.c (ReadSFWImage): Enforce that file is read using the\n+\tJPEG reader. (Credit to OSS-Fuzz)\n+\n \t* coders/miff.c (ReadMIFFImage): Fix leak of 'values' buffer due\n \tto change made yesterday.\n \ndiff --git a/coders/dcm.c b/coders/dcm.c\nindex a7cab7312da462d72a0e7706c2d0621b2d0e5567_Y29kZXJzL2RjbS5j..dfe0ac275b84fe5eaa2db36bfd64f88265a9644c_Y29kZXJzL2RjbS5j 100644\n--- a/coders/dcm.c\n+++ b/coders/dcm.c\n@@ -3038,12 +3038,13 @@\n   ARG_NOT_USED(image);\n   ARG_NOT_USED(exception);\n \n-  if ((dcm->data == (unsigned char *) NULL) || (dcm->length == 0))\n+  if (dcm->data == (unsigned char *) NULL)\n     {\n       ThrowException(exception,CorruptImageError,ImproperImageHeader,image->filename);\n       return MagickFail;\n     }\n \n+  (void) memset(photometric,0,sizeof(photometric));\n   for (i=0; i < Min(dcm->length, MaxTextExtent-1); i++)\n     photometric[i]=dcm->data[i];\n   photometric[i]='\\0';\n@@ -4810,9 +4811,12 @@\n         status=pfunc(image,&dcm,exception);\n       MagickFreeMemory(dcm.data);\n       dcm.data = NULL;\n+      dcm.length = 0;\n       if (status == MagickPass)\n         status=DCM_ReadElement(image,&dcm,exception);\n     }\n+  if (status == MagickFail)\n+    goto dcm_read_failure;\n #if defined(IGNORE_WINDOW_FOR_UNSPECIFIED_SCALE_TYPE)\n   if (dcm.rescale_type == DCM_RT_UNSPECIFIED)\n     {\n@@ -4825,9 +4829,6 @@\n   /*\n     Now process the image data\n   */\n-  if (status == MagickFail)\n-    goto dcm_read_failure;\n-\n   if ((dcm.columns == 0) || (dcm.rows == 0))\n     {\n       ThrowException(exception,CorruptImageError,ImproperImageHeader,image->filename);\ndiff --git a/coders/sfw.c b/coders/sfw.c\nindex a7cab7312da462d72a0e7706c2d0621b2d0e5567_Y29kZXJzL3Nmdy5j..dfe0ac275b84fe5eaa2db36bfd64f88265a9644c_Y29kZXJzL3Nmdy5j 100644\n--- a/coders/sfw.c\n+++ b/coders/sfw.c\n@@ -1,5 +1,5 @@\n /*\n-% Copyright (C) 2003 - 2017 GraphicsMagick Group\n+% Copyright (C) 2003 - 2018 GraphicsMagick Group\n % Copyright (C) 2002 ImageMagick Studio\n % Copyright 1991-1999 E. I. du Pont de Nemours and Company\n %\n@@ -210,7 +210,8 @@\n \n   char\n     original_filename[MaxTextExtent],\n-    original_magick[MaxTextExtent];\n+    original_magick[MaxTextExtent],\n+    temporary_filename[MaxTextExtent];\n \n   size_t\n     count;\n@@ -312,16 +313,12 @@\n   clone_info=CloneImageInfo(image_info);\n   clone_info->blob=(void *) NULL;\n   clone_info->length=0;\n-  file=AcquireTemporaryFileStream(clone_info->filename,BinaryFileIOMode);\n+  file=AcquireTemporaryFileStream(temporary_filename,BinaryFileIOMode);\n   if (file == (FILE *) NULL)\n     {\n-      char\n-        filename[MaxTextExtent];\n-\n-      (void) strcpy(filename,clone_info->filename);\n       MagickFreeMemory(buffer);\n       DestroyImageInfo(clone_info);\n-      ThrowReaderTemporaryFileException(filename)\n+      ThrowReaderTemporaryFileException(image_info->filename)\n     }\n   (void) fwrite(header,(size_t) (offset-header+1),1,file);\n   (void) fwrite(HuffmanTable,1,sizeof(HuffmanTable)/sizeof(*HuffmanTable),file);\n@@ -331,7 +328,7 @@\n   MagickFreeMemory(buffer);\n   if (status)\n     {\n-      (void) LiberateTemporaryFile(clone_info->filename);\n+      (void) LiberateTemporaryFile(temporary_filename);\n       DestroyImageInfo(clone_info);\n       ThrowReaderException(FileOpenError,UnableToWriteFile,image)\n     }\n@@ -342,8 +339,10 @@\n   /*\n     Read JPEG image.\n   */\n+  (void) strlcpy(clone_info->filename,\"JPEG:\",sizeof(clone_info->filename));\n+  (void) strlcat(clone_info->filename,temporary_filename,sizeof(clone_info->filename));\n   image=ReadImage(clone_info,exception);\n-  (void) LiberateTemporaryFile(clone_info->filename);\n+  (void) LiberateTemporaryFile(temporary_filename);\n   DestroyImageInfo(clone_info);\n   if (image == (Image *) NULL)\n     return(image);\ndiff --git a/www/Changelog.html b/www/Changelog.html\nindex a7cab7312da462d72a0e7706c2d0621b2d0e5567_d3d3L0NoYW5nZWxvZy5odG1s..dfe0ac275b84fe5eaa2db36bfd64f88265a9644c_d3d3L0NoYW5nZWxvZy5odG1s 100644\n--- a/www/Changelog.html\n+++ b/www/Changelog.html\n@@ -38,6 +38,8 @@\n <p>2018-09-09  Bob Friesenhahn  &lt;<a class=\"reference external\" href=\"mailto:bfriesen&#37;&#52;&#48;simple&#46;dallas&#46;tx&#46;us\">bfriesen<span>&#64;</span>simple<span>&#46;</span>dallas<span>&#46;</span>tx<span>&#46;</span>us</a>&gt;</p>\n <blockquote>\n <ul class=\"simple\">\n+<li>coders/sfw.c (ReadSFWImage): Enforce that file is read using the\n+JPEG reader. (Credit to OSS-Fuzz)</li>\n <li>coders/miff.c (ReadMIFFImage): Fix leak of 'values' buffer due\n to change made yesterday.</li>\n <li>coders/mpc.c (ReadMPCImage): Fix leak of 'values' buffer due to\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42470311-vul",
+      "digest": "sha256:7f64c1ab21b3f1f9a872ee5b7428517f9a613f13d810fbaf73d23c380ec1738a"
+    },
+    "patched": {
+      "ref": "n132/arvo:42470311-fix",
+      "digest": "sha256:4e7eeed611fca4c31c0e63bde25d4e09af4a9cc74fecb04851b43f4e7f6b5ef8"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/graphicsmagick/coders/dcm.c:3051",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/graphicsmagick/coders/dcm.c:3051"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

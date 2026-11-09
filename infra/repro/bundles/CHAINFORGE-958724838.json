@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-958724838",
+  "chain": "CWE-252->CWE-476",
+  "project": "curl",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42470017",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/curl/curl/commit/78d5302b5c05a49ecfa2ee8b8f1a21a2902357d3",
+      "fix_commits": [
+        "78d5302b5c05a49ecfa2ee8b8f1a21a2902357d3"
+      ],
+      "repo": "https://github.com/curl/curl"
+    },
+    "patch": "diff --git a/lib/http2.c b/lib/http2.c\nindex 251fcd8e820e..22655e94cd8d 100644\n--- a/lib/http2.c\n+++ b/lib/http2.c\n@@ -370,6 +370,10 @@ static ssize_t send_callback(nghttp2_session *h2,\n   (void)h2;\n   (void)flags;\n \n+  if(!c->send_underlying)\n+    /* called before setup properly! */\n+    return NGHTTP2_ERR_CALLBACK_FAILURE;\n+\n   written = ((Curl_send*)c->send_underlying)(conn, FIRSTSOCKET,\n                                              data, length, &result);\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42470017-vul",
+      "digest": "sha256:b3d19f5e96fd6f291cec29c5b0d50070ade13b85408e618a73cc3e9f3ac16061"
+    },
+    "patched": {
+      "ref": "n132/arvo:42470017-fix",
+      "digest": "sha256:0aa848f7b2d1da5389d8d3fb17733e518f544288d674f1c8289025d3de16b67c"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "undefined",
+        "bug_class": "SEGV",
+        "direction": "READ",
+        "crash_site": null,
+        "implies_sink_cwe": 476
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 252,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 476,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "undefined",
+        "bug_class": "SEGV",
+        "direction": "READ",
+        "site": null
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

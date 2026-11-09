@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042477257",
+  "chain": "CWE-1284->CWE-125",
+  "project": "gdal",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42477257",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "8c28547245cfd6264393457557a9477ca05b340a",
+      "fix_commits": [
+        "8c28547245cfd6264393457557a9477ca05b340a"
+      ],
+      "repo": "https://github.com/OSGeo/gdal"
+    },
+    "patch": "diff --git a/gdal/frmts/pdf/pdfdataset.cpp b/gdal/frmts/pdf/pdfdataset.cpp\nindex 2b3699215781..62bd0eb7d7c9 100644\n--- a/gdal/frmts/pdf/pdfdataset.cpp\n+++ b/gdal/frmts/pdf/pdfdataset.cpp\n@@ -5039,6 +5039,8 @@ static double Get(GDALPDFObject* poObj, int nIndice)\n     {\n         const char* pszStr = poObj->GetString().c_str();\n         size_t nLen = strlen(pszStr);\n+        if( nLen == 0 )\n+            return 0;\n         /* cf Military_Installations_2008.pdf that has values like \"96 0 0.0W\" */\n         char chLast = pszStr[nLen-1];\n         if (chLast == 'W' || chLast == 'E' || chLast == 'N' || chLast == 'S')\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42477257-vul",
+      "digest": "sha256:65e9d5a7f826076fef529082c9d6669cf125746a6d032b6139a2c810682f2596"
+    },
+    "patched": {
+      "ref": "n132/arvo:42477257-fix",
+      "digest": "sha256:f0d4795854300ec325693ec9b98f0c8b4b0013c790148af3940cd32e316d5a57"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/gdal/gdal/frmts/pdf/pdfdataset.cpp:5022",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/gdal/gdal/frmts/pdf/pdfdataset.cpp:5022"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

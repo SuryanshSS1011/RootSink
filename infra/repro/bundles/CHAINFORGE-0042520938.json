@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042520938",
+  "chain": "CWE-416->CWE-125",
+  "project": "binutils-gdb",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42520938",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "24b7e8b18ae6410e0b2445475cd21503a2c38922",
+      "fix_commits": [
+        "24b7e8b18ae6410e0b2445475cd21503a2c38922"
+      ],
+      "repo": "git://sourceware.org/git/binutils-gdb.git"
+    },
+    "patch": "diff --git a/gas/read.c b/gas/read.c\nindex c5a477f9e08..9f6a7007ebf 100644\n--- a/gas/read.c\n+++ b/gas/read.c\n@@ -274,11 +274,13 @@ read_begin (void)\n \n   if (flag_mri)\n     lex_type['?'] = 3;\n+  stabs_begin ();\n }\n \n void\n read_end (void)\n {\n+  stabs_end ();\n   poend ();\n   _obstack_free (&cond_obstack, NULL);\n }\ndiff --git a/gas/read.h b/gas/read.h\nindex baac5910c51..406b026d76f 100644\n--- a/gas/read.h\n+++ b/gas/read.h\n@@ -149,6 +149,8 @@ extern void stabs_generate_asm_file (void);\n extern void stabs_generate_asm_lineno (void);\n extern void stabs_generate_asm_func (const char *, const char *);\n extern void stabs_generate_asm_endfunc (const char *, const char *);\n+extern void stabs_begin (void);\n+extern void stabs_end (void);\n extern void do_repeat (size_t, const char *, const char *, const char *);\n extern void end_repeat (int);\n extern void do_parse_cons_expression (expressionS *, int);\ndiff --git a/gas/stabs.c b/gas/stabs.c\nindex e4817484834..f650a48ae88 100644\n--- a/gas/stabs.c\n+++ b/gas/stabs.c\n@@ -45,15 +45,31 @@ static void generate_asm_file (int, const char *);\n #define STAB_STRING_SECTION_NAME \".stabstr\"\n #endif\n \n-/* True if we're in the middle of a .func function, in which case\n-   stabs_generate_asm_lineno emits function relative line number stabs.\n-   Otherwise it emits line number stabs with absolute addresses.  Note that\n-   both cases only apply to assembler code assembled with -gstabs.  */\n-static bool in_dot_func_p = false;\n-\n-/* Label at start of current function if in_dot_func_p != FALSE.  */\n+/* Label at start of current function if we're in the middle of a\n+   .func function, in which case stabs_generate_asm_lineno emits\n+   function relative line number stabs.  Otherwise it emits line\n+   number stabs with absolute addresses.  Note that both cases only\n+   apply to assembler code assembled with -gstabs.  */\n static const char *current_function_label;\n \n+/* Current stab section when SEPARATE_STAB_SECTIONS.  */\n+static segT cached_sec;\n+\n+/* State used by generate_asm_file.  */\n+static char *last_asm_file;\n+static int file_label_count;\n+\n+/* State used by stabs_generate_asm_lineno.  */\n+static int line_label_count;\n+static unsigned int prev_lineno;\n+static char *prev_line_file;\n+\n+/* State used by stabs_generate_asm_func.  */\n+static bool void_emitted_p;\n+\n+/* State used by stabs_generate_asm_endfunc.  */\n+static int endfunc_label_count;\n+\n /*\n  * Handle .stabX directives, which used to be open-coded.\n  * So much creeping featurism overloaded the semantics that we decided\n@@ -314,8 +330,6 @@ s_stab_generic (int what,\n       unsigned int stroff;\n       char *p;\n \n-      static segT cached_sec;\n-\n       dot = frag_now_fix ();\n \n #ifdef md_flush_pending_output\n@@ -512,24 +526,22 @@ stabs_generate_asm_file (void)\n static void\n generate_asm_file (int type, const char *file)\n {\n-  static char *last_file;\n-  static int label_count;\n   char sym[30];\n   char *buf;\n   const char *tmp = file;\n   const char *file_endp = file + strlen (file);\n   char *bufp;\n \n-  if (last_file != NULL\n-      && filename_cmp (last_file, file) == 0)\n+  if (last_asm_file != NULL\n+      && filename_cmp (last_asm_file, file) == 0)\n     return;\n \n   /* Rather than try to do this in some efficient fashion, we just\n      generate a string and then parse it again.  That lets us use the\n      existing stabs hook, which expect to see a string, rather than\n      inventing new ones.  */\n-  sprintf (sym, \"%sF%d\", FAKE_LABEL_NAME, label_count);\n-  ++label_count;\n+  sprintf (sym, \"%sF%d\", FAKE_LABEL_NAME, file_label_count);\n+  ++file_label_count;\n \n   /* Allocate enough space for the file name (possibly extended with\n      doubled up backslashes), the symbol name, and the other characters\n@@ -563,8 +575,8 @@ generate_asm_file (int type, const char *file)\n \n   colon (sym);\n \n-  free (last_file);\n-  last_file = xstrdup (file);\n+  free (last_asm_file);\n+  last_asm_file = xstrdup (file);\n \n   free (buf);\n }\n@@ -575,14 +587,10 @@ generate_asm_file (int type, const char *file)\n void\n stabs_generate_asm_lineno (void)\n {\n-  static int label_count;\n   const char *file;\n   unsigned int lineno;\n   char *buf;\n   char sym[30];\n-  /* Remember the last file/line and avoid duplicates.  */\n-  static unsigned int prev_lineno = -1;\n-  static char *prev_file = NULL;\n \n   /* Rather than try to do this in some efficient fashion, we just\n      generate a string and then parse it again.  That lets us use the\n@@ -592,39 +600,32 @@ stabs_generate_asm_lineno (void)\n   file = as_where (&lineno);\n \n   /* Don't emit sequences of stabs for the same line.  */\n-  if (prev_file == NULL)\n+  if (prev_line_file != NULL\n+      && filename_cmp (file, prev_line_file) == 0)\n     {\n-      /* First time through.  */\n-      prev_file = xstrdup (file);\n-      prev_lineno = lineno;\n-    }\n-  else if (lineno == prev_lineno\n-\t   && filename_cmp (file, prev_file) == 0)\n-    {\n-      /* Same file/line as last time.  */\n-      return;\n+      if (lineno == prev_lineno)\n+\t/* Same file/line as last time.  */\n+\treturn;\n     }\n   else\n     {\n       /* Remember file/line for next time.  */\n-      prev_lineno = lineno;\n-      if (filename_cmp (file, prev_file) != 0)\n-\t{\n-\t  free (prev_file);\n-\t  prev_file = xstrdup (file);\n-\t}\n+      free (prev_line_file);\n+      prev_line_file = xstrdup (file);\n     }\n \n+  prev_lineno = lineno;\n+\n   /* Let the world know that we are in the middle of generating a\n      piece of stabs line debugging information.  */\n   outputting_stabs_line_debug = 1;\n \n   generate_asm_file (N_SOL, file);\n \n-  sprintf (sym, \"%sL%d\", FAKE_LABEL_NAME, label_count);\n-  ++label_count;\n+  sprintf (sym, \"%sL%d\", FAKE_LABEL_NAME, line_label_count);\n+  ++line_label_count;\n \n-  if (in_dot_func_p)\n+  if (current_function_label)\n     {\n       buf = XNEWVEC (char, 100 + strlen (current_function_label));\n       sprintf (buf, \"%d,0,%d,%s-%s\\n\", N_SLINE, lineno,\n@@ -652,7 +653,6 @@ stabs_generate_asm_lineno (void)\n void\n stabs_generate_asm_func (const char *funcname, const char *startlabname)\n {\n-  static bool void_emitted_p = false;\n   char *buf;\n   unsigned int lineno;\n \n@@ -674,8 +674,8 @@ stabs_generate_asm_func (const char *funcname, const char *startlabname)\n   restore_ilp ();\n   free (buf);\n \n+  free ((char *) current_function_label);\n   current_function_label = xstrdup (startlabname);\n-  in_dot_func_p = true;\n }\n \n /* Emit a stab to record the end of a function.  */\n@@ -684,12 +684,11 @@ void\n stabs_generate_asm_endfunc (const char *funcname ATTRIBUTE_UNUSED,\n \t\t\t    const char *startlabname)\n {\n-  static int label_count;\n   char *buf;\n   char sym[30];\n \n-  sprintf (sym, \"%sendfunc%d\", FAKE_LABEL_NAME, label_count);\n-  ++label_count;\n+  sprintf (sym, \"%sendfunc%d\", FAKE_LABEL_NAME, endfunc_label_count);\n+  ++endfunc_label_count;\n   colon (sym);\n \n   if (asprintf (&buf, \"\\\"\\\",%d,0,0,%s-%s\", N_FUN, sym, startlabname) == -1)\n@@ -700,6 +699,28 @@ stabs_generate_asm_endfunc (const char *funcname ATTRIBUTE_UNUSED,\n   restore_ilp ();\n   free (buf);\n \n-  in_dot_func_p = false;\n+  free ((char *) current_function_label);\n   current_function_label = NULL;\n }\n+\n+void\n+stabs_begin (void)\n+{\n+  current_function_label = NULL;\n+  cached_sec = NULL;\n+  last_asm_file = NULL;\n+  file_label_count = 0;\n+  line_label_count = 0;\n+  prev_lineno = -1u;\n+  prev_line_file = NULL;\n+  void_emitted_p = false;\n+  endfunc_label_count = 0;\n+}\n+\n+void\n+stabs_end (void)\n+{\n+  free ((char *) current_function_label);\n+  free (last_asm_file);\n+  free (prev_line_file);\n+}\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42520938-vul",
+      "digest": "sha256:9fc577c20f36657ea26b85b464ca9fa417f3c676085d57ce9df6602d746b9277"
+    },
+    "patched": {
+      "ref": "n132/arvo:42520938-fix",
+      "digest": "sha256:6155eee146af3e1461f7713e7ac834e4129f55a7e6a5957d52ccf889677bb458"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/binutils-gdb/gas/stabs.c:325",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/binutils-gdb/gas/stabs.c:325"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

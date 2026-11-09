@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042508312",
+  "chain": "CWE-20->CWE-125",
+  "project": "libcoap",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42508312",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "ba585f848ff527f2181f8f2bfd40520563e9e68d",
+      "fix_commits": [
+        "ba585f848ff527f2181f8f2bfd40520563e9e68d"
+      ],
+      "repo": "https://github.com/obgm/libcoap"
+    },
+    "patch": "diff --git a/tests/oss-fuzz/pdu_parse_target.c b/tests/oss-fuzz/pdu_parse_target.c\nindex 04be491a58..f1cea993c5 100644\n--- a/tests/oss-fuzz/pdu_parse_target.c\n+++ b/tests/oss-fuzz/pdu_parse_target.c\n@@ -8,14 +8,15 @@ LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {\n     coap_pdu_t *pdu = coap_pdu_init(0, 0, 0, size);\n     if (pdu) {\n         coap_set_log_level(LOG_DEBUG);\n-        coap_pdu_parse(COAP_PROTO_UDP, data, size, pdu);\n-        coap_string_t *query = coap_get_query(pdu);\n-        coap_string_t *uri_path = coap_get_uri_path(pdu);\n-        coap_show_pdu(LOG_DEBUG, pdu);\n-        coap_pdu_encode_header(pdu, COAP_PROTO_UDP);\n+        if (coap_pdu_parse(COAP_PROTO_UDP, data, size, pdu)) {\n+            coap_string_t *query = coap_get_query(pdu);\n+            coap_string_t *uri_path = coap_get_uri_path(pdu);\n+            coap_show_pdu(LOG_DEBUG, pdu);\n+            coap_pdu_encode_header(pdu, COAP_PROTO_UDP);\n \n-        coap_delete_string(query);\n-        coap_delete_string(uri_path);\n+            coap_delete_string(query);\n+            coap_delete_string(uri_path);\n+        }\n         coap_delete_pdu(pdu);\n     }\n     return 0;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42508312-vul",
+      "digest": "sha256:8269184431753b44ee935c07fe95e632e8f81daaf3087cf28a12d394eee903ae"
+    },
+    "patched": {
+      "ref": "n132/arvo:42508312-fix",
+      "digest": "sha256:eb69008c4dffb15d1255507703994f532a6efa8c779561de7ca67cbbe0d626bf"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/libcoap/src/uri.c:72",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/libcoap/src/uri.c:72"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

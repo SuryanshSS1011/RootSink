@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042475058",
+  "chain": "CWE-416->CWE-125",
+  "project": "open62541",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42475058",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "58a2fdb5b1ad1efafef455d66a9cbfb93c3fae9d",
+      "fix_commits": [
+        "58a2fdb5b1ad1efafef455d66a9cbfb93c3fae9d"
+      ],
+      "repo": "https://github.com/open62541/open62541"
+    },
+    "patch": "From 58a2fdb5b1ad1efafef455d66a9cbfb93c3fae9d Mon Sep 17 00:00:00 2001\nFrom: Stefan Profanter <git@s.profanter.me>\nDate: Mon, 6 May 2019 09:29:21 +0200\nSubject: [PATCH] Fuzz: Remove unsupported assert calls\n\n---\n tests/fuzz/fuzz_json_decode_encode.cc | 25 ++++++++++++++++---------\n 1 file changed, 16 insertions(+), 9 deletions(-)\n\ndiff --git a/tests/fuzz/fuzz_json_decode_encode.cc b/tests/fuzz/fuzz_json_decode_encode.cc\nindex dcd3fc6..0350eae 100644\n--- a/tests/fuzz/fuzz_json_decode_encode.cc\n+++ b/tests/fuzz/fuzz_json_decode_encode.cc\n@@ -38,19 +38,22 @@ LLVMFuzzerTestOneInput(uint8_t *data, size_t size) {\n     const uint8_t *bufEnd = &buf2.data[buf2.length];\n     retval = UA_encodeJson(&value, &UA_TYPES[UA_TYPES_VARIANT],\n                            &bufPos, &bufEnd, NULL, 0, NULL, 0, true);\n-    assert(retval == UA_STATUSCODE_GOOD);\n-    assert(bufPos == bufEnd);\n+\tUA_Variant_deleteMembers(&value);\n+\tif(retval != UA_STATUSCODE_GOOD || bufPos != bufEnd) {\n+\t\treturn 0;\n+\t}\n \n     UA_Variant value2;\n     UA_Variant_init(&value2);\n \n     retval = UA_decodeJson(&buf2, &value2, &UA_TYPES[UA_TYPES_VARIANT]);\n-    assert(retval == UA_STATUSCODE_GOOD);\n+    if(retval != UA_STATUSCODE_GOOD) {\n+\t\treturn 0;\n+\t}\n \n     UA_ByteString buf3 = UA_BYTESTRING_NULL;\n     retval = UA_ByteString_allocBuffer(&buf3, jsonSize);\n     if(retval != UA_STATUSCODE_GOOD) {\n-        UA_Variant_deleteMembers(&value);\n         UA_Variant_deleteMembers(&value2);\n         UA_ByteString_deleteMembers(&buf2);\n         return 0;\n@@ -60,12 +63,16 @@ LLVMFuzzerTestOneInput(uint8_t *data, size_t size) {\n     bufEnd = &buf3.data[buf3.length];\n     retval = UA_encodeJson(&value2, &UA_TYPES[UA_TYPES_VARIANT],\n                            &bufPos, &bufEnd, NULL, 0, NULL, 0, true);\n-    assert(retval == UA_STATUSCODE_GOOD);\n-    assert(bufPos == bufEnd);\n-    assert(memcmp(buf2.data, buf3.data, buf.length) == 0);\n+\tUA_Variant_deleteMembers(&value2);\n+\tif(retval != UA_STATUSCODE_GOOD) {\n+\t\tUA_ByteString_deleteMembers(&buf2);\n+\t\tUA_ByteString_deleteMembers(&buf3);\n+\t\treturn 0;\n+\t}\n+    if (memcmp(buf2.data, buf3.data, buf.length) != 0) {\n+    \t// ignore\n+    }\n \n-    UA_Variant_deleteMembers(&value);\n-    UA_Variant_deleteMembers(&value2);\n     UA_ByteString_deleteMembers(&buf2);\n     UA_ByteString_deleteMembers(&buf3);\n \n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42475058-vul",
+      "digest": "sha256:959bd9187f85f3d5ca88a7c47f40c1de3f7b67d651ad6d38e018abe109eda45c"
+    },
+    "patched": {
+      "ref": "n132/arvo:42475058-fix",
+      "digest": "sha256:3e72a6902e0fcd4d7d69e5e5492d4cd9fe762cf84cb3f0640cd09dd1ff1f62de"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/open62541/src/ua_types.c:140",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/open62541/src/ua_types.c:140"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

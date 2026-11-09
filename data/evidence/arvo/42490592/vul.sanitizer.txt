@@ -1,0 +1,69 @@
+======================= INFO =========================
+This binary is built for AFL-fuzz.
+To run the target function on individual input(s) execute this:
+  /out/radio-receive-done-fuzzer < INPUT_FILE
+or
+  /out/radio-receive-done-fuzzer INPUT_FILE1 [INPUT_FILE2 ... ]
+To fuzz with afl-fuzz execute this:
+  afl-fuzz [afl-flags] /out/radio-receive-done-fuzzer [-N]
+afl-fuzz will run N iterations before re-spawning the process (default: 1000)
+======================================================
+Reading 30 bytes from /tmp/poc
+=================================================================
+==7:7==ERROR: AddressSanitizer: stack-buffer-overflow on address 0x7f1d22d6ecb9 at pc 0x000000521ead bp 0x7ffe38b3e1e0 sp 0x7ffe38b3e1d8
+READ of size 1 at 0x7f1d22d6ecb9 thread T0
+SCARINESS: 27 (1-byte-read-stack-buffer-overflow)
+    #0 0x521eac in ot::Coap::Header::FromMessage(ot::Message const&, unsigned short) /src/openthread/src/core/coap/coap_header.cpp:99:13
+    #1 0x51ec2f in ot::Coap::Coap::Receive(ot::Message&, ot::Ip6::MessageInfo const&) /src/openthread/src/core/coap/coap.cpp:542:5
+    #2 0x5482ed in ot::Ip6::Udp::HandleMessage(ot::Message&, ot::Ip6::MessageInfo&) /src/openthread/src/core/net/udp6.cpp:266:17
+    #3 0x53e8d0 in ot::Ip6::Ip6::HandleDatagram(ot::Message&, ot::Ip6::Netif*, signed char, void const*, bool) /src/openthread/src/core/net/ip6.cpp:787:9
+    #4 0x553157 in ot::MeshForwarder::HandleReceivedFrame(ot::Mac::Frame&) /src/openthread/src/core/thread/mesh_forwarder.cpp:1833:13
+    #5 0x52f67c in ot::Mac::Mac::ReceiveDoneTask(ot::Mac::Frame*, otError) /src/openthread/src/core/mac/mac.cpp:1766:23
+    #6 0x5174c6 in LLVMFuzzerTestOneInput /src/openthread/tests/fuzz/radio_receive_done.cpp:67:5
+    #7 0x6014de in ExecuteFilesOnyByOne(int, char**) /src/libfuzzer/afl/afl_driver.cpp:265:5
+    #8 0x601a6e in main /src/libfuzzer/afl/afl_driver.cpp:302:12
+    #9 0x7f1d22e1f82f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+    #10 0x41b978 in _start (/out/radio-receive-done-fuzzer+0x41b978)
+
+DEDUP_TOKEN: ot::Coap::Header::FromMessage(ot::Message const&, unsigned short)--ot::Coap::Coap::Receive(ot::Message&, ot::Ip6::MessageInfo const&)--ot::Ip6::Udp::HandleMessage(ot::Message&, ot::Ip6::MessageInfo&)
+Address 0x7f1d22d6ecb9 is located in stack of thread T0 at offset 185 in frame
+    #0 0x51eb4f in ot::Coap::Coap::Receive(ot::Message&, ot::Ip6::MessageInfo const&) /src/openthread/src/core/coap/coap.cpp:538
+
+DEDUP_TOKEN: ot::Coap::Coap::Receive(ot::Message&, ot::Ip6::MessageInfo const&)
+  This frame has 1 object(s):
+    [32, 184) 'header' (line 540) <== Memory access at offset 185 overflows this variable
+HINT: this may be a false positive if your program uses some custom stack unwind mechanism or swapcontext
+      (longjmp and C++ exceptions *are* supported)
+SUMMARY: AddressSanitizer: stack-buffer-overflow /src/openthread/src/core/coap/coap_header.cpp:99:13 in ot::Coap::Header::FromMessage(ot::Message const&, unsigned short)
+Shadow bytes around the buggy address:
+  0x0fe4245a5d40: f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5
+  0x0fe4245a5d50: f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5
+  0x0fe4245a5d60: f1 f1 f1 f1 00 00 00 00 00 00 f2 f2 f2 f2 00 00
+  0x0fe4245a5d70: 00 00 00 f2 f2 f2 f2 f2 01 f2 01 f3 00 00 00 00
+  0x0fe4245a5d80: f1 f1 f1 f1 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x0fe4245a5d90: 00 00 00 00 00 00 00[f3]f3 f3 f3 f3 f3 f3 f3 f3
+  0x0fe4245a5da0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0fe4245a5db0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0fe4245a5dc0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0fe4245a5dd0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0fe4245a5de0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+==7:7==ABORTING

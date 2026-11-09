@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042480937",
+  "chain": "CWE-1284->CWE-125",
+  "project": "gdal",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42480937",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "090ceea45289cd6a7a14487595f4534d57d1c552",
+      "fix_commits": [
+        "090ceea45289cd6a7a14487595f4534d57d1c552"
+      ],
+      "repo": "https://github.com/OSGeo/gdal"
+    },
+    "patch": "diff --git a/gdal/frmts/rmf/rmfdataset.cpp b/gdal/frmts/rmf/rmfdataset.cpp\nindex 48d243dc8244..fb52c8e3be26 100644\n--- a/gdal/frmts/rmf/rmfdataset.cpp\n+++ b/gdal/frmts/rmf/rmfdataset.cpp\n@@ -1272,7 +1272,11 @@ do {                                                                    \\\n \n     if( poDS->sHeader.nExtHdrOffset && poDS->sHeader.nExtHdrSize )\n     {\n-        /* coverity[tainted_data] */\n+        if( poDS->sHeader.nExtHdrSize > 1000000 )\n+        {\n+            delete poDS;\n+            return NULL;\n+        }\n         GByte *pabyExtHeader = reinterpret_cast<GByte *>(\n             VSICalloc( poDS->sHeader.nExtHdrSize, 1 ) );\n         if( pabyExtHeader == NULL )\n@@ -1285,9 +1289,12 @@ do {                                                                    \\\n                    SEEK_SET );\n         VSIFReadL( pabyExtHeader, 1, poDS->sHeader.nExtHdrSize, poDS->fp );\n \n-        RMF_READ_LONG( pabyExtHeader, poDS->sExtHeader.nEllipsoid, 24 );\n-        RMF_READ_LONG( pabyExtHeader, poDS->sExtHeader.nDatum, 32 );\n-        RMF_READ_LONG( pabyExtHeader, poDS->sExtHeader.nZone, 36 );\n+        if( poDS->sHeader.nExtHdrSize >= 36 + 4 )\n+        {\n+            RMF_READ_LONG( pabyExtHeader, poDS->sExtHeader.nEllipsoid, 24 );\n+            RMF_READ_LONG( pabyExtHeader, poDS->sExtHeader.nDatum, 32 );\n+            RMF_READ_LONG( pabyExtHeader, poDS->sExtHeader.nZone, 36 );\n+        }\n \n         CPLFree( pabyExtHeader );\n     }\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42480937-vul",
+      "digest": "sha256:cdb3a25fd8b0325095475199bd4c5f24b13485ee80f7ee1b974995fb113239d2"
+    },
+    "patched": {
+      "ref": "n132/arvo:42480937-fix",
+      "digest": "sha256:f7ef7c4a63ef1e71e4b8c7a412d87e1ebb67195493ec2251f4c5f51639e9e525"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/gdal/gdal/frmts/rmf/rmfdataset.cpp:1288",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/gdal/gdal/frmts/rmf/rmfdataset.cpp:1288"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042490855",
+  "chain": "CWE-1284->CWE-125",
+  "project": "mdbtools",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42490855",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "50c9bdfee62ea54e33da6ae54ad9395e3042d581",
+      "fix_commits": [
+        "50c9bdfee62ea54e33da6ae54ad9395e3042d581"
+      ],
+      "repo": "https://github.com/mdbtools/mdbtools"
+    },
+    "patch": "diff --git a/src/libmdb/map.c b/src/libmdb/map.c\nindex 6fe826ea..b34ed03a 100644\n--- a/src/libmdb/map.c\n+++ b/src/libmdb/map.c\n@@ -24,6 +24,10 @@ mdb_map_find_next0(MdbHandle *mdb, unsigned char *map, unsigned int map_sz, guin\n \tguint32 pgnum, i, usage_bitlen;\n \tunsigned char *usage_bitmap;\n \n+\tif (map_sz < 5) {\n+\t\treturn 0;\n+\t}\n+\n \tpgnum = mdb_get_int32(map, 1);\n \tusage_bitmap = map + 5;\n \tusage_bitlen = (map_sz - 5) * 8;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42490855-vul",
+      "digest": "sha256:c4c68112464df67527059b619339b0c5a694f72d127b0dc4b3b5775749fd763f"
+    },
+    "patched": {
+      "ref": "n132/arvo:42490855-fix",
+      "digest": "sha256:ec544b6130df74e4116a9a0becf94cf587189b941c8e8f0d04e9ed295dd46a61"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/mdbtools/src/libmdb/file.c:475",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/mdbtools/src/libmdb/file.c:475"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

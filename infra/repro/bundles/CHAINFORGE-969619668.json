@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-969619668",
+  "chain": "CWE-456->CWE-457",
+  "project": "openjpeg",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42535258",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/uclouvain/openjpeg/commit/2f5a299cbae9856dccd98ed33971bac4d1283fd0",
+      "fix_commits": [
+        "2f5a299cbae9856dccd98ed33971bac4d1283fd0"
+      ],
+      "repo": "https://github.com/uclouvain/openjpeg"
+    },
+    "patch": "diff --git a/src/lib/openjp2/jp2.c b/src/lib/openjp2/jp2.c\nindex 6015190e1..4df055a54 100644\n--- a/src/lib/openjp2/jp2.c\n+++ b/src/lib/openjp2/jp2.c\n@@ -1989,12 +1989,16 @@ OPJ_BOOL opj_jp2_setup_encoder(opj_jp2_t *jp2,\n         jp2->enumcs = 0;\n     } else {\n         jp2->meth = 1;\n-        if (image->color_space == 1) {\n+        if (image->color_space == OPJ_CLRSPC_SRGB) {\n             jp2->enumcs = 16;    /* sRGB as defined by IEC 61966-2-1 */\n-        } else if (image->color_space == 2) {\n-            jp2->enumcs = 17;    /* greyscale */\n-        } else if (image->color_space == 3) {\n+        } else if (image->color_space == OPJ_CLRSPC_GRAY) {\n+            jp2->enumcs = 17;\n+        } else if (image->color_space == OPJ_CLRSPC_SYCC) {\n             jp2->enumcs = 18;    /* YUV */\n+        } else if (image->color_space == OPJ_CLRSPC_EYCC) {\n+            jp2->enumcs = 24;\n+        } else if (image->color_space == OPJ_CLRSPC_CMYK) {\n+            jp2->enumcs = 12;\n         }\n     }\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42535258-vul",
+      "digest": "sha256:9c5dae5062f61691f957ffd5d30786e7521ebb869cb54ae6d82b86774c672de7"
+    },
+    "patched": {
+      "ref": "n132/arvo:42535258-fix",
+      "digest": "sha256:d5c1b700a4b97709ad75df80b7057e721a1f40f50bc5df80084448602ab87a6f"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/openjpeg/src/lib/openjp2/j2k.c:11701",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/openjpeg/src/lib/openjp2/j2k.c:11701"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

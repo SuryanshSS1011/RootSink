@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042484165",
+  "chain": "CWE-456->CWE-457",
+  "project": "leptonica",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42484165",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "7b5ba2afc759b7a44f6776a53030b494c6d985c3",
+      "fix_commits": [
+        "7b5ba2afc759b7a44f6776a53030b494c6d985c3"
+      ],
+      "repo": "https://github.com/DanBloomberg/leptonica"
+    },
+    "patch": "From 7b5ba2afc759b7a44f6776a53030b494c6d985c3 Mon Sep 17 00:00:00 2001\nFrom: Dan Bloomberg <dan.bloomberg@gmail.com>\nDate: Fri, 29 May 2020 13:22:12 -0700\nSubject: [PATCH] Issue 22764 in oss-fuzz: uninit value in\n numaCrossingByThreshold(). * may be related to issue 22760: illegal read in\n pixAverageRasterScans(). * In readbarcode.c, make sure each pix is large\n enough.  Fix bug in   pixAverageRasterScans(), that could lead to illegal\n addressing. * Added numa size checking; if n < 2 there will not be any\n crossings. * In binexpand.c, remove unnecessary warning.\n\n---\n src/binexpand.c   |  2 --\n src/numafunc2.c   |  8 +++++++-\n src/readbarcode.c | 16 +++++++++++++---\n 3 files changed, 20 insertions(+), 6 deletions(-)\n\ndiff --git a/src/binexpand.c b/src/binexpand.c\nindex c7a8c1a..3c67297 100644\n--- a/src/binexpand.c\n+++ b/src/binexpand.c\n@@ -198,8 +198,6 @@ PIX       *pixd;\n             lined = datad + 8 * i * wpld;\n             for (j = 0; j < sqbits; j++) {\n                 sval = GET_DATA_QBIT(lines, j);\n-                if (sval > 15)\n-                    L_WARNING(\"sval = %d; should be < 16\\n\", procName, sval);\n                 lined[j] = tab8[sval];\n             }\n             for (k = 1; k < 8; k++)\ndiff --git a/src/numafunc2.c b/src/numafunc2.c\nindex 9673d3b..f667303 100644\n--- a/src/numafunc2.c\n+++ b/src/numafunc2.c\n@@ -2757,7 +2757,7 @@ NUMA      *nat;\n  * \\param[in]    estthresh    estimated pixel threshold for crossing:\n  *                            e.g., for images, white <--> black; typ. ~120\n  * \\param[out]   pbestthresh  robust estimate of threshold to use\n- * \\return  0 if OK, 1 on error\n+ * \\return  0 if OK, 1 on error or warning\n  *\n  * <pre>\n  * Notes:\n@@ -2772,6 +2772,7 @@ NUMA      *nat;\n  *         in the center of this stable plateau of crossings.\n  *         This can then be used with numaCrossingsByThreshold()\n  *         to get a good estimate of crossing locations.\n+ *     (3) If the count of nay is less than 2, a warning is issued.\n  * </pre>\n  */\n l_ok\n@@ -2792,6 +2793,10 @@ NUMA      *nat, *nac;\n     *pbestthresh = 0.0;\n     if (!nay)\n         return ERROR_INT(\"nay not defined\", procName, 1);\n+    if (numaGetCount(nay) < 2) {\n+        L_WARNING(\"nay count < 2; no threshold crossing\\n\", procName);\n+        return 1;\n+    }\n \n         /* Compute the number of crossings for different thresholds */\n     nat = numaCreate(41);\n@@ -2901,6 +2906,7 @@ NUMA      *nad;\n         return (NUMA *)ERROR_PTR(\"nax and nay sizes differ\", procName, NULL);\n \n     nad = numaCreate(0);\n+    if (n < 2) return nad;\n     numaGetFValue(nay, 0, &yval1);\n     numaGetParameters(nay, &startx, &delx);\n     if (nax)\ndiff --git a/src/readbarcode.c b/src/readbarcode.c\nindex 3b10865..cbfe891 100644\n--- a/src/readbarcode.c\n+++ b/src/readbarcode.c\n@@ -93,6 +93,10 @@ static const l_int32  MAX_SPACE_WIDTH = 19;  /* was 15 */\n static const l_int32  MAX_NOISE_WIDTH = 50;  /* smaller than barcode width */\n static const l_int32  MAX_NOISE_HEIGHT = 30;  /* smaller than barcode height */\n \n+    /* Minimum barcode image size */\n+static const l_int32  MIN_BC_WIDTH = 100;\n+static const l_int32  MIN_BC_HEIGHT = 50;\n+\n     /* Static functions */\n static PIX *pixGenerateBarcodeMask(PIX *pixs, l_int32 maxspace,\n                                    l_int32 nwidth, l_int32 nheight);\n@@ -263,7 +267,7 @@ pixReadBarcodes(PIXA     *pixa,\n {\n char      *barstr, *data;\n char       emptystring[] = \"\";\n-l_int32    i, j, n, nbars, ival;\n+l_int32    w, h, i, j, n, nbars, ival;\n NUMA      *na;\n PIX       *pixt;\n SARRAY    *saw, *sad;\n@@ -284,6 +288,11 @@ SARRAY    *saw, *sad;\n     for (i = 0; i < n; i++) {\n             /* Extract the widths of the lines in each barcode */\n         pixt = pixaGetPix(pixa, i, L_CLONE);\n+        pixGetDimensions(pixt, &w, &h, NULL);\n+        if (w < MIN_BC_WIDTH || h < MIN_BC_HEIGHT) {\n+            L_ERROR(\"pix is too small: w = %d, h = %d\\n\", procName, w, h);\n+            continue;\n+        }\n         na = pixReadBarcodeWidths(pixt, method, debugflag);\n         pixDestroy(&pixt);\n         if (!na) {\n@@ -729,7 +738,8 @@ NUMA      *nas, *nax, *nay, *nad;\n         return (NUMA *)ERROR_PTR(\"pixs undefined or not 8 bpp\", procName, NULL);\n \n         /* Scan pixels horizontally and average results */\n-    nas = pixAverageRasterScans(pixs, 51);\n+    if ((nas = pixAverageRasterScans(pixs, 50)) == NULL)\n+        return (NUMA *)ERROR_PTR(\"nas not made\", procName, NULL);\n \n         /* Interpolate to get 4x the number of values */\n     w = pixGetWidth(pixs);\n@@ -785,7 +795,7 @@ NUMA       *nad;\n         return (NUMA *)ERROR_PTR(\"pixs undefined or not 8 bpp\", procName, NULL);\n \n     pixGetDimensions(pixs, &w, &h, NULL);\n-    if (nscans <= h) {\n+    if (nscans > h) {\n         first = 0;\n         last = h - 1;\n         nscans = h;\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42484165-vul",
+      "digest": "sha256:d79ad69e479d205e5fa04548e889dff592417a147a9778824ab44d7cda3679b4"
+    },
+    "patched": {
+      "ref": "n132/arvo:42484165-fix",
+      "digest": "sha256:392941290f0eff836397173e6a6a861783f188c97e583d6d403d377bfbff8212"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/leptonica/src/numafunc2.c:2918",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/leptonica/src/numafunc2.c:2918"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

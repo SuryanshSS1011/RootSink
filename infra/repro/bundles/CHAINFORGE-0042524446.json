@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042524446",
+  "chain": "CWE-20->CWE-787",
+  "project": "proj.4",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42524446",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "d14bf09d94be40e3e2ed2be5b0b55c9d885f1513",
+      "fix_commits": [
+        "d14bf09d94be40e3e2ed2be5b0b55c9d885f1513"
+      ],
+      "repo": "https://github.com/OSGeo/proj.4"
+    },
+    "patch": "diff --git a/src/proj_4D_api.c b/src/proj_4D_api.c\nindex af4bae4544..0d50407f05 100644\n--- a/src/proj_4D_api.c\n+++ b/src/proj_4D_api.c\n@@ -402,7 +402,6 @@ invocators can emulate the behaviour of pj_transform and the cs2cs app.\n **************************************************************************************/\n     PJ *Q;\n     paralist *p;\n-    char def[1000];\n     if (0==P)\n         return 0;\n \n@@ -415,8 +414,12 @@ invocators can emulate the behaviour of pj_transform and the cs2cs app.\n \n     /* Don't axisswap if data are already in \"enu\" order */\n     if (p && (0!=strcmp (\"enu\", p->param))) {\n+        char *def = malloc (100+strlen(P->axis));\n+        if (0==def)\n+            return 0;\n         sprintf (def, \"break_cs2cs_recursion     proj=axisswap  axis=%s\", P->axis);\n         Q = proj_create (P->ctx, def);\n+        free (def);\n         if (0==Q)\n             return 0;\n         P->axisswap = skip_prep_fin(Q);\n@@ -426,8 +429,12 @@ invocators can emulate the behaviour of pj_transform and the cs2cs app.\n     p = pj_param_exists (P->params, \"geoidgrids\");\n     if (p  &&  strlen (p->param) > strlen (\"geoidgrids=\")) {\n         char *gridnames = p->param + strlen (\"geoidgrids=\");\n+        char *def = malloc (100+strlen(gridnames));\n+        if (0==def)\n+            return 0;\n         sprintf (def, \"break_cs2cs_recursion     proj=vgridshift  grids=%s\", gridnames);\n         Q = proj_create (P->ctx, def);\n+        free (def);\n         if (0==Q)\n             return 0;\n         P->vgridshift = skip_prep_fin(Q);\n@@ -437,8 +444,12 @@ invocators can emulate the behaviour of pj_transform and the cs2cs app.\n     p = pj_param_exists (P->params, \"nadgrids\");\n     if (p  &&  strlen (p->param) > strlen (\"nadgrids=\")) {\n         char *gridnames = p->param + strlen (\"nadgrids=\");\n+        char *def = malloc (100+strlen(gridnames));\n+        if (0==def)\n+            return 0;\n         sprintf (def, \"break_cs2cs_recursion     proj=hgridshift  grids=%s\", gridnames);\n         Q = proj_create (P->ctx, def);\n+        free (def);\n         if (0==Q)\n             return 0;\n         P->hgridshift = skip_prep_fin(Q);\n@@ -447,6 +458,7 @@ invocators can emulate the behaviour of pj_transform and the cs2cs app.\n     /* We ignore helmert if we have grid shift */\n     p = P->hgridshift ? 0 : pj_param_exists (P->params, \"towgs84\");\n     while (p) {\n+        char *def;\n         char *s = p->param;\n         double *d = P->datum_params;\n         size_t n = strlen (s);\n@@ -455,12 +467,15 @@ invocators can emulate the behaviour of pj_transform and the cs2cs app.\n         if (0==d[0] && 0==d[1] && 0==d[2] && 0==d[3] && 0==d[4] && 0==d[5] && 0==d[6])\n             break;\n \n-        if (n > 900)\n-            return 0;\n         if (n <= 8) /* 8==strlen (\"towgs84=\") */\n             return 0;\n+\n+        def = malloc (100+n);\n+        if (0==def)\n+            return 0;\n         sprintf (def, \"break_cs2cs_recursion     proj=helmert %s\", s);\n         Q = proj_create (P->ctx, def);\n+        free (def);\n         if (0==Q)\n             return 0;\n         P->helmert = skip_prep_fin(Q);\n@@ -471,7 +486,7 @@ invocators can emulate the behaviour of pj_transform and the cs2cs app.\n     /* We also need cartesian/geographical transformations if we are working in */\n     /* geocentric/cartesian space or we need to do a Helmert transform.         */\n     if (P->is_geocent || P->helmert) {\n-        char *wgs84 = \"ellps=WGS84\";\n+        char def[100];\n         sprintf (def, \"break_cs2cs_recursion     proj=cart\");\n         Q = proj_create (P->ctx, def);\n         if (0==Q)\n@@ -479,7 +494,7 @@ invocators can emulate the behaviour of pj_transform and the cs2cs app.\n         pj_inherit_ellipsoid_def(P, Q);\n         P->cart = skip_prep_fin(Q);\n \n-        sprintf (def, \"break_cs2cs_recursion     proj=cart  %s\", wgs84);\n+        sprintf (def, \"break_cs2cs_recursion     proj=cart  ellps=WGS84\");\n         Q = proj_create (P->ctx, def);\n         if (0==Q)\n             return 0;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42524446-vul",
+      "digest": "sha256:6d93570f082ddee86ecf004a601a07dfd27888e5d605781280b90906377f06c6"
+    },
+    "patched": {
+      "ref": "n132/arvo:42524446-fix",
+      "digest": "sha256:2a2f1c10c8006423b8bde5b502077cfad1e085ad20e1ff3a9c8980e2761736e3"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/proj.4/src/proj_4D_api.c:440",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/proj.4/src/proj_4D_api.c:440"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

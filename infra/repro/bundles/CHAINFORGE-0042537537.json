@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042537537",
+  "chain": "CWE-20->CWE-787",
+  "project": "edk2",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42537537",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "589304e67fbfcbb7c250d1a3031ef23c4fb8a41b",
+      "fix_commits": [
+        "589304e67fbfcbb7c250d1a3031ef23c4fb8a41b"
+      ],
+      "repo": "https://github.com/tianocore/edk2"
+    },
+    "patch": "diff --git a/NetworkPkg/UefiPxeBcDxe/PxeBcBoot.c b/NetworkPkg/UefiPxeBcDxe/PxeBcBoot.c\nindex f22a151e256d..0af791dc5f58 100644\n--- a/NetworkPkg/UefiPxeBcDxe/PxeBcBoot.c\n+++ b/NetworkPkg/UefiPxeBcDxe/PxeBcBoot.c\n@@ -1268,5 +1268,12 @@ PxeBcLoadBootFile (\n     AsciiPrint (\"\\n  PXE-E99: Unexpected network error.\\n\");\r\n   }\r\n \r\n+  REPORT_STATUS_CODE_WITH_EXTENDED_DATA (\r\n+    EFI_ERROR_CODE,\r\n+    (EFI_STATUS_CODE_VALUE)(EFI_IO_BUS_IP_NETWORK | EFI_OEM_SPECIFIC | ((EFI_STATUS_CODE_VALUE)(Status & 0x1F))),\r\n+    (VOID *)&(PxeBcMode->UsingIpv6),\r\n+    sizeof (PxeBcMode->UsingIpv6)\r\n+    );\r\n+\r\n   return Status;\r\n }\r\ndiff --git a/NetworkPkg/UefiPxeBcDxe/PxeBcImpl.c b/NetworkPkg/UefiPxeBcDxe/PxeBcImpl.c\nindex 0a4baf6f90e8..e29647447184 100644\n--- a/NetworkPkg/UefiPxeBcDxe/PxeBcImpl.c\n+++ b/NetworkPkg/UefiPxeBcDxe/PxeBcImpl.c\n@@ -72,6 +72,13 @@ EfiPxeBcStart (\n     return EFI_UNSUPPORTED;\r\n   }\r\n \r\n+  REPORT_STATUS_CODE_WITH_EXTENDED_DATA (\r\n+    EFI_PROGRESS_CODE,\r\n+    EFI_IO_BUS_IP_NETWORK | EFI_IOB_PC_RECONFIG,\r\n+    (VOID *)&(Mode->UsingIpv6),\r\n+    sizeof (Mode->UsingIpv6)\r\n+    );\r\n+\r\n   if (Mode->UsingIpv6) {\r\n     AsciiPrint (\"\\n>>Start PXE over IPv6\");\r\n     //\r\ndiff --git a/NetworkPkg/UefiPxeBcDxe/PxeBcImpl.h b/NetworkPkg/UefiPxeBcDxe/PxeBcImpl.h\nindex 732889f23d16..cdb9b3448094 100644\n--- a/NetworkPkg/UefiPxeBcDxe/PxeBcImpl.h\n+++ b/NetworkPkg/UefiPxeBcDxe/PxeBcImpl.h\n@@ -48,6 +48,7 @@\n #include <Library/DpcLib.h>\r\n #include <Library/DevicePathLib.h>\r\n #include <Library/PcdLib.h>\r\n+#include <Library/ReportStatusCodeLib.h>\r\n \r\n typedef struct _PXEBC_PRIVATE_DATA      PXEBC_PRIVATE_DATA;\r\n typedef struct _PXEBC_PRIVATE_PROTOCOL  PXEBC_PRIVATE_PROTOCOL;\r\ndiff --git a/NetworkPkg/UefiPxeBcDxe/UefiPxeBcDxe.inf b/NetworkPkg/UefiPxeBcDxe/UefiPxeBcDxe.inf\nindex 3371c150be13..d5aba1376ac0 100644\n--- a/NetworkPkg/UefiPxeBcDxe/UefiPxeBcDxe.inf\n+++ b/NetworkPkg/UefiPxeBcDxe/UefiPxeBcDxe.inf\n@@ -62,6 +62,7 @@\n   DpcLib\r\n   DevicePathLib\r\n   PcdLib\r\n+  ReportStatusCodeLib\r\n \r\n [Protocols]\r\n   ## TO_START\r\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42537537-vul",
+      "digest": "sha256:222ae05155a1c70a1e4b93e83685ecdc57d21cd8b3d9e2b9ed6f60b60934bf8e"
+    },
+    "patched": {
+      "ref": "n132/arvo:42537537-fix",
+      "digest": "sha256:3febaa9b9b2b1804caea8f0127074e20f4eee23b0329920de3a3ccc1e25d48d7"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/edk2/MdeModulePkg/Bus/Usb/UsbBusPei/UsbPeim.c:928",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/edk2/MdeModulePkg/Bus/Usb/UsbBusPei/UsbPeim.c:928"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042475056",
+  "chain": "CWE-456->CWE-457",
+  "project": "kimageformats",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42475056",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "4bf2894bdee81ae7da6953f05915351685373b75",
+      "fix_commits": [
+        "4bf2894bdee81ae7da6953f05915351685373b75"
+      ],
+      "repo": "https://invent.kde.org/frameworks/kimageformats.git"
+    },
+    "patch": "From 4bf2894bdee81ae7da6953f05915351685373b75 Mon Sep 17 00:00:00 2001\nFrom: Albert Astals Cid <aacid@kde.org>\nDate: Thu, 5 Sep 2019 20:05:29 +0200\nSubject: [PATCH] Fix uninitialized memory read\n\nSummary:\nMake sure whole of pixel_size in pixel has data either because it was\nread or because we set it to 0\n\noss-fuzz/14565\n\nReviewers: dfaure, apol, vkrause\n\nReviewed By: vkrause\n\nSubscribers: kde-frameworks-devel\n\nTags: #frameworks\n\nDifferential Revision: https://phabricator.kde.org/D23739\n---\n src/imageformats/tga.cpp | 5 ++++-\n 1 file changed, 4 insertions(+), 1 deletion(-)\n\ndiff --git a/src/imageformats/tga.cpp b/src/imageformats/tga.cpp\nindex 46129bb..6b0b600 100644\n--- a/src/imageformats/tga.cpp\n+++ b/src/imageformats/tga.cpp\n@@ -252,7 +252,10 @@ static bool LoadTGA(QDataStream &s, const TgaHeader &tga, QImage &img)\n                 // RLE pixels.\n                 assert(pixel_size <= 8);\n                 char pixel[8];\n-                s.readRawData(pixel, pixel_size);\n+                const int dataRead = s.readRawData(pixel, pixel_size);\n+                if (dataRead < (int)pixel_size) {\n+                    memset(&pixel[dataRead], 0, pixel_size - dataRead);\n+                }\n                 do {\n                     memcpy(dst, pixel, pixel_size);\n                     dst += pixel_size;\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42475056-vul",
+      "digest": "sha256:2b900d0dd8ed11ae9cc3d8b8dbde93280b145efceea6abc31f2764e84de6b56b"
+    },
+    "patched": {
+      "ref": "n132/arvo:42475056-fix",
+      "digest": "sha256:88e0b5b52d4c4f4c7d31609c4b5d22e049193e53739af65b0147dc8aed2f557c"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/kimageformats/src/imageformats/tga.cpp:301",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/kimageformats/src/imageformats/tga.cpp:301"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

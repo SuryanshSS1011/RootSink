@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042541443",
+  "chain": "CWE-416->CWE-125",
+  "project": "ffmpeg",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42541443",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "51290406461ed40b70e0e05b389a461a283f3367",
+      "fix_commits": [
+        "51290406461ed40b70e0e05b389a461a283f3367"
+      ],
+      "repo": "https://git.ffmpeg.org/ffmpeg.git"
+    },
+    "patch": "From 51290406461ed40b70e0e05b389a461a283f3367 Mon Sep 17 00:00:00 2001\nFrom: Michael Niedermayer <michael@niedermayer.cc>\nDate: Sun, 22 Jul 2018 18:58:34 +0200\nSubject: [PATCH] avcodec/diracdec: Prevent integer overflow in intermediate in\n global_mv()\n\nFixes: signed integer overflow: -393471 * 5460 cannot be represented in type 'int'\nFixes: 8890/clusterfuzz-testcase-minimized-ffmpeg_AV_CODEC_ID_DIRAC_fuzzer-6299775379963904\n\nFound-by: continuous fuzzing process https://github.com/google/oss-fuzz/tree/master/projects/ffmpeg\nSigned-off-by: Michael Niedermayer <michael@niedermayer.cc>\n---\n libavcodec/diracdec.c | 4 ++--\n 1 file changed, 2 insertions(+), 2 deletions(-)\n\ndiff --git a/libavcodec/diracdec.c b/libavcodec/diracdec.c\nindex 753adef..e4cdd7e 100644\n--- a/libavcodec/diracdec.c\n+++ b/libavcodec/diracdec.c\n@@ -1399,8 +1399,8 @@ static void global_mv(DiracContext *s, DiracBlock *block, int x, int y, int ref)\n     int *c      = s->globalmc[ref].perspective;\n \n     int m       = (1<<ep) - (c[0]*x + c[1]*y);\n-    int64_t mx  = m * (int64_t)((A[0][0] * x + A[0][1]*y) + (1<<ez) * b[0]);\n-    int64_t my  = m * (int64_t)((A[1][0] * x + A[1][1]*y) + (1<<ez) * b[1]);\n+    int64_t mx  = m * (int64_t)((A[0][0] * (int64_t)x + A[0][1]*(int64_t)y) + (1<<ez) * b[0]);\n+    int64_t my  = m * (int64_t)((A[1][0] * (int64_t)x + A[1][1]*(int64_t)y) + (1<<ez) * b[1]);\n \n     block->u.mv[ref][0] = (mx + (1<<(ez+ep))) >> (ez+ep);\n     block->u.mv[ref][1] = (my + (1<<(ez+ep))) >> (ez+ep);\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42541443-vul",
+      "digest": "sha256:6a579e8e14a84676cb8b219fd7b24b430b31191ee68a3102cce32c08a7a5e042"
+    },
+    "patched": {
+      "ref": "n132/arvo:42541443-fix",
+      "digest": "sha256:0786c1ec5ef4057a77d2f3c119b6e4afa824835287837efdbb0e671cab46ed2b"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/ffmpeg/libavcodec/libvpxdec.c:162",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/ffmpeg/libavcodec/libvpxdec.c:162"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

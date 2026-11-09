@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0419346940",
+  "chain": "CWE-456->CWE-457",
+  "project": "quickjs",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "419346940",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "02a2643142a0522e9e2d0d60df19e72daa84bbc3",
+      "fix_commits": [
+        "02a2643142a0522e9e2d0d60df19e72daa84bbc3"
+      ],
+      "repo": "https://github.com/bellard/quickjs"
+    },
+    "patch": "From 02a2643142a0522e9e2d0d60df19e72daa84bbc3 Mon Sep 17 00:00:00 2001\nFrom: Fabrice Bellard <fabrice@bellard.org>\nDate: Sat, 24 May 2025 12:47:35 +0200\nSubject: [PATCH] fixed parsing of function definition\n\n---\n quickjs.c          | 2 +-\n test262_errors.txt | 1 -\n 2 files changed, 1 insertion(+), 2 deletions(-)\n\ndiff --git a/quickjs.c b/quickjs.c\nindex b9c0152..ac4f2aa 100644\n--- a/quickjs.c\n+++ b/quickjs.c\n@@ -35353,7 +35353,7 @@ static __exception int js_parse_function_decl2(JSParseState *s,\n     push_scope(s);  /* enter body scope */\n     fd->body_scope = fd->scope_level;\n \n-    if (s->token.val == TOK_ARROW) {\n+    if (s->token.val == TOK_ARROW && func_type == JS_PARSE_FUNC_ARROW) {\n         if (next_token(s))\n             goto fail;\n \ndiff --git a/test262_errors.txt b/test262_errors.txt\nindex dbbcac2..6cac22d 100644\n--- a/test262_errors.txt\n+++ b/test262_errors.txt\n@@ -28,7 +28,6 @@ test262/test/staging/sm/async-functions/await-error.js:12: Test262Error: Expecte\n test262/test/staging/sm/async-functions/await-in-arrow-parameters.js:33: Error: Assertion failed: expected exception SyntaxError, no exception thrown - AsyncFunction:(a = (b = await/r/g) => {}) => {}\n test262/test/staging/sm/class/boundFunctionSubclassing.js:12: Test262Error: Expected SameValue(\u00abfalse\u00bb, \u00abtrue\u00bb) to be true\n test262/test/staging/sm/class/compPropNames.js:26: Error: Expected syntax error: ({[1, 2]: 3})\n-test262/test/staging/sm/class/methDefn.js:26: Error: Expected syntax error: b = {a() => 0}\n test262/test/staging/sm/class/strictExecution.js:32: Error: Assertion failed: expected exception TypeError, no exception thrown\n test262/test/staging/sm/class/superPropOrdering.js:83: Error: Assertion failed: expected exception TypeError, no exception thrown\n test262/test/staging/sm/expressions/optional-chain.js:25: Error: Assertion failed: expected exception SyntaxError, no exception thrown\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:419346940-vul",
+      "digest": "sha256:c144d573079a08d230aff580b124d0fe216c2f63475f8ffc8dc2403a9b70bce9"
+    },
+    "patched": {
+      "ref": "n132/arvo:419346940-fix",
+      "digest": "sha256:ae307744b95d6734304a3b2e54e94804df65d3d54f785740310e92d64f2c47d2"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/quickjs/quickjs.c:6071",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/quickjs/quickjs.c:6071"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

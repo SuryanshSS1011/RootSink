@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042530963",
+  "chain": "CWE-416->CWE-125",
+  "project": "opensc",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42530963",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "5835f0d4f6c033bd58806d33fa546908d39825c9",
+      "fix_commits": [
+        "5835f0d4f6c033bd58806d33fa546908d39825c9"
+      ],
+      "repo": "https://github.com/OpenSC/OpenSC"
+    },
+    "patch": "From 5835f0d4f6c033bd58806d33fa546908d39825c9 Mon Sep 17 00:00:00 2001\nFrom: Jakub Jelen <jjelen@redhat.com>\nDate: Mon, 18 Dec 2023 11:09:50 +0100\nSubject: [PATCH] authentic: Avoid use after free\n\nThanks oss-fuzz\n\nhttps://bugs.chromium.org/p/oss-fuzz/issues/detail?id=64898\n---\n src/pkcs15init/pkcs15-authentic.c | 2 +-\n 1 file changed, 1 insertion(+), 1 deletion(-)\n\ndiff --git a/src/pkcs15init/pkcs15-authentic.c b/src/pkcs15init/pkcs15-authentic.c\nindex a6d8b8f..798bc44 100644\n--- a/src/pkcs15init/pkcs15-authentic.c\n+++ b/src/pkcs15init/pkcs15-authentic.c\n@@ -868,7 +868,7 @@ authentic_emu_update_tokeninfo(struct sc_profile *profile, struct sc_pkcs15_card\n \trv = sc_select_file(p15card->card, &path, &file);\n \tif (!rv) {\n \t\trv = sc_get_challenge(p15card->card, buffer, sizeof(buffer));\n-\t\tif (!rv) {\n+\t\tif (rv < 0) {\n \t\t\tsc_file_free(file);\n \t\t\tLOG_TEST_RET(ctx, rv, \"Get challenge error\");\n \t\t}\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42530963-vul",
+      "digest": "sha256:205c0800ad69ec03f89dc3a6da5bd72c2b11003c58ed115126eb49eceac4c88e"
+    },
+    "patched": {
+      "ref": "n132/arvo:42530963-fix",
+      "digest": "sha256:4f8aedab4c102c64344dee5bbd9e03361149c151dca90546ba83a15571e30ff1"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/opensc/src/pkcs15init/pkcs15-authentic.c:876",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/opensc/src/pkcs15init/pkcs15-authentic.c:876"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

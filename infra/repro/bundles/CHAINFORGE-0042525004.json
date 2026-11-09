@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042525004",
+  "chain": "CWE-456->CWE-457",
+  "project": "lldpd",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42525004",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "83f0eddcfb7fb1d0a825136e3929f8847cd85a62",
+      "fix_commits": [
+        "83f0eddcfb7fb1d0a825136e3929f8847cd85a62"
+      ],
+      "repo": "https://github.com/lldpd/lldpd"
+    },
+    "patch": "From 83f0eddcfb7fb1d0a825136e3929f8847cd85a62 Mon Sep 17 00:00:00 2001\nFrom: Arjun Singh <ajsinghyadav00@gmail.com>\nDate: Mon, 7 Aug 2023 17:01:45 +0530\nSubject: [PATCH] [bug] fix 5193822305648640 and 4673544697806848\n\nSigned-off-by: Arjun Singh <ajsinghyadav00@gmail.com>\n---\n src/daemon/protocols/lldp.c | 2 +-\n tests/fuzz_edp.c            | 1 +\n 2 files changed, 2 insertions(+), 1 deletion(-)\n\ndiff --git a/src/daemon/protocols/lldp.c b/src/daemon/protocols/lldp.c\nindex 4f689a0..23211f8 100644\n--- a/src/daemon/protocols/lldp.c\n+++ b/src/daemon/protocols/lldp.c\n@@ -614,7 +614,7 @@ lldp_decode(struct lldpd *cfg, char *frame, int s, struct lldpd_hardware *hardwa\n #endif\n \tstruct lldpd_mgmt *mgmt;\n \tint af;\n-\tu_int8_t addr_str_length, addr_str_buffer[32];\n+\tu_int8_t addr_str_length, addr_str_buffer[32] = { 0 };\n \tu_int8_t addr_family, addr_length, *addr_ptr, iface_subtype;\n \tu_int32_t iface_number, iface;\n \tint unrecognized;\ndiff --git a/tests/fuzz_edp.c b/tests/fuzz_edp.c\nindex 76d1253..e82e533 100644\n--- a/tests/fuzz_edp.c\n+++ b/tests/fuzz_edp.c\n@@ -32,6 +32,7 @@ LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size)\n \n \tstruct lldpd cfg;\n \tcfg.g_config.c_mgmt_pattern = NULL;\n+\tcfg.g_config.c_tx_hold = LLDPD_TX_HOLD;\n \n \tstruct lldpd_chassis *nchassis = NULL;\n \tstruct lldpd_port *nport = NULL;\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42525004-vul",
+      "digest": "sha256:be917f71b666df326002fe199f683f07ed2b8323ddbccfd5170b651645ab428b"
+    },
+    "patched": {
+      "ref": "n132/arvo:42525004-fix",
+      "digest": "sha256:4557d7f40cd341d078f61fc4f61fc9c76777e407cfd08bad5635892acd3c2792"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/lldpd/src/daemon/protocols/lldp.c:838",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/lldpd/src/daemon/protocols/lldp.c:838"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042529061",
+  "chain": "CWE-416->CWE-787",
+  "project": "ghostpdl",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42529061",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "cf8dfe905be28f1e74416441eed760e704ae1f4d",
+      "fix_commits": [
+        "cf8dfe905be28f1e74416441eed760e704ae1f4d"
+      ],
+      "repo": "https://cgit.ghostscript.com/ghostpdl.git"
+    },
+    "patch": "From cf8dfe905be28f1e74416441eed760e704ae1f4d Mon Sep 17 00:00:00 2001\nFrom: Ken Sharp <Ken.Sharp@artifex.com>\nDate: Thu, 12 Oct 2023 12:03:09 +0100\nSubject: [PATCH] Graphics library - improved fix for OSS-fuzz #63185\n\nWe shouldn't decrement pcs unless we incrememnted it, the only way to\nknow if we incremented it is if penum->pcs points to it. So instead\nof decrementing pcs, decrement penum->pcs.\n\nInitialise penum->pcs to NULL because there are failure routes which\ncan get here without having set penum->pcs.\n---\n base/gxipixel.c | 3 ++-\n 1 file changed, 2 insertions(+), 1 deletion(-)\n\ndiff --git a/base/gxipixel.c b/base/gxipixel.c\nindex 6837303..1b02e55 100644\n--- a/base/gxipixel.c\n+++ b/base/gxipixel.c\n@@ -287,6 +287,7 @@ gx_image_enum_begin(gx_device * dev, const gs_gstate * pgs,\n     int orthogonal;\n     int force_interpolation = 0;\n \n+    penum->pcs = NULL;\n     penum->clues = NULL;\n     penum->icc_setup.has_transfer = false;\n     penum->icc_setup.is_lab = false;\n@@ -1077,7 +1078,7 @@ fail:\n         penum->clip_dev = NULL;\n     }\n     gs_free_object(mem, penum->clip_dev, \"image clipper\");\n-    rc_decrement_cs(pcs, \"error in gx_begin_image1\");\n+    rc_decrement_cs(penum->pcs, \"error in gx_begin_image1\");\n     penum->pcs = NULL;\n     gs_free_object(mem, penum, \"gx_begin_image1\");\n     return code;\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42529061-vul",
+      "digest": "sha256:b1442b300f5029cc129a0926c08e8b7b5990d551609c4b0c7584d52681c411ce"
+    },
+    "patched": {
+      "ref": "n132/arvo:42529061-fix",
+      "digest": "sha256:cf67c5373e089cb3d442fb6323ec5fa900338c726e38a507f0d7c99ca2957394"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "WRITE",
+        "crash_site": "/src/ghostpdl/./base/gxipixel.c:1082",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "WRITE",
+        "site": "/src/ghostpdl/./base/gxipixel.c:1082"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

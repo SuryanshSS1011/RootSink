@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042507334",
+  "chain": "CWE-20->CWE-125",
+  "project": "ghostpdl",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42507334",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "fd267e86e80929b9b82d8741552250a121d4f8c9",
+      "fix_commits": [
+        "fd267e86e80929b9b82d8741552250a121d4f8c9"
+      ],
+      "repo": "https://cgit.ghostscript.com/ghostpdl.git"
+    },
+    "patch": "From fd267e86e80929b9b82d8741552250a121d4f8c9 Mon Sep 17 00:00:00 2001\nFrom: Ken Sharp <ken.sharp@artifex.com>\nDate: Tue, 18 Jan 2022 09:24:42 +0000\nSubject: [PATCH] OSS-fuzz #43621 - prevent overflow in pattern step scaling\n\nRobin Watts also has a fix for this, in the graphics library, I think\nit is worth having both.\n\nThe problem was that YStep in the pattern was so large that when scaled\nby the CTM it was overflowing a float and becoming #INF, which was\nmaking all the arithmetic in the graphics library invalid.\n\nThis code checks the Step values to ensure they all fit into\na float, and then in the graphics library checks that after\nmultiplication they still fit before attempting to use them.\n---\n base/gsptype1.c   | 34 +++++++++++++++++++++++++++++-----\n pdf/pdf_pattern.c | 10 +++++++++-\n 2 files changed, 38 insertions(+), 6 deletions(-)\n\ndiff --git a/base/gsptype1.c b/base/gsptype1.c\nindex f020b90..4a266e2 100644\n--- a/base/gsptype1.c\n+++ b/base/gsptype1.c\n@@ -1,4 +1,4 @@\n-/* Copyright (C) 2001-2021 Artifex Software, Inc.\n+/* Copyright (C) 2001-2022 Artifex Software, Inc.\n    All Rights Reserved.\n \n    This software is provided AS-IS with no warranty, either express or\n@@ -616,10 +616,34 @@ compute_inst_matrix(gs_pattern1_instance_t * pinst,\n         return code;\n \n     /* The stepping matrix : */\n-    xx = pinst->templat.XStep * saved->ctm.xx;\n-    xy = pinst->templat.XStep * saved->ctm.xy;\n-    yx = pinst->templat.YStep * saved->ctm.yx;\n-    yy = pinst->templat.YStep * saved->ctm.yy;\n+    /* We do not want to overflow the maths here. Since xx etc are all floats\n+     * then the multiplication will definitely fit into a double, and we can\n+     * check to ensure that the result still fits into a float without\n+     * overflowing at any point.\n+     */\n+    {\n+        double double_mult = 0.0;\n+\n+        double_mult = (double)pinst->templat.XStep * (double)saved->ctm.xx;\n+        if (double_mult < -MAX_FLOAT || double_mult > MAX_FLOAT)\n+            return_error(gs_error_rangecheck);\n+        xx = (float)double_mult;\n+\n+        double_mult = (double)pinst->templat.XStep * (double)saved->ctm.xy;\n+        if (double_mult < -MAX_FLOAT || double_mult > MAX_FLOAT)\n+            return_error(gs_error_rangecheck);\n+        xy = double_mult;\n+\n+        double_mult = (double)pinst->templat.YStep * (double)saved->ctm.yx;\n+        if (double_mult < -MAX_FLOAT || double_mult > MAX_FLOAT)\n+            return_error(gs_error_rangecheck);\n+        yx = double_mult;\n+\n+        double_mult = (double)pinst->templat.YStep * (double)saved->ctm.yy;\n+        if (double_mult < -MAX_FLOAT || double_mult > MAX_FLOAT)\n+            return_error(gs_error_rangecheck);\n+        yy = double_mult;\n+    }\n \n     /* Adjust the stepping matrix so all coefficients are >= 0. */\n     if (xx == 0 || yy == 0) { /* We know that both xy and yx are non-zero. */\ndiff --git a/pdf/pdf_pattern.c b/pdf/pdf_pattern.c\nindex 15923d6..a21c36f 100644\n--- a/pdf/pdf_pattern.c\n+++ b/pdf/pdf_pattern.c\n@@ -1,4 +1,4 @@\n-/* Copyright (C) 2019-2021 Artifex Software, Inc.\n+/* Copyright (C) 2019-2022 Artifex Software, Inc.\n    All Rights Reserved.\n \n    This software is provided AS-IS with no warranty, either express or\n@@ -446,6 +446,14 @@ pdfi_setpattern_type1(pdf_context *ctx, pdf_dict *stream_dict, pdf_dict *page_di\n     if (code < 0)\n         goto exit;\n \n+    /* The pattern instance holds the pattern step as floats, make sure they\n+     * will fit.\n+     */\n+    if (XStep < -MAX_FLOAT || XStep > MAX_FLOAT || YStep < -MAX_FLOAT || YStep > MAX_FLOAT) {\n+        code = gs_note_error(gs_error_rangecheck);\n+        goto exit;\n+    }\n+\n     /* The spec says Resources are required, but in fact this doesn't seem to be true.\n      * (tests_private/pdf/sumatra/infinite_pattern_recursion.pdf)\n      */\n-- \n2.55.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42507334-vul",
+      "digest": "sha256:e124fd5e4aa07b1426ac031f08bfdab71fbf8baa695a42b4e6ff88089bc9cb8b"
+    },
+    "patched": {
+      "ref": "n132/arvo:42507334-fix",
+      "digest": "sha256:34e6d615773bdcb746a9771e08ca0a9920758b67ae9fa7fd8b278a645fde3e4d"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/ghostpdl/./base/gdevm1.c:683",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/ghostpdl/./base/gdevm1.c:683"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

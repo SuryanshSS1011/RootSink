@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042531419",
+  "chain": "CWE-1285->CWE-125",
+  "project": "ndpi",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42531419",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "5c7200f2bb763bfcd4e0636aebb88573e97bbcf3",
+      "fix_commits": [
+        "5c7200f2bb763bfcd4e0636aebb88573e97bbcf3"
+      ],
+      "repo": "https://github.com/ntop/nDPI"
+    },
+    "patch": "diff --git a/src/lib/protocols/tls.c b/src/lib/protocols/tls.c\nindex 71f6eb0beca..e3e1033070a 100644\n--- a/src/lib/protocols/tls.c\n+++ b/src/lib/protocols/tls.c\n@@ -2383,13 +2383,14 @@ int processClientServerHello(struct ndpi_detection_module_struct *ndpi_struct,\n #endif\n \n \t\tja.client.num_signature_algorithms = ndpi_min(sa_size, MAX_NUM_JA);\n-\n+\t\tfor(i=0, id=0; i<tot_signature_algorithms_len && s_offset+i<total_len; i += 2) {\n+\t\t  ja.client.signature_algorithms[id++] = ntohs(*(u_int16_t*)&packet->payload[s_offset+i]);\n+\t\t}\n+\t\t\n \t\tfor(i=0, id=0; i<tot_signature_algorithms_len && s_offset+i<total_len; i++) {\n \t\t  int rc = ndpi_snprintf(&ja.client.signature_algorithms_str[i*2],\n \t\t\t\t\t sizeof(ja.client.signature_algorithms_str)-i*2,\n \t\t\t\t\t \"%02X\", packet->payload[s_offset+i]);\n-\t\t  ja.client.signature_algorithms[id++] = ntohs(*(u_int16_t*)&packet->payload[s_offset+i*2]);\n-\n \t\t  if(rc < 0) break;\n \t\t}\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42531419-vul",
+      "digest": "sha256:a7bf83dd8d28407cac229da245b4f1f03ec4c8b1b3d696ce3a6a92fc5bbc40ad"
+    },
+    "patched": {
+      "ref": "n132/arvo:42531419-fix",
+      "digest": "sha256:73b29ff14e6d5572ce0aa3e4c9d00cbff19385fcb9822b1d0d1570938ba66aca"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/ndpi/src/lib/protocols/tls.c:2391",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/ndpi/src/lib/protocols/tls.c:2391"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

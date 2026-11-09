@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042482590",
+  "chain": "CWE-1285->CWE-125",
+  "project": "ndpi",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42482590",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "98f2d3a73c0d4b09b1204e4cfc868ec258a3e478",
+      "fix_commits": [
+        "98f2d3a73c0d4b09b1204e4cfc868ec258a3e478"
+      ],
+      "repo": "https://github.com/ntop/nDPI"
+    },
+    "patch": "diff --git a/src/lib/protocols/irc.c b/src/lib/protocols/irc.c\nindex ed86aed4249..2ebb929faa8 100644\n--- a/src/lib/protocols/irc.c\n+++ b/src/lib/protocols/irc.c\n@@ -677,7 +677,7 @@ void ndpi_search_irc_tcp(struct ndpi_detection_module_struct *ndpi_struct, struc\n \t      if (memcmp(&packet->line[i].ptr[j], \"SEND \", 5) == 0\n \t\t  || (memcmp(&packet->line[i].ptr[j], \"CHAT\", 4) == 0)\n \t\t  || (memcmp(&packet->line[i].ptr[j], \"chat\", 4) == 0)\n-\t\t  || (memcmp(&packet->line[i].ptr[j], \"sslchat\", 7) == 0)\n+\t\t  || (j+7 < packet->line[i].len && memcmp(&packet->line[i].ptr[j], \"sslchat\", 7) == 0)\n \t\t  || (memcmp(&packet->line[i].ptr[j], \"TSEND\", 5) == 0)) {\n \t\tNDPI_LOG_DBG2(ndpi_struct, \"found CHAT,chat,sslchat,TSEND.\");\n \t\tj += 4;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42482590-vul",
+      "digest": "sha256:52f0ccbbfab04119a827e4a3d8d3e099e4ba1241f1e24c96e44477f497ce37b7"
+    },
+    "patched": {
+      "ref": "n132/arvo:42482590-fix",
+      "digest": "sha256:87e9406159f0793ee42ee8213d8b8e659ac76d7851261c3b2263702afd4a843f"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/ndpi/src/lib/protocols/irc.c:680",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/ndpi/src/lib/protocols/irc.c:680"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

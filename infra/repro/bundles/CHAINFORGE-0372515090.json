@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0372515090",
+  "chain": "CWE-1284->CWE-125",
+  "project": "kamailio",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "372515090",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "fc4817064f81ef9a82b1b1468b1b8a4ae352c1f2",
+      "fix_commits": [
+        "fc4817064f81ef9a82b1b1468b1b8a4ae352c1f2"
+      ],
+      "repo": "https://github.com/kamailio/kamailio"
+    },
+    "patch": "diff --git a/src/core/parser/sdp/sdp_helpr_funcs.c b/src/core/parser/sdp/sdp_helpr_funcs.c\nindex a5dffd9c398..a5186fb4428 100644\n--- a/src/core/parser/sdp/sdp_helpr_funcs.c\n+++ b/src/core/parser/sdp/sdp_helpr_funcs.c\n@@ -447,6 +447,9 @@ int extract_sendrecv_mode(str *body, str *sendrecv_mode, int *is_on_hold)\n {\n \tchar *cp1;\n \n+\tif(body->len < 10) {\n+\t\treturn -1;\n+\t}\n \tcp1 = body->s;\n \tif(!((strncasecmp(cp1, \"a=sendrecv\", 10) == 0)\n \t\t\t   || (strncasecmp(cp1, \"a=recvonly\", 10) == 0))) {\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:372515090-vul",
+      "digest": "sha256:739149616357e0f267b68289ddc12eea595032b6ec10976f19dcb1763e67ceb0"
+    },
+    "patched": {
+      "ref": "n132/arvo:372515090-fix",
+      "digest": "sha256:77bde0179f86c90ea8fde038ee1a5c3c9cfe4b24ec2e501c97f130fba357849c"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/kamailio/src/core/parser/sdp/sdp_helpr_funcs.c:387",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/kamailio/src/core/parser/sdp/sdp_helpr_funcs.c:387"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

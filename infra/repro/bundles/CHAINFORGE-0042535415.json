@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042535415",
+  "chain": "CWE-416->CWE-787",
+  "project": "quickjs",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42535415",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "0c5d59f6a9f1fb6935e263603d2e8d45b9559fd5",
+      "fix_commits": [
+        "0c5d59f6a9f1fb6935e263603d2e8d45b9559fd5"
+      ],
+      "repo": "https://github.com/bellard/quickjs"
+    },
+    "patch": "diff --git a/TODO b/TODO\nindex d4de64827..027501bb5 100644\n--- a/TODO\n+++ b/TODO\n@@ -62,6 +62,6 @@ Optimization ideas:\n Test262o:   0/11262 errors, 463 excluded\n Test262o commit: 7da91bceb9ce7613f87db47ddd1292a2dda58b42 (es5-tests branch)\n \n-Result: 10/76964 errors, 3147 excluded, 6912 skipped\n+Result: 1/76964 errors, 3147 excluded, 6912 skipped\n Test262 commit: 56e77d6325067a545ea7e8ff5be5d9284334e33c\n \ndiff --git a/quickjs-atom.h b/quickjs-atom.h\nindex 43f2526ae..73766f23c 100644\n--- a/quickjs-atom.h\n+++ b/quickjs-atom.h\n@@ -173,6 +173,10 @@ DEF(status, \"status\")\n DEF(reason, \"reason\")\n DEF(globalThis, \"globalThis\")\n DEF(bigint, \"bigint\")\n+DEF(minus_zero, \"-0\")\n+DEF(Infinity, \"Infinity\")\n+DEF(minus_Infinity, \"-Infinity\")\n+DEF(NaN, \"NaN\")\n /* the following 3 atoms are only used with CONFIG_ATOMICS */\n DEF(not_equal, \"not-equal\")\n DEF(timed_out, \"timed-out\")\ndiff --git a/quickjs.c b/quickjs.c\nindex fae324cee..e9d2408c1 100644\n--- a/quickjs.c\n+++ b/quickjs.c\n@@ -3088,7 +3088,7 @@ static JSValue JS_AtomIsNumericIndex1(JSContext *ctx, JSAtom atom)\n     JSRuntime *rt = ctx->rt;\n     JSAtomStruct *p1;\n     JSString *p;\n-    int c, len, ret;\n+    int c, ret;\n     JSValue num, str;\n \n     if (__JS_AtomIsTaggedInt(atom))\n@@ -3097,52 +3097,24 @@ static JSValue JS_AtomIsNumericIndex1(JSContext *ctx, JSAtom atom)\n     p1 = rt->atom_array[atom];\n     if (p1->atom_type != JS_ATOM_TYPE_STRING)\n         return JS_UNDEFINED;\n-    p = p1;\n-    len = p->len;\n-    if (p->is_wide_char) {\n-        const uint16_t *r = p->u.str16, *r_end = p->u.str16 + len;\n-        if (r >= r_end)\n-            return JS_UNDEFINED;\n-        c = *r;\n-        if (c == '-') {\n-            if (r >= r_end)\n-                return JS_UNDEFINED;\n-            r++;\n-            c = *r;\n-            /* -0 case is specific */\n-            if (c == '0' && len == 2)\n-                goto minus_zero;\n-        }\n-        /* XXX: should test NaN, but the tests do not check it */\n-        if (!is_num(c)) {\n-            /* XXX: String should be normalized, therefore 8-bit only */\n-            const uint16_t nfinity16[7] = { 'n', 'f', 'i', 'n', 'i', 't', 'y' };\n-            if (!(c =='I' && (r_end - r) == 8 &&\n-                  !memcmp(r + 1, nfinity16, sizeof(nfinity16))))\n-                return JS_UNDEFINED;\n-        }\n-    } else {\n-        const uint8_t *r = p->u.str8, *r_end = p->u.str8 + len;\n-        if (r >= r_end)\n-            return JS_UNDEFINED;\n-        c = *r;\n-        if (c == '-') {\n-            if (r >= r_end)\n-                return JS_UNDEFINED;\n-            r++;\n-            c = *r;\n-            /* -0 case is specific */\n-            if (c == '0' && len == 2) {\n-            minus_zero:\n-                return __JS_NewFloat64(ctx, -0.0);\n-            }\n-        }\n-        if (!is_num(c)) {\n-            if (!(c =='I' && (r_end - r) == 8 &&\n-                  !memcmp(r + 1, \"nfinity\", 7)))\n-                return JS_UNDEFINED;\n-        }\n+    switch(atom) {\n+    case JS_ATOM_minus_zero:\n+        return __JS_NewFloat64(ctx, -0.0);\n+    case JS_ATOM_Infinity:\n+        return __JS_NewFloat64(ctx, INFINITY);\n+    case JS_ATOM_minus_Infinity:\n+        return __JS_NewFloat64(ctx, -INFINITY);\n+    case JS_ATOM_NaN:\n+        return __JS_NewFloat64(ctx, NAN);\n+    default:\n+        break;\n     }\n+    p = p1;\n+    if (p->len == 0)\n+        return JS_UNDEFINED;\n+    c = string_get(p, 0);\n+    if (!is_num(c) && c != '-')\n+        return JS_UNDEFINED;\n     /* this is ECMA CanonicalNumericIndexString primitive */\n     num = JS_ToNumber(ctx, JS_MKPTR(JS_TAG_STRING, p));\n     if (JS_IsException(num))\ndiff --git a/test262_errors.txt b/test262_errors.txt\nindex d81293e06..b42ae134f 100644\n--- a/test262_errors.txt\n+++ b/test262_errors.txt\n@@ -1,2 +1 @@\n test262/test/language/module-code/top-level-await/module-graphs-does-not-hang.js:10: TypeError: $DONE() not called\n-test262/test/language/statements/with/set-mutable-binding-binding-deleted-with-typed-array-in-proto-chain.js:20: Test262Error: Expected SameValue(\u00ab[object Object]\u00bb, \u00abundefined\u00bb) to be true\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42535415-vul",
+      "digest": "sha256:fe2d6068d116c8dd45c43e4d4f4c349c8fb1317a65bde4b2032667a837561acc"
+    },
+    "patched": {
+      "ref": "n132/arvo:42535415-fix",
+      "digest": "sha256:4d4989fa0aa7bb5368b4bd80fb42d002e20eb3dcb902437c546e7b6aa04016cd"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "WRITE",
+        "crash_site": "/src/quickjs/./list.h:75",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "WRITE",
+        "site": "/src/quickjs/./list.h:75"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

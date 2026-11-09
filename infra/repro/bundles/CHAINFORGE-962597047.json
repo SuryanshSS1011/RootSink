@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-962597047",
+  "chain": "CWE-456->CWE-457",
+  "project": "skia",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42532255",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://skia.googlesource.com/skia.git/+/18e9ba1eddb09bff6083f9a83dc569d3b3b54fe6%5E%21/",
+      "fix_commits": [
+        "18e9ba1eddb09bff6083f9a83dc569d3b3b54fe6"
+      ],
+      "repo": "https://skia.googlesource.com/skia.git"
+    },
+    "patch": "From 18e9ba1eddb09bff6083f9a83dc569d3b3b54fe6 Mon Sep 17 00:00:00 2001\nFrom: Mike Klein <mtklein@chromium.org>\nDate: Tue, 6 Mar 2018 08:43:22 -0500\nSubject: [PATCH] support 888x, 1010102, and 101010x in SkPixmap::erase()\n\n... and a few more methods to make it possible to write the new test.\n\nBug: oss-fuzz:6606\n\nChange-Id: Ie8dd221059579248405f165a93c324c8ba518fd4\nReviewed-on: https://skia-review.googlesource.com/112400\nReviewed-by: Mike Reed <reed@google.com>\nCommit-Queue: Mike Klein <mtklein@chromium.org>\n---\n src/core/SkBitmap.cpp |  3 ++\n src/core/SkPixmap.cpp | 69 +++++++++++++++++++++++++++++++++++++++----\n tests/BitmapTest.cpp  | 31 +++++++++++++++++++\n 3 files changed, 98 insertions(+), 5 deletions(-)\n\ndiff --git a/src/core/SkBitmap.cpp b/src/core/SkBitmap.cpp\nindex 7223fdb..a9d5fe8 100644\n--- a/src/core/SkBitmap.cpp\n+++ b/src/core/SkBitmap.cpp\n@@ -384,8 +384,11 @@ void* SkBitmap::getAddr(int x, int y) const {\n             case kRGBA_F16_SkColorType:\n                 base += x << 3;\n                 break;\n+            case kRGB_888x_SkColorType:\n             case kRGBA_8888_SkColorType:\n             case kBGRA_8888_SkColorType:\n+            case kRGB_101010x_SkColorType:\n+            case kRGBA_1010102_SkColorType:\n                 base += x << 2;\n                 break;\n             case kARGB_4444_SkColorType:\ndiff --git a/src/core/SkPixmap.cpp b/src/core/SkPixmap.cpp\nindex 19d1d65..852ffb0 100644\n--- a/src/core/SkPixmap.cpp\n+++ b/src/core/SkPixmap.cpp\n@@ -150,6 +150,7 @@ bool SkPixmap::erase(SkColor color, const SkIRect& inArea) const {\n             }\n             break;\n         }\n+\n         case kARGB_4444_SkColorType:\n         case kRGB_565_SkColorType: {\n             uint16_t* p = this->writable_addr16(area.fLeft, area.fTop);\n@@ -175,8 +176,11 @@ bool SkPixmap::erase(SkColor color, const SkIRect& inArea) const {\n             }\n             break;\n         }\n-        case kBGRA_8888_SkColorType:\n-        case kRGBA_8888_SkColorType: {\n+\n+        case kRGB_888x_SkColorType:\n+            a = 255; // then fallthrough to 8888\n+        case kRGBA_8888_SkColorType:\n+        case kBGRA_8888_SkColorType: {\n             uint32_t* p = this->writable_addr32(area.fLeft, area.fTop);\n \n             if (255 != a && kPremul_SkAlphaType == this->alphaType()) {\n@@ -184,16 +188,42 @@ bool SkPixmap::erase(SkColor color, const SkIRect& inArea) const {\n                 g = SkMulDiv255Round(g, a);\n                 b = SkMulDiv255Round(b, a);\n             }\n-            uint32_t v = kRGBA_8888_SkColorType == this->colorType()\n-                             ? SkPackARGB_as_RGBA(a, r, g, b)\n-                             : SkPackARGB_as_BGRA(a, r, g, b);\n+            uint32_t v = kBGRA_8888_SkColorType == this->colorType()\n+                             ? SkPackARGB_as_BGRA(a, r, g, b)   // bgra 8888\n+                             : SkPackARGB_as_RGBA(a, r, g, b);  // rgba 8888 or rgb 888\n+\n+            while (--height >= 0) {\n+                sk_memset32(p, v, width);\n+                p = (uint32_t*)((char*)p + rowBytes);\n+            }\n+            break;\n+        }\n \n+        case kRGB_101010x_SkColorType:\n+            a = 255;  // then fallthrough to 1010102\n+        case kRGBA_1010102_SkColorType: {\n+            uint32_t* p = this->writable_addr32(area.fLeft, area.fTop);\n+\n+            float R = r * (1/255.0f),\n+                  G = g * (1/255.0f),\n+                  B = b * (1/255.0f),\n+                  A = a * (1/255.0f);\n+            if (a != 255 && this->alphaType() == kPremul_SkAlphaType) {\n+                R *= A;\n+                G *= A;\n+                B *= A;\n+            }\n+            uint32_t v = (uint32_t)(R * 1023.0f) <<  0\n+                       | (uint32_t)(G * 1023.0f) << 10\n+                       | (uint32_t)(B * 1023.0f) << 20\n+                       | (uint32_t)(A *    3.0f) << 30;\n             while (--height >= 0) {\n                 sk_memset32(p, v, width);\n                 p = (uint32_t*)((char*)p + rowBytes);\n             }\n             break;\n         }\n+\n         case kRGBA_F16_SkColorType:\n             // The colorspace is unspecified, so assume linear just like getColor().\n             this->erase(SkColor4f{(1 / 255.0f) * r,\n@@ -321,6 +351,10 @@ SkColor SkPixmap::getColor(int x, int y) const {\n             SkPMColor c = SkPixel4444ToPixel32(value);\n             return toColor(c);\n         }\n+        case kRGB_888x_SkColorType: {\n+            uint32_t value = *this->addr32(x, y);\n+            return SkSwizzle_RB(value | 0xff000000);\n+        }\n         case kBGRA_8888_SkColorType: {\n             uint32_t value = *this->addr32(x, y);\n             SkPMColor c = SkSwizzle_BGRA_to_PMColor(value);\n@@ -331,6 +365,31 @@ SkColor SkPixmap::getColor(int x, int y) const {\n             SkPMColor c = SkSwizzle_RGBA_to_PMColor(value);\n             return toColor(c);\n         }\n+        case kRGB_101010x_SkColorType: {\n+            uint32_t value = *this->addr32(x, y);\n+            // Convert 10-bit rgb to 8-bit bgr, and mask in 0xff alpha at the top.\n+            return (uint32_t)( ((value >>  0) & 0x3ff) * (255/1023.0f) ) << 16\n+                 | (uint32_t)( ((value >> 10) & 0x3ff) * (255/1023.0f) ) <<  8\n+                 | (uint32_t)( ((value >> 20) & 0x3ff) * (255/1023.0f) ) <<  0\n+                 | 0xff000000;\n+        }\n+        case kRGBA_1010102_SkColorType: {\n+            uint32_t value = *this->addr32(x, y);\n+\n+            float r = ((value >>  0) & 0x3ff) * (1/1023.0f),\n+                  g = ((value >> 10) & 0x3ff) * (1/1023.0f),\n+                  b = ((value >> 20) & 0x3ff) * (1/1023.0f),\n+                  a = ((value >> 30) & 0x3  ) * (1/   3.0f);\n+            if (a != 0 && needsUnpremul) {\n+                r *= (1.0f/a);\n+                g *= (1.0f/a);\n+                b *= (1.0f/a);\n+            }\n+            return (uint32_t)( r * 255.0f ) << 16\n+                 | (uint32_t)( g * 255.0f ) <<  8\n+                 | (uint32_t)( b * 255.0f ) <<  0\n+                 | (uint32_t)( a * 255.0f ) << 24;\n+        }\n         case kRGBA_F16_SkColorType: {\n              const uint64_t* addr =\n                  (const uint64_t*)fPixels + y * (fRowBytes >> 3) + x;\ndiff --git a/tests/BitmapTest.cpp b/tests/BitmapTest.cpp\nindex f62288c..b404938 100644\n--- a/tests/BitmapTest.cpp\n+++ b/tests/BitmapTest.cpp\n@@ -226,3 +226,34 @@ DEF_TEST(Bitmap_clear_pixelref_keep_info, r) {\n     SkDEBUGCODE(bm.validate();)\n }\n \n+// At the time of writing, SkBitmap::erase() works when the color is zero for all formats,\n+// but some formats failed when the color is non-zero!\n+DEF_TEST(Bitmap_erase, r) {\n+    SkColorType colorTypes[] = {\n+        kRGB_565_SkColorType,\n+        kARGB_4444_SkColorType,\n+        kRGB_888x_SkColorType,\n+        kRGBA_8888_SkColorType,\n+        kBGRA_8888_SkColorType,\n+        kRGB_101010x_SkColorType,\n+        kRGBA_1010102_SkColorType,\n+    };\n+\n+    for (SkColorType ct : colorTypes) {\n+        SkImageInfo info = SkImageInfo::Make(1,1, (SkColorType)ct, kPremul_SkAlphaType);\n+\n+        SkBitmap bm;\n+        bm.allocPixels(info);\n+\n+        bm.eraseColor(0x00000000);\n+        if (SkColorTypeIsAlwaysOpaque(ct)) {\n+            REPORTER_ASSERT(r, bm.getColor(0,0) == 0xff000000);\n+        } else {\n+            REPORTER_ASSERT(r, bm.getColor(0,0) == 0x00000000);\n+        }\n+\n+        bm.eraseColor(0xaabbccdd);\n+        REPORTER_ASSERT(r, bm.getColor(0,0) != 0xff000000);\n+        REPORTER_ASSERT(r, bm.getColor(0,0) != 0x00000000);\n+    }\n+}\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42532255-vul",
+      "digest": "sha256:103f301af89b8aaee2141ab0e49a489cf95793193f247a15745d2698798e2c1a"
+    },
+    "patched": {
+      "ref": "n132/arvo:42532255-fix",
+      "digest": "sha256:94c38d5834db292b8244b29afc62ca8ff9da28c0dc0e5ddc81239ac44dba6f7c"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/skia/out/Fuzz/../../src/jumper/SkJumper_stages.cpp:462",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/skia/out/Fuzz/../../src/jumper/SkJumper_stages.cpp:462"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

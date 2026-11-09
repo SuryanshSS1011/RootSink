@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042502542",
+  "chain": "CWE-456->CWE-457",
+  "project": "matio",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42502542",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "24e85d59007d71e88a71d85088592d62101d97e9",
+      "fix_commits": [
+        "24e85d59007d71e88a71d85088592d62101d97e9"
+      ],
+      "repo": "https://github.com/tbeu/matio"
+    },
+    "patch": "From 24e85d59007d71e88a71d85088592d62101d97e9 Mon Sep 17 00:00:00 2001\nFrom: tbeu <tbeu@users.noreply.github.com>\nDate: Sat, 20 Nov 2021 15:22:06 +0100\nSubject: [PATCH] Avoid uninitialized memory access\n\nAs reported by https://bugs.chromium.org/p/oss-fuzz/issues/detail?id=39308\n---\n src/mat5.c | 10 +++++-----\n 1 file changed, 5 insertions(+), 5 deletions(-)\n\ndiff --git a/src/mat5.c b/src/mat5.c\nindex b369187..f06455b 100644\n--- a/src/mat5.c\n+++ b/src/mat5.c\n@@ -3056,7 +3056,7 @@ Mat_VarRead5(mat_t *mat, matvar_t *matvar)\n     size_t nelems = 1;\n     enum matio_types packed_type = MAT_T_UNKNOWN;\n     long fpos;\n-    mat_uint32_t tag[2];\n+    mat_uint32_t tag[2] = {0, 0};\n     size_t bytesread = 0;\n \n     if ( matvar == NULL )\n@@ -3512,7 +3512,7 @@ Mat_VarRead5(mat_t *mat, matvar_t *matvar)\n                         default:\n                             break;\n                     }\n-#else /* EXTENDED_SPARSE */\n+#else  /* EXTENDED_SPARSE */\n                     nBytes =\n                         ReadDoubleData(mat, (double *)complex_data->Im, packed_type, sparse->ndata);\n #endif /* EXTENDED_SPARSE */\n@@ -3582,7 +3582,7 @@ Mat_VarRead5(mat_t *mat, matvar_t *matvar)\n                         default:\n                             break;\n                     }\n-#else /* EXTENDED_SPARSE */\n+#else  /* EXTENDED_SPARSE */\n                     nBytes = ReadCompressedDoubleData(mat, matvar->internal->z,\n                                                       (double *)complex_data->Re, packed_type,\n                                                       sparse->ndata);\n@@ -3675,7 +3675,7 @@ Mat_VarRead5(mat_t *mat, matvar_t *matvar)\n                         default:\n                             break;\n                     }\n-#else /* EXTENDED_SPARSE */\n+#else  /* EXTENDED_SPARSE */\n                     nBytes = ReadCompressedDoubleData(mat, matvar->internal->z,\n                                                       (double *)complex_data->Im, packed_type,\n                                                       sparse->ndata);\n@@ -3820,7 +3820,7 @@ Mat_VarRead5(mat_t *mat, matvar_t *matvar)\n                         default:\n                             break;\n                     }\n-#else /* EXTENDED_SPARSE */\n+#else  /* EXTENDED_SPARSE */\n                     nBytes =\n                         ReadCompressedDoubleData(mat, matvar->internal->z, (double *)sparse->data,\n                                                  packed_type, sparse->ndata);\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42502542-vul",
+      "digest": "sha256:3b16a27386b71a0d6f624e2cc8eeab59ddda534aadd728b796eeec7715be40cb"
+    },
+    "patched": {
+      "ref": "n132/arvo:42502542-fix",
+      "digest": "sha256:6cc8d27f2a7eb699576cc32a828bcc90af308028a9b9e7ea77e3e8ddf75b6276"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/matio/src/mat5.c:497",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/matio/src/mat5.c:497"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

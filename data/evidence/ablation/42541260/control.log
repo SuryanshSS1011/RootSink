@@ -1,0 +1,80 @@
+======================= INFO =========================
+This binary is built for AFL-fuzz.
+To run the target function on individual input(s) execute this:
+  /out/gdal_fuzzer < INPUT_FILE
+or
+  /out/gdal_fuzzer INPUT_FILE1 [INPUT_FILE2 ... ]
+To fuzz with afl-fuzz execute this:
+  afl-fuzz [afl-flags] /out/gdal_fuzzer [-N]
+afl-fuzz will run N iterations before re-spawning the process (default: 1000)
+======================================================
+Reading 648 bytes from /tmp/poc
+=================================================================
+==26783==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x6140000025f0 at pc 0x0000004f4ca5 bp 0x7ffd3cfaff80 sp 0x7ffd3cfaf730
+WRITE of size 616 at 0x6140000025f0 thread T0
+SCARINESS: 45 (multi-byte-write-heap-buffer-overflow)
+    #0 0x4f4ca4 in __asan_memcpy /src/llvm/projects/compiler-rt/lib/asan/asan_interceptors_memintrinsics.cc:23
+    #1 0xd179c7 in VSIMemHandle::Read(void*, unsigned long, unsigned long) /src/gdal/gdal/port/cpl_vsi_mem.cpp:384:9
+    #2 0x92a69a in RMFDataset::ReadTile(int, int, unsigned char*, unsigned long, unsigned int, unsigned int) /src/gdal/gdal/frmts/rmf/rmfdataset.cpp:2903:8
+    #3 0x929175 in RMFRasterBand::IReadBlock(int, int, void*) /src/gdal/gdal/frmts/rmf/rmfdataset.cpp:226:30
+    #4 0xc4f40a in GDALRasterBand::GetLockedBlockRef(int, int, int) /src/gdal/gdal/gcore/gdalrasterband.cpp:1309:20
+    #5 0xc8d1bd in GDALRasterBand::IRasterIO(GDALRWFlag, int, int, int, int, void*, int, int, GDALDataType, long long, long long, GDALRasterIOExtraArg*) /src/gdal/gdal/gcore/rasterio.cpp:358:27
+    #6 0xc4cb60 in GDALRasterBand::RasterIO(GDALRWFlag, int, int, int, int, void*, int, int, GDALDataType, long long, long long, GDALRasterIOExtraArg*) /src/gdal/gdal/gcore/gdalrasterband.cpp:361:16
+    #7 0xc4d1dd in GDALRasterIO /src/gdal/gdal/gcore/gdalrasterband.cpp:395:21
+    #8 0xe6eb13 in GDALChecksumImage /src/gdal/gdal/alg/gdalchecksum.cpp:155:17
+    #9 0x53961b in LLVMFuzzerTestOneInput /src/gdal/gdal/./fuzzers/gdal_fuzzer.cpp:238:17
+    #10 0x539e1f in ExecuteFilesOnyByOne(int, char**) /src/libfuzzer/afl/afl_driver.cpp:301:5
+    #11 0x53a3ce in main /src/libfuzzer/afl/afl_driver.cpp:339:12
+    #12 0x7f3d8f32a82f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+    #13 0x427f08 in _start (/out/gdal_fuzzer+0x427f08)
+
+DEDUP_TOKEN: __asan_memcpy--VSIMemHandle::Read(void*, unsigned long, unsigned long)--RMFDataset::ReadTile(int, int, unsigned char*, unsigned long, unsigned int, unsigned int)
+0x6140000025f0 is located 0 bytes to the right of 432-byte region [0x614000002440,0x6140000025f0)
+allocated by thread T0 here:
+    #0 0x4f5d97 in __interceptor_malloc /src/llvm/projects/compiler-rt/lib/asan/asan_malloc_linux.cc:121
+    #1 0x92a82d in RMFDataset::ReadTile(int, int, unsigned char*, unsigned long, unsigned int, unsigned int) /src/gdal/gdal/frmts/rmf/rmfdataset.cpp:2892:37
+    #2 0x929175 in RMFRasterBand::IReadBlock(int, int, void*) /src/gdal/gdal/frmts/rmf/rmfdataset.cpp:226:30
+    #3 0xc4f40a in GDALRasterBand::GetLockedBlockRef(int, int, int) /src/gdal/gdal/gcore/gdalrasterband.cpp:1309:20
+    #4 0xc8d1bd in GDALRasterBand::IRasterIO(GDALRWFlag, int, int, int, int, void*, int, int, GDALDataType, long long, long long, GDALRasterIOExtraArg*) /src/gdal/gdal/gcore/rasterio.cpp:358:27
+    #5 0xc4cb60 in GDALRasterBand::RasterIO(GDALRWFlag, int, int, int, int, void*, int, int, GDALDataType, long long, long long, GDALRasterIOExtraArg*) /src/gdal/gdal/gcore/gdalrasterband.cpp:361:16
+    #6 0xc4d1dd in GDALRasterIO /src/gdal/gdal/gcore/gdalrasterband.cpp:395:21
+    #7 0xe6eb13 in GDALChecksumImage /src/gdal/gdal/alg/gdalchecksum.cpp:155:17
+    #8 0x53961b in LLVMFuzzerTestOneInput /src/gdal/gdal/./fuzzers/gdal_fuzzer.cpp:238:17
+    #9 0x539e1f in ExecuteFilesOnyByOne(int, char**) /src/libfuzzer/afl/afl_driver.cpp:301:5
+    #10 0x53a3ce in main /src/libfuzzer/afl/afl_driver.cpp:339:12
+    #11 0x7f3d8f32a82f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+
+DEDUP_TOKEN: __interceptor_malloc--RMFDataset::ReadTile(int, int, unsigned char*, unsigned long, unsigned int, unsigned int)--RMFRasterBand::IReadBlock(int, int, void*)
+SUMMARY: AddressSanitizer: heap-buffer-overflow /src/llvm/projects/compiler-rt/lib/asan/asan_interceptors_memintrinsics.cc:23 in __asan_memcpy
+Shadow bytes around the buggy address:
+  0x0c287fff8460: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c287fff8470: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 fa fa
+  0x0c287fff8480: fa fa fa fa fa fa fa fa 00 00 00 00 00 00 00 00
+  0x0c287fff8490: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c287fff84a0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x0c287fff84b0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00[fa]fa
+  0x0c287fff84c0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c287fff84d0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c287fff84e0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c287fff84f0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c287fff8500: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+  Shadow gap:              cc

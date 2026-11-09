@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-952129717",
+  "chain": "CWE-129->CWE-787",
+  "project": "gdal",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42478672",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/OSGeo/gdal/commit/59ac0f6876270b8fc7508be94297ab7d94aac470",
+      "fix_commits": [
+        "59ac0f6876270b8fc7508be94297ab7d94aac470"
+      ],
+      "repo": "https://github.com/OSGeo/gdal"
+    },
+    "patch": "diff --git a/gdal/ogr/ogrsf_frmts/dgn/dgnlib.h b/gdal/ogr/ogrsf_frmts/dgn/dgnlib.h\nindex b625f62f38be..af751ee69dd1 100644\n--- a/gdal/ogr/ogrsf_frmts/dgn/dgnlib.h\n+++ b/gdal/ogr/ogrsf_frmts/dgn/dgnlib.h\n@@ -121,7 +121,10 @@ typedef struct {\n   DGNElemCore   core;\n \n   int           num_vertices;  /*!< Number of vertices in \"vertices\" */\n-  DGNPoint      vertices[2];   /*!< Array of two or more vertices */\n+  DGNPoint      vertices[1];   /*!< Array of two or more vertices */\n+                               // Note: We set [1] to please clang UBSAN\n+                               // regarding structures that are extended at\n+                               // malloc time\n \n } DGNElemMultiPoint;\n \ndiff --git a/gdal/ogr/ogrsf_frmts/dgn/dgnread.cpp b/gdal/ogr/ogrsf_frmts/dgn/dgnread.cpp\nindex 8c4e97c8e464..4cb3444251f6 100644\n--- a/gdal/ogr/ogrsf_frmts/dgn/dgnread.cpp\n+++ b/gdal/ogr/ogrsf_frmts/dgn/dgnread.cpp\n@@ -426,7 +426,7 @@ static DGNElemCore *DGNProcessElement( DGNInfo *psDGN, int nType, int nLevel )\n       case DGNT_LINE:\n       {\n           DGNElemMultiPoint *psLine = static_cast<DGNElemMultiPoint *>(\n-              CPLCalloc(sizeof(DGNElemMultiPoint), 1));\n+              CPLCalloc(sizeof(DGNElemMultiPoint) + sizeof(DGNPoint), 1));\n           psElement = (DGNElemCore *) psLine;\n           psElement->stype = DGNST_MULTIPOINT;\n           DGNParseCore( psDGN, psElement );\n@@ -495,7 +495,7 @@ static DGNElemCore *DGNProcessElement( DGNInfo *psDGN, int nType, int nLevel )\n               return NULL;\n           }\n           DGNElemMultiPoint *psLine = static_cast<DGNElemMultiPoint *>(\n-              CPLCalloc(sizeof(DGNElemMultiPoint)+(count-2)*sizeof(DGNPoint),\n+              CPLCalloc(sizeof(DGNElemMultiPoint)+(count-1)*sizeof(DGNPoint),\n                         1));\n           psElement = (DGNElemCore *) psLine;\n           psElement->stype = DGNST_MULTIPOINT;\n@@ -532,8 +532,9 @@ static DGNElemCore *DGNProcessElement( DGNInfo *psDGN, int nType, int nLevel )\n                     }\n               }\n           }\n-          psLine->num_vertices = count;\n-          for( int i = 0; i < psLine->num_vertices; i++ )\n+          for( int i = 0; i < count &&\n+                          (( psDGN->dimension == 3 ) ? 46 : 42) +\n+                                i*pntsize + 4 <= psDGN->nElemBytes; i++ )\n           {\n               psLine->vertices[i].x =\n                   DGN_INT32( psDGN->abyElem + 38 + i*pntsize );\n@@ -550,6 +551,7 @@ static DGNElemCore *DGNProcessElement( DGNInfo *psDGN, int nType, int nLevel )\n                 psLine->vertices[i].y += dy / 32767.0;\n               }\n               DGNTransformPoint( psDGN, psLine->vertices + i );\n+              psLine->num_vertices = i+1;\n           }\n       }\n       break;\ndiff --git a/gdal/ogr/ogrsf_frmts/dgn/dgnwrite.cpp b/gdal/ogr/ogrsf_frmts/dgn/dgnwrite.cpp\nindex 1ed8e265e26f..11b7cef07c59 100644\n--- a/gdal/ogr/ogrsf_frmts/dgn/dgnwrite.cpp\n+++ b/gdal/ogr/ogrsf_frmts/dgn/dgnwrite.cpp\n@@ -466,7 +466,7 @@ DGNElemCore *DGNCloneElement( CPL_UNUSED DGNHandle hDGNSrc,\n         DGNElemMultiPoint *psSrcMP = (DGNElemMultiPoint *) psSrcElement;\n \n         const size_t nSize = sizeof(DGNElemMultiPoint)\n-            + sizeof(DGNPoint) * (psSrcMP->num_vertices-2);\n+            + sizeof(DGNPoint) * (psSrcMP->num_vertices-1);\n \n         DGNElemMultiPoint *psMP =\n             static_cast<DGNElemMultiPoint *>(CPLMalloc( nSize ));\n@@ -881,7 +881,7 @@ DGNElemCore *DGNCreateMultiPointElem( DGNHandle hDGN, int nType,\n /* -------------------------------------------------------------------- */\n     DGNElemMultiPoint *psMP = static_cast<DGNElemMultiPoint *>(\n         CPLCalloc( sizeof(DGNElemMultiPoint)\n-                   + sizeof(DGNPoint) * (nPointCount-2), 1 ));\n+                   + sizeof(DGNPoint) * (nPointCount-1), 1 ));\n     DGNElemCore *psCore = &(psMP->core);\n \n     DGNInitializeElemCore( hDGN, psCore );\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42478672-vul",
+      "digest": "sha256:3b0c4a31ff91e540c39f8332044f39c38212b2fc367f52296b880ad112c98609"
+    },
+    "patched": {
+      "ref": "n132/arvo:42478672-fix",
+      "digest": "sha256:a862d9cc9fb9a26801defcbc7c7c87d736d1fe32f4b5cb1c43d5b86c98de8582"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "crash_site": "/src/gdal/gdal/ogr/ogrsf_frmts/dgn/dgnread.cpp:538",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 129,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "site": "/src/gdal/gdal/ogr/ogrsf_frmts/dgn/dgnread.cpp:538"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

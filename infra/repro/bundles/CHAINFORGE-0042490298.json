@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042490298",
+  "chain": "CWE-1285->CWE-125",
+  "project": "fluent-bit",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42490298",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "598745d7f7330c45df80a0bad7a8bae8d9e5cc32",
+      "fix_commits": [
+        "598745d7f7330c45df80a0bad7a8bae8d9e5cc32"
+      ],
+      "repo": "https://github.com/fluent/fluent-bit"
+    },
+    "patch": "diff --git a/src/flb_gzip.c b/src/flb_gzip.c\nindex c3b1d33933f..012b7d3c743 100644\n--- a/src/flb_gzip.c\n+++ b/src/flb_gzip.c\n@@ -275,6 +275,11 @@ int flb_gzip_uncompress(void *in_data, size_t in_len,\n     }\n     out_size = dlen;\n \n+    /* Ensure size is above 0 */\n+    if (((p + in_len) - start - 8) <= 0) {\n+        return -1;\n+    }\n+\n     /* Map zip content */\n     zip_data = (uint8_t *) start;\n     zip_len = (p + in_len) - start - 8;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42490298-vul",
+      "digest": "sha256:b2cdb007eb03ac16c6de4e6f90537b785789ea329f967e9a38d9ab130faf3ae3"
+    },
+    "patched": {
+      "ref": "n132/arvo:42490298-fix",
+      "digest": "sha256:20a3a7f3bb69a53b918744c559223eec917026145b203637ca28d8d7ddec378f"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/fluent-bit/lib/miniz/miniz.c:2429",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/fluent-bit/lib/miniz/miniz.c:2429"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

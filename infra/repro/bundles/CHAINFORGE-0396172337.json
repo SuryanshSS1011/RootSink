@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0396172337",
+  "chain": "CWE-1285->CWE-125",
+  "project": "libconfig",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "396172337",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "f55523ab4722b216349d909bf770f7a84b4f4c67",
+      "fix_commits": [
+        "f55523ab4722b216349d909bf770f7a84b4f4c67"
+      ],
+      "repo": "https://github.com/hyperrealm/libconfig"
+    },
+    "patch": "diff --git a/fuzz/fuzz_config_read.c b/fuzz/fuzz_config_read.c\nindex 38138dd..02adb0b 100644\n--- a/fuzz/fuzz_config_read.c\n+++ b/fuzz/fuzz_config_read.c\n@@ -93,49 +93,36 @@ size_t LLVMFuzzerCustomMutator(uint8_t *data, size_t size,\n     srand(seed);\n     config_init(&cfg);\n \n-    fuzz_data_t *fuzz_data = (fuzz_data_t *) data;\n-\n-    // Ensure MIN_BUFF_SIZE * 2 <= size <= MAX_BUFF_SIZE\n-    if (remaining_size < MIN_BUFF_SIZE)\n-    {\n-        return 2 * MIN_BUFF_SIZE;\n-    }\n-    if (remaining_size > MAX_BUFF_SIZE)\n-    {\n-        return MAX_BUFF_SIZE;\n+    if (size < MIN_BUFF_SIZE || max_size < MIN_BUFF_SIZE || max_size > MAX_BUFF_SIZE) {\n+        return MIN_BUFF_SIZE;\n     }\n \n-    remaining_size -= MIN_BUFF_SIZE;\n+    fuzz_data_t *fuzz_data = (fuzz_data_t *) data;\n+    remaining_size -= sizeof(fuzz_data_t);\n \n-    fuzz_data->lookup_type = rand() % (CONFIG_TYPE_LIST + 1);\n+    // Limit sizes to avoid overflow\n+    size_t max_content = min_size(remaining_size, MAX_CONFIG_SIZE - 1);\n+    fuzz_data->content_size = rand() % max_content;\n \n-    // Ensure the content and path sizes are within bounds\n-    if (fuzz_data->content_size + fuzz_data->path_size > remaining_size)\n-    {\n-        fuzz_data->content_size = rand() % remaining_size;\n-        fuzz_data->path_size = remaining_size - fuzz_data->content_size;\n+    size_t max_path = min_size(remaining_size - fuzz_data->content_size, MAX_PATH_SIZE - 1);\n+    fuzz_data->path_size = rand() % max_path;\n+\n+    if (fuzz_data->content_size + fuzz_data->path_size + sizeof(fuzz_data_t) >= max_size) {\n+        fuzz_data->content_size = max_content / 2;\n+        fuzz_data->path_size = max_path / 2;\n     }\n \n-    // Extract and mutate the config\n     fuzz_data_content(fuzz_data, &config_data);\n-    fuzz_data->content_size = LLVMFuzzerMutate(config_data, fuzz_data->content_size, remaining_size);\n-    config_data[fuzz_data->content_size] = '\\0'; // Null-terminate the config\n+    fuzz_data_path(fuzz_data, &path_data);\n \n-    if (fuzz_data->content_size > remaining_size) {\n-        return 0;\n-    }\n+    // Mutate content and path safely\n+    fuzz_data->content_size = LLVMFuzzerMutate(config_data, fuzz_data->content_size, max_content);\n+    config_data[fuzz_data->content_size < max_content ? fuzz_data->content_size : max_content - 1] = '\\0';\n \n-    remaining_size -= fuzz_data->content_size;\n+    fuzz_data->path_size = LLVMFuzzerMutate(path_data, fuzz_data->path_size, max_path);\n+    path_data[fuzz_data->path_size < max_path ? fuzz_data->path_size : max_path - 1] = '\\0';\n \n-    // Extract and mutate the path\n-    fuzz_data->path_size = min_size(fuzz_data->path_size, remaining_size);\n-    fuzz_data_path(fuzz_data, &path_data);\n-    if (remaining_size > 0) {\n-        fuzz_data->path_size = LLVMFuzzerMutate(path_data, fuzz_data->path_size, remaining_size);\n-    }\n-    path_data[fuzz_data->path_size] = '\\0'; // Null-terminate the path\n-\n-    return min_size(MIN_BUFF_SIZE + fuzz_data->content_size + fuzz_data->path_size, max_size);\n+    return sizeof(fuzz_data_t) + fuzz_data->content_size + fuzz_data->path_size + 2;\n }\n \n int LLVMFuzzerTestOneInput(const uint8_t *data, const size_t size)\n@@ -169,6 +156,11 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, const size_t size)\n \n     config_init(&cfg);\n \n+    if (fuzz_data->content_size > MAX_CONFIG_SIZE || \n+        fuzz_data->path_size > MAX_PATH_SIZE || \n+        sizeof(fuzz_data_t) + fuzz_data->content_size + fuzz_data->path_size > size) { \n+        goto end; \n+    } \n     fuzz_data_content(fuzz_data, &config_ptr);\n     fuzz_data_path(fuzz_data, &path_ptr);\n     const char *config_data = (const char *) config_ptr;\n@@ -243,4 +235,4 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, const size_t size)\n     end:\n     config_destroy(&cfg);\n     return rc;\n-}\n\\ No newline at end of file\n+}\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:396172337-vul",
+      "digest": "sha256:e3abc3c5427dadc68b6e012a3f2b2007087c696cc691d18b686e558bac09b0a1"
+    },
+    "patched": {
+      "ref": "n132/arvo:396172337-fix",
+      "digest": "sha256:137db638a927b67f7c70b513218c0ef56c74ebe353fc73ce75de8a98508b98f1"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/libconfig/build/lib/scanner.c:2209",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/libconfig/build/lib/scanner.c:2209"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

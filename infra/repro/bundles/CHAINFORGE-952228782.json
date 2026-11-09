@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-952228782",
+  "chain": "CWE-129->CWE-125",
+  "project": "h3",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42498762",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/uber/h3/commit/fda03e297b1abe3ce8277794a7de8970601ed7c9",
+      "fix_commits": [
+        "fda03e297b1abe3ce8277794a7de8970601ed7c9"
+      ],
+      "repo": "https://github.com/uber/h3"
+    },
+    "patch": "diff --git a/CHANGELOG.md b/CHANGELOG.md\nindex d0223603c4..6267983709 100644\n--- a/CHANGELOG.md\n+++ b/CHANGELOG.md\n@@ -7,6 +7,9 @@ The public API of this library consists of the functions declared in file\n \n ## [Unreleased]\n \n+### Fixed\n+- `gridDisk` of invalid indexes should not crash. (#498)\n+\n ### Added\n - Vertex mode and associated functions:\n     - `cellToVertex(cell, vertexNum)`\ndiff --git a/src/apps/testapps/testGridDisk.c b/src/apps/testapps/testGridDisk.c\nindex 6832c1ff1c..d3679771f1 100644\n--- a/src/apps/testapps/testGridDisk.c\n+++ b/src/apps/testapps/testGridDisk.c\n@@ -360,7 +360,16 @@ SUITE(gridDisk) {\n         int k = 1000;\n         int kSz = H3_EXPORT(maxGridDiskSize)(k);\n         H3Index *neighbors = calloc(kSz, sizeof(H3Index));\n-        H3_EXPORT(gridDisk)(0x7fffffffffffffff, 1000, neighbors);\n+        H3_EXPORT(gridDisk)(0x7fffffffffffffff, k, neighbors);\n+        // Assertion is should not crash - should return an error in the future\n+        free(neighbors);\n+    }\n+\n+    TEST(gridDiskInvalidDigit) {\n+        int k = 2;\n+        int kSz = H3_EXPORT(maxGridDiskSize)(k);\n+        H3Index *neighbors = calloc(kSz, sizeof(H3Index));\n+        H3_EXPORT(gridDisk)(0x4d4b00fe5c5c3030, k, neighbors);\n         // Assertion is should not crash - should return an error in the future\n         free(neighbors);\n     }\ndiff --git a/src/h3lib/lib/algos.c b/src/h3lib/lib/algos.c\nindex cf5f1d8ea1..0a6ecd4fef 100644\n--- a/src/h3lib/lib/algos.c\n+++ b/src/h3lib/lib/algos.c\n@@ -346,7 +346,10 @@ H3Index h3NeighborRotations(H3Index origin, Direction dir, int *rotations) {\n         } else {\n             Direction oldDigit = H3_GET_INDEX_DIGIT(out, r + 1);\n             Direction nextDir;\n-            if (isResolutionClassIII(r + 1)) {\n+            if (oldDigit == INVALID_DIGIT) {\n+                // Only possible on invalid input\n+                return H3_NULL;\n+            } else if (isResolutionClassIII(r + 1)) {\n                 H3_SET_INDEX_DIGIT(out, r + 1, NEW_DIGIT_II[oldDigit][dir]);\n                 nextDir = NEW_ADJUSTMENT_II[oldDigit][dir];\n             } else {\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42498762-vul",
+      "digest": "sha256:c38ca0cb783dd76336e54e2b36a86dbe923e6026215851e11ea3f0fba54d229c"
+    },
+    "patched": {
+      "ref": "n132/arvo:42498762-fix",
+      "digest": "sha256:6f4305789a83fb4bddc04201dc83afe9ab5980c43b075dc3c5f5d0781f10e7a3"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "crash_site": "/src/h3/src/h3lib/lib/algos.c:350",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 129,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "site": "/src/h3/src/h3lib/lib/algos.c:350"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

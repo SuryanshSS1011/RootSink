@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042482019",
+  "chain": "CWE-1284->CWE-125",
+  "project": "ndpi",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42482019",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "fe513014a8f5156b243ec2eb5e6862a0506c6632",
+      "fix_commits": [
+        "fe513014a8f5156b243ec2eb5e6862a0506c6632"
+      ],
+      "repo": "https://github.com/ntop/nDPI"
+    },
+    "patch": "diff --git a/src/lib/protocols/dns.c b/src/lib/protocols/dns.c\nindex 2f8fd5612d3..8290ca9dc8c 100644\n--- a/src/lib/protocols/dns.c\n+++ b/src/lib/protocols/dns.c\n@@ -113,7 +113,7 @@ static int search_valid_dns(struct ndpi_detection_module_struct *ndpi_struct,\n        && (((dns_header->flags & 0x2800) == 0x2800 /* Dynamic DNS Update */)\n \t   || ((dns_header->num_answers == 0) && (dns_header->authority_rrs == 0)))) {\n       /* This is a good query */\n-      while(x < flow->packet.payload_packet_len) {\n+      while(x+2 < flow->packet.payload_packet_len) {\n         if(flow->packet.payload[x] == '\\0') {\n           x++;\n           flow->protos.dns.query_type = get16(&x, flow->packet.payload);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42482019-vul",
+      "digest": "sha256:ba36b9e38d02c460fe099274f3ed20c1208f89245e66c82b687dfb224b66eff7"
+    },
+    "patched": {
+      "ref": "n132/arvo:42482019-fix",
+      "digest": "sha256:5016ca38e40d4f59a551551c9c047cddec5b9d7f98e4d4886738da96cf9ae688"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/ndpi/src/lib/protocols/dns.c:40",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/ndpi/src/lib/protocols/dns.c:40"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

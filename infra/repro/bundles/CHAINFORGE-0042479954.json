@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042479954",
+  "chain": "CWE-456->CWE-457",
+  "project": "matio",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42479954",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "d255262c794a56d6f1c6dfca3e3025e7865c22f3",
+      "fix_commits": [
+        "d255262c794a56d6f1c6dfca3e3025e7865c22f3"
+      ],
+      "repo": "https://github.com/tbeu/matio"
+    },
+    "patch": "From d255262c794a56d6f1c6dfca3e3025e7865c22f3 Mon Sep 17 00:00:00 2001\nFrom: tbeu <tbeu@users.noreply.github.com>\nDate: Tue, 26 Nov 2019 21:58:15 +0100\nSubject: [PATCH] Avoid uninitialized memory\n\nAs reported by https://bugs.chromium.org/p/oss-fuzz/issues/detail?id=18974\n---\n src/mat5.c | 2 +-\n 1 file changed, 1 insertion(+), 1 deletion(-)\n\ndiff --git a/src/mat5.c b/src/mat5.c\nindex 05c4248..41907c1 100644\n--- a/src/mat5.c\n+++ b/src/mat5.c\n@@ -1474,7 +1474,7 @@ ReadNextStructField( mat_t *mat, matvar_t *matvar )\n         Mat_Critical(\"Not compiled with zlib support\");\n #endif\n     } else {\n-        mat_uint32_t buf[6];\n+        mat_uint32_t buf[6] = {0,};\n         mat_uint32_t array_flags, len;\n \n         bytesread+=fread(buf,4,2,(FILE*)mat->fp);\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42479954-vul",
+      "digest": "sha256:1197045446bb24999885421a3becde9efc359247b1c6b6556ff4fdd82d887c2b"
+    },
+    "patched": {
+      "ref": "n132/arvo:42479954-fix",
+      "digest": "sha256:121869c8cdaa1e7e01a5326be8defa93c9c8f98c41cad3b7937ddc1027cc49cd"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/matio/src/mat5.c:1454",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/matio/src/mat5.c:1454"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

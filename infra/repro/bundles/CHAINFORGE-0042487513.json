@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042487513",
+  "chain": "CWE-20->CWE-125",
+  "project": "opencv",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42487513",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "6c575e882664443c633196fea38a0605f0a3a118",
+      "fix_commits": [
+        "6c575e882664443c633196fea38a0605f0a3a118"
+      ],
+      "repo": "https://github.com/opencv/opencv"
+    },
+    "patch": "diff --git a/modules/imgcodecs/src/grfmt_jpeg2000_openjpeg.cpp b/modules/imgcodecs/src/grfmt_jpeg2000_openjpeg.cpp\nindex 8a9096b8d530..149b34c92773 100644\n--- a/modules/imgcodecs/src/grfmt_jpeg2000_openjpeg.cpp\n+++ b/modules/imgcodecs/src/grfmt_jpeg2000_openjpeg.cpp\n@@ -634,6 +634,23 @@ bool Jpeg2KOpjDecoder::readData( Mat& img )\n                  cv::format(\"OpenJPEG2000: output precision > 16 not supported: target depth %d\", depth));\n     }();\n     const uint8_t shift = outPrec > m_maxPrec ? 0 : (uint8_t)(m_maxPrec - outPrec); // prec <= 64\n+\n+    const int inChannels = image_->numcomps;\n+\n+    CV_Assert(inChannels > 0);\n+    CV_Assert(image_->comps);\n+    for (int c = 0; c < inChannels; c++)\n+    {\n+        const opj_image_comp_t& comp = image_->comps[c];\n+        CV_CheckEQ((int)comp.dx, 1, \"OpenJPEG2000: tiles are not supported\");\n+        CV_CheckEQ((int)comp.dy, 1, \"OpenJPEG2000: tiles are not supported\");\n+        CV_CheckEQ((int)comp.x0, 0, \"OpenJPEG2000: tiles are not supported\");\n+        CV_CheckEQ((int)comp.y0, 0, \"OpenJPEG2000: tiles are not supported\");\n+        CV_CheckEQ((int)comp.w, img.cols, \"OpenJPEG2000: tiles are not supported\");\n+        CV_CheckEQ((int)comp.h, img.rows, \"OpenJPEG2000: tiles are not supported\");\n+        CV_Assert(comp.data && \"OpenJPEG2000: missing component data (unsupported / broken input)\");\n+    }\n+\n     return decode(*image_, img, shift);\n }\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42487513-vul",
+      "digest": "sha256:fa779138c225036e5500dfe5c2e518063b3701b1fd407d4b98035e5601d09699"
+    },
+    "patched": {
+      "ref": "n132/arvo:42487513-fix",
+      "digest": "sha256:2e0ab14909bb03d331f227ab8e83ccb624241f5055fedd29c7c42544f74acd86"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/opencv/modules/imgcodecs/src/grfmt_jpeg2000_openjpeg.cpp:232",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/opencv/modules/imgcodecs/src/grfmt_jpeg2000_openjpeg.cpp:232"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

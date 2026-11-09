@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042476560",
+  "chain": "CWE-1284->CWE-787",
+  "project": "ffmpeg",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42476560",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "02f909dc24b1f05cfbba75077c7707b905e63cd2",
+      "fix_commits": [
+        "02f909dc24b1f05cfbba75077c7707b905e63cd2"
+      ],
+      "repo": "https://git.ffmpeg.org/ffmpeg.git"
+    },
+    "patch": "From 02f909dc24b1f05cfbba75077c7707b905e63cd2 Mon Sep 17 00:00:00 2001\nFrom: Michael Niedermayer <michael@niedermayer.cc>\nDate: Fri, 26 Jul 2019 00:35:32 +0200\nSubject: [PATCH] avcodec/vqavideo: Set video size\n\nFixes: out of array access\nFixes: 15919/clusterfuzz-testcase-minimized-ffmpeg_AV_CODEC_ID_VQA_fuzzer-5657368257363968\n\nFound-by: continuous fuzzing process https://github.com/google/oss-fuzz/tree/master/projects/ffmpeg\nSigned-off-by: Michael Niedermayer <michael@niedermayer.cc>\n---\n libavcodec/vqavideo.c | 2 +-\n 1 file changed, 1 insertion(+), 1 deletion(-)\n\ndiff --git a/libavcodec/vqavideo.c b/libavcodec/vqavideo.c\nindex 0e70be1..b9743ab 100644\n--- a/libavcodec/vqavideo.c\n+++ b/libavcodec/vqavideo.c\n@@ -147,7 +147,7 @@ static av_cold int vqa_decode_init(AVCodecContext *avctx)\n     }\n     s->width = AV_RL16(&s->avctx->extradata[6]);\n     s->height = AV_RL16(&s->avctx->extradata[8]);\n-    if ((ret = av_image_check_size(s->width, s->height, 0, avctx)) < 0) {\n+    if ((ret = ff_set_dimensions(avctx, s->width, s->height)) < 0) {\n         s->width= s->height= 0;\n         return ret;\n     }\n-- \n2.55.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42476560-vul",
+      "digest": "sha256:e3e684af4aa26174030c960faf00177475a16920433d033414adc37449387d9a"
+    },
+    "patched": {
+      "ref": "n132/arvo:42476560-fix",
+      "digest": "sha256:35b4f4de6b669759548651342805476f47bfefa2ec9c96bb4b08013cc7bda6b6"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/ffmpeg/libavcodec/vqavideo.c:529",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/ffmpeg/libavcodec/vqavideo.c:529"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

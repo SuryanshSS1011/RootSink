@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042498099",
+  "chain": "CWE-456->CWE-457",
+  "project": "libjxl",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42498099",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "58e6b3f8fdd2c72f393e4bbae6c7aa2efd91abb2",
+      "fix_commits": [
+        "58e6b3f8fdd2c72f393e4bbae6c7aa2efd91abb2"
+      ],
+      "repo": "https://github.com/libjxl/libjxl"
+    },
+    "patch": "From 58e6b3f8fdd2c72f393e4bbae6c7aa2efd91abb2 Mon Sep 17 00:00:00 2001\nFrom: Lode <lode@google.com>\nDate: Thu, 17 Jun 2021 21:18:01 +0200\nSubject: [PATCH] Verify JxlPixelFormat validity when setting out callback\n\nThe format must be checked for having a supported amount of channels,\npixel type, etc... This was done in the size check for the image output\nbuffer setters, but was not done in the callback because buffer size\nworks differently for those.\n\nNow the full check is done here as well to fix that.\n---\n lib/jxl/decode.cc | 5 +++++\n 1 file changed, 5 insertions(+)\n\ndiff --git a/lib/jxl/decode.cc b/lib/jxl/decode.cc\nindex ced3d91..8c94648 100644\n--- a/lib/jxl/decode.cc\n+++ b/lib/jxl/decode.cc\n@@ -2111,6 +2111,11 @@ JxlDecoderStatus JxlDecoderSetImageOutCallback(JxlDecoder* dec,\n         \"Cannot change from image out buffer to image out callback\");\n   }\n \n+  // Perform error checking for invalid format.\n+  size_t bits_dummy;\n+  JxlDecoderStatus status = PrepareSizeCheck(dec, format, &bits_dummy);\n+  if (status != JXL_DEC_SUCCESS) return status;\n+\n   dec->image_out_buffer_set = true;\n   dec->image_out_callback = callback;\n   dec->image_out_opaque = opaque;\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42498099-vul",
+      "digest": "sha256:9ebfe810388d6d41aa237e4323910a404d0a02ca7d071d2cd6944367ee4edfd3"
+    },
+    "patched": {
+      "ref": "n132/arvo:42498099-fix",
+      "digest": "sha256:5b70f398a050f87f6c79b4226f8c8abce575015cf28243e3d1f59371ab1012bc"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/libjxl/third_party/highway/hwy/ops/x86_256-inl.h:2511",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/libjxl/third_party/highway/hwy/ops/x86_256-inl.h:2511"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

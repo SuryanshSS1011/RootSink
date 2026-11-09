@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042473818",
+  "chain": "CWE-416->CWE-125",
+  "project": "openh264",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42473818",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "f8687facbba0b1cf6aa786c5cf7e7685e07bf624",
+      "fix_commits": [
+        "f8687facbba0b1cf6aa786c5cf7e7685e07bf624"
+      ],
+      "repo": "https://github.com/cisco/openh264"
+    },
+    "patch": "From f8687facbba0b1cf6aa786c5cf7e7685e07bf624 Mon Sep 17 00:00:00 2001\nFrom: xiaotiansf <xiaotianshimail@gmail.com>\nDate: Fri, 15 Mar 2019 15:09:51 -0700\nSubject: [PATCH] try to use decoder error conditions to determine how to\n continue instead of trying to loacate deleted references.\n\n---\n codec/decoder/core/src/decoder.cpp | 22 ----------------------\n codec/decoder/core/src/mv_pred.cpp |  4 ++++\n 2 files changed, 4 insertions(+), 22 deletions(-)\n\ndiff --git a/codec/decoder/core/src/decoder.cpp b/codec/decoder/core/src/decoder.cpp\nindex 346ca85..1e6ac4b 100644\n--- a/codec/decoder/core/src/decoder.cpp\n+++ b/codec/decoder/core/src/decoder.cpp\n@@ -165,27 +165,6 @@ static int32_t IncreasePicBuff (PWelsDecoderContext pCtx, PPicBuff* ppPicBuf, co\n   return ERR_NONE;\n }\n \n-static void ResetRefPicReferences (const PWelsDecoderContext& pCtx, const PPicture& inPPic) {\n-  //seach and reset the references of deleted references.\n-  int32_t list_count = pCtx->eSliceType == B_SLICE ? 2 : 1;\n-  for (int32_t list = LIST_0; list < list_count; ++list) {\n-    int32_t refIdx = 0;\n-    PPicture pPic = pCtx->sRefPic.pRefList[list][refIdx];\n-    while (refIdx < MAX_DPB_COUNT && pPic != NULL) {\n-      ++refIdx;\n-      for (int32_t i = LIST_0; i < LIST_A; ++i) {\n-        int32_t ref = 0;\n-        while (ref < MAX_DPB_COUNT && pPic->pRefPic[i][ref] != NULL) {\n-          if (pPic->pRefPic[i][ref] == inPPic) {\n-            pPic->pRefPic[i][ref] = NULL;\n-          }\n-          ++ref;\n-        }\n-      }\n-    }\n-  }\n-}\n-\n static int32_t DecreasePicBuff (PWelsDecoderContext pCtx, PPicBuff* ppPicBuf, const int32_t kiOldSize,\n                                 const int32_t kiPicWidth, const int32_t kiPicHeight, const int32_t kiNewSize) {\n   PPicBuff pPicOldBuf = *ppPicBuf;\n@@ -233,7 +212,6 @@ static int32_t DecreasePicBuff (PWelsDecoderContext pCtx, PPicBuff* ppPicBuf, co\n   for (iPicIdx = iDelIdx; iPicIdx < kiOldSize; iPicIdx++) {\n     if (iPrevPicIdx != iPicIdx) {\n       if (pPicOldBuf->ppPic[iPicIdx] != NULL) {\n-        ResetRefPicReferences (pCtx, pPicOldBuf->ppPic[iPicIdx]);\n         FreePicture (pPicOldBuf->ppPic[iPicIdx], pMa);\n         pPicOldBuf->ppPic[iPicIdx] = NULL;\n       }\ndiff --git a/codec/decoder/core/src/mv_pred.cpp b/codec/decoder/core/src/mv_pred.cpp\nindex f517086..fd2bb26 100644\n--- a/codec/decoder/core/src/mv_pred.cpp\n+++ b/codec/decoder/core/src/mv_pred.cpp\n@@ -1104,6 +1104,10 @@ void FillTemporalDirect8x8Mv (PDqLayer pCurLayer, const int16_t& iIdx8, const in\n }\n int8_t MapColToList0 (PWelsDecoderContext& pCtx, const int8_t& colocRefIndexL0,\n                       const int32_t& ref0Count) { //ISO/IEC 14496-10:2009(E) (8-193)\n+  //When reference is lost, this function must be skipped.\n+  if ((pCtx->iErrorCode & dsRefLost) == dsRefLost) {\n+    return 0;\n+  }\n   PPicture pic1 = pCtx->sRefPic.pRefList[LIST_1][0];\n   if (pic1 && pic1->pRefPic[LIST_0][colocRefIndexL0]) {\n     const int32_t iFramePoc = pic1->pRefPic[LIST_0][colocRefIndexL0]->iFramePoc;\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42473818-vul",
+      "digest": "sha256:82dede943e9e63e873a9c2245b9aee581604e71f7b8582f0c535481660abb3af"
+    },
+    "patched": {
+      "ref": "n132/arvo:42473818-fix",
+      "digest": "sha256:d6da5412172ebb265ca751181c954d7c1f672a9d5069c2b5f95669abca6f5c31"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/openh264/codec/decoder/core/src/decoder.cpp:176",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/openh264/codec/decoder/core/src/decoder.cpp:176"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

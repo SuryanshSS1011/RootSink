@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042473565",
+  "chain": "CWE-20->CWE-125",
+  "project": "file",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42473565",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "ecca6e54f49f251bb4c16fe145d04c2b45923dc3",
+      "fix_commits": [
+        "ecca6e54f49f251bb4c16fe145d04c2b45923dc3"
+      ],
+      "repo": "https://github.com/file/file"
+    },
+    "patch": "diff --git a/src/encoding.c b/src/encoding.c\nindex 81cd925945..8d84669c1d 100644\n--- a/src/encoding.c\n+++ b/src/encoding.c\n@@ -35,7 +35,7 @@\n #include \"file.h\"\n \n #ifndef\tlint\n-FILE_RCSID(\"@(#)$File: encoding.c,v 1.17 2019/02/20 02:35:27 christos Exp $\")\n+FILE_RCSID(\"@(#)$File: encoding.c,v 1.18 2019/02/20 16:15:47 christos Exp $\")\n #endif\t/* lint */\n \n #include \"magic.h\"\n@@ -442,9 +442,9 @@ looks_ucs16(const unsigned char *bf, size_t nbytes, unichar *ubf,\n \t\t/* XXX fix to properly handle chars > 65536 */\n \n \t\tif (bigend)\n-\t\t\tubf[(*ulen)++] = bf[i + 1] + 256 * bf[i];\n+\t\t\tubf[(*ulen)++] = bf[i + 1] + (bf[i] << 8);\n \t\telse\n-\t\t\tubf[(*ulen)++] = bf[i] + 256 * bf[i + 1];\n+\t\t\tubf[(*ulen)++] = bf[i] + (bf[i + 1] << 8);\n \n \t\tif (ubf[*ulen - 1] == 0xfffe)\n \t\t\treturn 0;\n@@ -475,15 +475,17 @@ looks_ucs32(const unsigned char *bf, size_t nbytes, unichar *ubf,\n \n \t*ulen = 0;\n \n-\tfor (i = 4; i + 1 < nbytes; i += 4) {\n+\tfor (i = 4; i + 3 < nbytes; i += 4) {\n \t\t/* XXX fix to properly handle chars > 65536 */\n \n \t\tif (bigend)\n \t\t\tubf[(*ulen)++] = bf[i + 3] | (bf[i + 2] << 8)\n-\t\t\t    | (bf[i + 1] << 16) | bf[i] << 24;\n+\t\t\t    | (bf[i + 1] << 16)\n+\t\t\t    | CAST(unichar, bf[i] << 24);\n \t\telse\n \t\t\tubf[(*ulen)++] = bf[i] | (bf[i + 1] << 8) \n-\t\t\t    | (bf[i + 2] << 16) | (bf[i + 3] << 24);\n+\t\t\t    | (bf[i + 2] << 16)\n+\t\t\t    | CAST(unichar, bf[i + 3] << 24);\n \n \t\tif (ubf[*ulen - 1] == 0xfffe)\n \t\t\treturn 0;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42473565-vul",
+      "digest": "sha256:e9a0055aa683ce3ce2f8d4f152ac94ebf824a4e8844881a2d7efef32ddd9058e"
+    },
+    "patched": {
+      "ref": "n132/arvo:42473565-fix",
+      "digest": "sha256:14026125833a8fbe984b10e0c337b1baf47479c1a79a500fa508160395d44ebd"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/file/src/encoding.c:486",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/file/src/encoding.c:486"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

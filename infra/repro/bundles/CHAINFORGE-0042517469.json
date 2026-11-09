@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042517469",
+  "chain": "CWE-1285->CWE-787",
+  "project": "ClickHouse",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42517469",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "2c7708a03edf0495fb83fe5fcf1c16bfbae25a6e",
+      "fix_commits": [
+        "2c7708a03edf0495fb83fe5fcf1c16bfbae25a6e"
+      ],
+      "repo": "https://github.com/ClickHouse/ClickHouse"
+    },
+    "patch": "diff --git a/src/Compression/LZ4_decompress_faster.cpp b/src/Compression/LZ4_decompress_faster.cpp\nindex f2084f34274ab..34bb440c19cf2 100644\n--- a/src/Compression/LZ4_decompress_faster.cpp\n+++ b/src/Compression/LZ4_decompress_faster.cpp\n@@ -3,10 +3,10 @@\n #include <cstring>\n #include <iostream>\n #include <Core/Defines.h>\n-#include <Common/Stopwatch.h>\n-#include <Common/TargetSpecific.h>\n #include <base/types.h>\n #include <base/unaligned.h>\n+#include <Common/Stopwatch.h>\n+#include <Common/TargetSpecific.h>\n \n #ifdef __SSE2__\n #include <emmintrin.h>\n@@ -599,6 +599,9 @@ bool NO_INLINE decompressImpl(const char * const source, char * const dest, size\n \n         copy_end = op + length;\n \n+        if (unlikely(copy_end > output_end))\n+            return false;\n+\n         /** Here we can write up to copy_amount - 1 - 4 * 2 bytes after buffer.\n           * The worst case when offset = 1 and length = 4\n           */\ndiff --git a/src/Compression/tests/gtest_compressionCodec.cpp b/src/Compression/tests/gtest_compressionCodec.cpp\nindex 9b44c60cd815d..4765aeb45ed4b 100644\n--- a/src/Compression/tests/gtest_compressionCodec.cpp\n+++ b/src/Compression/tests/gtest_compressionCodec.cpp\n@@ -1,8 +1,5 @@\n #include <Compression/CompressionFactory.h>\n \n-#include <Common/PODArray.h>\n-#include <Common/Stopwatch.h>\n-#include <base/types.h>\n #include <DataTypes/DataTypesNumber.h>\n #include <DataTypes/IDataType.h>\n #include <IO/ReadBufferFromMemory.h>\n@@ -10,6 +7,12 @@\n #include <Parsers/ExpressionElementParsers.h>\n #include <Parsers/IParser.h>\n #include <Parsers/TokenIterator.h>\n+#include <base/types.h>\n+#include <Common/PODArray.h>\n+#include <Common/Stopwatch.h>\n+\n+#include <Compression/LZ4_decompress_faster.h>\n+#include <IO/BufferWithOwnMemory.h>\n \n #include <random>\n #include <bitset>\n@@ -1319,4 +1322,34 @@ INSTANTIATE_TEST_SUITE_P(Gorilla,\n //    ),\n //);\n \n+TEST(LZ4Test, DecompressMalformedInput)\n+{\n+    /// This malformed input was initially found by lz4_decompress_fuzzer and causes failure under UBSAN.\n+    constexpr unsigned char data[]\n+        = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,\n+           0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,\n+           0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,\n+           0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,\n+           0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,\n+           0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,\n+           0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,\n+           0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x07, 0x00,\n+           0x00, 0x20, 0x00, 0x00, 0x66, 0x66, 0x66, 0x66, 0xff, 0xff, 0xff, 0x17, 0xff, 0xff, 0x0f, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff,\n+           0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,\n+           0xfe, 0x1f, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};\n+\n+    const char * const source = reinterpret_cast<const char * const>(data);\n+    const uint32_t source_size = std::size(data);\n+    constexpr uint32_t uncompressed_size = 80;\n+\n+    DB::Memory<> memory;\n+    memory.resize(ICompressionCodec::getHeaderSize() + uncompressed_size + LZ4::ADDITIONAL_BYTES_AT_END_OF_BUFFER);\n+    unalignedStoreLE<uint8_t>(memory.data(), static_cast<uint8_t>(CompressionMethodByte::LZ4));\n+    unalignedStoreLE<uint32_t>(&memory[1], source_size);\n+    unalignedStoreLE<uint32_t>(&memory[5], uncompressed_size);\n+\n+    auto codec = CompressionCodecFactory::instance().get(\"LZ4\", {});\n+    ASSERT_THROW(codec->decompress(source, source_size, memory.data()), Exception);\n+}\n+\n }\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42517469-vul",
+      "digest": "sha256:42d930cd434c1d093d1040b55e0d2c9d61efc7e3c85c6e123073c535108cbb7e"
+    },
+    "patched": {
+      "ref": "n132/arvo:42517469-fix",
+      "digest": "sha256:3185e46f69a07212d0bbbdc71bcf854e8a112e9ae735a5a7a929d3b13269eb07"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": null,
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": null
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

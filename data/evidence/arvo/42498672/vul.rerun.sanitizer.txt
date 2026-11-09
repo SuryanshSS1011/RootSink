@@ -1,0 +1,76 @@
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 4097727296
+INFO: Loaded 1 modules   (10676 inline 8-bit counters): 10676 [0x8453324, 0x8455cd8), 
+INFO: Loaded 1 PC tables (10676 PCs): 10676 [0x83be338,0x83d30d8), 
+/out/re2_fuzzer: Running 1 inputs 1 time(s) each.
+Running: /tmp/poc
+=================================================================
+==7==ERROR: AddressSanitizer: stack-buffer-overflow on address 0xeafd888f at pc 0x0829735f bp 0xff950ae8 sp 0xff950ae0
+READ of size 1 at 0xeafd888f thread T0
+SCARINESS: 27 (1-byte-read-stack-buffer-overflow)
+    #0 0x829735e in bool re2::DFA::InlinedSearchLoop<true, true, true>(re2::DFA::SearchParams*) /src/re2/re2/dfa.cc:1379:11
+    #1 0x8298acd in FastSearchLoop /src/re2/re2/dfa.cc:1591:10
+    #2 0x8298acd in re2::DFA::Search(re2::StringPiece const&, re2::StringPiece const&, bool, bool, bool, bool*, char const**, re2::SparseSetT<void>*) /src/re2/re2/dfa.cc:1770:14
+    #3 0x8299ca4 in re2::Prog::SearchDFA(re2::StringPiece const&, re2::StringPiece const&, re2::Prog::Anchor, re2::Prog::MatchKind, re2::StringPiece*, bool*, re2::SparseSetT<void>*) /src/re2/re2/dfa.cc:1868:23
+    #4 0x820f8f8 in re2::RE2::Match(re2::StringPiece const&, unsigned int, unsigned int, re2::RE2::Anchor, re2::StringPiece*, int) const /src/re2/re2/re2.cc:744:19
+    #5 0x820d71c in re2::RE2::DoMatch(re2::StringPiece const&, re2::RE2::Anchor, unsigned int*, re2::RE2::Arg const* const*, int) const /src/re2/re2/re2.cc:917:8
+    #6 0x820dc55 in re2::RE2::PartialMatchN(re2::StringPiece const&, re2::RE2 const&, re2::RE2::Arg const* const*, int) /src/re2/re2/re2.cc:380:13
+    #7 0x81db313 in Apply<bool (*)(const re2::StringPiece &, const re2::RE2 &, const re2::RE2::Arg *const *, int), re2::StringPiece> /src/re2/./re2/re2.h:340:12
+    #8 0x81db313 in PartialMatch<> /src/re2/./re2/re2.h:404:12
+    #9 0x81db313 in TestOneInput(re2::StringPiece, re2::RE2::Options const&, re2::StringPiece) /src/re2/re2/fuzzing/re2_fuzzer.cc:102:5
+    #10 0x81ddbbb in LLVMFuzzerTestOneInput /src/re2/re2/fuzzing/re2_fuzzer.cc:169:3
+    #11 0x80d128e in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned int) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:599:15
+    #12 0x80bc33e in fuzzer::RunOneTest(fuzzer::Fuzzer*, char const*, unsigned int) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:323:6
+    #13 0x80c2225 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned int)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:856:9
+    #14 0x80ebf97 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #15 0xec23b646 in __libc_start_main (/lib32/libc.so.6+0x18646)
+    #16 0x8096831 in _start (/out/re2_fuzzer+0x8096831)
+
+DEDUP_TOKEN: bool re2::DFA::InlinedSearchLoop<true, true, true>(re2::DFA::SearchParams*)--FastSearchLoop--re2::DFA::Search(re2::StringPiece const&, re2::StringPiece const&, bool, bool, bool, bool*, char const**, re2::SparseSetT<void>*)
+Address 0xeafd888f is located in stack of thread T0 at offset 143 in frame
+    #0 0x81dd0cf in LLVMFuzzerTestOneInput /src/re2/re2/fuzzing/re2_fuzzer.cc:136
+
+DEDUP_TOKEN: LLVMFuzzerTestOneInput
+  This frame has 6 object(s):
+    [16, 24) 'fdp' (line 142)
+    [48, 72) 'options' (line 150)
+    [112, 124) 'pattern' (line 166)
+    [144, 156) 'text' (line 167) <== Memory access at offset 143 underflows this variable
+    [176, 184) 'agg.tmp'
+    [208, 216) 'agg.tmp14'
+HINT: this may be a false positive if your program uses some custom stack unwind mechanism, swapcontext or vfork
+      (longjmp and C++ exceptions *are* supported)
+SUMMARY: AddressSanitizer: stack-buffer-overflow /src/re2/re2/dfa.cc:1379:11 in bool re2::DFA::InlinedSearchLoop<true, true, true>(re2::DFA::SearchParams*)
+Shadow bytes around the buggy address:
+  0x3d5fb0c0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x3d5fb0d0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x3d5fb0e0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x3d5fb0f0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x3d5fb100: f1 f1 00 f2 f2 f2 00 00 00 f2 f2 f2 f2 f2 00 04
+=>0x3d5fb110: f2[f2]00 04 f2 f2 00 f2 f2 f2 00 f3 f3 f3 00 00
+  0x3d5fb120: f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5
+  0x3d5fb130: f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5
+  0x3d5fb140: f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5
+  0x3d5fb150: f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5
+  0x3d5fb160: f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+  Shadow gap:              cc
+==7==ABORTING

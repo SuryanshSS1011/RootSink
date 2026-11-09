@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042483504",
+  "chain": "CWE-1284->CWE-125",
+  "project": "ndpi",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42483504",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "bbbc5fdbae79c72dbe157e02dfee4ef9f18014b5",
+      "fix_commits": [
+        "bbbc5fdbae79c72dbe157e02dfee4ef9f18014b5"
+      ],
+      "repo": "https://github.com/ntop/nDPI"
+    },
+    "patch": "diff --git a/src/lib/ndpi_main.c b/src/lib/ndpi_main.c\nindex f1338ea7437..f93f0bfd3e6 100644\n--- a/src/lib/ndpi_main.c\n+++ b/src/lib/ndpi_main.c\n@@ -4858,7 +4858,8 @@ void ndpi_parse_packet_line_info(struct ndpi_detection_module_struct *ndpi_str,\n     if(get_u_int16_t(packet->payload, a) == ntohs(0x0d0a)) {\n       /* If end of line char sequence CR+NL \"\\r\\n\", process line */\n \n-      if(get_u_int16_t(packet->payload, a+2) == ntohs(0x0d0a)) {\n+      if(((a + 3) <= packet->payload_packet_len)\n+\t && (get_u_int16_t(packet->payload, a+2) == ntohs(0x0d0a))) {\n \t/* \\r\\n\\r\\n */\n \tint diff; /* No unsigned ! */\n \tu_int32_t a1 = a + 4;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42483504-vul",
+      "digest": "sha256:ca174d59a0187bebf85bdde4328741985350f2db5586a5774ad89beb738c2584"
+    },
+    "patched": {
+      "ref": "n132/arvo:42483504-fix",
+      "digest": "sha256:7e043f69d5c56547e09647d4035dccd66ae00c5da967a865814d291f27ffe410"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/ndpi/src/lib/ndpi_main.c:4804",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/ndpi/src/lib/ndpi_main.c:4804"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

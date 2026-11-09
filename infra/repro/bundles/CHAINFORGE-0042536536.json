@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042536536",
+  "chain": "CWE-1284->CWE-125",
+  "project": "qpdf",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42536536",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "8ae3ef28ac34fddb1cc8b03b2479f499e4af5f8a",
+      "fix_commits": [
+        "8ae3ef28ac34fddb1cc8b03b2479f499e4af5f8a"
+      ],
+      "repo": "https://github.com/qpdf/qpdf"
+    },
+    "patch": "diff --git a/fuzz/CMakeLists.txt b/fuzz/CMakeLists.txt\nindex 75f0db5ae..8f3008d57 100644\n--- a/fuzz/CMakeLists.txt\n+++ b/fuzz/CMakeLists.txt\n@@ -119,6 +119,7 @@ set(CORPUS_OTHER\n   68668.fuzz\n   68915.fuzz\n   69857.fuzz\n+  69913.fuzz\n )\n \n set(CORPUS_DIR ${CMAKE_CURRENT_BINARY_DIR}/qpdf_corpus)\ndiff --git a/fuzz/qpdf_extra/69913.fuzz b/fuzz/qpdf_extra/69913.fuzz\nnew file mode 100644\nindex 000000000..978ade90a\nBinary files /dev/null and b/fuzz/qpdf_extra/69913.fuzz differ\ndiff --git a/fuzz/qtest/fuzz.test b/fuzz/qtest/fuzz.test\nindex 341696691..6bcbbde45 100644\n--- a/fuzz/qtest/fuzz.test\n+++ b/fuzz/qtest/fuzz.test\n@@ -21,7 +21,7 @@ my @fuzzers = (\n     ['pngpredictor' => 1],\n     ['runlength' => 6],\n     ['tiffpredictor' => 2],\n-    ['qpdf' => 61],             # increment when adding new files\n+    ['qpdf' => 62],             # increment when adding new files\n     );\n \n my $n_tests = 0;\ndiff --git a/libqpdf/QPDF.cc b/libqpdf/QPDF.cc\nindex ada49f3ef..f46885a10 100644\n--- a/libqpdf/QPDF.cc\n+++ b/libqpdf/QPDF.cc\n@@ -905,9 +905,8 @@ QPDF::read_xrefEntry(qpdf_offset_t& f1, int& f2, char& type)\n     if (QUtil::is_space(*p++) && (*p == 'f' || *p == 'n')) {\n         // C++20: [[likely]]\n         type = *p;\n-        ++p;\n-        ++p; // No test for valid line[19].\n-        if ((*p == '\\n' || *p == '\\r') && f1_len == 10 && f2_len == 5) {\n+        // No test for valid line[19].\n+        if (*(++p) && *(++p) && (*p == '\\n' || *p == '\\r') && f1_len == 10 && f2_len == 5) {\n             // C++20: [[likely]]\n             return true;\n         }\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42536536-vul",
+      "digest": "sha256:596901c8b1f8a0aa8266148fe9757140bd6e79324c895d12994015c930cba693"
+    },
+    "patched": {
+      "ref": "n132/arvo:42536536-fix",
+      "digest": "sha256:5ea7dd642b3ccbb56ad4049f705d682a7ba846483b47388295257774760d7599"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/qpdf/libqpdf/QPDF.cc:898",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/qpdf/libqpdf/QPDF.cc:898"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

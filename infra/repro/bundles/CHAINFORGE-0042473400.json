@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042473400",
+  "chain": "CWE-1285->CWE-125",
+  "project": "pcre2",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42473400",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "f2e1cea2884e93a0f27473c4e3db18936abed039",
+      "fix_commits": [
+        "f2e1cea2884e93a0f27473c4e3db18936abed039"
+      ],
+      "repo": "https://github.com/PCRE2Project/pcre2"
+    },
+    "patch": "diff --git a/src/pcre2_compile.c b/src/pcre2_compile.c\nindex 1edcf1a57..5a6f88c82 100644\n--- a/src/pcre2_compile.c\n+++ b/src/pcre2_compile.c\n@@ -1596,6 +1596,7 @@ else\n       {\n       uint32_t xc;\n       \n+      if (ptr >= ptrend) break;\n       if (*ptr == CHAR_LEFT_CURLY_BRACKET && \n           (extra_options & PCRE2_EXTRA_ALT_BSUX) != 0)\n         {\ndiff --git a/testdata/testinput5 b/testdata/testinput5\nindex b48d27ad1..2c4e847a6 100644\n--- a/testdata/testinput5\n+++ b/testdata/testinput5\n@@ -817,6 +817,9 @@\n /^\\u{0000000000010ffff}/utf,extra_alt_bsux\n     \\x{10ffff}\n \n+/\\u/utf,alt_bsux\n+    \\\\u\n+\n /^a+[a\\x{200}]/B,utf\n     aa\n \ndiff --git a/testdata/testoutput5 b/testdata/testoutput5\nindex 2bcb39f37..23438dd1b 100644\n--- a/testdata/testoutput5\n+++ b/testdata/testoutput5\n@@ -1738,6 +1738,10 @@ Failed: error 173 at offset 6: disallowed Unicode code point (>= 0xd800 && <= 0x\n     \\x{10ffff}\n  0: \\x{10ffff}\n \n+/\\u/utf,alt_bsux\n+    \\\\u\n+ 0: u\n+\n /^a+[a\\x{200}]/B,utf\n ------------------------------------------------------------------\n         Bra\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42473400-vul",
+      "digest": "sha256:e87874dd7440ef74c7a89dfcca83ed2edd4cc7bf0e3cee75ab5bacb6d4d6d2c4"
+    },
+    "patched": {
+      "ref": "n132/arvo:42473400-fix",
+      "digest": "sha256:2208efa74f9821e48fc8444c0567016bcae23ae4c5c5f05501cbbdcac435cbb8"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/pcre2/src/pcre2_compile.c:1599",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/pcre2/src/pcre2_compile.c:1599"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042470716",
+  "chain": "CWE-456->CWE-457",
+  "project": "file",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42470716",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "393dafa41b26a7d8ed593912e0ec1f1e7bd4e406",
+      "fix_commits": [
+        "393dafa41b26a7d8ed593912e0ec1f1e7bd4e406"
+      ],
+      "repo": "https://github.com/file/file"
+    },
+    "patch": "From 393dafa41b26a7d8ed593912e0ec1f1e7bd4e406 Mon Sep 17 00:00:00 2001\nFrom: Christos Zoulas <christos@zoulas.com>\nDate: Fri, 7 Apr 2017 20:10:24 +0000\nSubject: [PATCH] Work around glibc/regex/msan bug regexec returns 0 but does\n initialize pmatch. Found by oss-fuzz.\n\n---\n src/funcs.c | 4 +++-\n 1 file changed, 3 insertions(+), 1 deletion(-)\n\ndiff --git a/src/funcs.c b/src/funcs.c\nindex d39056b..33778ff 100644\n--- a/src/funcs.c\n+++ b/src/funcs.c\n@@ -27,7 +27,7 @@\n #include \"file.h\"\n \n #ifndef\tlint\n-FILE_RCSID(\"@(#)$File: funcs.c,v 1.90 2016/10/19 20:51:17 christos Exp $\")\n+FILE_RCSID(\"@(#)$File: funcs.c,v 1.92 2017/04/07 20:10:24 christos Exp $\")\n #endif\t/* lint */\n \n #include \"magic.h\"\n@@ -509,6 +509,8 @@ file_regexec(file_regex_t *rx, const char *str, size_t nmatch,\n     regmatch_t* pmatch, int eflags)\n {\n \tassert(rx->rc == 0);\n+\t/* XXX: force initialization because glibc does not always do this */\n+\tmemset(pmatch, 0, nmatch * sizeof(*pmatch));\n \treturn regexec(&rx->rx, str, nmatch, pmatch, eflags);\n }\n \n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42470716-vul",
+      "digest": "sha256:72338d7e36a940838d1a73c8774938153c619e3f69f37ad0fef38a056a256b13"
+    },
+    "patched": {
+      "ref": "n132/arvo:42470716-fix",
+      "digest": "sha256:85c5a23622f18dcf35612f8590302649b1dba9b23eba28ab81796eaf910b202d"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/file/src/softmagic.c:365",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/file/src/softmagic.c:365"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042484866",
+  "chain": "CWE-1285->CWE-125",
+  "project": "skia",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42484866",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "4190f27b41ffb710e7d56fe1f1883cd8cd8b853e",
+      "fix_commits": [
+        "4190f27b41ffb710e7d56fe1f1883cd8cd8b853e"
+      ],
+      "repo": "https://skia.googlesource.com/skia.git"
+    },
+    "patch": "diff --git a/gn/tests.gni b/gn/tests.gni\nindex 5b8b99f..d8b7494 100644\n--- a/gn/tests.gni\n+++ b/gn/tests.gni\n@@ -185,6 +185,7 @@\n   \"$_tests/PaintImageFilterTest.cpp\",\n   \"$_tests/PaintTest.cpp\",\n   \"$_tests/ParametricStageTest.cpp\",\n+  \"$_tests/ParseColorTest.cpp\",\n   \"$_tests/ParsePathTest.cpp\",\n   \"$_tests/PathCoverageTest.cpp\",\n   \"$_tests/PathMeasureTest.cpp\",\ndiff --git a/src/utils/SkParseColor.cpp b/src/utils/SkParseColor.cpp\nindex ba7c510..671708b 100644\n--- a/src/utils/SkParseColor.cpp\n+++ b/src/utils/SkParseColor.cpp\n@@ -185,33 +185,61 @@\n         len -= 6;\n         *sixMatchPtr++ = sixMatch;\n     } while (last == false && len > 0);\n-    const int colorNameSize = sizeof(gColorNames) / sizeof(unsigned int);\n-    int lo = 0;\n-    int hi = colorNameSize - 3; // back off to beginning of yellowgreen\n+\n+    auto is_rec_start = [](size_t i) {\n+        SkASSERT(i < SK_ARRAY_COUNT(gColorNames));\n+\n+        // the first record word is tagged in bit 31\n+        return static_cast<int>(gColorNames[i]) < 0;\n+    };\n+\n+    auto rec_start = [&](size_t i, int dir) {\n+        // find the beginning of a record, searching in the given direction.\n+        while (!is_rec_start(i)) {\n+            i += dir;\n+        }\n+\n+        return i;\n+    };\n+\n+    size_t lo = 0,\n+           hi = SK_ARRAY_COUNT(gColorNames) - 3; // back off to beginning of yellowgreen\n+\n     while (lo <= hi) {\n-        int mid = (hi + lo) >> 1;\n-        while ((int) gColorNames[mid] >= 0)\n-            --mid;\n+        SkASSERT(is_rec_start(lo));\n+        SkASSERT(is_rec_start(hi));\n+\n+        const auto  mid         = rec_start((hi + lo) >> 1, -1);\n+        const auto* midMatchPtr = &gColorNames[mid]; // separate cursor, to keep |mid| on rec start\n+\n         sixMatchPtr = sixMatches;\n-        while (gColorNames[mid] == *sixMatchPtr) {\n-            ++mid;\n+        while (*midMatchPtr == *sixMatchPtr) {\n+            ++midMatchPtr;\n             if ((*sixMatchPtr & 1) == 0) { // last\n-                *color = gColorNames[mid] | 0xFF000000;\n+                // jackpot\n+                *color = *midMatchPtr | 0xFF000000;\n                 return namePtr;\n             }\n             ++sixMatchPtr;\n         }\n-        int sixMask = *sixMatchPtr & ~0x80000000;\n-        int midMask = gColorNames[mid] & ~0x80000000;\n+\n+        if (hi == lo) {\n+            // not found\n+            break;\n+        }\n+\n+        int sixMask = *sixMatchPtr & ~0x80000000,\n+            midMask = *midMatchPtr & ~0x80000000;\n+\n+        SkASSERT(sixMask != midMask);\n         if (sixMask > midMask) {\n-            lo = mid + 2;   // skip color\n-            while ((int) gColorNames[lo] >= 0)\n-                ++lo;\n-        } else if (hi == mid)\n-            return nullptr;\n-        else\n+            // skip color\n+            lo = rec_start(mid + 2,  1);\n+        } else {\n             hi = mid;\n+        }\n     }\n+\n     return nullptr;\n }\n \ndiff --git a/tests/ParseColorTest.cpp b/tests/ParseColorTest.cpp\nnew file mode 100644\nindex 0000000..35f80de\n--- /dev/null\n+++ b/tests/ParseColorTest.cpp\n@@ -0,0 +1,194 @@\n+/*\n+ * Copyright 2020 Google LLC\n+ *\n+ * Use of this source code is governed by a BSD-style license that can be\n+ * found in the LICENSE file.\n+ */\n+\n+#include \"include/utils/SkParse.h\"\n+#include \"tests/Test.h\"\n+\n+static constexpr struct {\n+    const char* fName;\n+    SkColor     fColor;\n+} gNamedColors[] = {\n+    { \"aliceblue\",            0xfff0f8ff },\n+    { \"antiquewhite\",         0xfffaebd7 },\n+    { \"aqua\",                 0xff00ffff },\n+    { \"aquamarine\",           0xff7fffd4 },\n+    { \"azure\",                0xfff0ffff },\n+    { \"beige\",                0xfff5f5dc },\n+    { \"bisque\",               0xffffe4c4 },\n+    { \"black\",                0xff000000 },\n+    { \"blanchedalmond\",       0xffffebcd },\n+    { \"blue\",                 0xff0000ff },\n+    { \"blueviolet\",           0xff8a2be2 },\n+    { \"brown\",                0xffa52a2a },\n+    { \"burlywood\",            0xffdeb887 },\n+    { \"cadetblue\",            0xff5f9ea0 },\n+    { \"chartreuse\",           0xff7fff00 },\n+    { \"chocolate\",            0xffd2691e },\n+    { \"coral\",                0xffff7f50 },\n+    { \"cornflowerblue\",       0xff6495ed },\n+    { \"cornsilk\",             0xfffff8dc },\n+    { \"crimson\",              0xffdc143c },\n+    { \"cyan\",                 0xff00ffff },\n+    { \"darkblue\",             0xff00008b },\n+    { \"darkcyan\",             0xff008b8b },\n+    { \"darkgoldenrod\",        0xffb8860b },\n+    { \"darkgray\",             0xffa9a9a9 },\n+    { \"darkgreen\",            0xff006400 },\n+    { \"darkkhaki\",            0xffbdb76b },\n+    { \"darkmagenta\",          0xff8b008b },\n+    { \"darkolivegreen\",       0xff556b2f },\n+    { \"darkorange\",           0xffff8c00 },\n+    { \"darkorchid\",           0xff9932cc },\n+    { \"darkred\",              0xff8b0000 },\n+    { \"darksalmon\",           0xffe9967a },\n+    { \"darkseagreen\",         0xff8fbc8f },\n+    { \"darkslateblue\",        0xff483d8b },\n+    { \"darkslategray\",        0xff2f4f4f },\n+    { \"darkturquoise\",        0xff00ced1 },\n+    { \"darkviolet\",           0xff9400d3 },\n+    { \"deeppink\",             0xffff1493 },\n+    { \"deepskyblue\",          0xff00bfff },\n+    { \"dimgray\",              0xff696969 },\n+    { \"dodgerblue\",           0xff1e90ff },\n+    { \"firebrick\",            0xffb22222 },\n+    { \"floralwhite\",          0xfffffaf0 },\n+    { \"forestgreen\",          0xff228b22 },\n+    { \"fuchsia\",              0xffff00ff },\n+    { \"gainsboro\",            0xffdcdcdc },\n+    { \"ghostwhite\",           0xfff8f8ff },\n+    { \"gold\",                 0xffffd700 },\n+    { \"goldenrod\",            0xffdaa520 },\n+    { \"gray\",                 0xff808080 },\n+    { \"green\",                0xff008000 },\n+    { \"greenyellow\",          0xffadff2f },\n+    { \"honeydew\",             0xfff0fff0 },\n+    { \"hotpink\",              0xffff69b4 },\n+    { \"indianred\",            0xffcd5c5c },\n+    { \"indigo\",               0xff4b0082 },\n+    { \"ivory\",                0xfffffff0 },\n+    { \"khaki\",                0xfff0e68c },\n+    { \"lavender\",             0xffe6e6fa },\n+    { \"lavenderblush\",        0xfffff0f5 },\n+    { \"lawngreen\",            0xff7cfc00 },\n+    { \"lemonchiffon\",         0xfffffacd },\n+    { \"lightblue\",            0xffadd8e6 },\n+    { \"lightcoral\",           0xfff08080 },\n+    { \"lightcyan\",            0xffe0ffff },\n+    { \"lightgoldenrodyellow\", 0xfffafad2 },\n+    { \"lightgreen\",           0xff90ee90 },\n+    { \"lightgrey\",            0xffd3d3d3 },\n+    { \"lightpink\",            0xffffb6c1 },\n+    { \"lightsalmon\",          0xffffa07a },\n+    { \"lightseagreen\",        0xff20b2aa },\n+    { \"lightskyblue\",         0xff87cefa },\n+    { \"lightslategray\",       0xff778899 },\n+    { \"lightsteelblue\",       0xffb0c4de },\n+    { \"lightyellow\",          0xffffffe0 },\n+    { \"lime\",                 0xff00ff00 },\n+    { \"limegreen\",            0xff32cd32 },\n+    { \"linen\",                0xfffaf0e6 },\n+    { \"magenta\",              0xffff00ff },\n+    { \"maroon\",               0xff800000 },\n+    { \"mediumaquamarine\",     0xff66cdaa },\n+    { \"mediumblue\",           0xff0000cd },\n+    { \"mediumorchid\",         0xffba55d3 },\n+    { \"mediumpurple\",         0xff9370db },\n+    { \"mediumseagreen\",       0xff3cb371 },\n+    { \"mediumslateblue\",      0xff7b68ee },\n+    { \"mediumspringgreen\",    0xff00fa9a },\n+    { \"mediumturquoise\",      0xff48d1cc },\n+    { \"mediumvioletred\",      0xffc71585 },\n+    { \"midnightblue\",         0xff191970 },\n+    { \"mintcream\",            0xfff5fffa },\n+    { \"mistyrose\",            0xffffe4e1 },\n+    { \"moccasin\",             0xffffe4b5 },\n+    { \"navajowhite\",          0xffffdead },\n+    { \"navy\",                 0xff000080 },\n+    { \"oldlace\",              0xfffdf5e6 },\n+    { \"olive\",                0xff808000 },\n+    { \"olivedrab\",            0xff6b8e23 },\n+    { \"orange\",               0xffffa500 },\n+    { \"orangered\",            0xffff4500 },\n+    { \"orchid\",               0xffda70d6 },\n+    { \"palegoldenrod\",        0xffeee8aa },\n+    { \"palegreen\",            0xff98fb98 },\n+    { \"paleturquoise\",        0xffafeeee },\n+    { \"palevioletred\",        0xffdb7093 },\n+    { \"papayawhip\",           0xffffefd5 },\n+    { \"peachpuff\",            0xffffdab9 },\n+    { \"peru\",                 0xffcd853f },\n+    { \"pink\",                 0xffffc0cb },\n+    { \"plum\",                 0xffdda0dd },\n+    { \"powderblue\",           0xffb0e0e6 },\n+    { \"purple\",               0xff800080 },\n+    { \"red\",                  0xffff0000 },\n+    { \"rosybrown\",            0xffbc8f8f },\n+    { \"royalblue\",            0xff4169e1 },\n+    { \"saddlebrown\",          0xff8b4513 },\n+    { \"salmon\",               0xfffa8072 },\n+    { \"sandybrown\",           0xfff4a460 },\n+    { \"seagreen\",             0xff2e8b57 },\n+    { \"seashell\",             0xfffff5ee },\n+    { \"sienna\",               0xffa0522d },\n+    { \"silver\",               0xffc0c0c0 },\n+    { \"skyblue\",              0xff87ceeb },\n+    { \"slateblue\",            0xff6a5acd },\n+    { \"slategray\",            0xff708090 },\n+    { \"snow\",                 0xfffffafa },\n+    { \"springgreen\",          0xff00ff7f },\n+    { \"steelblue\",            0xff4682b4 },\n+    { \"tan\",                  0xffd2b48c },\n+    { \"teal\",                 0xff008080 },\n+    { \"thistle\",              0xffd8bfd8 },\n+    { \"tomato\",               0xffff6347 },\n+    { \"turquoise\",            0xff40e0d0 },\n+    { \"violet\",               0xffee82ee },\n+    { \"wheat\",                0xfff5deb3 },\n+    { \"white\",                0xffffffff },\n+    { \"whitesmoke\",           0xfff5f5f5 },\n+    { \"yellow\",               0xffffff00 },\n+    { \"yellowgreen\",          0xff9acd32 },\n+};\n+\n+static bool is_valid_name(const SkString& name) {\n+    for (const auto& c : gNamedColors) {\n+        if (name.equals(c.fName)) return true;\n+    }\n+    return false;\n+}\n+\n+DEF_TEST(ParseNamedColor, reporter) {\n+    SkColor color;\n+\n+    for (const auto& c : gNamedColors) {\n+        // check the real name\n+        REPORTER_ASSERT(reporter, SkParse::FindNamedColor(c.fName , strlen(c.fName), &color)\n+                                                       == c.fName + strlen(c.fName));\n+        REPORTER_ASSERT(reporter, color == c.fColor);\n+\n+        // check partial prefixes\n+        for (int l = strlen(c.fName) - 1; l >= 0; --l) {\n+            SkString s(c.fName, l);\n+            // some substrings are valid color names\n+            if (is_valid_name(s)) continue;\n+\n+            REPORTER_ASSERT(reporter, SkParse::FindNamedColor(s.c_str(), l, &color) == nullptr);\n+        }\n+\n+        // check suffixes\n+        SkString s(c.fName, strlen(c.fName));\n+        s.append(\"A\");\n+        REPORTER_ASSERT(reporter, SkParse::FindNamedColor(s.c_str(), s.size(), &color) == nullptr);\n+    }\n+\n+    // some oddballs\n+    REPORTER_ASSERT(reporter, SkParse::FindNamedColor(\"\"   , 0, &color) == nullptr);\n+    REPORTER_ASSERT(reporter, SkParse::FindNamedColor(\"aaa\", 3, &color) == nullptr);\n+    REPORTER_ASSERT(reporter, SkParse::FindNamedColor(\"zzz\", 3, &color) == nullptr);\n+    REPORTER_ASSERT(reporter, SkParse::FindNamedColor(\"aaaaaaaaaaaa\", 12, &color) == nullptr);\n+    REPORTER_ASSERT(reporter, SkParse::FindNamedColor(\"zzzzzzzzzzzz\", 12, &color) == nullptr);\n+}\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42484866-vul",
+      "digest": "sha256:c927155229688f56e5af1e9c4ab5d9bae506b603c40e38c79af69085a4994d4a"
+    },
+    "patched": {
+      "ref": "n132/arvo:42484866-fix",
+      "digest": "sha256:049432951e986241db80e11c46ddd16f02692139eb08ce781595cb43565bfd0a"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "global-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/skia/out/Fuzz/../../src/utils/SkParseColor.cpp:208",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "global-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/skia/out/Fuzz/../../src/utils/SkParseColor.cpp:208"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

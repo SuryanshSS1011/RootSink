@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042498749",
+  "chain": "CWE-456->CWE-457",
+  "project": "libjxl",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42498749",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "f8dd198a2d8ad4f4fccd591349a384bc0eff5ec9",
+      "fix_commits": [
+        "f8dd198a2d8ad4f4fccd591349a384bc0eff5ec9"
+      ],
+      "repo": "https://github.com/libjxl/libjxl"
+    },
+    "patch": "From f8dd198a2d8ad4f4fccd591349a384bc0eff5ec9 Mon Sep 17 00:00:00 2001\nFrom: Evgenii Kliuchnikov <eustas@google.com>\nDate: Wed, 7 Jul 2021 10:45:14 +0000\nSubject: [PATCH] Fuzz: use-of-uninitialized in unsqueeze\n\nPrevious shortcut logic created uninitialized images even for non-empty channels\n---\n lib/jxl/modular/transform/squeeze.cc | 22 ++++++++++++++++++----\n 1 file changed, 18 insertions(+), 4 deletions(-)\n\ndiff --git a/lib/jxl/modular/transform/squeeze.cc b/lib/jxl/modular/transform/squeeze.cc\nindex 0239c69..c1940e4 100644\n--- a/lib/jxl/modular/transform/squeeze.cc\n+++ b/lib/jxl/modular/transform/squeeze.cc\n@@ -21,13 +21,21 @@ void InvHSqueeze(Image &input, int c, int rc, ThreadPool *pool) {\n   JXL_ASSERT(chin.w == DivCeil(chin.w + chin_residual.w, 2));\n   JXL_ASSERT(chin.h == chin_residual.h);\n \n+  if (chin_residual.w == 0) {\n+    // Short-circuit: output channel has same dimensions as input.\n+    input.channel[c].hshift--;\n+    return;\n+  }\n+\n+  // Note: chin.w >= chin_residual.w and at most 1 different.\n   Channel chout(chin.w + chin_residual.w, chin.h, chin.hshift - 1, chin.vshift);\n   JXL_DEBUG_V(4,\n               \"Undoing horizontal squeeze of channel %i using residuals in \"\n               \"channel %i (going from width %zu to %zu)\",\n               c, rc, chin.w, chout.w);\n-  if (chin_residual.w == 0 || chin_residual.h == 0) {\n-    // Short-circuit for channels with no pixels.\n+\n+  if (chin_residual.h == 0) {\n+    // Short-circuit: channel with no pixels.\n     input.channel[c] = std::move(chout);\n     return;\n   }\n@@ -77,6 +85,12 @@ void InvVSqueeze(Image &input, int c, int rc, ThreadPool *pool) {\n   JXL_ASSERT(chin.h == DivCeil(chin.h + chin_residual.h, 2));\n   JXL_ASSERT(chin.w == chin_residual.w);\n \n+  if (chin_residual.h == 0) {\n+    // Short-circuit: output channel has same dimensions as input.\n+    input.channel[c].vshift--;\n+    return;\n+  }\n+\n   // Note: chin.h >= chin_residual.h and at most 1 different.\n   Channel chout(chin.w, chin.h + chin_residual.h, chin.hshift, chin.vshift - 1);\n   JXL_DEBUG_V(\n@@ -85,8 +99,8 @@ void InvVSqueeze(Image &input, int c, int rc, ThreadPool *pool) {\n       \"%i (going from height %zu to %zu)\",\n       c, rc, chin.h, chout.h);\n \n-  if (chin_residual.w == 0 || chin_residual.h == 0) {\n-    // Short-circuit for channels with no pixels.\n+  if (chin_residual.w == 0) {\n+    // Short-circuit: channel with no pixels.\n     input.channel[c] = std::move(chout);\n     return;\n   }\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42498749-vul",
+      "digest": "sha256:16522513d6119c5bb3333226abbe5875ce8fc91f558feb79593c5cedf1b5a9d5"
+    },
+    "patched": {
+      "ref": "n132/arvo:42498749-fix",
+      "digest": "sha256:402b30c9ba8295fe43fee45517e5a70ded6e5c52bbd11b4d65665fec4627e7ee"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/libjxl/lib/jxl/dec_modular.cc:117",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/libjxl/lib/jxl/dec_modular.cc:117"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

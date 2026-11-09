@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042524654",
+  "chain": "CWE-1285->CWE-125",
+  "project": "ntopng",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42524654",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "bf61ca1bcd64f7a457a8290f2a119bf62ecbb8e8",
+      "fix_commits": [
+        "bf61ca1bcd64f7a457a8290f2a119bf62ecbb8e8"
+      ],
+      "repo": "https://github.com/ntop/ntopng"
+    },
+    "patch": "diff --git a/src/NetworkInterface.cpp b/src/NetworkInterface.cpp\nindex a8ab6ad79834..be4ea5d09b2b 100644\n--- a/src/NetworkInterface.cpp\n+++ b/src/NetworkInterface.cpp\n@@ -1553,13 +1553,12 @@ NetworkInterface *NetworkInterface::getDynInterface(u_int64_t criteria,\n \n /* **************************************************** */\n \n-bool NetworkInterface::processPacket(\n-    u_int32_t bridge_iface_idx, bool ingressPacket,\n-    const struct bpf_timeval *when, const u_int64_t packet_time,\n-    struct ndpi_ethhdr *eth, u_int16_t vlan_id, struct ndpi_iphdr *iph,\n-    struct ndpi_ipv6hdr *ip6, u_int16_t ip_offset,\n-    u_int16_t encapsulation_overhead, u_int32_t len_on_wire,\n-    const struct pcap_pkthdr *h, const u_char *packet, u_int16_t *ndpiProtocol,\n+bool NetworkInterface::processPacket(u_int32_t bridge_iface_idx, bool ingressPacket,\n+\t\t\t\t     const struct bpf_timeval *when, const u_int64_t packet_time,\n+\t\t\t\t     struct ndpi_ethhdr *eth, u_int16_t vlan_id, struct ndpi_iphdr *iph,\n+\t\t\t\t     struct ndpi_ipv6hdr *ip6, u_int16_t ip_offset,\n+\t\t\t\t     u_int16_t encapsulation_overhead, u_int32_t len_on_wire,\n+\t\t\t\t     const struct pcap_pkthdr *h, const u_char *packet, u_int16_t *ndpiProtocol,\n     Host **srcHost, Host **dstHost, Flow **hostFlow) {\n   u_int16_t trusted_ip_len = max_val(0, (int)h->caplen - ip_offset);\n   u_int16_t trusted_payload_len = 0;\n@@ -1596,10 +1595,9 @@ bool NetworkInterface::processPacket(\n #ifndef HAVE_NEDGE\n     /* Custom disaggregation */\n     if (sub_interfaces && (sub_interfaces->getNumSubInterfaces() > 0)) {\n-      processed = sub_interfaces->processPacket(\n-          bridge_iface_idx, ingressPacket, when, packet_time, eth, vlan_id, iph,\n-          ip6, ip_offset, encapsulation_overhead, len_on_wire, h, packet,\n-          ndpiProtocol, srcHost, dstHost, hostFlow);\n+      processed = sub_interfaces->processPacket(bridge_iface_idx, ingressPacket, when, packet_time, eth, vlan_id, iph,\n+\t\t\t\t\t\tip6, ip_offset, encapsulation_overhead, len_on_wire, h, packet,\n+\t\t\t\t\t\tndpiProtocol, srcHost, dstHost, hostFlow);\n     }\n #endif\n #endif\n@@ -1611,10 +1609,9 @@ bool NetworkInterface::processPacket(\n \n         if ((vIface = getDynInterface((u_int32_t)vlan_id, false)) != NULL) {\n           vIface->setTimeLastPktRcvd(h->ts.tv_sec);\n-          pass_verdict = vIface->processPacket(\n-              bridge_iface_idx, ingressPacket, when, packet_time, eth, vlan_id,\n-              iph, ip6, ip_offset, encapsulation_overhead, len_on_wire, h,\n-              packet, ndpiProtocol, srcHost, dstHost, hostFlow);\n+          pass_verdict = vIface->processPacket(bridge_iface_idx, ingressPacket, when, packet_time, eth, vlan_id,\n+\t\t\t\t\t       iph, ip6, ip_offset, encapsulation_overhead, len_on_wire, h,\n+\t\t\t\t\t       packet, ndpiProtocol, srcHost, dstHost, hostFlow);\n           processed = true;\n         }\n       }\n@@ -1682,6 +1679,14 @@ bool NetworkInterface::processPacket(\n \n     /* NOTE: ip_tot_len is not trusted as may be forged */\n     ip_tot_len = ntohs(iph->tot_len);\n+\n+    if(ip_tot_len > (h->caplen - ip_offset)) {\n+      /* Invalid lenght */\n+      incStats(ingressPacket, when->tv_sec, ETHERTYPE_IP, NDPI_PROTOCOL_UNKNOWN,\n+\t       NDPI_PROTOCOL_CATEGORY_UNSPECIFIED, 0, len_on_wire, 1);\n+      return (pass_verdict);\n+    }\n+    \n     tos = iph->tos;\n \n     /* Use the actual h->len and not the h->caplen to determine\n@@ -1749,8 +1754,16 @@ bool NetworkInterface::processPacket(\n     tos = ((ntohl(*tos_ptr) & 0xFF00000) >> 20) & 0xFF;\n   }\n \n-  trusted_l4_packet_len = packet + h->caplen - l4;\n-\n+  if((packet + h->caplen) > l4)\n+    trusted_l4_packet_len = packet + h->caplen - l4;\n+  else {\n+    /* Invalid lenght */\n+    incStats(ingressPacket, when->tv_sec, ETHERTYPE_IPV6,\n+\t     NDPI_PROTOCOL_UNKNOWN, NDPI_PROTOCOL_CATEGORY_UNSPECIFIED, 0,\n+\t     len_on_wire, 1);\n+    return (pass_verdict);\n+  }\n+  \n   if (trusted_l4_packet_len > frame_padding)\n     trusted_l4_packet_len -= frame_padding;\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42524654-vul",
+      "digest": "sha256:85450a31938f78c14340d4690d896ab1e329bf3cb2f24382d550da90363e11d3"
+    },
+    "patched": {
+      "ref": "n132/arvo:42524654-fix",
+      "digest": "sha256:71d2e741243f85a3c1ecd5453835aa40c6cf734968fe27c8cb694718f1bfab54"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/ntopng/src/ICMPinfo.cpp:100",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/ntopng/src/ICMPinfo.cpp:100"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

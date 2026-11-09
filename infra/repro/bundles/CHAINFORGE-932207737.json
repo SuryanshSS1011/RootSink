@@ -1,0 +1,82 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-932207737",
+  "chain": "CWE-1285->CWE-190->CWE-787",
+  "project": "mruby",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42517942",
+    "commit_range": {
+      "introduced": null,
+      "fixed": null,
+      "fix_commits": [
+        "9fcfd01f205fdd092be0932ac0b7a6a4eb29d2b3"
+      ],
+      "repo": "https://github.com/mruby/mruby"
+    },
+    "patch": "diff --git a/mrbgems/mruby-pack/src/pack.c b/mrbgems/mruby-pack/src/pack.c\nindex 08c22b5ebc..9999e0ef7c 100644\n--- a/mrbgems/mruby-pack/src/pack.c\n+++ b/mrbgems/mruby-pack/src/pack.c\n@@ -1306,7 +1306,7 @@ read_tmpl(mrb_state *mrb, struct tmpl *tmpl, enum pack_dir *dirp, enum pack_type\n     if (ISDIGIT(ch)) {\n       char *e;\n       mrb_int n;\n-      if (!mrb_read_int(tptr+tmpl->idx, tptr+tlen, &e, &n)) {\n+      if (!mrb_read_int(tptr+tmpl->idx, tptr+tlen, &e, &n) || INT_MAX < n) {\n         mrb_raise(mrb, E_RUNTIME_ERROR, \"too big template length\");\n       }\n       count = (int)n;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42517942-vul",
+      "digest": "sha256:ba9e71c1bfaa4ed7fa761d376696e7fb25d58f565f32912ddf91755e70e4b8eb"
+    },
+    "patched": {
+      "ref": "n132/arvo:42517942-fix",
+      "digest": "sha256:38de0a82d9e27295c57e27d10f22cb246a110f392978625ae56cd035106d0236"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "crash_site": "/src/mruby/src/string.c:73",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 190,
+      "role": "intermediate",
+      "witness": {
+        "method": "ubsan-rebuild",
+        "recipe": "SANITIZER=undefined compile && $ENTRYPOINT",
+        "ubsan_options": "print_stacktrace=1:halt_on_error=0:silence_unsigned_overflow=0:symbolize=1"
+      },
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "site": "/src/mruby/src/string.c:73"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

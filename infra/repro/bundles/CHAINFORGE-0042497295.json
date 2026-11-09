@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042497295",
+  "chain": "CWE-456->CWE-457",
+  "project": "mruby",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42497295",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "e323cd0c6ebdeeb42c267a5fe28cec87ae2f00a0",
+      "fix_commits": [
+        "e323cd0c6ebdeeb42c267a5fe28cec87ae2f00a0"
+      ],
+      "repo": "https://github.com/mruby/mruby"
+    },
+    "patch": "From e323cd0c6ebdeeb42c267a5fe28cec87ae2f00a0 Mon Sep 17 00:00:00 2001\nFrom: \"Yukihiro \\\"Matz\\\" Matsumoto\" <matz@ruby.or.jp>\nDate: Mon, 24 May 2021 07:05:57 +0900\nSubject: [PATCH] class.c: add write barrier for aliases.\n\n---\n src/class.c | 1 +\n 1 file changed, 1 insertion(+)\n\ndiff --git a/src/class.c b/src/class.c\nindex cd4e160..046e99f 100644\n--- a/src/class.c\n+++ b/src/class.c\n@@ -2216,6 +2216,7 @@ mrb_alias_method(mrb_state *mrb, struct RClass *c, mrb_sym a, mrb_sym b)\n       }\n       p->e.env = e;\n       p->flags |= MRB_PROC_ENVSET;\n+      mrb_field_write_barrier(mrb, (struct RBasic*)p, (struct RBasic*)e);\n     }\n   }\n   mrb_define_method_raw(mrb, c, a, m);\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42497295-vul",
+      "digest": "sha256:885dd43a8a123cbc5bf1417fc9e3760e0d9bd4bf26289ec7159b230e811c1f78"
+    },
+    "patched": {
+      "ref": "n132/arvo:42497295-fix",
+      "digest": "sha256:4344e534589912e31c1de08d5a3bc0165d13ce7526074fc4337c7428483136ec"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/mruby/src/vm.c:1600",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/mruby/src/vm.c:1600"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

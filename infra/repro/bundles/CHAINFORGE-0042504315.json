@@ -1,0 +1,59 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042504315",
+  "chain": "CWE-416->CWE-787",
+  "project": "wolfmqtt",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42504315",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "147aa20720112bb8d3c814c6a3cfa95837df4256",
+      "fix_commits": [
+        "147aa20720112bb8d3c814c6a3cfa95837df4256"
+      ],
+      "repo": "https://github.com/wolfSSL/wolfMQTT"
+    },
+    "patch": "diff --git a/src/mqtt_client.c b/src/mqtt_client.c\nindex 1ca1da497..ff79f7202 100644\n--- a/src/mqtt_client.c\n+++ b/src/mqtt_client.c\n@@ -273,7 +273,10 @@ static int MqttClient_RespList_Find(MqttClient *client,\n            (packet_id == tmpResp->packet_id))\n         {\n         #ifdef WOLFMQTT_DEBUG_CLIENT\n-            if (client->lastRc != MQTT_CODE_CONTINUE) {\n+            #if defined(WOLFMQTT_NONBLOCK) && defined(WOLFMQTT_DEBUG_CLIENT)\n+            if (client->lastRc != MQTT_CODE_CONTINUE)\n+            #endif\n+            {\n             PRINTF(\"PendResp Found: %p, Type %s (%d), ID %d, InProc %d, Done %d\",\n                 tmpResp, MqttPacket_TypeDesc(tmpResp->packet_type),\n                 tmpResp->packet_type, tmpResp->packet_id,\n@@ -861,9 +864,7 @@ static int MqttClient_WaitType(MqttClient *client, void *packet_obj,\n             /* Check to see if packet type and id have already completed */\n             rc = MqttClient_CheckPendResp(client, wait_type, wait_packet_id);\n             if (rc != MQTT_CODE_ERROR_NOT_FOUND\n-            #ifdef WOLFMQTT_NONBLOCK\n                 && rc != MQTT_CODE_CONTINUE\n-            #endif\n             ) {\n                 return rc;\n             }\n@@ -1434,7 +1435,7 @@ int MqttClient_Connect(MqttClient *client, MqttConnect *mc_connect)\n     /* Wait for connect ack packet */\n     rc = MqttClient_WaitType(client, &mc_connect->ack,\n         MQTT_PACKET_TYPE_CONNECT_ACK, 0, client->cmd_timeout_ms);\n-#ifdef WOLFMQTT_NONBLOCK\n+#if defined(WOLFMQTT_NONBLOCK) || defined(WOLFMQTT_MULTITHREAD)\n     if (rc == MQTT_CODE_CONTINUE)\n         return rc;\n #endif\n@@ -1830,7 +1831,7 @@ static int MqttPublishMsg(MqttClient *client, MqttPublish *publish,\n                     rc = MqttClient_WaitType(client, &publish->resp, resp_type,\n                         publish->packet_id, client->cmd_timeout_ms);\n                 }\n-            #ifdef WOLFMQTT_NONBLOCK\n+            #if defined(WOLFMQTT_NONBLOCK) || defined(WOLFMQTT_MULTITHREAD)\n                 if (rc == MQTT_CODE_CONTINUE)\n                     break;\n             #endif\n@@ -1966,7 +1967,7 @@ int MqttClient_Subscribe(MqttClient *client, MqttSubscribe *subscribe)\n     rc = MqttClient_WaitType(client, &subscribe->ack,\n         MQTT_PACKET_TYPE_SUBSCRIBE_ACK, subscribe->packet_id,\n         client->cmd_timeout_ms);\n-#ifdef WOLFMQTT_NONBLOCK\n+#if defined(WOLFMQTT_NONBLOCK) || defined(WOLFMQTT_MULTITHREAD)\n     if (rc == MQTT_CODE_CONTINUE)\n         return rc;\n #endif\n@@ -2068,7 +2069,7 @@ int MqttClient_Unsubscribe(MqttClient *client, MqttUnsubscribe *unsubscribe)\n     rc = MqttClient_WaitType(client, &unsubscribe->ack,\n         MQTT_PACKET_TYPE_UNSUBSCRIBE_ACK, unsubscribe->packet_id,\n         client->cmd_timeout_ms);\n-#ifdef WOLFMQTT_NONBLOCK\n+#if defined(WOLFMQTT_NONBLOCK) || defined(WOLFMQTT_MULTITHREAD)\n     if (rc == MQTT_CODE_CONTINUE)\n         return rc;\n #endif\n@@ -2161,7 +2162,7 @@ int MqttClient_Ping_ex(MqttClient *client, MqttPing* ping)\n     /* Wait for ping resp packet */\n     rc = MqttClient_WaitType(client, ping, MQTT_PACKET_TYPE_PING_RESP, 0,\n         client->cmd_timeout_ms);\n-#ifdef WOLFMQTT_NONBLOCK\n+#if defined(WOLFMQTT_NONBLOCK) || defined(WOLFMQTT_MULTITHREAD)\n     if (rc == MQTT_CODE_CONTINUE)\n         return rc;\n #endif\n@@ -2311,7 +2312,7 @@ int MqttClient_Auth(MqttClient *client, MqttAuth* auth)\n     /* Wait for auth packet */\n     rc = MqttClient_WaitType(client, auth, MQTT_PACKET_TYPE_AUTH, 0,\n         client->cmd_timeout_ms);\n-#ifdef WOLFMQTT_NONBLOCK\n+#if defined(WOLFMQTT_NONBLOCK) || defined(WOLFMQTT_MULTITHREAD)\n     if (rc == MQTT_CODE_CONTINUE)\n         return rc;\n #endif\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42504315-vul",
+      "digest": "sha256:1242cf808fdda8706486c235613b3e9b7f1a258a3d36972d0e14d6ba47a5c5ec"
+    },
+    "patched": {
+      "ref": "n132/arvo:42504315-fix",
+      "digest": "sha256:30fd0b8933cd8c7c23b430a69cecc92aab371fc843146894481075f06686b35b"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": null
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witnessed": false
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042522218",
+  "chain": "CWE-416->CWE-125",
+  "project": "qemu",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42522218",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "a2e1753b8054344f32cf94f31c6399a58794a380",
+      "fix_commits": [
+        "a2e1753b8054344f32cf94f31c6399a58794a380"
+      ],
+      "repo": "https://git.qemu.org/git/qemu.git"
+    },
+    "patch": "From a2e1753b8054344f32cf94f31c6399a58794a380 Mon Sep 17 00:00:00 2001\nFrom: Alexander Bulekov <alxndr@bu.edu>\nDate: Thu, 27 Apr 2023 17:10:06 -0400\nSubject: [PATCH] memory: prevent dma-reentracy issues\n\nAdd a flag to the DeviceState, when a device is engaged in PIO/MMIO/DMA.\nThis flag is set/checked prior to calling a device's MemoryRegion\nhandlers, and set when device code initiates DMA.  The purpose of this\nflag is to prevent two types of DMA-based reentrancy issues:\n\n1.) mmio -> dma -> mmio case\n2.) bh -> dma write -> mmio case\n\nThese issues have led to problems such as stack-exhaustion and\nuse-after-frees.\n\nSummary of the problem from Peter Maydell:\nhttps://lore.kernel.org/qemu-devel/CAFEAcA_23vc7hE3iaM-JVA6W38LK4hJoWae5KcknhPRD5fPBZA@mail.gmail.com\n\nResolves: https://gitlab.com/qemu-project/qemu/-/issues/62\nResolves: https://gitlab.com/qemu-project/qemu/-/issues/540\nResolves: https://gitlab.com/qemu-project/qemu/-/issues/541\nResolves: https://gitlab.com/qemu-project/qemu/-/issues/556\nResolves: https://gitlab.com/qemu-project/qemu/-/issues/557\nResolves: https://gitlab.com/qemu-project/qemu/-/issues/827\nResolves: https://gitlab.com/qemu-project/qemu/-/issues/1282\nResolves: CVE-2023-0330\n\nSigned-off-by: Alexander Bulekov <alxndr@bu.edu>\nReviewed-by: Thomas Huth <thuth@redhat.com>\nMessage-Id: <20230427211013.2994127-2-alxndr@bu.edu>\n[thuth: Replace warn_report() with warn_report_once()]\nSigned-off-by: Thomas Huth <thuth@redhat.com>\n---\n include/exec/memory.h  |  5 +++++\n include/hw/qdev-core.h |  7 +++++++\n softmmu/memory.c       | 16 ++++++++++++++++\n 3 files changed, 28 insertions(+)\n\ndiff --git a/include/exec/memory.h b/include/exec/memory.h\nindex 15ade91..e45ce60 100644\n--- a/include/exec/memory.h\n+++ b/include/exec/memory.h\n@@ -767,6 +767,8 @@ struct MemoryRegion {\n     bool is_iommu;\n     RAMBlock *ram_block;\n     Object *owner;\n+    /* owner as TYPE_DEVICE. Used for re-entrancy checks in MR access hotpath */\n+    DeviceState *dev;\n \n     const MemoryRegionOps *ops;\n     void *opaque;\n@@ -791,6 +793,9 @@ struct MemoryRegion {\n     unsigned ioeventfd_nb;\n     MemoryRegionIoeventfd *ioeventfds;\n     RamDiscardManager *rdm; /* Only for RAM */\n+\n+    /* For devices designed to perform re-entrant IO into their own IO MRs */\n+    bool disable_reentrancy_guard;\n };\n \n struct IOMMUMemoryRegion {\ndiff --git a/include/hw/qdev-core.h b/include/hw/qdev-core.h\nindex bd50ad5..7623703 100644\n--- a/include/hw/qdev-core.h\n+++ b/include/hw/qdev-core.h\n@@ -162,6 +162,10 @@ struct NamedClockList {\n     QLIST_ENTRY(NamedClockList) node;\n };\n \n+typedef struct {\n+    bool engaged_in_io;\n+} MemReentrancyGuard;\n+\n /**\n  * DeviceState:\n  * @realized: Indicates whether the device has been fully constructed.\n@@ -194,6 +198,9 @@ struct DeviceState {\n     int alias_required_for_version;\n     ResettableState reset;\n     GSList *unplug_blockers;\n+\n+    /* Is the device currently in mmio/pio/dma? Used to prevent re-entrancy */\n+    MemReentrancyGuard mem_reentrancy_guard;\n };\n \n struct DeviceListener {\ndiff --git a/softmmu/memory.c b/softmmu/memory.c\nindex b1a6cae..b7b3386 100644\n--- a/softmmu/memory.c\n+++ b/softmmu/memory.c\n@@ -542,6 +542,18 @@ static MemTxResult access_with_adjusted_size(hwaddr addr,\n         access_size_max = 4;\n     }\n \n+    /* Do not allow more than one simultaneous access to a device's IO Regions */\n+    if (mr->dev && !mr->disable_reentrancy_guard &&\n+        !mr->ram_device && !mr->ram && !mr->rom_device && !mr->readonly) {\n+        if (mr->dev->mem_reentrancy_guard.engaged_in_io) {\n+            warn_report_once(\"Blocked re-entrant IO on MemoryRegion: \"\n+                             \"%s at addr: 0x%\" HWADDR_PRIX,\n+                             memory_region_name(mr), addr);\n+            return MEMTX_ACCESS_ERROR;\n+        }\n+        mr->dev->mem_reentrancy_guard.engaged_in_io = true;\n+    }\n+\n     /* FIXME: support unaligned access? */\n     access_size = MAX(MIN(size, access_size_max), access_size_min);\n     access_mask = MAKE_64BIT_MASK(0, access_size * 8);\n@@ -556,6 +568,9 @@ static MemTxResult access_with_adjusted_size(hwaddr addr,\n                         access_mask, attrs);\n         }\n     }\n+    if (mr->dev) {\n+        mr->dev->mem_reentrancy_guard.engaged_in_io = false;\n+    }\n     return r;\n }\n \n@@ -1170,6 +1185,7 @@ static void memory_region_do_init(MemoryRegion *mr,\n     }\n     mr->name = g_strdup(name);\n     mr->owner = owner;\n+    mr->dev = (DeviceState *) object_dynamic_cast(mr->owner, TYPE_DEVICE);\n     mr->ram_block = NULL;\n \n     if (name) {\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42522218-vul",
+      "digest": "sha256:e5c52fe9f41b8452632339fa92c405e6f88271a038c1560b9d121420736db035"
+    },
+    "patched": {
+      "ref": "n132/arvo:42522218-fix",
+      "digest": "sha256:c7771a3878ab199bfb18033a7121c8524aab05acb15411a1a2c5490a49252b17"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/qemu/build-oss-fuzz/../hw/net/e1000e_core.c:1651",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/qemu/build-oss-fuzz/../hw/net/e1000e_core.c:1651"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

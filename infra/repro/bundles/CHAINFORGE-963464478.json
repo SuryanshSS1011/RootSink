@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-963464478",
+  "chain": "CWE-456->CWE-457",
+  "project": "ndpi",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42498089",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/ntop/nDPI/commit/58665e93a98d014b53d131b2481ccab074efc9ff",
+      "fix_commits": [
+        "58665e93a98d014b53d131b2481ccab074efc9ff"
+      ],
+      "repo": "https://github.com/ntop/nDPI"
+    },
+    "patch": "diff --git a/src/lib/ndpi_main.c b/src/lib/ndpi_main.c\nindex 854666b7a39..d014da32866 100644\n--- a/src/lib/ndpi_main.c\n+++ b/src/lib/ndpi_main.c\n@@ -6682,7 +6682,7 @@ int ndpi_match_string_subprotocol(struct ndpi_detection_module_struct *ndpi_str,\n   rc = ndpi_match_string_common(((AC_AUTOMATA_t *) automa->ac_automa),\n \t\t  string_to_match,string_to_match_len, &ret_match->protocol_id,\n \t\t  &ret_match->protocol_category, &ret_match->protocol_breed);\n-  return rc < 0 ? rc : ret_match->protocol_id;\n+  return rc < 0 ? NDPI_PROTOCOL_UNKNOWN : ret_match->protocol_id;\n }\n \n /* **************************************** */\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42498089-vul",
+      "digest": "sha256:47a88cdf11323e599ee89b4cd417eb09460b58feaba4e6c46c302fee8c504d65"
+    },
+    "patched": {
+      "ref": "n132/arvo:42498089-fix",
+      "digest": "sha256:042060cf581877b2b43e898025f1b00259c5ba7cf8bbdb8e9116f030ed1fdf81"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/ndpi/src/lib/ndpi_main.c:6685",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/ndpi/src/lib/ndpi_main.c:6685"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

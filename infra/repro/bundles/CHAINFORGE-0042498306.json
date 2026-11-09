@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042498306",
+  "chain": "CWE-20->CWE-125",
+  "project": "selinux",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42498306",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "8470058934e89d1876b8e034d1ea818bde62b994",
+      "fix_commits": [
+        "8470058934e89d1876b8e034d1ea818bde62b994"
+      ],
+      "repo": "https://github.com/SELinuxProject/selinux"
+    },
+    "patch": "diff --git a/libsepol/cil/src/cil_resolve_ast.c b/libsepol/cil/src/cil_resolve_ast.c\nindex 145d4e7452..1800732476 100644\n--- a/libsepol/cil/src/cil_resolve_ast.c\n+++ b/libsepol/cil/src/cil_resolve_ast.c\n@@ -3228,6 +3228,7 @@ int cil_resolve_expr(enum cil_flavor expr_type, struct cil_list *str_expr, struc\n \tstruct cil_symtab_datum *res_datum = NULL;\n \tenum cil_sym_index sym_index =  CIL_SYM_UNKNOWN;\n \tstruct cil_list *datum_sub_expr;\n+\tenum cil_flavor op = CIL_NONE;\n \n \tswitch (str_expr->flavor) {\n \tcase CIL_BOOL:\n@@ -3263,14 +3264,24 @@ int cil_resolve_expr(enum cil_flavor expr_type, struct cil_list *str_expr, struc\n \t\t\t}\n \t\t\tif (sym_index == CIL_SYM_CATS && NODE(res_datum)->flavor == CIL_CATSET) {\n \t\t\t\tstruct cil_catset *catset = (struct cil_catset *)res_datum;\n-\t\t\t\tif (!catset->cats->datum_expr) {\n-\t\t\t\t\trc = cil_resolve_expr(expr_type, catset->cats->str_expr, &catset->cats->datum_expr, parent, extra_args);\n-\t\t\t\t\tif (rc != SEPOL_OK) {\n-\t\t\t\t\t\tgoto exit;\n+\t\t\t\tif (op == CIL_RANGE) {\n+\t\t\t\t\tcil_tree_log(parent, CIL_ERR, \"Category set not allowed in category range\");\n+\t\t\t\t\trc = SEPOL_ERR;\n+\t\t\t\t\tgoto exit;\n+\t\t\t\t}\n+\t\t\t\tif (!res_datum->name) {\n+\t\t\t\t\t/* Anonymous category sets need to be resolved when encountered */\n+\t\t\t\t\tif (!catset->cats->datum_expr) {\n+\t\t\t\t\t\trc = cil_resolve_expr(expr_type, catset->cats->str_expr, &catset->cats->datum_expr, parent, extra_args);\n+\t\t\t\t\t\tif (rc != SEPOL_OK) {\n+\t\t\t\t\t\t\tgoto exit;\n+\t\t\t\t\t\t}\n \t\t\t\t\t}\n+\t\t\t\t\tcil_copy_list(catset->cats->datum_expr, &datum_sub_expr);\n+\t\t\t\t\tcil_list_append(*datum_expr, CIL_LIST, datum_sub_expr);\n+\t\t\t\t} else {\n+\t\t\t\t\tcil_list_append(*datum_expr, CIL_DATUM, res_datum);\n \t\t\t\t}\n-\t\t\t\tcil_copy_list(catset->cats->datum_expr, &datum_sub_expr);\n-\t\t\t\tcil_list_append(*datum_expr, CIL_LIST, datum_sub_expr);\n \t\t\t} else {\n \t\t\t\tif (sym_index == CIL_SYM_TYPES && (expr_type == CIL_CONSTRAIN || expr_type == CIL_VALIDATETRANS)) {\n \t\t\t\t\tcil_type_used(res_datum, CIL_ATTR_CONSTRAINT);\n@@ -3287,9 +3298,12 @@ int cil_resolve_expr(enum cil_flavor expr_type, struct cil_list *str_expr, struc\n \t\t\tbreak;\n \t\t}\n \t\tdefault:\n+\t\t\tif (curr->flavor == CIL_OP) {\n+\t\t\t\top = (enum cil_flavor)(uintptr_t)curr->data;\n+\t\t\t}\n \t\t\tcil_list_append(*datum_expr, curr->flavor, curr->data);\n \t\t\tbreak;\n-\t\t}\t\t\t\t\n+\t\t}\n \t}\n \treturn SEPOL_OK;\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42498306-vul",
+      "digest": "sha256:c5bf4df66cfebf3b15789ea6a9705d8f7c74257ecafa1afe78ac5ab0ad061db5"
+    },
+    "patched": {
+      "ref": "n132/arvo:42498306-fix",
+      "digest": "sha256:1db86abe1b6fc10914f5fc93c19f807a74f3b7d5afb8515f9a4fb62a236aae00"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/selinux/libsepol/src/../cil/src/cil_post.c:1211",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/selinux/libsepol/src/../cil/src/cil_post.c:1211"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

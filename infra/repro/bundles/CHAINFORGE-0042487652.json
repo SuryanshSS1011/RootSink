@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042487652",
+  "chain": "CWE-1284->CWE-125",
+  "project": "libavif",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42487652",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "b86bc3c8296f7d37cacf674ee031851cd513b8e4",
+      "fix_commits": [
+        "b86bc3c8296f7d37cacf674ee031851cd513b8e4"
+      ],
+      "repo": "https://github.com/AOMediaCodec/libavif"
+    },
+    "patch": "diff --git a/include/avif/internal.h b/include/avif/internal.h\nindex c237866f44..9042a85088 100644\n--- a/include/avif/internal.h\n+++ b/include/avif/internal.h\n@@ -220,6 +220,7 @@ avifBool avifROStreamReadU32(avifROStream * stream, uint32_t * v);\n avifBool avifROStreamReadUX8(avifROStream * stream, uint64_t * v, uint64_t factor); // Reads a factor*8 sized uint, saves in v\n avifBool avifROStreamReadU64(avifROStream * stream, uint64_t * v);\n avifBool avifROStreamReadString(avifROStream * stream, char * output, size_t outputSize);\n+avifBool avifROStreamReadBoxHeaderPartial(avifROStream * stream, avifBoxHeader * header); // This doesn't require that the full box can fit in the stream\n avifBool avifROStreamReadBoxHeader(avifROStream * stream, avifBoxHeader * header);\n avifBool avifROStreamReadVersionAndFlags(avifROStream * stream, uint8_t * version, uint32_t * flags); // version and flags ptrs are both optional\n avifBool avifROStreamReadAndEnforceVersion(avifROStream * stream, uint8_t enforcedVersion); // currently discards flags\ndiff --git a/src/read.c b/src/read.c\nindex 1196436218..be53466596 100644\n--- a/src/read.c\n+++ b/src/read.c\n@@ -2048,7 +2048,7 @@ static avifResult avifParse(avifDecoder * decoder)\n         // Parse the header, and find out how many bytes it actually was\n         BEGIN_STREAM(headerStream, headerContents.data, headerContents.size);\n         avifBoxHeader header;\n-        CHECK(avifROStreamReadBoxHeader(&headerStream, &header));\n+        CHECK(avifROStreamReadBoxHeaderPartial(&headerStream, &header));\n         parseOffset += headerStream.offset;\n \n         // Try to get the remainder of the box, if necessary\ndiff --git a/src/stream.c b/src/stream.c\nindex bc8a7b4054..7d521f0e47 100644\n--- a/src/stream.c\n+++ b/src/stream.c\n@@ -143,7 +143,7 @@ avifBool avifROStreamReadString(avifROStream * stream, char * output, size_t out\n     return AVIF_TRUE;\n }\n \n-avifBool avifROStreamReadBoxHeader(avifROStream * stream, avifBoxHeader * header)\n+avifBool avifROStreamReadBoxHeaderPartial(avifROStream * stream, avifBoxHeader * header)\n {\n     size_t startOffset = stream->offset;\n \n@@ -168,6 +168,14 @@ avifBool avifROStreamReadBoxHeader(avifROStream * stream, avifBoxHeader * header\n     return AVIF_TRUE;\n }\n \n+avifBool avifROStreamReadBoxHeader(avifROStream * stream, avifBoxHeader * header)\n+{\n+    if (!avifROStreamReadBoxHeaderPartial(stream, header)) {\n+        return AVIF_FALSE;\n+    }\n+    return (header->size <= avifROStreamRemainingBytes(stream));\n+}\n+\n avifBool avifROStreamReadVersionAndFlags(avifROStream * stream, uint8_t * version, uint32_t * flags)\n {\n     uint8_t versionAndFlags[4];\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42487652-vul",
+      "digest": "sha256:ec99f34e11b7df06b5a862e7aca2dbdaf368887825a8fb936f50aad565a3f654"
+    },
+    "patched": {
+      "ref": "n132/arvo:42487652-fix",
+      "digest": "sha256:5b04e07df1ab5123af4ef363aa8df9cb8024bd8ab18747bd93defd04d0b2b07b"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/libavif/build/../src/stream.c:61",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/libavif/build/../src/stream.c:61"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

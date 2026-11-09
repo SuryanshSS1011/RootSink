@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042487785",
+  "chain": "CWE-416->CWE-125",
+  "project": "libxml2",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42487785",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "847a3a1181d59dc49c1b446d646d344d0543af3e",
+      "fix_commits": [
+        "847a3a1181d59dc49c1b446d646d344d0543af3e"
+      ],
+      "repo": "https://gitlab.gnome.org/GNOME/libxml2.git"
+    },
+    "patch": "From 847a3a1181d59dc49c1b446d646d344d0543af3e Mon Sep 17 00:00:00 2001\nFrom: Nick Wellnhofer <wellnhofer@aevum.de>\nDate: Mon, 28 Sep 2020 12:28:29 +0200\nSubject: [PATCH] Fix use-after-free when XIncluding text from Reader\n\nThe XML Reader can free text nodes coming from the XInclude engine\nbefore parsing has finished. Cache a copy of the text string, not the\nincluded node to avoid use after free.\n\nFound by OSS-Fuzz.\n---\n xinclude.c | 31 ++++++++++++++++++-------------\n 1 file changed, 18 insertions(+), 13 deletions(-)\n\ndiff --git a/xinclude.c b/xinclude.c\nindex f48e0af..1636caf 100644\n--- a/xinclude.c\n+++ b/xinclude.c\n@@ -72,7 +72,7 @@ struct _xmlXIncludeCtxt {\n \n     int                 txtNr; /* number of unparsed documents */\n     int                txtMax; /* size of unparsed documents tab */\n-    xmlNodePtr        *txtTab; /* array of unparsed text nodes */\n+    xmlChar *         *txtTab; /* array of unparsed text strings */\n     xmlURL         *txturlTab; /* array of unparsed text URLs */\n \n     xmlChar *             url; /* the current URL processed */\n@@ -393,18 +393,22 @@ xmlXIncludeFreeContext(xmlXIncludeCtxtPtr ctxt) {\n \tif (ctxt->incTab[i] != NULL)\n \t    xmlXIncludeFreeRef(ctxt->incTab[i]);\n     }\n+    if (ctxt->incTab != NULL)\n+\txmlFree(ctxt->incTab);\n+    if (ctxt->txtTab != NULL) {\n+\tfor (i = 0;i < ctxt->txtNr;i++) {\n+\t    if (ctxt->txtTab[i] != NULL)\n+\t\txmlFree(ctxt->txtTab[i]);\n+\t}\n+\txmlFree(ctxt->txtTab);\n+    }\n     if (ctxt->txturlTab != NULL) {\n \tfor (i = 0;i < ctxt->txtNr;i++) {\n \t    if (ctxt->txturlTab[i] != NULL)\n \t\txmlFree(ctxt->txturlTab[i]);\n \t}\n-    }\n-    if (ctxt->incTab != NULL)\n-\txmlFree(ctxt->incTab);\n-    if (ctxt->txtTab != NULL)\n-\txmlFree(ctxt->txtTab);\n-    if (ctxt->txturlTab != NULL)\n \txmlFree(ctxt->txturlTab);\n+    }\n     if (ctxt->base != NULL) {\n         xmlFree(ctxt->base);\n     }\n@@ -764,13 +768,14 @@ xmlXIncludeRecurseDoc(xmlXIncludeCtxtPtr ctxt, xmlDocPtr doc,\n  * Add a new text node to the list\n  */\n static void\n-xmlXIncludeAddTxt(xmlXIncludeCtxtPtr ctxt, xmlNodePtr txt, const xmlURL url) {\n+xmlXIncludeAddTxt(xmlXIncludeCtxtPtr ctxt, const xmlChar *txt,\n+                  const xmlURL url) {\n #ifdef DEBUG_XINCLUDE\n     xmlGenericError(xmlGenericErrorContext, \"Adding text %s\\n\", url);\n #endif\n     if (ctxt->txtMax == 0) {\n \tctxt->txtMax = 4;\n-        ctxt->txtTab = (xmlNodePtr *) xmlMalloc(ctxt->txtMax *\n+        ctxt->txtTab = (xmlChar **) xmlMalloc(ctxt->txtMax *\n \t\t                          sizeof(ctxt->txtTab[0]));\n         if (ctxt->txtTab == NULL) {\n \t    xmlXIncludeErrMemory(ctxt, NULL, \"processing text\");\n@@ -785,7 +790,7 @@ xmlXIncludeAddTxt(xmlXIncludeCtxtPtr ctxt, xmlNodePtr txt, const xmlURL url) {\n     }\n     if (ctxt->txtNr >= ctxt->txtMax) {\n \tctxt->txtMax *= 2;\n-        ctxt->txtTab = (xmlNodePtr *) xmlRealloc(ctxt->txtTab,\n+        ctxt->txtTab = (xmlChar **) xmlRealloc(ctxt->txtTab,\n \t             ctxt->txtMax * sizeof(ctxt->txtTab[0]));\n         if (ctxt->txtTab == NULL) {\n \t    xmlXIncludeErrMemory(ctxt, NULL, \"processing text\");\n@@ -798,7 +803,7 @@ xmlXIncludeAddTxt(xmlXIncludeCtxtPtr ctxt, xmlNodePtr txt, const xmlURL url) {\n \t    return;\n \t}\n     }\n-    ctxt->txtTab[ctxt->txtNr] = txt;\n+    ctxt->txtTab[ctxt->txtNr] = xmlStrdup(txt);\n     ctxt->txturlTab[ctxt->txtNr] = xmlStrdup(url);\n     ctxt->txtNr++;\n }\n@@ -1845,7 +1850,7 @@ xmlXIncludeLoadTxt(xmlXIncludeCtxtPtr ctxt, const xmlChar *url, int nr) {\n      */\n     for (i = 0; i < ctxt->txtNr; i++) {\n \tif (xmlStrEqual(URL, ctxt->txturlTab[i])) {\n-\t    node = xmlCopyNode(ctxt->txtTab[i], 1);\n+            node = xmlNewText(ctxt->txtTab[i]);\n \t    goto loaded;\n \t}\n     }\n@@ -1935,7 +1940,7 @@ xinclude_multibyte_fallback:\n \txmlBufShrink(buf->buffer, len);\n     }\n     xmlFreeParserCtxt(pctxt);\n-    xmlXIncludeAddTxt(ctxt, node, URL);\n+    xmlXIncludeAddTxt(ctxt, node->content, URL);\n     xmlFreeInputStream(inputStream);\n \n loaded:\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42487785-vul",
+      "digest": "sha256:5f0f10903ff3461f84da14ae1784b0497ad83dfa899e7b172adc7da562e65eff"
+    },
+    "patched": {
+      "ref": "n132/arvo:42487785-fix",
+      "digest": "sha256:c4a8158e5c8422562a2f180acf87b508f682c4986f3c580ea931e68cd1af0526"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/libxml2/tree.c:4197",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/libxml2/tree.c:4197"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

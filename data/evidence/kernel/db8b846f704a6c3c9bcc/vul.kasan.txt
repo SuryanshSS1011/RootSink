@@ -1,0 +1,91 @@
+Booting from ROM..[    0.000000] Linux version 4.18.0-rc2+ (@0121b795adf7) (gcc version 7.5.0 (GCC)) #1 SMP Fri Oct 23 02:20:40 UTC 2026
+[init] environment up, running reproducer
+[    3.038709] ==================================================================
+[    3.040554] BUG: KASAN: slab-out-of-bounds in sha1_final+0x232/0x280
+[    3.042139] Write of size 4 at addr ffff880118bbc118 by task repro/2110
+[    3.043775] 
+[    3.044180] CPU: 0 PID: 2110 Comm: repro Not tainted 4.18.0-rc2+ #1
+[    3.045736] Hardware name: QEMU Standard PC (i440FX + PIIX, 1996), BIOS 1.16.3-debian-1.16.3-2 04/01/2014
+[    3.048109] Call Trace:
+[    3.048746]  dump_stack+0x16a/0x231
+[    3.049637]  ? arch_local_irq_restore+0x44/0x44
+[    3.050786]  ? printk+0x97/0xbe
+[    3.051588]  ? kmsg_dump_rewind_nolock+0xdf/0xdf
+[    3.052765]  ? memzero_explicit+0xe/0x10
+[    3.053766]  print_address_description+0x73/0x250
+[    3.054952]  kasan_report+0x256/0x380
+[    3.055887]  ? sha1_final+0x232/0x280
+[    3.056850]  __asan_report_store4_noabort+0x17/0x20
+[    3.058087]  sha1_final+0x232/0x280
+[    3.058966]  crypto_shash_final+0xd0/0x1f0
+[    3.060008]  ? __keyctl_dh_compute+0x12c2/0x1df0
+[    3.061185]  __keyctl_dh_compute+0x14df/0x1df0
+[    3.062311]  ? dh_data_from_key+0x320/0x320
+[    3.063371]  ? find_held_lock+0x35/0x1d0
+[    3.064372]  ? __might_fault+0xf1/0x1b0
+[    3.065351]  ? lock_release+0xa60/0xa60
+[    3.066329]  ? kasan_check_write+0x14/0x20
+[    3.067368]  keyctl_dh_compute+0x9a/0xde
+[    3.068363]  ? __keyctl_dh_compute+0x1df0/0x1df0
+[    3.069518]  ? trace_hardirqs_on+0xd/0x10
+[    3.070531]  __x64_sys_keyctl+0x279/0x350
+[    3.071537]  ? trace_hardirqs_on_caller+0x421/0x5c0
+[    3.072764]  do_syscall_64+0x183/0x710
+[    3.073712]  ? finish_task_switch+0x565/0x9b0
+[    3.074806]  ? syscall_return_slowpath+0x4e0/0x4e0
+[    3.076019]  ? syscall_return_slowpath+0x216/0x4e0
+[    3.077225]  ? prepare_exit_to_usermode+0x310/0x310
+[    3.078442]  ? retint_user+0x18/0x18
+[    3.079358]  ? trace_hardirqs_off_thunk+0x1a/0x1c
+[    3.080535]  entry_SYSCALL_64_after_hwframe+0x49/0xbe
+[    3.081803] RIP: 0033:0x4122bd
+[    3.082580] Code: b3 66 2e 0f 1f 84 00 00 00 00 00 66 90 f3 0f 1e fa 48 89 f8 48 89 f7 48 89 d6 48 89 ca 4d 89 c2 4d 89 c8 4c 8b 4c 24 08 0f 05 <48> 3d 01 f0 ff ff 73 01 c3 48 c7 c1 c0 ff ff ff f7 d8 64 89 01 48 
+[    3.087261] RSP: 002b:00007ffc339a56b8 EFLAGS: 00000217 ORIG_RAX: 00000000000000fa
+[    3.089140] RAX: ffffffffffffffda RBX: 0000000000000001 RCX: 00000000004122bd
+[    3.090898] RDX: 0000000020000280 RSI: 0000000020000100 RDI: 0000000000000017
+[    3.092668] RBP: 00007ffc339a5780 R08: 0000000020000240 R09: 0000000000000000
+[    3.094435] R10: 0000000000000005 R11: 0000000000000217 R12: 00007ffc339a57f8
+[    3.096212] R13: 00007ffc339a5808 R14: 00000000004a5f68 R15: 0000000000000001
+[    3.097972] 
+[    3.098374] Allocated by task 2110:
+[    3.099259]  save_stack+0x43/0xd0
+[    3.100104]  kasan_kmalloc+0xad/0xe0
+[    3.101003]  __kmalloc+0x162/0x760
+[    3.101865]  __keyctl_dh_compute+0x12c2/0x1df0
+[    3.102985]  keyctl_dh_compute+0x9a/0xde
+[    3.103979]  __x64_sys_keyctl+0x279/0x350
+[    3.104988]  do_syscall_64+0x183/0x710
+[    3.105937]  entry_SYSCALL_64_after_hwframe+0x49/0xbe
+[    3.107207] 
+[    3.107597] Freed by task 9:
+[    3.108347]  save_stack+0x43/0xd0
+[    3.109191]  __kasan_slab_free+0x11a/0x170
+[    3.110222]  kasan_slab_free+0xe/0x10
+[    3.111151]  kfree+0xd9/0x260
+[    3.111907]  kzfree+0x28/0x30
+[    3.112682]  apparmor_task_free+0xe4/0x170
+[    3.113739]  security_task_free+0x40/0x70
+[    3.114776]  __put_task_struct+0x153/0x3b0
+[    3.115820]  delayed_put_task_struct+0xca/0x3d0
+[    3.116961]  rcu_process_callbacks+0xa00/0x19f0
+[    3.118113]  __do_softirq+0x2e8/0xbbb
+[    3.119048] 
+[    3.119438] The buggy address belongs to the object at ffff880118bbc100
+[    3.119438]  which belongs to the cache kmalloc-32 of size 32
+[    3.122487] The buggy address is located 24 bytes inside of
+[    3.122487]  32-byte region [ffff880118bbc100, ffff880118bbc120)
+[    3.125345] The buggy address belongs to the page:
+[    3.126542] page:ffffea000462ef00 count:1 mapcount:0 mapping:ffff88011a0001c0 index:0xffff880118bbcfc1
+[    3.128837] flags: 0x2fffc0000000100(slab)
+[    3.129864] raw: 02fffc0000000100 ffffea0004621e88 ffffea0004610888 ffff88011a0001c0
+[    3.131775] raw: ffff880118bbcfc1 ffff880118bbc000 000000010000003f 0000000000000000
+[    3.133691] page dumped because: kasan: bad access detected
+[    3.135083] 
+[    3.135470] Memory state around the buggy address:
+[    3.136662]  ffff880118bbc000: 00 00 00 00 fc fc fc fc fb fb fb fb fc fc fc fc
+[    3.138432]  ffff880118bbc080: fb fb fb fb fc fc fc fc fb fb fb fb fc fc fc fc
+[    3.140208] >ffff880118bbc100: 00 00 00 fc fc fc fc fc fb fb fb fb fc fc fc fc
+[    3.141973]                             ^
+[    3.142975]  ffff880118bbc180: fb fb fb fb fc fc fc fc fb fb fb fb fc fc fc fc
+[    3.144749]  ffff880118bbc200: fb fb fb fb fc fc fc fc fb fb fb fb fc fc fc fc
+[    3.146520] ==================================================================

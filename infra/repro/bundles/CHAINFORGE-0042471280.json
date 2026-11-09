@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042471280",
+  "chain": "CWE-20->CWE-125",
+  "project": "openvswitch",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42471280",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "2d3deb58df05c4686f19ecf16ddbd76a79b2d5a5",
+      "fix_commits": [
+        "2d3deb58df05c4686f19ecf16ddbd76a79b2d5a5"
+      ],
+      "repo": "https://github.com/openvswitch/ovs"
+    },
+    "patch": "diff --git a/lib/odp-util.c b/lib/odp-util.c\nindex 626a03b7686..f50de7fd275 100644\n--- a/lib/odp-util.c\n+++ b/lib/odp-util.c\n@@ -4812,7 +4812,7 @@ scan_vxlan_gbp(const char *s, uint32_t *key, uint32_t *mask)\n         s += 3;\n         len = scan_be16(s, &id, mask ? &id_mask : NULL);\n         if (len == 0) {\n-            return -EINVAL;\n+            return 0;\n         }\n         s += len;\n     }\n@@ -4824,7 +4824,7 @@ scan_vxlan_gbp(const char *s, uint32_t *key, uint32_t *mask)\n         s += 6;\n         len = scan_u8(s, &flags, mask ? &flags_mask : NULL);\n         if (len == 0) {\n-            return -EINVAL;\n+            return 0;\n         }\n         s += len;\n     }\n@@ -4858,7 +4858,7 @@ scan_erspan_metadata(const char *s,\n         s += 4;\n         len = scan_u8(s, &ver, mask ? &ver_mask : NULL);\n         if (len == 0) {\n-            return -EINVAL;\n+            return 0;\n         }\n         s += len;\n     }\n@@ -4872,7 +4872,7 @@ scan_erspan_metadata(const char *s,\n             s += 4;\n             len = scan_u32(s, &idx, mask ? &idx_mask : NULL);\n             if (len == 0) {\n-                return -EINVAL;\n+                return 0;\n             }\n             s += len;\n         }\n@@ -4892,7 +4892,7 @@ scan_erspan_metadata(const char *s,\n             s += 4;\n             len = scan_u8(s, &dir, mask ? &dir_mask : NULL);\n             if (len == 0) {\n-                return -EINVAL;\n+                return 0;\n             }\n             s += len;\n         }\n@@ -4903,7 +4903,7 @@ scan_erspan_metadata(const char *s,\n             s += 5;\n             len = scan_u8(s, &hwid, mask ? &hwid_mask : NULL);\n             if (len == 0) {\n-                return -EINVAL;\n+                return 0;\n             }\n             s += len;\n         }\n@@ -4944,7 +4944,7 @@ scan_geneve(const char *s, struct geneve_scan *key, struct geneve_scan *mask)\n             len = scan_be16(s, &opt->opt_class,\n                             mask ? &opt_mask->opt_class : NULL);\n             if (len == 0) {\n-                return -EINVAL;\n+                return 0;\n             }\n             s += len;\n         } else if (mask) {\n@@ -4958,7 +4958,7 @@ scan_geneve(const char *s, struct geneve_scan *key, struct geneve_scan *mask)\n             s += 5;\n             len = scan_u8(s, &opt->type, mask ? &opt_mask->type : NULL);\n             if (len == 0) {\n-                return -EINVAL;\n+                return 0;\n             }\n             s += len;\n         } else if (mask) {\n@@ -4973,7 +4973,7 @@ scan_geneve(const char *s, struct geneve_scan *key, struct geneve_scan *mask)\n             s += 4;\n             len = scan_u8(s, &opt_len, mask ? &opt_len_mask : NULL);\n             if (len == 0) {\n-                return -EINVAL;\n+                return 0;\n             }\n             s += len;\n \n@@ -5016,6 +5016,8 @@ scan_geneve(const char *s, struct geneve_scan *key, struct geneve_scan *mask)\n                 opt_mask += 1 + data_len / 4;\n             }\n             len_remain -= data_len;\n+        } else {\n+            return 0;\n         }\n     }\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42471280-vul",
+      "digest": "sha256:664bfaf6a0c29c14da40b545b74e17dac6db35fdde87c23fc24821bf34f52e74"
+    },
+    "patched": {
+      "ref": "n132/arvo:42471280-fix",
+      "digest": "sha256:bdc556e4e431914456a7d785829132d533693cfef5347b1ff5083c8b08102fcb"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/openvswitch/lib/odp-util.c:5451",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/openvswitch/lib/odp-util.c:5451"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

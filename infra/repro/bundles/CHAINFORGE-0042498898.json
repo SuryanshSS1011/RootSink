@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042498898",
+  "chain": "CWE-416->CWE-125",
+  "project": "sleuthkit",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42498898",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "fce5d5e906f49c988106aeaae88ed6b6ce3e0a2a",
+      "fix_commits": [
+        "fce5d5e906f49c988106aeaae88ed6b6ce3e0a2a"
+      ],
+      "repo": "https://github.com/sleuthkit/sleuthkit"
+    },
+    "patch": "diff --git a/tsk/fs/fatfs_utils.c b/tsk/fs/fatfs_utils.c\nindex 42e7fe57dc..9495ac923e 100755\n--- a/tsk/fs/fatfs_utils.c\n+++ b/tsk/fs/fatfs_utils.c\n@@ -149,7 +149,7 @@ fatfs_dos_2_unix_time(uint16_t date, uint16_t time, uint8_t timetens)\n         tm1.tm_sec = 0;\n \n     /* The ctimetens value has a range of 0 to 199 */\n-    if (timetens > 100)\n+    if (timetens >= 100)\n         tm1.tm_sec++;\n \n     tm1.tm_min = ((time & FATFS_MIN_MASK) >> FATFS_MIN_SHIFT);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42498898-vul",
+      "digest": "sha256:48f77afa680f8c323ead23469da28f48966ef7a38ceb61ff26a1f23ecec4206e"
+    },
+    "patched": {
+      "ref": "n132/arvo:42498898-fix",
+      "digest": "sha256:3ba5826aadbad36f2e3985c6022e1d1e2ed1c387b6359539246a07762674bbfd"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/sleuthkit/tsk/pool/./../img/../fs/tsk_apfs.hpp:1150",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/sleuthkit/tsk/pool/./../img/../fs/tsk_apfs.hpp:1150"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

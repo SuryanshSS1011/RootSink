@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0398067543",
+  "chain": "CWE-20->CWE-125",
+  "project": "net-snmp",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "398067543",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "2b3e0837830e14c7747ac1e175017c733d9d62b3",
+      "fix_commits": [
+        "2b3e0837830e14c7747ac1e175017c733d9d62b3"
+      ],
+      "repo": "https://github.com/net-snmp/net-snmp"
+    },
+    "patch": "diff --git a/snmplib/mib.c b/snmplib/mib.c\nindex c804bf8a1a..15a8803849 100644\n--- a/snmplib/mib.c\n+++ b/snmplib/mib.c\n@@ -2382,7 +2382,7 @@ snmp_in_options(char *optarg, int argc, char *const *argv)\n             break;\n         case 's':\n             if (!*(++cp)) {\n-                cp = argv[optind++];\n+                cp = optind < argc ? argv[optind++] : NULL;\n                 if (!cp)\n                     return \"?\";\n             }\n@@ -2393,7 +2393,7 @@ snmp_in_options(char *optarg, int argc, char *const *argv)\n \n         case 'S':\n             if (!*(++cp)) {\n-                cp = argv[optind++];\n+                cp = optind < argc ? argv[optind++] : NULL;\n                 if (!cp)\n                     return \"?\";\n             }\ndiff --git a/snmplib/snmp_parse_args.c b/snmplib/snmp_parse_args.c\nindex 872fac20b2..4c8c248d20 100644\n--- a/snmplib/snmp_parse_args.c\n+++ b/snmplib/snmp_parse_args.c\n@@ -634,7 +634,7 @@ netsnmp_parse_args(int argc,\n     /*\n      * get the hostname \n      */\n-    if (optind == argc) {\n+    if (optind >= argc) {\n         fprintf(stderr, \"No hostname specified.\\n\");\n         ret = NETSNMP_PARSE_ARGS_ERROR_USAGE;\n         goto out;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:398067543-vul",
+      "digest": "sha256:c31805a8f2fe07a145596204cca4e741d1523a826653c098d2c1015777d22488"
+    },
+    "patched": {
+      "ref": "n132/arvo:398067543-fix",
+      "digest": "sha256:66853a748251b4ee93b1dc5f47b5bcf91a9ef5c6f110161305120766f266ded8"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/net-snmp/snmplib/mib.c:2396",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/net-snmp/snmplib/mib.c:2396"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

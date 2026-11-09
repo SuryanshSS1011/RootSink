@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042521480",
+  "chain": "CWE-456->CWE-457",
+  "project": "mupdf",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42521480",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "117c8cb448c1f43ce2e9027e8ac155283d68062f",
+      "fix_commits": [
+        "117c8cb448c1f43ce2e9027e8ac155283d68062f"
+      ],
+      "repo": "git://git.ghostscript.com/jbig2dec.git"
+    },
+    "patch": "From 117c8cb448c1f43ce2e9027e8ac155283d68062f Mon Sep 17 00:00:00 2001\nFrom: Sebastian Rasmussen <sebras@gmail.com>\nDate: Sun, 18 Mar 2018 14:09:16 +0800\nSubject: [PATCH] Fix 699127: JBIG2 adaptive pixels restricted to field.\n\nWhen decoding generic regions the adaptive pixels must be\nrestricted to a field, previously this was not validated,\nleading to out of buffer accesses.\n\nThis is now validated and may generate a fatal error.\n---\n jbig2_generic.c | 36 ++++++++++++++++++++++++++++++++++++\n 1 file changed, 36 insertions(+)\n\ndiff --git a/jbig2_generic.c b/jbig2_generic.c\nindex 5d7fd95..8d4a3c2 100644\n--- a/jbig2_generic.c\n+++ b/jbig2_generic.c\n@@ -61,6 +61,7 @@ jbig2_generic_stats_size(Jbig2Ctx *ctx, int template)\n     byte *gbreg_line = (byte *) image->data;\n \n     /* todo: currently we only handle the nominal gbat location */\n+    /* when resolved make sure to call jbig2_check_adaptive_pixel_in_field() */\n \n #ifdef OUTPUT_PBM\n     printf(\"P4\\n%d %d\\n\", GBW, GBH);\n@@ -110,6 +111,9 @@ jbig2_generic_stats_size(Jbig2Ctx *ctx, int template)\n     return 0;\n }\n \n+#define pixel_outside_field(x, y) \\\n+    ((y) < -128 || (y) > 0 || (x) < -128 || ((y) < 0 && (x) > 127) || ((y) == 0 && (x) > 0))\n+\n static int\n jbig2_decode_generic_template0_unopt(Jbig2Ctx *ctx,\n                                      Jbig2Segment *segment,\n@@ -121,6 +125,13 @@ jbig2_decode_generic_template0_unopt(Jbig2Ctx *ctx,\n     int x, y;\n     bool bit;\n \n+    if (pixel_outside_field(params->gbat[0], params->gbat[1]) ||\n+        pixel_outside_field(params->gbat[2], params->gbat[3]) ||\n+        pixel_outside_field(params->gbat[4], params->gbat[5]) ||\n+        pixel_outside_field(params->gbat[6], params->gbat[7]))\n+        return jbig2_error(ctx, JBIG2_SEVERITY_FATAL, segment->number,\n+                           \"adaptive template pixel is out of field\");\n+\n     /* this version is generic and easy to understand, but very slow */\n \n     for (y = 0; y < GBH; y++) {\n@@ -161,6 +172,7 @@ jbig2_decode_generic_template1(Jbig2Ctx *ctx,\n     byte *gbreg_line = (byte *) image->data;\n \n     /* todo: currently we only handle the nominal gbat location */\n+    /* when resolved make sure to call jbig2_check_adaptive_pixel_in_field() */\n \n #ifdef OUTPUT_PBM\n     printf(\"P4\\n%d %d\\n\", GBW, GBH);\n@@ -222,6 +234,7 @@ jbig2_decode_generic_template2(Jbig2Ctx *ctx,\n     byte *gbreg_line = (byte *) image->data;\n \n     /* todo: currently we only handle the nominal gbat location */\n+    /* when resolved make sure to call jbig2_check_adaptive_pixel_in_field() */\n \n #ifdef OUTPUT_PBM\n     printf(\"P4\\n%d %d\\n\", GBW, GBH);\n@@ -402,6 +415,10 @@ jbig2_decode_generic_template3_unopt(Jbig2Ctx *ctx,\n     int x, y;\n     bool bit;\n \n+    if (pixel_outside_field(params->gbat[0], params->gbat[1]))\n+        return jbig2_error(ctx, JBIG2_SEVERITY_FATAL, segment->number,\n+                           \"adaptive template pixel is out of field\");\n+\n     /* this version is generic and easy to understand, but very slow */\n \n     for (y = 0; y < GBH; y++) {\n@@ -450,6 +467,13 @@ jbig2_decode_generic_template0_TPGDON(Jbig2Ctx *ctx,\n     bool bit;\n     int LTP = 0;\n \n+    if (pixel_outside_field(params->gbat[0], params->gbat[1]) ||\n+        pixel_outside_field(params->gbat[2], params->gbat[3]) ||\n+        pixel_outside_field(params->gbat[4], params->gbat[5]) ||\n+        pixel_outside_field(params->gbat[6], params->gbat[7]))\n+        return jbig2_error(ctx, JBIG2_SEVERITY_FATAL, segment->number,\n+                           \"adaptive template pixel is out of field\");\n+\n     for (y = 0; y < GBH; y++) {\n         LTP ^= jbig2_arith_decode(as, &GB_stats[0x9B25]);\n         if (!LTP) {\n@@ -493,6 +517,10 @@ jbig2_decode_generic_template1_TPGDON(Jbig2Ctx *ctx,\n     bool bit;\n     int LTP = 0;\n \n+    if (pixel_outside_field(params->gbat[0], params->gbat[1]))\n+        return jbig2_error(ctx, JBIG2_SEVERITY_FATAL, segment->number,\n+                           \"adaptive template pixel is out of field\");\n+\n     for (y = 0; y < GBH; y++) {\n         LTP ^= jbig2_arith_decode(as, &GB_stats[0x0795]);\n         if (!LTP) {\n@@ -533,6 +561,10 @@ jbig2_decode_generic_template2_TPGDON(Jbig2Ctx *ctx,\n     bool bit;\n     int LTP = 0;\n \n+    if (pixel_outside_field(params->gbat[0], params->gbat[1]))\n+        return jbig2_error(ctx, JBIG2_SEVERITY_FATAL, segment->number,\n+                           \"adaptive template pixel is out of field\");\n+\n     for (y = 0; y < GBH; y++) {\n         LTP ^= jbig2_arith_decode(as, &GB_stats[0xE5]);\n         if (!LTP) {\n@@ -570,6 +602,10 @@ jbig2_decode_generic_template3_TPGDON(Jbig2Ctx *ctx,\n     bool bit;\n     int LTP = 0;\n \n+    if (pixel_outside_field(params->gbat[0], params->gbat[1]))\n+        return jbig2_error(ctx, JBIG2_SEVERITY_FATAL, segment->number,\n+                           \"adaptive template pixel is out of field\");\n+\n     for (y = 0; y < GBH; y++) {\n         LTP ^= jbig2_arith_decode(as, &GB_stats[0x0195]);\n         if (!LTP) {\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42521480-vul",
+      "digest": "sha256:5c005f8961bcd6bff3c7494cd5cb42a8fdeec21b3668647552d03840d2a3dce6"
+    },
+    "patched": {
+      "ref": "n132/arvo:42521480-fix",
+      "digest": "sha256:7ad95a32d631e931cfd3cc6d669ed20c07eea42c02b867d4276c470e02f07f98"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/mupdf/thirdparty/jbig2dec/jbig2_arith.c:268",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/mupdf/thirdparty/jbig2dec/jbig2_arith.c:268"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

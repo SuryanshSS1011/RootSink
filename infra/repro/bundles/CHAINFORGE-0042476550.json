@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042476550",
+  "chain": "CWE-416->CWE-125",
+  "project": "gdal",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42476550",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "76821fd24a49e07680929bc3fe6e20f1ee083a87",
+      "fix_commits": [
+        "76821fd24a49e07680929bc3fe6e20f1ee083a87"
+      ],
+      "repo": "https://github.com/OSGeo/gdal"
+    },
+    "patch": "From 76821fd24a49e07680929bc3fe6e20f1ee083a87 Mon Sep 17 00:00:00 2001\nFrom: Kurt Schwehr <schwehr@gmail.com>\nDate: Mon, 15 May 2017 13:51:26 +0000\nSubject: [PATCH] Add const and remove redundant parens in\n TABMAPCoordBlock::ReadCoordSecHdrs().\n\ngit-svn-id: https://svn.osgeo.org/gdal/trunk@38392 f0d54148-0727-0410-94bb-9a71ac55c965\n---\n gdal/ogr/ogrsf_frmts/mitab/mitab_mapcoordblock.cpp | 4 ++--\n 1 file changed, 2 insertions(+), 2 deletions(-)\n\ndiff --git a/gdal/ogr/ogrsf_frmts/mitab/mitab_mapcoordblock.cpp b/gdal/ogr/ogrsf_frmts/mitab/mitab_mapcoordblock.cpp\nindex 5066eba..2a09222 100644\n--- a/gdal/ogr/ogrsf_frmts/mitab/mitab_mapcoordblock.cpp\n+++ b/gdal/ogr/ogrsf_frmts/mitab/mitab_mapcoordblock.cpp\n@@ -434,10 +434,10 @@ int     TABMAPCoordBlock::ReadCoordSecHdrs(GBool bCompressed,\n                  \"Invalid numSections\");\n         return -1;\n     }\n-    int nTotalHdrSizeUncompressed = nSectionSize * numSections;\n+    const int nTotalHdrSizeUncompressed = nSectionSize * numSections;\n \n     const int nVertexSize =\n-                (bCompressed) ? 2 * sizeof(GUInt16) : 2 * sizeof(GUInt32);\n+                bCompressed ? 2 * sizeof(GUInt16) : 2 * sizeof(GUInt32);\n     numVerticesTotal = 0;\n \n     for( int i = 0;  i < numSections; i++ )\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42476550-vul",
+      "digest": "sha256:012e0c5e8492a4a87ebbe889bb60d725674554a032ff5279fe2bc8b42666148e"
+    },
+    "patched": {
+      "ref": "n132/arvo:42476550-fix",
+      "digest": "sha256:c153256d2e4559a62851da2b6c62446774d46c2c55d92cfc2b92daf1eca94b85"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/gdal/gdal/ogr/ogrsf_frmts/kml/kmlnode.cpp:351",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/gdal/gdal/ogr/ogrsf_frmts/kml/kmlnode.cpp:351"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042519555",
+  "chain": "CWE-1285->CWE-787",
+  "project": "libredwg",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42519555",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "7f9016032a29873a9c30c6d6548cda13e67fd335",
+      "fix_commits": [
+        "7f9016032a29873a9c30c6d6548cda13e67fd335"
+      ],
+      "repo": "https://github.com/LibreDWG/libredwg"
+    },
+    "patch": "diff --git a/src/decode.c b/src/decode.c\nindex 8679cbf690..1877ea86b5 100644\n--- a/src/decode.c\n+++ b/src/decode.c\n@@ -5858,6 +5858,11 @@ decode_preR13_entities (BITCODE_RL start, BITCODE_RL end,\n              blocks_max != (BITCODE_RL)0 ? \"block \" : \"\", start, end, num_entities,\n              size, blocks_max);\n   LOG_INFO (\"==========================================\\n\");\n+  if (size > dat->size || end > dat->size)\n+    {\n+      LOG_ERROR (\"size overflow\")\n+      return DWG_ERR_INVALIDDWG;\n+    }\n   if (end != 0 && start == end)\n     // with empty entities, ignore num_entities as they include block ents\n     return 0;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42519555-vul",
+      "digest": "sha256:9916ca34ea9a2711147ac93e827ed3b9204998772a9076e82b7f0efc7c0afb72"
+    },
+    "patched": {
+      "ref": "n132/arvo:42519555-fix",
+      "digest": "sha256:d68934292651e2a590b815929d637c1f63d40702019980783d480e335486f272"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/libredwg/src/./header_variables_r11.spec:145",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/libredwg/src/./header_variables_r11.spec:145"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

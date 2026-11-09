@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042494345",
+  "chain": "CWE-1285->CWE-125",
+  "project": "gpac",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42494345",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "322c8a92e3d37c9632a5db584e8100fcc9704344",
+      "fix_commits": [
+        "322c8a92e3d37c9632a5db584e8100fcc9704344"
+      ],
+      "repo": "https://github.com/gpac/gpac"
+    },
+    "patch": "diff --git a/src/isomedia/box_code_base.c b/src/isomedia/box_code_base.c\nindex 94183934fa..352d08d588 100644\n--- a/src/isomedia/box_code_base.c\n+++ b/src/isomedia/box_code_base.c\n@@ -5705,11 +5705,20 @@ GF_Err stsz_box_read(GF_Box *s, GF_BitStream *bs)\n \t\tptr->alloc_size = ptr->sampleCount;\n \n \t\tfor (i = 0; i < ptr->sampleCount; ) {\n+\t\t\tu32 s_size;\n \t\t\tswitch (ptr->sampleSize) {\n \t\t\tcase 4:\n-\t\t\t\tptr->sizes[i] = gf_bs_read_int(bs, 4);\n+\t\t\t\ts_size = ptr->sizes[i] = gf_bs_read_int(bs, 4);\n+\t\t\t\tif (ptr->max_size < s_size)\n+\t\t\t\t\tptr->max_size = s_size;\n+\t\t\t\tptr->total_size += s_size;\n+\t\t\t\tptr->total_samples++;\n \t\t\t\tif (i+1 < ptr->sampleCount) {\n-\t\t\t\t\tptr->sizes[i+1] = gf_bs_read_int(bs, 4);\n+\t\t\t\t\ts_size = ptr->sizes[i+1] = gf_bs_read_int(bs, 4);\n+\t\t\t\t\tif (ptr->max_size < s_size)\n+\t\t\t\t\t\tptr->max_size = s_size;\n+\t\t\t\t\tptr->total_size += s_size;\n+\t\t\t\t\tptr->total_samples++;\n \t\t\t\t} else {\n \t\t\t\t\t//0 padding in odd sample count\n \t\t\t\t\tgf_bs_read_int(bs, 4);\n@@ -5717,14 +5726,14 @@ GF_Err stsz_box_read(GF_Box *s, GF_BitStream *bs)\n \t\t\t\ti += 2;\n \t\t\t\tbreak;\n \t\t\tdefault:\n-\t\t\t\tptr->sizes[i] = gf_bs_read_int(bs, ptr->sampleSize);\n+\t\t\t\ts_size = ptr->sizes[i] = gf_bs_read_int(bs, ptr->sampleSize);\n+\t\t\t\tif (ptr->max_size < s_size)\n+\t\t\t\t\tptr->max_size = s_size;\n+\t\t\t\tptr->total_size += s_size;\n+\t\t\t\tptr->total_samples++;\n \t\t\t\ti += 1;\n \t\t\t\tbreak;\n \t\t\t}\n-\t\t\tif (ptr->max_size < ptr->sizes[i])\n-\t\t\t\tptr->max_size = ptr->sizes[i];\n-\t\t\tptr->total_size += ptr->sizes[i];\n-\t\t\tptr->total_samples++;\n \t\t}\n \t}\n \treturn GF_OK;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42494345-vul",
+      "digest": "sha256:6f62c4bf9320a8df4af88832e9815660df5f979aef0a8b4ce960e0af84955eea"
+    },
+    "patched": {
+      "ref": "n132/arvo:42494345-fix",
+      "digest": "sha256:e8ff45fe087537866e3746057928771dd55313aa5d9a3fb7c0207de6b7920a37"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/gpac/src/isomedia/box_code_base.c:5667",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/gpac/src/isomedia/box_code_base.c:5667"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

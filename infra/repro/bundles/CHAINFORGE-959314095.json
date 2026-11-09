@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-959314095",
+  "chain": "CWE-129->CWE-125",
+  "project": "gdal",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42476717",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/OSGeo/gdal/commit/76821fd24a49e07680929bc3fe6e20f1ee083a87",
+      "fix_commits": [
+        "76821fd24a49e07680929bc3fe6e20f1ee083a87"
+      ],
+      "repo": "https://github.com/OSGeo/gdal"
+    },
+    "patch": "diff --git a/gdal/ogr/ogrsf_frmts/mitab/mitab_mapcoordblock.cpp b/gdal/ogr/ogrsf_frmts/mitab/mitab_mapcoordblock.cpp\nindex 5066eba2a21f..2a09222ffec1 100644\n--- a/gdal/ogr/ogrsf_frmts/mitab/mitab_mapcoordblock.cpp\n+++ b/gdal/ogr/ogrsf_frmts/mitab/mitab_mapcoordblock.cpp\n@@ -434,10 +434,10 @@ int     TABMAPCoordBlock::ReadCoordSecHdrs(GBool bCompressed,\n                  \"Invalid numSections\");\n         return -1;\n     }\n-    int nTotalHdrSizeUncompressed = nSectionSize * numSections;\n+    const int nTotalHdrSizeUncompressed = nSectionSize * numSections;\n \n     const int nVertexSize =\n-                (bCompressed) ? 2 * sizeof(GUInt16) : 2 * sizeof(GUInt32);\n+                bCompressed ? 2 * sizeof(GUInt16) : 2 * sizeof(GUInt32);\n     numVerticesTotal = 0;\n \n     for( int i = 0;  i < numSections; i++ )\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42476717-vul",
+      "digest": "sha256:923bab425a873b49fc4c734c7cbb8a33bbf065fc33afc1eb0713cde2b02f0dd5"
+    },
+    "patched": {
+      "ref": "n132/arvo:42476717-fix",
+      "digest": "sha256:ec1b6387db6f147e12cdae99dc410333c2e2f66fbb0bf2c5a5fda7151b3c42c5"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "crash_site": "/src/gdal/gdal/port/cpl_string.cpp:2514",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 129,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "site": "/src/gdal/gdal/port/cpl_string.cpp:2514"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

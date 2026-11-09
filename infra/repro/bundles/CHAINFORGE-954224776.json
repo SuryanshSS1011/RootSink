@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-954224776",
+  "chain": "CWE-362->CWE-415",
+  "project": "openvswitch",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42471555",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/openvswitch/ovs/commit/4d1ca7035df8d1688b7d85e6495722f57870726f",
+      "fix_commits": [
+        "4d1ca7035df8d1688b7d85e6495722f57870726f"
+      ],
+      "repo": "https://github.com/openvswitch/ovs"
+    },
+    "patch": "diff --git a/tests/oss-fuzz/ofctl_parse_target.c b/tests/oss-fuzz/ofctl_parse_target.c\nindex d4712a44247..b4db52f7ed4 100644\n--- a/tests/oss-fuzz/ofctl_parse_target.c\n+++ b/tests/oss-fuzz/ofctl_parse_target.c\n@@ -22,7 +22,7 @@ ofctl_parse_flows__(struct ofputil_flow_mod *fms, size_t n_fms,\n \n     if (!(usable_protocols & OFPUTIL_P_ANY)) {\n         printf(\"no usable protocol\\n\");\n-        return;\n+        goto free;\n     }\n     for (i = 0; i < sizeof(enum ofputil_protocol) * CHAR_BIT; i++) {\n         protocol = 1u << i;\n@@ -40,7 +40,11 @@ ofctl_parse_flows__(struct ofputil_flow_mod *fms, size_t n_fms,\n \n         msg = ofputil_encode_flow_mod(fm, protocol);\n         ofpbuf_delete(msg);\n+    }\n \n+free:\n+    for (i = 0; i < n_fms; i++) {\n+        struct ofputil_flow_mod *fm = &fms[i];\n         free(CONST_CAST(struct ofpact *, fm->ofpacts));\n         minimatch_destroy(&fm->match);\n     }\n@@ -62,7 +66,6 @@ ofctl_parse_flow(const char *input, int command)\n         free(error);\n     } else {\n         ofctl_parse_flows__(&fm, 1, usable_protocols);\n-        minimatch_destroy(&fm.match);\n     }\n }\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42471555-vul",
+      "digest": "sha256:a78777dc871a17d4a78b30e72ad7f5c997cd2714afec635e66089a0a000e5998"
+    },
+    "patched": {
+      "ref": "n132/arvo:42471555-fix",
+      "digest": "sha256:358c63a5cad48af19cb0b3d9aadb5da395182abcfd1b38ed3fdc2bcadd9fc018"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "attempting",
+        "direction": null,
+        "crash_site": "/src/openvswitch/lib/match.c:1783",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 362,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 415,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "attempting",
+        "direction": null,
+        "site": "/src/openvswitch/lib/match.c:1783"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

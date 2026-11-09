@@ -1,0 +1,79 @@
+======================= INFO =========================
+This binary is built for AFL-fuzz.
+To run the target function on individual input(s) execute this:
+  /out/ofctl_parse_target < INPUT_FILE
+or
+  /out/ofctl_parse_target INPUT_FILE1 [INPUT_FILE2 ... ]
+To fuzz with afl-fuzz execute this:
+  afl-fuzz [afl-flags] /out/ofctl_parse_target [-N]
+afl-fuzz will run N iterations before re-spawning the process (default: 1000)
+======================================================
+Reading 32 bytes from /tmp/poc
+=================================================================
+==2160262==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x60b000000210 at pc 0x0000004ece61 bp 0x7fff95c66fd0 sp 0x7fff95c66780
+WRITE of size 64 at 0x60b000000210 thread T0
+SCARINESS: 45 (multi-byte-write-heap-buffer-overflow)
+    #0 0x4ece60 in __asan_memmove /src/llvm/projects/compiler-rt/lib/asan/asan_interceptors_memintrinsics.cc:31
+    #1 0x5f5613 in ofpbuf_insert /src/openvswitch/lib/ofpbuf.c:473:9
+    #2 0x67a6e0 in nx_put_raw /src/openvswitch/lib/nx-match.c:1261:9
+    #3 0x678be3 in nx_put_match /src/openvswitch/lib/nx-match.c:1282:21
+    #4 0x5a8df4 in ofputil_encode_flow_mod /src/openvswitch/lib/ofp-flow.c:463:21
+    #5 0x52e03a in ofctl_parse_flows__ /src/openvswitch/tests/oss-fuzz/ofctl_parse_target.c:40:15
+    #6 0x52deaa in ofctl_parse_flow /src/openvswitch/tests/oss-fuzz/ofctl_parse_target.c:62:5
+    #7 0x52dd20 in LLVMFuzzerTestOneInput /src/openvswitch/tests/oss-fuzz/ofctl_parse_target.c:103:5
+    #8 0x52e4de in ExecuteFilesOnyByOne(int, char**) /src/libfuzzer/afl/afl_driver.cpp:301:5
+    #9 0x52ea4e in main /src/libfuzzer/afl/afl_driver.cpp:339:12
+    #10 0x145c54e8682f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+    #11 0x41ee18 in _start (/out/ofctl_parse_target+0x41ee18)
+
+DEDUP_TOKEN: __asan_memmove--ofpbuf_insert--nx_put_raw
+0x60b000000210 is located 0 bytes to the right of 112-byte region [0x60b0000001a0,0x60b000000210)
+allocated by thread T0 here:
+    #0 0x4edfbe in realloc /src/llvm/projects/compiler-rt/lib/asan/asan_malloc_linux.cc:165
+    #1 0x61486d in xrealloc /src/openvswitch/lib/util.c:134:9
+    #2 0x5f4a6d in ofpbuf_resize__ /src/openvswitch/lib/ofpbuf.c:244:24
+    #3 0x5c8df7 in ofpraw_put__ /src/openvswitch/lib/ofp-msgs.c:716:5
+    #4 0x5c8d31 in ofpraw_alloc_xid /src/openvswitch/lib/ofp-msgs.c:588:5
+    #5 0x5a8d39 in ofputil_encode_flow_mod /src/openvswitch/lib/ofp-flow.c:458:15
+    #6 0x52e03a in ofctl_parse_flows__ /src/openvswitch/tests/oss-fuzz/ofctl_parse_target.c:40:15
+    #7 0x52deaa in ofctl_parse_flow /src/openvswitch/tests/oss-fuzz/ofctl_parse_target.c:62:5
+    #8 0x52dd20 in LLVMFuzzerTestOneInput /src/openvswitch/tests/oss-fuzz/ofctl_parse_target.c:103:5
+    #9 0x52e4de in ExecuteFilesOnyByOne(int, char**) /src/libfuzzer/afl/afl_driver.cpp:301:5
+    #10 0x52ea4e in main /src/libfuzzer/afl/afl_driver.cpp:339:12
+    #11 0x145c54e8682f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+
+DEDUP_TOKEN: realloc--xrealloc--ofpbuf_resize__
+SUMMARY: AddressSanitizer: heap-buffer-overflow /src/llvm/projects/compiler-rt/lib/asan/asan_interceptors_memintrinsics.cc:31 in __asan_memmove
+Shadow bytes around the buggy address:
+  0x0c167fff7ff0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c167fff8000: fa fa fa fa fa fa fa fa fd fd fd fd fd fd fd fd
+  0x0c167fff8010: fd fd fd fd fd fa fa fa fa fa fa fa fa fa 00 00
+  0x0c167fff8020: 00 00 00 00 00 00 00 00 00 00 00 00 fa fa fa fa
+  0x0c167fff8030: fa fa fa fa 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x0c167fff8040: 00 00[fa]fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c167fff8050: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c167fff8060: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c167fff8070: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c167fff8080: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c167fff8090: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+  Shadow gap:              cc
+==2160262==ABORTING

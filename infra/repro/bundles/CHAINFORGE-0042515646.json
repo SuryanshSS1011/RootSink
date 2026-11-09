@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042515646",
+  "chain": "CWE-456->CWE-457",
+  "project": "hunspell",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42515646",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "6b4c0259f24f5eb4e475c2ccce70218e6d69c229",
+      "fix_commits": [
+        "6b4c0259f24f5eb4e475c2ccce70218e6d69c229"
+      ],
+      "repo": "https://github.com/hunspell/hunspell"
+    },
+    "patch": "From 6b4c0259f24f5eb4e475c2ccce70218e6d69c229 Mon Sep 17 00:00:00 2001\nFrom: =?UTF-8?q?Caol=C3=A1n=20McNamara?= <caolanm@redhat.com>\nDate: Thu, 8 Sep 2022 13:05:11 +0100\nSubject: [PATCH] ofz#51105 handle phonetable load failure in bad .aff\n\n---\n src/hunspell/affixmgr.cxx | 24 +++++++++++++-----------\n 1 file changed, 13 insertions(+), 11 deletions(-)\n\ndiff --git a/src/hunspell/affixmgr.cxx b/src/hunspell/affixmgr.cxx\nindex b25e893..d6010b2 100644\n--- a/src/hunspell/affixmgr.cxx\n+++ b/src/hunspell/affixmgr.cxx\n@@ -75,6 +75,7 @@\n #include <time.h>\n \n #include <algorithm>\n+#include <memory>\n #include <limits>\n #include <string>\n #include <vector>\n@@ -3882,6 +3883,7 @@ bool AffixMgr::parse_phonetable(const std::string& line, FileMgr* af) {\n                      af->getlinenum());\n     return false;\n   }\n+  std::unique_ptr<phonetable> new_phone;\n   int num = -1;\n   int i = 0;\n   int np = 0;\n@@ -3900,8 +3902,8 @@ bool AffixMgr::parse_phonetable(const std::string& line, FileMgr* af) {\n                            af->getlinenum());\n           return false;\n         }\n-        phone = new phonetable;\n-        phone->utf8 = (char)utf8;\n+        new_phone.reset(new phonetable);\n+        new_phone->utf8 = (char)utf8;\n         np++;\n         break;\n       }\n@@ -3924,7 +3926,7 @@ bool AffixMgr::parse_phonetable(const std::string& line, FileMgr* af) {\n       return false;\n     mychomp(nl);\n     i = 0;\n-    const size_t old_size = phone->rules.size();\n+    const size_t old_size = new_phone->rules.size();\n     iter = nl.begin();\n     start_piece = mystrsep(nl, iter);\n     while (start_piece != nl.end()) {\n@@ -3939,12 +3941,12 @@ bool AffixMgr::parse_phonetable(const std::string& line, FileMgr* af) {\n             break;\n           }\n           case 1: {\n-            phone->rules.push_back(std::string(start_piece, iter));\n+            new_phone->rules.push_back(std::string(start_piece, iter));\n             break;\n           }\n           case 2: {\n-            phone->rules.push_back(std::string(start_piece, iter));\n-            mystrrep(phone->rules.back(), \"_\", \"\");\n+            new_phone->rules.push_back(std::string(start_piece, iter));\n+            mystrrep(new_phone->rules.back(), \"_\", \"\");\n             break;\n           }\n           default:\n@@ -3954,16 +3956,16 @@ bool AffixMgr::parse_phonetable(const std::string& line, FileMgr* af) {\n       }\n       start_piece = mystrsep(nl, iter);\n     }\n-    if (phone->rules.size() != old_size + 2) {\n+    if (new_phone->rules.size() != old_size + 2) {\n       HUNSPELL_WARNING(stderr, \"error: line %d: table is corrupt\\n\",\n                        af->getlinenum());\n-      phone->rules.clear();\n       return false;\n     }\n   }\n-  phone->rules.push_back(\"\");\n-  phone->rules.push_back(\"\");\n-  init_phonet_hash(*phone);\n+  new_phone->rules.push_back(\"\");\n+  new_phone->rules.push_back(\"\");\n+  init_phonet_hash(*new_phone);\n+  phone = new_phone.release();\n   return true;\n }\n \n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42515646-vul",
+      "digest": "sha256:b9b7ebd9a8f2d91a9f297795056f1615d5aa8eefd678857580677bd5ced98b2a"
+    },
+    "patched": {
+      "ref": "n132/arvo:42515646-fix",
+      "digest": "sha256:2ad83bdf07369521cc470909fbaa8d7ad2045877d79e5b4c95c3da5b87914bfa"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/hunspell/src/hunspell/phonet.cxx:92",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/hunspell/src/hunspell/phonet.cxx:92"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

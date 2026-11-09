@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042527550",
+  "chain": "CWE-20->CWE-125",
+  "project": "libxaac",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42527550",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "cd91e1af765486ea6aad21e258b3a23294fa291d",
+      "fix_commits": [
+        "cd91e1af765486ea6aad21e258b3a23294fa291d"
+      ],
+      "repo": "https://github.com/ittiam-systems/libxaac"
+    },
+    "patch": "diff --git a/encoder/ixheaace_api.c b/encoder/ixheaace_api.c\nindex 8630f860..57bd1b03 100644\n--- a/encoder/ixheaace_api.c\n+++ b/encoder/ixheaace_api.c\n@@ -3079,7 +3079,8 @@ static IA_ERRORCODE iusace_process(ixheaace_api_struct *pstr_api_struct) {\n           &(pstr_api_struct->pstr_state->num_anc_data_bytes[0][0]),\n           pstr_api_struct->pstr_state->anc_data_bytes[0],\n           &(pstr_api_struct->spectral_band_replication_tabs), &(pstr_api_struct->common_tabs),\n-          &(mps_extension_payload.p_data[0]), mps_extension_payload.data_size, 0, NULL);\n+          &(mps_extension_payload.p_data[0]), mps_extension_payload.data_size, 0,\n+          &pstr_api_struct->pstr_state->str_usac_enc_data.num_sbr_bits);\n       if (error != IA_NO_ERROR) {\n         return error;\n       }\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42527550-vul",
+      "digest": "sha256:a40c1003af7ce330b28387bcb8b04c09c4c100eab190e1b52e64f93081e47f50"
+    },
+    "patched": {
+      "ref": "n132/arvo:42527550-fix",
+      "digest": "sha256:378ecdd4458ca9751ecdf60112bf4d47e717856bb80dbf1036f02f9c002caf29"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/libxaac/encoder/ixheaace_api.c:3252",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/libxaac/encoder/ixheaace_api.c:3252"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

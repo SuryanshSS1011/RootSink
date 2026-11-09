@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0410786957",
+  "chain": "CWE-456->CWE-457",
+  "project": "binutils-gdb",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "410786957",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "46efd5fb30d093496b7d9a4d5548913c2278efda",
+      "fix_commits": [
+        "46efd5fb30d093496b7d9a4d5548913c2278efda"
+      ],
+      "repo": "git://sourceware.org/git/binutils-gdb.git"
+    },
+    "patch": "diff --git a/binutils/rescoff.c b/binutils/rescoff.c\nindex 98e5eb0ea3..88b5f34096 100644\n--- a/binutils/rescoff.c\n+++ b/binutils/rescoff.c\n@@ -218,7 +218,8 @@ read_coff_res_dir (windres_bfd *wrbfd, const bfd_byte *data,\n       return NULL;\n     }\n \n-  if ((size_t) (flaginfo->data_end - data) < sizeof (struct extern_res_directory))\n+  size_t data_len = flaginfo->data_end - data;\n+  if (data_len < sizeof (struct extern_res_directory))\n     {\n       overrun (flaginfo, _(\"directory\"));\n       return NULL;\n@@ -249,7 +250,8 @@ read_coff_res_dir (windres_bfd *wrbfd, const bfd_byte *data,\n       const bfd_byte *ers;\n       int length, j;\n \n-      if ((const bfd_byte *) ere >= flaginfo->data_end)\n+      if ((const bfd_byte *) ere > flaginfo->data_end\n+\t  || flaginfo->data_end - (const bfd_byte *) ere < 8)\n \t{\n \t  overrun (flaginfo, _(\"named directory entry\"));\n \t  return NULL;\n@@ -261,31 +263,32 @@ read_coff_res_dir (windres_bfd *wrbfd, const bfd_byte *data,\n       /* For some reason the high bit in NAME is set.  */\n       name &=~ 0x80000000;\n \n-      if (name > (rc_uint_type) (flaginfo->data_end - flaginfo->data))\n+      if (name > data_len)\n \t{\n \t  overrun (flaginfo, _(\"directory entry name\"));\n \t  return NULL;\n \t}\n \n       ers = flaginfo->data + name;\n-\n+      if (flaginfo->data_end - ers < 2)\n+\t{\n+\t  overrun (flaginfo, _(\"resource name\"));\n+\t  return NULL;\n+\t}\n+      length = windres_get_16 (wrbfd, ers, 2);\n+      /* PR 17512: file: 05dc4a16.  */\n+      if (length * 2 + 4 > flaginfo->data_end - ers)\n+\t{\n+\t  overrun (flaginfo, _(\"resource name\"));\n+\t  return NULL;\n+\t}\n       re = (rc_res_entry *) res_alloc (sizeof *re);\n       re->next = NULL;\n       re->id.named = 1;\n-      length = windres_get_16 (wrbfd, ers, 2);\n       re->id.u.n.length = length;\n       re->id.u.n.name = (unichar *) res_alloc (length * sizeof (unichar));\n       for (j = 0; j < length; j++)\n-\t{\n-\t  /* PR 17512: file: 05dc4a16.  */\n-\t  if (length < 0 || ers >= flaginfo->data_end\n-\t      || ers + j * 2 + 4 >= flaginfo->data_end)\n-\t    {\n-\t      overrun (flaginfo, _(\"resource name\"));\n-\t      return NULL;\n-\t    }\n-\t  re->id.u.n.name[j] = windres_get_16 (wrbfd, ers + j * 2 + 2, 2);\n-\t}\n+\tre->id.u.n.name[j] = windres_get_16 (wrbfd, ers + j * 2 + 2, 2);\n \n       if (level == 0)\n \ttype = &re->id;\n@@ -293,24 +296,25 @@ read_coff_res_dir (windres_bfd *wrbfd, const bfd_byte *data,\n       if ((rva & 0x80000000) != 0)\n \t{\n \t  rva &=~ 0x80000000;\n-\t  if (rva >= (rc_uint_type) (flaginfo->data_end - flaginfo->data))\n+\t  if (rva >= data_len)\n \t    {\n \t      overrun (flaginfo, _(\"named subdirectory\"));\n \t      return NULL;\n \t    }\n \t  re->subdir = 1;\n-\t  re->u.dir = read_coff_res_dir (wrbfd, flaginfo->data + rva, flaginfo, type,\n-\t\t\t\t\t level + 1);\n+\t  re->u.dir = read_coff_res_dir (wrbfd, flaginfo->data + rva, flaginfo,\n+\t\t\t\t\t type, level + 1);\n \t}\n       else\n \t{\n-\t  if (rva >= (rc_uint_type) (flaginfo->data_end - flaginfo->data))\n+\t  if (rva >= data_len)\n \t    {\n \t      overrun (flaginfo, _(\"named resource\"));\n \t      return NULL;\n \t    }\n \t  re->subdir = 0;\n-\t  re->u.res = read_coff_data_entry (wrbfd, flaginfo->data + rva, flaginfo, type);\n+\t  re->u.res = read_coff_data_entry (wrbfd, flaginfo->data + rva,\n+\t\t\t\t\t    flaginfo, type);\n \t}\n \n       *pp = re;\n@@ -322,7 +326,8 @@ read_coff_res_dir (windres_bfd *wrbfd, const bfd_byte *data,\n       unsigned long name, rva;\n       rc_res_entry *re;\n \n-      if ((const bfd_byte *) ere >= flaginfo->data_end)\n+      if ((const bfd_byte *) ere > flaginfo->data_end\n+\t  || flaginfo->data_end - (const bfd_byte *) ere < 8)\n \t{\n \t  overrun (flaginfo, _(\"ID directory entry\"));\n \t  return NULL;\n@@ -342,24 +347,25 @@ read_coff_res_dir (windres_bfd *wrbfd, const bfd_byte *data,\n       if ((rva & 0x80000000) != 0)\n \t{\n \t  rva &=~ 0x80000000;\n-\t  if (rva >= (rc_uint_type) (flaginfo->data_end - flaginfo->data))\n+\t  if (rva >= data_len)\n \t    {\n \t      overrun (flaginfo, _(\"ID subdirectory\"));\n \t      return NULL;\n \t    }\n \t  re->subdir = 1;\n-\t  re->u.dir = read_coff_res_dir (wrbfd, flaginfo->data + rva, flaginfo, type,\n-\t\t\t\t\t level + 1);\n+\t  re->u.dir = read_coff_res_dir (wrbfd, flaginfo->data + rva, flaginfo,\n+\t\t\t\t\t type, level + 1);\n \t}\n       else\n \t{\n-\t  if (rva >= (rc_uint_type) (flaginfo->data_end - flaginfo->data))\n+\t  if (rva >= data_len)\n \t    {\n \t      overrun (flaginfo, _(\"ID resource\"));\n \t      return NULL;\n \t    }\n \t  re->subdir = 0;\n-\t  re->u.res = read_coff_data_entry (wrbfd, flaginfo->data + rva, flaginfo, type);\n+\t  re->u.res = read_coff_data_entry (wrbfd, flaginfo->data + rva,\n+\t\t\t\t\t    flaginfo, type);\n \t}\n \n       *pp = re;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:410786957-vul",
+      "digest": "sha256:092241bf7fa575da8c3e533fa7441ab21a54c4113eb9c43fc67bd278d316bc46"
+    },
+    "patched": {
+      "ref": "n132/arvo:410786957-fix",
+      "digest": "sha256:c1dff16452367c53a592607739c461a63057caf9e07b54b18b08f806fdb9bfa0"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/binutils-gdb/bfd/libbfd.c:752",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/binutils-gdb/bfd/libbfd.c:752"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042502974",
+  "chain": "CWE-1285->CWE-125",
+  "project": "freeradius-server",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42502974",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "20e38cd1ba068cc86de12949dadcf9668f989ef8",
+      "fix_commits": [
+        "20e38cd1ba068cc86de12949dadcf9668f989ef8"
+      ],
+      "repo": "https://github.com/FreeRADIUS/freeradius-server"
+    },
+    "patch": "diff --git a/src/protocols/tacacs/decode.c b/src/protocols/tacacs/decode.c\nindex c067a8c0d584..bc115dcbbf6e 100644\n--- a/src/protocols/tacacs/decode.c\n+++ b/src/protocols/tacacs/decode.c\n@@ -160,18 +160,43 @@ static int tacacs_decode_args(TALLOC_CTX *ctx, fr_pair_list_t *out, fr_dict_attr\n \t\t}\n \n \t\t/*\n-\t\t *\tParse the string, and try to convert it to the\n-\t\t *\tunderlying data type.  If it can't be\n-\t\t *\tconverted as a data type, just convert it as\n-\t\t *\tArgument-List.\n+\t\t *\tIf it's OCTETS or STRING type, then just copy\n+\t\t *\tthe value verbatim.  But if it's zero length,\n+\t\t *\tthen don't do anything.\n \t\t *\n-\t\t *\tAnd if that fails, just ignore it completely.\n+\t\t *\tNote that we copy things manually here because\n+\t\t *\twe don't want the OCTETS type to be parsed as\n+\t\t *\thex.  And, we don't want the string type to be\n+\t\t *\tunescaped.\n \t\t */\n-\t\tif (fr_pair_value_from_str(vp, (char const *) value, arg_end - value, 0, true) < 0) {\n-\t\t\ttalloc_free(vp);\n-\t\t\tif (da != parent) goto raw;\n+\t\tif (da->type == FR_TYPE_OCTETS) {\n+\t\t\tif ((arg_end > value) &&\n+\t\t\t    (fr_pair_value_memdup(vp, value, arg_end - value, true) < 0)) {\n+\t\t\t\tgoto fail;\n+\t\t\t}\n+\n+\t\t} else if (da->type == FR_TYPE_STRING) {\n+\t\t\tif ((arg_end > value) &&\n+\t\t\t    (fr_pair_value_bstrndup(vp, (char const *) value, arg_end - value, true) < 0)) {\n+\t\t\t\tgoto fail;\n+\t\t\t}\n \n-\t\t\tgoto next;\n+\t\t} else {\n+\t\t\t/*\n+\t\t\t *\tParse the string, and try to convert it to the\n+\t\t\t *\tunderlying data type.  If it can't be\n+\t\t\t *\tconverted as a data type, just convert it as\n+\t\t\t *\tArgument-List.\n+\t\t\t *\n+\t\t\t *\tAnd if that fails, just ignore it completely.\n+\t\t\t */\n+\t\t\tif (fr_pair_value_from_str(vp, (char const *) value, arg_end - value, 0, true) < 0) {\n+\t\t\tfail:\n+\t\t\t\ttalloc_free(vp);\n+\t\t\t\tif (da != parent) goto raw;\n+\n+\t\t\t\tgoto next;\n+\t\t\t}\n \t\t}\n \n \t\tfr_pair_append(out, vp);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42502974-vul",
+      "digest": "sha256:5b50062679d675bb3e8edad97b6a55a892bd2cfa962e599812245a580c7ce913"
+    },
+    "patched": {
+      "ref": "n132/arvo:42502974-fix",
+      "digest": "sha256:d7317feca418b0619531247906aeb187c9975c1d9c9c850afc33921254c5431a"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "global-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/freeradius-server/src/freeradius-devel/util/base16.h:53",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "global-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/freeradius-server/src/freeradius-devel/util/base16.h:53"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

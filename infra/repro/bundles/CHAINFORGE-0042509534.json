@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042509534",
+  "chain": "CWE-1285->CWE-125",
+  "project": "freeradius-server",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42509534",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "622489f07fd4fd4eaefdb24fa1381aab3bed3ed3",
+      "fix_commits": [
+        "622489f07fd4fd4eaefdb24fa1381aab3bed3ed3"
+      ],
+      "repo": "https://github.com/FreeRADIUS/freeradius-server"
+    },
+    "patch": "diff --git a/src/protocols/dhcpv4/decode.c b/src/protocols/dhcpv4/decode.c\nindex 20ce648a05eb..120db27aa002 100644\n--- a/src/protocols/dhcpv4/decode.c\n+++ b/src/protocols/dhcpv4/decode.c\n@@ -682,6 +682,7 @@ ssize_t fr_dhcpv4_decode_option(TALLOC_CTX *ctx, fr_pair_list_t *out,\n \t\tq = packet_ctx->buffer;\n \n \t\tfor (next = data; next < end; next += 2 + next[1]) {\n+\t\t\tif ((end - next) < 2) return -1;\n \t\t\tif (next[0] != data[0]) break;\n \t\t\tif ((next + 2 + next[1]) > end) return -1;\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42509534-vul",
+      "digest": "sha256:a5811a266416cbe07b7f6d9c12510b4582e096cc347c16d1c1d09fa391241495"
+    },
+    "patched": {
+      "ref": "n132/arvo:42509534-fix",
+      "digest": "sha256:5093069715e07ae977db84de62c5a189a9186bef031e889e3e54f55f5fd6d098"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/freeradius-server/src/protocols/dhcpv4/decode.c:687",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/freeradius-server/src/protocols/dhcpv4/decode.c:687"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

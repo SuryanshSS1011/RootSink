@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042493296",
+  "chain": "CWE-456->CWE-457",
+  "project": "ots",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42493296",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "6e9a697bd9a76475d2d947fb1a371e8f7a6edb32",
+      "fix_commits": [
+        "6e9a697bd9a76475d2d947fb1a371e8f7a6edb32"
+      ],
+      "repo": "https://github.com/khaledhosny/ots"
+    },
+    "patch": "From 6e9a697bd9a76475d2d947fb1a371e8f7a6edb32 Mon Sep 17 00:00:00 2001\nFrom: Khaled Hosny <khaled@aliftype.com>\nDate: Tue, 16 Feb 2021 16:32:00 +0200\nSubject: [PATCH] [graphite] Zero-initialize the decompressed buffer\n\nApparently lz4 is not fully initializing it despite claiming the\ndecompressed size is exactly what we requested.\n---\n src/glat.cc                                    |   2 +-\n src/silf.cc                                    |   2 +-\n ...e77a0231fe3d0af9875d314c4c5da04e65b3680.ttf | Bin 0 -> 424652 bytes\n 3 files changed, 2 insertions(+), 2 deletions(-)\n create mode 100644 tests/fonts/fuzzing/1e77a0231fe3d0af9875d314c4c5da04e65b3680.ttf\n\ndiff --git a/src/glat.cc b/src/glat.cc\nindex 0e55cc0..d9034e1 100644\n--- a/src/glat.cc\n+++ b/src/glat.cc\n@@ -214,7 +214,7 @@ bool OpenTypeGLAT_v3::Parse(const uint8_t* data, size_t length,\n                             OTS_MAX_DECOMPRESSED_TABLE_SIZE / (1024.0 * 1024.0),\n                             decompressed_size / (1024.0 * 1024.0));\n       }\n-      std::unique_ptr<uint8_t> decompressed(new uint8_t[decompressed_size]);\n+      std::unique_ptr<uint8_t> decompressed(new uint8_t[decompressed_size]());\n       int ret = LZ4_decompress_safe_partial(\n           reinterpret_cast<const char*>(data + table.offset()),\n           reinterpret_cast<char*>(decompressed.get()),\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42493296-vul",
+      "digest": "sha256:5e81b84821c3eea383c8e48089578454bf5d25b5d5cc6286afeca465d92f5a55"
+    },
+    "patched": {
+      "ref": "n132/arvo:42493296-fix",
+      "digest": "sha256:8973421a4776ca317c67c9aae83aef74b8e86e24879ab1bdb1e60c9aa2420643"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": null,
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": null
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

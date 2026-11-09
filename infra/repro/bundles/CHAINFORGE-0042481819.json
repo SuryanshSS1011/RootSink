@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042481819",
+  "chain": "CWE-416->CWE-125",
+  "project": "ghostpdl",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42481819",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "f5b7acb59c4f2e88591aab9f355813e0b7b68db5",
+      "fix_commits": [
+        "f5b7acb59c4f2e88591aab9f355813e0b7b68db5"
+      ],
+      "repo": "https://cgit.ghostscript.com/ghostpdl.git"
+    },
+    "patch": "From f5b7acb59c4f2e88591aab9f355813e0b7b68db5 Mon Sep 17 00:00:00 2001\nFrom: Julian Smith <jules@op59.net>\nDate: Fri, 14 Feb 2020 17:08:12 +0000\nSubject: [PATCH] Fix segv after memento squeeze in psdf_DCT_filter().\n\nFixes:\n    MEMENTO_FAILAT=117152 LD_LIBRARY_PATH=../libbacktrace/.libs ./membin/gpdl -sDEVICE=bit -o /dev/null examples/tiger.eps\n---\n devices/vector/gdevpsdu.c | 2 ++\n 1 file changed, 2 insertions(+)\n\ndiff --git a/devices/vector/gdevpsdu.c b/devices/vector/gdevpsdu.c\nindex c86405e..d626358 100644\n--- a/devices/vector/gdevpsdu.c\n+++ b/devices/vector/gdevpsdu.c\n@@ -393,6 +393,8 @@ psdf_DCT_filter(gs_param_list *plist /* may be NULL */,\n            &st_jpeg_compress_data, \"zDCTE\");\n         if (jcdp == 0)\n             return_error(gs_error_VMerror);\n+        jcdp->cinfo.mem = NULL;\n+        jcdp->cinfo.client_data = NULL;\n         ss->data.compress = jcdp;\n         jcdp->memory = ss->jpeg_memory = mem;\t/* set now for allocation */\n         if ((code = gs_jpeg_create_compress(ss)) < 0)\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42481819-vul",
+      "digest": "sha256:4267f4c201aae1c525d5d925e8dd89028aa8329ebfc7871adc9ee62698357752"
+    },
+    "patched": {
+      "ref": "n132/arvo:42481819-fix",
+      "digest": "sha256:1fd1dc2a1a65b1f8cae78880cbcc3cabebfba19a7c453874d0b64f553037a2d1"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/ghostpdl/./psi/idict.c:425",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/ghostpdl/./psi/idict.c:425"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

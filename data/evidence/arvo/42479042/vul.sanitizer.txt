@@ -1,0 +1,76 @@
+======================= INFO =========================
+This binary is built for AFL-fuzz.
+To run the target function on individual input(s) execute this:
+  /out/hts_open_fuzzer < INPUT_FILE
+or
+  /out/hts_open_fuzzer INPUT_FILE1 [INPUT_FILE2 ... ]
+To fuzz with afl-fuzz execute this:
+  afl-fuzz [afl-flags] /out/hts_open_fuzzer [-N]
+afl-fuzz will run N iterations before re-spawning the process (default: 1000)
+======================================================
+Reading 165 bytes from /tmp/poc
+[W::bam_hdr_read] EOF marker is absent. The input is probably truncated
+[W::sam_hdr_sanitise] Unexpected NUL character in header. Possibly truncated
+[E::bam_read1] =================================================================
+==2220043==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x606000000480 at pc 0x00000043e18f bp 0x7ffdca20b1e0 sp 0x7ffdca20a968
+READ of size 65 at 0x606000000480 thread T0
+SCARINESS: 26 (multi-byte-read-heap-buffer-overflow)
+    #0 0x43e18e in printf_common(void*, char const*, __va_list_tag*) /src/llvm/projects/compiler-rt/lib/asan/../sanitizer_common/sanitizer_common_interceptors_format.inc:547:9
+    #1 0x4ed10a in hts_log /src/htslib/hts.c:3861:9
+    #2 0x50f411 in bam_read1 /src/htslib/sam.c:595:13
+    #3 0x51dd5d in sam_read1 /src/htslib/sam.c:2724:17
+    #4 0x4c9fed in view_sam /src/htslib/test/fuzz/hts_open_fuzzer.c:72:12
+    #5 0x4c9ed7 in LLVMFuzzerTestOneInput /src/htslib/test/fuzz/hts_open_fuzzer.c:140:13
+    #6 0x4ca64e in ExecuteFilesOnyByOne /src/libfuzzer/afl/afl_driver.cpp:216:5
+    #7 0x4ca64e in main /src/libfuzzer/afl/afl_driver.cpp:253:12
+    #8 0x14927b5e882f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+    #9 0x41f638 in _start (/out/hts_open_fuzzer+0x41f638)
+
+DEDUP_TOKEN: printf_common(void*, char const*, __va_list_tag*)--hts_log--bam_read1
+0x606000000480 is located 0 bytes to the right of 64-byte region [0x606000000440,0x606000000480)
+allocated by thread T0 here:
+    #0 0x497da9 in realloc /src/llvm/projects/compiler-rt/lib/asan/asan_malloc_linux.cpp:164:3
+    #1 0x50defe in sam_realloc_bam_data /src/htslib/sam.c:386:20
+    #2 0x50ef01 in bam_read1 /src/htslib/sam.c:575:9
+    #3 0x51dd5d in sam_read1 /src/htslib/sam.c:2724:17
+    #4 0x4c9fed in view_sam /src/htslib/test/fuzz/hts_open_fuzzer.c:72:12
+    #5 0x4c9ed7 in LLVMFuzzerTestOneInput /src/htslib/test/fuzz/hts_open_fuzzer.c:140:13
+    #6 0x4ca64e in ExecuteFilesOnyByOne /src/libfuzzer/afl/afl_driver.cpp:216:5
+    #7 0x4ca64e in main /src/libfuzzer/afl/afl_driver.cpp:253:12
+    #8 0x14927b5e882f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+
+DEDUP_TOKEN: realloc--sam_realloc_bam_data--bam_read1
+SUMMARY: AddressSanitizer: heap-buffer-overflow /src/llvm/projects/compiler-rt/lib/asan/../sanitizer_common/sanitizer_common_interceptors_format.inc:547:9 in printf_common(void*, char const*, __va_list_tag*)
+Shadow bytes around the buggy address:
+  0x0c0c7fff8040: 00 00 00 00 00 00 00 fa fa fa fa fa 00 00 00 00
+  0x0c0c7fff8050: 00 00 00 00 fa fa fa fa 00 00 00 00 00 00 00 fa
+  0x0c0c7fff8060: fa fa fa fa 00 00 00 00 00 00 00 00 fa fa fa fa
+  0x0c0c7fff8070: 00 00 00 00 00 00 00 fa fa fa fa fa 00 00 00 00
+  0x0c0c7fff8080: 00 00 00 00 fa fa fa fa 00 00 00 00 00 00 00 00
+=>0x0c0c7fff8090:[fa]fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c0c7fff80a0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c0c7fff80b0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c0c7fff80c0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c0c7fff80d0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c0c7fff80e0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+  Shadow gap:              cc
+==2220043==ABORTING

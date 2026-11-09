@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042515760",
+  "chain": "CWE-20->CWE-125",
+  "project": "h3",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42515760",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "fce1c53844ca21dcc14f3acabeaf2e12d47e5568",
+      "fix_commits": [
+        "fce1c53844ca21dcc14f3acabeaf2e12d47e5568"
+      ],
+      "repo": "https://github.com/uber/h3"
+    },
+    "patch": "diff --git a/src/apps/testapps/testCellToLocalIj.c b/src/apps/testapps/testCellToLocalIj.c\nindex fd64eb6b4b..944d1eb139 100644\n--- a/src/apps/testapps/testCellToLocalIj.c\n+++ b/src/apps/testapps/testCellToLocalIj.c\n@@ -272,4 +272,12 @@ SUITE(h3ToLocalIj) {\n                      \"Invalid mode fail for cellToLocalIj\");\n         }\n     }\n+\n+    TEST(invalid_negativeIj) {\n+        H3Index index = 0x200f202020202020;\n+        CoordIJ ij = {.i = -14671840, .j = -2147483648};\n+        H3Index out;\n+        t_assert(H3_EXPORT(localIjToCell)(index, &ij, 0, &out) == E_FAILED,\n+                 \"Negative I and J components fail\");\n+    }\n }\ndiff --git a/src/h3lib/lib/coordijk.c b/src/h3lib/lib/coordijk.c\nindex 91771bdf8b..b3533ed0db 100644\n--- a/src/h3lib/lib/coordijk.c\n+++ b/src/h3lib/lib/coordijk.c\n@@ -245,11 +245,12 @@ void _ijkNormalize(CoordIJK *c) {\n }\n \n /**\n- * Determines the H3 digit corresponding to a unit vector in ijk coordinates.\n+ * Determines the H3 digit corresponding to a unit vector or the zero vector\n+ * in ijk coordinates.\n  *\n- * @param ijk The ijk coordinates; must be a unit vector.\n- * @return The H3 digit (0-6) corresponding to the ijk unit vector, or\n- * INVALID_DIGIT on failure.\n+ * @param ijk The ijk coordinates; must be a unit vector or zero vector.\n+ * @return The H3 digit (0-6) corresponding to the ijk unit vector, zero vector,\n+ * or INVALID_DIGIT (7) on failure.\n  */\n Direction _unitIjkToDigit(const CoordIJK *ijk) {\n     CoordIJK c = *ijk;\ndiff --git a/src/h3lib/lib/localij.c b/src/h3lib/lib/localij.c\nindex 6e338c6d5a..8b0730265c 100644\n--- a/src/h3lib/lib/localij.c\n+++ b/src/h3lib/lib/localij.c\n@@ -317,12 +317,12 @@ H3Error localIjkToCell(H3Index origin, const CoordIJK *ijk, H3Index *out) {\n \n     // check for res 0/base cell\n     if (res == 0) {\n-        if (ijk->i > 1 || ijk->j > 1 || ijk->k > 1) {\n-            // out of range input\n+        const Direction dir = _unitIjkToDigit(ijk);\n+        if (dir == INVALID_DIGIT) {\n+            // out of range input - not a unit vector or zero vector\n             return E_FAILED;\n         }\n \n-        const Direction dir = _unitIjkToDigit(ijk);\n         const int newBaseCell = _getBaseCellNeighbor(originBaseCell, dir);\n         if (newBaseCell == INVALID_BASE_CELL) {\n             // Moving in an invalid direction off a pentagon.\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42515760-vul",
+      "digest": "sha256:6b2484d601718a88ac7c9cea01f41f59b84a4cf67352e2928366f56735ea0f30"
+    },
+    "patched": {
+      "ref": "n132/arvo:42515760-fix",
+      "digest": "sha256:655202f03435c224561d7be222ea5315935e5bf983f95c21cda28d27cd27302e"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "global-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/h3/src/h3lib/lib/baseCells.c:901",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "global-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/h3/src/h3lib/lib/baseCells.c:901"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

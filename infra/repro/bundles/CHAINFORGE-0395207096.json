@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0395207096",
+  "chain": "CWE-456->CWE-457",
+  "project": "wavpack",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "395207096",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "84b576d2c627418a6453cc986b53e79bed38d653",
+      "fix_commits": [
+        "84b576d2c627418a6453cc986b53e79bed38d653"
+      ],
+      "repo": "https://github.com/dbry/WavPack"
+    },
+    "patch": "From 84b576d2c627418a6453cc986b53e79bed38d653 Mon Sep 17 00:00:00 2001\nFrom: David Bryant <david@wavpack.com>\nDate: Tue, 11 Feb 2025 11:24:44 -0800\nSubject: [PATCH] src/unpack_utils.c: fix for oss-fuzz issue #395207096\n (use-of-uninitialized-value)\n\n- unitialized array was just raw audio, so not a vulnerability\n- trigger file added to regression test\n---\n fuzzing/regression/395207096.wv | Bin 0 -> 138 bytes\n src/unpack_utils.c              |   4 +++-\n 2 files changed, 3 insertions(+), 1 deletion(-)\n create mode 100644 fuzzing/regression/395207096.wv\n\ndiff --git a/fuzzing/regression/395207096.wv b/fuzzing/regression/395207096.wv\nnew file mode 100644\nindex 0000000000000000000000000000000000000000..cf670c0349a27bdd8fd3f39f0d1b8ee50b71e78d\nGIT binary patch\nliteral 138\nzcmXRfE68?WU|<knVNd`AAX`BJgcbgS_<X_~%nBkP78roV5G)`UDpC$KM*`U#uo(;t\nV|MMXlLGn^Sc@8vtU<UqI004U!7)Ag9\n\nliteral 0\nHcmV?d00001\n\ndiff --git a/src/unpack_utils.c b/src/unpack_utils.c\nindex 0289823..610faf0 100644\n--- a/src/unpack_utils.c\n+++ b/src/unpack_utils.c\n@@ -506,8 +506,10 @@ static void *unpack_samples_worker_thread (void *param)\n         if (cxt->state == Quit)                     // break out if we're done\n             break;\n \n-        if (cxt->samcnt > temp_samples)             // reallocate temp buffer if not big enough\n+        if (cxt->samcnt > temp_samples) {           // reallocate temp buffer if not big enough\n             temp_buffer = (int32_t *) realloc (temp_buffer, (temp_samples = cxt->samcnt) * 8);\n+            memset (temp_buffer, 0, temp_samples * 8);\n+        }\n \n         // this is where the work is done\n         unpack_samples_interleave (cxt->wps, cxt->outbuf, cxt->offset, temp_buffer, cxt->samcnt);\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:395207096-vul",
+      "digest": "sha256:516eab42b2a7edd7f98e62e698836ade0aaf77eba784a0c0376536304810746e"
+    },
+    "patched": {
+      "ref": "n132/arvo:395207096-fix",
+      "digest": "sha256:945dbc2b68ba8fd201f9727124ba634932471c20f7e36684977a9caf0dea9e0e"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/wavpack/src/unpack_dsd.c:605",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/wavpack/src/unpack_dsd.c:605"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

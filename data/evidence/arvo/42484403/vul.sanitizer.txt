@@ -1,0 +1,62 @@
+Accepting input from '/tmp/poc'
+Usage for fuzzing: honggfuzz -P [flags] -- /out/libraw_fuzzer
+=================================================================
+==313716==ERROR: AddressSanitizer: stack-buffer-overflow on address 0x1532a70888a0 at pc 0x000000433fa4 bp 0x7fff64dc0d90 sp 0x7fff64dc0550
+READ of size 129 at 0x1532a70888a0 thread T0
+SCARINESS: 41 (multi-byte-read-stack-buffer-overflow)
+    #0 0x433fa3 in strchr /src/llvm-project/compiler-rt/lib/asan/../sanitizer_common/sanitizer_common_interceptors.inc:689:5
+    #1 0x4e6281 in __libcpp_strchr(char const*, int) /usr/local/bin/../include/c++/v1/string.h:73:64
+    #2 0x4e5511 in strchr(char*, int) [enable_if:true] /usr/local/bin/../include/c++/v1/string.h:77:54
+    #3 0x5d8247 in LibRaw::parse_rollei() /src/libraw/src/metadata/misc_parsers.cpp:305:16
+    #4 0x5b892a in LibRaw::identify() /src/libraw/src/metadata/identify.cpp:654:5
+    #5 0x4f2089 in LibRaw::open_datastream(LibRaw_abstract_datastream*) /src/libraw/src/utils/open.cpp:390:4
+    #6 0x4f117f in LibRaw::open_buffer(void*, unsigned long) /src/libraw/src/utils/open.cpp:153:13
+    #7 0x4c9419 in LLVMFuzzerTestOneInput /src/libraw_fuzzer.cc:31:24
+    #8 0x4c9b0d in main (/out/libraw_fuzzer+0x4c9b0d)
+    #9 0x1532a602082f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+    #10 0x41e808 in _start (/out/libraw_fuzzer+0x41e808)
+
+DEDUP_TOKEN: strchr--__libcpp_strchr(char const*, int)--strchr(char*, int) [enable_if:true]
+Address 0x1532a70888a0 is located in stack of thread T0 at offset 160 in frame
+    #0 0x5d7f0f in LibRaw::parse_rollei() /src/libraw/src/metadata/misc_parsers.cpp:293
+
+DEDUP_TOKEN: LibRaw::parse_rollei()
+  This frame has 2 object(s):
+    [32, 160) 'line' (line 294)
+    [192, 248) 't' (line 295) <== Memory access at offset 160 partially underflows this variable
+HINT: this may be a false positive if your program uses some custom stack unwind mechanism, swapcontext or vfork
+      (longjmp and C++ exceptions *are* supported)
+SUMMARY: AddressSanitizer: stack-buffer-overflow /src/llvm-project/compiler-rt/lib/asan/../sanitizer_common/sanitizer_common_interceptors.inc:689:5 in strchr
+Shadow bytes around the buggy address:
+  0x02a6d4e090c0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x02a6d4e090d0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x02a6d4e090e0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x02a6d4e090f0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x02a6d4e09100: f1 f1 f1 f1 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x02a6d4e09110: 00 00 00 00[f2]f2 f2 f2 00 00 00 00 00 00 00 f3
+  0x02a6d4e09120: f3 f3 f3 f3 00 00 00 00 00 00 00 00 00 00 00 00
+  0x02a6d4e09130: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x02a6d4e09140: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x02a6d4e09150: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x02a6d4e09160: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+  Shadow gap:              cc
+==313716==ABORTING

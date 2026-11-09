@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042473305",
+  "chain": "CWE-20->CWE-787",
+  "project": "capstonenext",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42473305",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "d1adb923ccb1356b69e48556c5a0700e00036e6d",
+      "fix_commits": [
+        "d1adb923ccb1356b69e48556c5a0700e00036e6d"
+      ],
+      "repo": "https://github.com/aquynh/capstone"
+    },
+    "patch": "diff --git a/bindings/python/test_skipdata.py b/bindings/python/test_skipdata.py\nindex 5a5b755b8b..726a086dda 100755\n--- a/bindings/python/test_skipdata.py\n+++ b/bindings/python/test_skipdata.py\n@@ -42,18 +42,21 @@ def test_class():\n             # Default \"data\" instruction's name is \".byte\". To rename it to \"db\", just use\n             # the code below.\n             md.skipdata_setup = (\"db\", None, None)\n+\n             # NOTE: This example ignores SKIPDATA's callback (first None) & user_data (second None)\n             # Can also use dedicated setter\n-            md.skipdata_mnem = 'db'\n+            #md.skipdata_mnem = 'db'\n \n             # To customize the SKIPDATA callback, use the line below.\n-            md.skipdata_setup = (\".db\", testcb, None)\n+            #md.skipdata_setup = (\".db\", testcb, None)\n+\n             # Or use dedicated setter with custom parameter\n-            md.skipdata_callback = (testcb, 42)\n+            #md.skipdata_callback = (testcb, 42)\n+\n             # Or provide just a function\n-            md.skipdata_callback = testcb\n+            #md.skipdata_callback = testcb\n             # Note that reading this property will always return a tuple\n-            assert md.skipdata_callback == (testcb, None)\n+            #assert md.skipdata_callback == (testcb, None)\n \n             for insn in md.disasm(code, 0x1000):\n                 #bytes = binascii.hexlify(insn.bytes)\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42473305-vul",
+      "digest": "sha256:92fd074f03e174eddc2ce11e25f2dfbfdb88276d05d62185415ebdd99ace8340"
+    },
+    "patched": {
+      "ref": "n132/arvo:42473305-fix",
+      "digest": "sha256:8ff31bfd5172f87341334838db751b457545a8a7820a2c17334fa49fa99c126b"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/capstonenext/SStream.c:49",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/capstonenext/SStream.c:49"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,82 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-30042490125",
+  "chain": "CWE-20->CWE-190->CWE-125",
+  "project": "php-src",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42490125",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "f06afc434aec631f18f8da8ffca9a6f0559e1acf",
+      "fix_commits": [
+        "f06afc434aec631f18f8da8ffca9a6f0559e1acf"
+      ],
+      "repo": "https://github.com/php/php-src"
+    },
+    "patch": "diff --git a/Zend/tests/attributes/032_attribute_validation_scope.phpt b/Zend/tests/attributes/032_attribute_validation_scope.phpt\nnew file mode 100644\nindex 000000000000..039a427254f4\n--- /dev/null\n+++ b/Zend/tests/attributes/032_attribute_validation_scope.phpt\n@@ -0,0 +1,9 @@\n+--TEST--\n+Validation for \"Attribute\" does not use a scope when evaluating constant ASTs\n+--FILE--\n+<?php\n+#[Attribute(parent::x)]\n+class x extends y {}\n+?>\n+--EXPECTF--\n+Fatal error: Cannot access \"parent\" when no class scope is active in %s on line %d\ndiff --git a/Zend/zend_attributes.c b/Zend/zend_attributes.c\nindex 29a2f4a73254..ae07802b5bcb 100644\n--- a/Zend/zend_attributes.c\n+++ b/Zend/zend_attributes.c\n@@ -33,7 +33,10 @@ void validate_attribute(zend_attribute *attr, uint32_t target, zend_class_entry\n \tif (attr->argc > 0) {\n \t\tzval flags;\n \n-\t\tif (FAILURE == zend_get_attribute_value(&flags, attr, 0, scope)) {\n+\t\t/* As this is run in the middle of compilation, fetch the attribute value without\n+\t\t * specifying a scope. The class is not fully linked yet, and we may seen an\n+\t\t * inconsistent state. */\n+\t\tif (FAILURE == zend_get_attribute_value(&flags, attr, 0, NULL)) {\n \t\t\treturn;\n \t\t}\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42490125-vul",
+      "digest": "sha256:f734f6c0ed664516b66815060945111462cb4c4e3f048b0f9d4d2a9f8f23e4d9"
+    },
+    "patched": {
+      "ref": "n132/arvo:42490125-fix",
+      "digest": "sha256:20f6cae4dada1a6caca972a4ee0ec9aaa22fcc463f1a7236179ccc7e3790bf8d"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/php-src/Zend/zend_hash.c:54",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 190,
+      "role": "intermediate",
+      "witness": {
+        "method": "ubsan-rebuild",
+        "recipe": "SANITIZER=undefined compile && $ENTRYPOINT",
+        "ubsan_options": "print_stacktrace=1:halt_on_error=0:silence_unsigned_overflow=0:symbolize=1"
+      },
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/php-src/Zend/zend_hash.c:54"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042510753",
+  "chain": "CWE-1285->CWE-125",
+  "project": "quickjs",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42510753",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "a0570086c698f78ec829cafd7d8d7ac3906abbc1",
+      "fix_commits": [
+        "a0570086c698f78ec829cafd7d8d7ac3906abbc1"
+      ],
+      "repo": "https://github.com/bellard/quickjs"
+    },
+    "patch": "diff --git a/quickjs.c b/quickjs.c\nindex d80d601e2..4c4d27323 100644\n--- a/quickjs.c\n+++ b/quickjs.c\n@@ -38496,13 +38496,21 @@ static JSValue js_array_lastIndexOf(JSContext *ctx, JSValueConst this_val,\n     return JS_EXCEPTION;\n }\n \n+enum {\n+    special_find,\n+    special_findIndex,\n+    special_findLast,\n+    special_findLastIndex,\n+};\n+\n static JSValue js_array_find(JSContext *ctx, JSValueConst this_val,\n-                             int argc, JSValueConst *argv, int findIndex)\n+                             int argc, JSValueConst *argv, int mode)\n {\n     JSValueConst func, this_arg;\n     JSValueConst args[3];\n     JSValue obj, val, index_val, res;\n-    int64_t len, k;\n+    int64_t len, k, end;\n+    int dir;\n \n     index_val = JS_UNDEFINED;\n     val = JS_UNDEFINED;\n@@ -38518,7 +38526,18 @@ static JSValue js_array_find(JSContext *ctx, JSValueConst this_val,\n     if (argc > 1)\n         this_arg = argv[1];\n \n-    for(k = 0; k < len; k++) {\n+    if (mode == special_findLast || mode == special_findLastIndex) {\n+        k = len - 1;\n+        dir = -1;\n+        end = -1;\n+    } else {\n+        k = 0;\n+        dir = 1;\n+        end = len;\n+    }\n+\n+    // TODO(bnoordhuis) add fast path for fast arrays\n+    for(; k != end; k += dir) {\n         index_val = JS_NewInt64(ctx, k);\n         if (JS_IsException(index_val))\n             goto exception;\n@@ -38532,7 +38551,7 @@ static JSValue js_array_find(JSContext *ctx, JSValueConst this_val,\n         if (JS_IsException(res))\n             goto exception;\n         if (JS_ToBoolFree(ctx, res)) {\n-            if (findIndex) {\n+            if (mode == special_findIndex || mode == special_findLastIndex) {\n                 JS_FreeValue(ctx, val);\n                 JS_FreeValue(ctx, obj);\n                 return index_val;\n@@ -38546,7 +38565,7 @@ static JSValue js_array_find(JSContext *ctx, JSValueConst this_val,\n         JS_FreeValue(ctx, index_val);\n     }\n     JS_FreeValue(ctx, obj);\n-    if (findIndex)\n+    if (mode == special_findIndex || mode == special_findLastIndex)\n         return JS_NewInt32(ctx, -1);\n     else\n         return JS_UNDEFINED;\n@@ -39369,8 +39388,10 @@ static const JSCFunctionListEntry js_array_proto_funcs[] = {\n     JS_CFUNC_MAGIC_DEF(\"reduce\", 1, js_array_reduce, special_reduce ),\n     JS_CFUNC_MAGIC_DEF(\"reduceRight\", 1, js_array_reduce, special_reduceRight ),\n     JS_CFUNC_DEF(\"fill\", 1, js_array_fill ),\n-    JS_CFUNC_MAGIC_DEF(\"find\", 1, js_array_find, 0 ),\n-    JS_CFUNC_MAGIC_DEF(\"findIndex\", 1, js_array_find, 1 ),\n+    JS_CFUNC_MAGIC_DEF(\"find\", 1, js_array_find, special_find ),\n+    JS_CFUNC_MAGIC_DEF(\"findIndex\", 1, js_array_find, special_findIndex ),\n+    JS_CFUNC_MAGIC_DEF(\"findLast\", 1, js_array_find, special_findLast ),\n+    JS_CFUNC_MAGIC_DEF(\"findLastIndex\", 1, js_array_find, special_findLastIndex ),\n     JS_CFUNC_DEF(\"indexOf\", 1, js_array_indexOf ),\n     JS_CFUNC_DEF(\"lastIndexOf\", 1, js_array_lastIndexOf ),\n     JS_CFUNC_DEF(\"includes\", 1, js_array_includes ),\n@@ -50725,8 +50746,19 @@ void JS_AddIntrinsicBaseObjects(JSContext *ctx)\n     /* XXX: create auto_initializer */\n     {\n         /* initialize Array.prototype[Symbol.unscopables] */\n-        char const unscopables[] = \"copyWithin\" \"\\0\" \"entries\" \"\\0\" \"fill\" \"\\0\" \"find\" \"\\0\"\n-            \"findIndex\" \"\\0\" \"flat\" \"\\0\" \"flatMap\" \"\\0\" \"includes\" \"\\0\" \"keys\" \"\\0\" \"values\" \"\\0\";\n+        char const unscopables[] =\n+            \"copyWithin\" \"\\0\"\n+            \"entries\" \"\\0\"\n+            \"fill\" \"\\0\"\n+            \"find\" \"\\0\"\n+            \"findIndex\" \"\\0\"\n+            \"findLast\" \"\\0\"\n+            \"findLastIndex\" \"\\0\"\n+            \"flat\" \"\\0\"\n+            \"flatMap\" \"\\0\"\n+            \"includes\" \"\\0\"\n+            \"keys\" \"\\0\"\n+            \"values\" \"\\0\";\n         const char *p = unscopables;\n         obj1 = JS_NewObjectProto(ctx, JS_NULL);\n         for(p = unscopables; *p; p += strlen(p) + 1) {\n@@ -51791,12 +51823,13 @@ static JSValue js_typed_array_fill(JSContext *ctx, JSValueConst this_val,\n }\n \n static JSValue js_typed_array_find(JSContext *ctx, JSValueConst this_val,\n-                                   int argc, JSValueConst *argv, int findIndex)\n+                                   int argc, JSValueConst *argv, int mode)\n {\n     JSValueConst func, this_arg;\n     JSValueConst args[3];\n     JSValue val, index_val, res;\n-    int len, k;\n+    int len, k, end;\n+    int dir;\n \n     val = JS_UNDEFINED;\n     len = js_typed_array_get_length_internal(ctx, this_val);\n@@ -51811,7 +51844,17 @@ static JSValue js_typed_array_find(JSContext *ctx, JSValueConst this_val,\n     if (argc > 1)\n         this_arg = argv[1];\n \n-    for(k = 0; k < len; k++) {\n+    if (mode == special_findLast || mode == special_findLastIndex) {\n+        k = len - 1;\n+        dir = -1;\n+        end = -1;\n+    } else {\n+        k = 0;\n+        dir = 1;\n+        end = len;\n+    }\n+\n+    for(; k != end; k += dir) {\n         index_val = JS_NewInt32(ctx, k);\n         val = JS_GetPropertyValue(ctx, this_val, index_val);\n         if (JS_IsException(val))\n@@ -51823,7 +51866,7 @@ static JSValue js_typed_array_find(JSContext *ctx, JSValueConst this_val,\n         if (JS_IsException(res))\n             goto exception;\n         if (JS_ToBoolFree(ctx, res)) {\n-            if (findIndex) {\n+            if (mode == special_findIndex || mode == special_findLastIndex) {\n                 JS_FreeValue(ctx, val);\n                 return index_val;\n             } else {\n@@ -51832,7 +51875,7 @@ static JSValue js_typed_array_find(JSContext *ctx, JSValueConst this_val,\n         }\n         JS_FreeValue(ctx, val);\n     }\n-    if (findIndex)\n+    if (mode == special_findIndex || mode == special_findLastIndex)\n         return JS_NewInt32(ctx, -1);\n     else\n         return JS_UNDEFINED;\n@@ -52630,8 +52673,10 @@ static const JSCFunctionListEntry js_typed_array_base_proto_funcs[] = {\n     JS_CFUNC_MAGIC_DEF(\"reduce\", 1, js_array_reduce, special_reduce | special_TA ),\n     JS_CFUNC_MAGIC_DEF(\"reduceRight\", 1, js_array_reduce, special_reduceRight | special_TA ),\n     JS_CFUNC_DEF(\"fill\", 1, js_typed_array_fill ),\n-    JS_CFUNC_MAGIC_DEF(\"find\", 1, js_typed_array_find, 0 ),\n-    JS_CFUNC_MAGIC_DEF(\"findIndex\", 1, js_typed_array_find, 1 ),\n+    JS_CFUNC_MAGIC_DEF(\"find\", 1, js_typed_array_find, special_find ),\n+    JS_CFUNC_MAGIC_DEF(\"findIndex\", 1, js_typed_array_find, special_findIndex ),\n+    JS_CFUNC_MAGIC_DEF(\"findLast\", 1, js_typed_array_find, special_findLast ),\n+    JS_CFUNC_MAGIC_DEF(\"findLastIndex\", 1, js_typed_array_find, special_findLastIndex ),\n     JS_CFUNC_DEF(\"reverse\", 0, js_typed_array_reverse ),\n     JS_CFUNC_DEF(\"slice\", 2, js_typed_array_slice ),\n     JS_CFUNC_DEF(\"subarray\", 2, js_typed_array_subarray ),\ndiff --git a/test262.conf b/test262.conf\nindex 49fdca6fd..c4349f126 100644\n--- a/test262.conf\n+++ b/test262.conf\n@@ -55,7 +55,7 @@ __setter__\n AggregateError\n align-detached-buffer-semantics-with-web-reality\n arbitrary-module-namespace-names=skip\n-array-find-from-last=skip\n+array-find-from-last\n array-grouping=skip\n Array.fromAsync=skip\n Array.prototype.at\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42510753-vul",
+      "digest": "sha256:edde1cba370c547fd7432c21fd539d0f8939024baf7ad6135da9fd2955063471"
+    },
+    "patched": {
+      "ref": "n132/arvo:42510753-fix",
+      "digest": "sha256:fb0d66d75609dfdf33a2a171e41f20bb3522b1b0d5f65a04eff614ad35124f05"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/quickjs/quickjs.c:15131",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/quickjs/quickjs.c:15131"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

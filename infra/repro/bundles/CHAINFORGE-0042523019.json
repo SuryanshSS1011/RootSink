@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042523019",
+  "chain": "CWE-20->CWE-787",
+  "project": "ghostpdl",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42523019",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "7eced55b5700c0d2aa2e102ed78f10b0ce755a64",
+      "fix_commits": [
+        "7eced55b5700c0d2aa2e102ed78f10b0ce755a64"
+      ],
+      "repo": "https://cgit.ghostscript.com/ghostpdl.git"
+    },
+    "patch": "From 7eced55b5700c0d2aa2e102ed78f10b0ce755a64 Mon Sep 17 00:00:00 2001\nFrom: Ken Sharp <ken.sharp@artifex.com>\nDate: Thu, 6 Apr 2023 16:14:20 +0100\nSubject: [PATCH] GhostPDF - prevent buffer overrun when evaluating functions\n\nOSS-fuzz bug #57745\n\nThe problem in the report is that the BlackGeneration function is a 1-in\n3-out function. It is required to be a 1-in, 1-out function. The result\nwas that the evaluation was writing 3 floats to a 1 float buffer.\n\nCheck the parameters of the function to make sure it is of the correct\nsize before trying to evaluate it.\n\nI also desk-checked all the other uses of functions; most were already\nchecking the function parameters but I found two more cases which were\nnot. Fix the /Separation and DeviceN tint transform so that we check the\nnumber of inputs and outputs to make sure they are correct.\n---\n pdf/pdf_colour.c | 10 ++++++++++\n pdf/pdf_gstate.c |  5 +++++\n 2 files changed, 15 insertions(+)\n\ndiff --git a/pdf/pdf_colour.c b/pdf/pdf_colour.c\nindex 24610ad..cdbc737 100644\n--- a/pdf/pdf_colour.c\n+++ b/pdf/pdf_colour.c\n@@ -2004,6 +2004,11 @@ static int pdfi_create_Separation(pdf_context *ctx, pdf_array *color_array, int\n     if (code < 0)\n         goto pdfi_separation_error;\n \n+    if (pfn->params.m != 1 || pfn->params.n != cs_num_components(pcs_alt)) {\n+        code = gs_note_error(gs_error_rangecheck);\n+        goto pdfi_separation_error;\n+    }\n+\n     code = gs_cspace_new_Separation(&pcs, pcs_alt, ctx->memory);\n     if (code < 0)\n         goto pdfi_separation_error;\n@@ -2184,6 +2189,11 @@ all_error:\n     if (code < 0)\n         goto pdfi_devicen_error;\n \n+    if (pfn->params.m != pdfi_array_size(inks) || pfn->params.n != cs_num_components(pcs_alt)) {\n+        code = gs_note_error(gs_error_rangecheck);\n+        goto pdfi_devicen_error;\n+    }\n+\n     code = gs_cspace_new_DeviceN(&pcs, pdfi_array_size(inks), pcs_alt, ctx->memory);\n     if (code < 0)\n         return code;\ndiff --git a/pdf/pdf_gstate.c b/pdf/pdf_gstate.c\nindex 8df2719..f339763 100644\n--- a/pdf/pdf_gstate.c\n+++ b/pdf/pdf_gstate.c\n@@ -609,6 +609,11 @@ static int pdfi_set_blackgeneration(pdf_context *ctx, pdf_obj *obj, pdf_dict *pa\n             if (code < 0)\n                 return code;\n \n+            if (pfn->params.n != 1) {\n+                pdfi_free_function(ctx, pfn);\n+                return_error(gs_error_rangecheck);\n+            }\n+\n             gs_setblackgeneration_remap(ctx->pgs, gs_mapped_transfer, false);\n             for (i = 0; i < transfer_map_size; i++) {\n                 float v, f;\n-- \n2.55.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42523019-vul",
+      "digest": "sha256:329cc4827b5483a4e1cb6f2b0ba3b2ae004a3d7bab73a800a733e9ec4be44cc0"
+    },
+    "patched": {
+      "ref": "n132/arvo:42523019-fix",
+      "digest": "sha256:4b5a8fcb790301d850f05c5e681e0d29a8aadf4383c84aafd7aff98af9ab4f36"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/ghostpdl/./base/gsfunc3.c:121",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/ghostpdl/./base/gsfunc3.c:121"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

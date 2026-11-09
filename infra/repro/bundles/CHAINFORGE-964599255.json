@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-964599255",
+  "chain": "CWE-456->CWE-457",
+  "project": "ndpi",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "437162340",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/ntop/nDPI/commit/81c4a0f08c48c17988aad2441cc14c26f8c3ea8e",
+      "fix_commits": [
+        "81c4a0f08c48c17988aad2441cc14c26f8c3ea8e"
+      ],
+      "repo": "https://github.com/ntop/nDPI"
+    },
+    "patch": "diff --git a/src/lib/ndpi_utils.c b/src/lib/ndpi_utils.c\nindex 039a1259967..1b51589c8c4 100644\n--- a/src/lib/ndpi_utils.c\n+++ b/src/lib/ndpi_utils.c\n@@ -3237,7 +3237,7 @@ bool ndpi_is_valid_hostname(char * const hostname, size_t len) {\n   size_t label_len = 0, idx = 0;\n   bool has_valid_label = false;\n \n-  if(!hostname || *hostname == '\\0')\n+  if(!hostname || len == 0 || *hostname == '\\0')\n     return(false); /* Empty string or NULL pointer */\n \n   if(len > 253) /* Maximum length of a full hostname */\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:437162340-vul",
+      "digest": "sha256:b42f87d1352625019de6c86886f4d32bd642c59fd5dce8d8ae1b7bc502687a82"
+    },
+    "patched": {
+      "ref": "n132/arvo:437162340-fix",
+      "digest": "sha256:70e80f6f97cf81fa8addccfe2f9d23e50adba4113c8ca06343c8adf9e9995da7"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/ndpi/src/lib/ndpi_utils.c:3240",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/ndpi/src/lib/ndpi_utils.c:3240"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042486973",
+  "chain": "CWE-1284->CWE-125",
+  "project": "rnp",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42486973",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "43006e3eaf712f9e5f39e9cd11cf0fcec0ba0237",
+      "fix_commits": [
+        "43006e3eaf712f9e5f39e9cd11cf0fcec0ba0237"
+      ],
+      "repo": "https://github.com/rnpgp/rnp"
+    },
+    "patch": "diff --git a/src/librepgp/stream-packet.cpp b/src/librepgp/stream-packet.cpp\nindex 19e7abaf0e..168a1912f1 100644\n--- a/src/librepgp/stream-packet.cpp\n+++ b/src/librepgp/stream-packet.cpp\n@@ -409,8 +409,10 @@ add_packet_body_s2k(pgp_packet_body_t *body, const pgp_s2k_t *s2k)\n             return false;\n         }\n         if (s2k->gpg_ext_num == PGP_S2K_GPG_SMARTCARD) {\n+            static_assert(sizeof(s2k->gpg_serial) == 16, \"invalid gpg serial length\");\n+            size_t slen = s2k->gpg_serial_len > 16 ? 16 : s2k->gpg_serial_len;\n             return add_packet_body_byte(body, s2k->gpg_serial_len) &&\n-                   add_packet_body(body, s2k->gpg_serial, s2k->gpg_serial_len);\n+                   add_packet_body(body, s2k->gpg_serial, slen);\n         }\n         return true;\n     }\ndiff --git a/src/tests/data/test_fuzz_keyring/crash-8619144979e56d07ab4890bf564b90271ae9b1c9 b/src/tests/data/test_fuzz_keyring/crash-8619144979e56d07ab4890bf564b90271ae9b1c9\nnew file mode 100644\nindex 0000000000..dada7b93f6\nBinary files /dev/null and b/src/tests/data/test_fuzz_keyring/crash-8619144979e56d07ab4890bf564b90271ae9b1c9 differ\ndiff --git a/src/tests/fuzz_keyring.cpp b/src/tests/fuzz_keyring.cpp\nindex 3d43f6a769..92b61c8153 100644\n--- a/src/tests/fuzz_keyring.cpp\n+++ b/src/tests/fuzz_keyring.cpp\n@@ -40,4 +40,8 @@ TEST_F(rnp_tests, test_fuzz_keyring)\n \n     data = file_to_vec(DATA_PATH \"crash-7ff10f10a95b78461d6f3578f5f99e870c792b9f\");\n     assert_int_equal(keyring_LLVMFuzzerTestOneInput(data.data(), data.size()), 0);\n+\n+    /* Issue 25292 in oss-fuzz: rnp:fuzz_keyring: Stack-buffer-overflow in stream_write_key */\n+    data = file_to_vec(DATA_PATH \"crash-8619144979e56d07ab4890bf564b90271ae9b1c9\");\n+    assert_int_equal(keyring_LLVMFuzzerTestOneInput(data.data(), data.size()), 0);\n }\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42486973-vul",
+      "digest": "sha256:afbcd0ce75e2ae98578050fa5741a19b806a9289e60c24f4ae7949b2ffe88b01"
+    },
+    "patched": {
+      "ref": "n132/arvo:42486973-fix",
+      "digest": "sha256:e43f060afd1486726bb15c073261685db3a7b6b1d0f830a5fa76b435e9d56d57"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/rnp/src/librepgp/stream-packet.cpp:306",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/rnp/src/librepgp/stream-packet.cpp:306"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

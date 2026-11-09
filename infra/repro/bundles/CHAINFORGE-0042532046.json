@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042532046",
+  "chain": "CWE-416->CWE-787",
+  "project": "quickjs",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42532046",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "3b45d155c77bbdfe9177b1e03db830d2aff0b2a8",
+      "fix_commits": [
+        "3b45d155c77bbdfe9177b1e03db830d2aff0b2a8"
+      ],
+      "repo": "https://github.com/bellard/quickjs"
+    },
+    "patch": "diff --git a/quickjs.c b/quickjs.c\nindex bd0c9e3e7..e8fdd8aa7 100644\n--- a/quickjs.c\n+++ b/quickjs.c\n@@ -55157,7 +55157,8 @@ static JSValue js_dataview_getValue(JSContext *ctx,\n {\n     JSTypedArray *ta;\n     JSArrayBuffer *abuf;\n-    int is_swap, size;\n+    BOOL littleEndian, is_swap;\n+    int size;\n     uint8_t *ptr;\n     uint32_t v;\n     uint64_t pos;\n@@ -55168,9 +55169,8 @@ static JSValue js_dataview_getValue(JSContext *ctx,\n     size = 1 << typed_array_size_log2(class_id);\n     if (JS_ToIndex(ctx, &pos, argv[0]))\n         return JS_EXCEPTION;\n-    is_swap = TRUE;\n-    if (argc > 1)\n-        is_swap = !JS_ToBool(ctx, argv[1]);\n+    littleEndian = argc > 1 && JS_ToBool(ctx, argv[1]);\n+    is_swap = littleEndian ^ !is_be();\n     abuf = ta->buffer->u.array_buffer;\n     if (abuf->detached)\n         return JS_ThrowTypeErrorDetachedArrayBuffer(ctx);\n@@ -55255,7 +55255,8 @@ static JSValue js_dataview_setValue(JSContext *ctx,\n {\n     JSTypedArray *ta;\n     JSArrayBuffer *abuf;\n-    int is_swap, size;\n+    BOOL littleEndian, is_swap;\n+    int size;\n     uint8_t *ptr;\n     uint64_t v64;\n     uint32_t v;\n@@ -55294,9 +55295,8 @@ static JSValue js_dataview_setValue(JSContext *ctx,\n             v64 = u.u64;\n         }\n     }\n-    is_swap = TRUE;\n-    if (argc > 2)\n-        is_swap = !JS_ToBool(ctx, argv[2]);\n+    littleEndian = argc > 2 && JS_ToBool(ctx, argv[2]);\n+    is_swap = littleEndian ^ !is_be();\n     abuf = ta->buffer->u.array_buffer;\n     if (abuf->detached)\n         return JS_ThrowTypeErrorDetachedArrayBuffer(ctx);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42532046-vul",
+      "digest": "sha256:0e382d9a22a84eeb5981574714dad04f55b75765bc8250c0e386b34e738ee0fa"
+    },
+    "patched": {
+      "ref": "n132/arvo:42532046-fix",
+      "digest": "sha256:9cbb0b1eed569d7c96f1538e3a6a936a210f98fb00b3c7b99363fb678563510e"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "WRITE",
+        "crash_site": "/src/quickjs/./list.h:51",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "WRITE",
+        "site": "/src/quickjs/./list.h:51"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042495001",
+  "chain": "CWE-416->CWE-125",
+  "project": "php-src",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42495001",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "f40c8fdf672923fd585023574e954b79b85b8777",
+      "fix_commits": [
+        "f40c8fdf672923fd585023574e954b79b85b8777"
+      ],
+      "repo": "https://github.com/php/php-src"
+    },
+    "patch": "From f40c8fdf672923fd585023574e954b79b85b8777 Mon Sep 17 00:00:00 2001\nFrom: Nikita Popov <nikita.ppv@gmail.com>\nDate: Thu, 15 Apr 2021 12:32:05 +0200\nSubject: [PATCH] Fix return-by-ref from array_reduce callback\n\nFixes oss-fuzz #32990.\n---\n ext/standard/array.c                                  |  3 +++\n .../tests/array/array_reduce_return_by_ref.phpt       | 11 +++++++++++\n 2 files changed, 14 insertions(+)\n create mode 100644 ext/standard/tests/array/array_reduce_return_by_ref.phpt\n\ndiff --git a/ext/standard/array.c b/ext/standard/array.c\nindex 3967d832..4556cfe8 100644\n--- a/ext/standard/array.c\n+++ b/ext/standard/array.c\n@@ -5877,6 +5877,9 @@ PHP_FUNCTION(array_reduce)\n \t\t\tzval_ptr_dtor(&args[1]);\n \t\t\tzval_ptr_dtor(&args[0]);\n \t\t\tZVAL_COPY_VALUE(return_value, &retval);\n+\t\t\tif (UNEXPECTED(Z_ISREF_P(return_value))) {\n+\t\t\t\tzend_unwrap_reference(return_value);\n+\t\t\t}\n \t\t} else {\n \t\t\tzval_ptr_dtor(&args[1]);\n \t\t\tzval_ptr_dtor(&args[0]);\ndiff --git a/ext/standard/tests/array/array_reduce_return_by_ref.phpt b/ext/standard/tests/array/array_reduce_return_by_ref.phpt\nnew file mode 100644\nindex 00000000..8da7018c\n--- /dev/null\n+++ b/ext/standard/tests/array/array_reduce_return_by_ref.phpt\n@@ -0,0 +1,11 @@\n+--TEST--\n+Return by reference from array_reduce() callback\n+--FILE--\n+<?php\n+$array = [1, 2];\n+var_dump(array_reduce($array, function &($a, $b) {\n+    return $b;\n+}, 0));\n+?>\n+--EXPECT--\n+int(2)\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42495001-vul",
+      "digest": "sha256:a54bc4bf173ff5829b00d481c75f99281d20e9c678de2a6d0c31118f961016bd"
+    },
+    "patched": {
+      "ref": "n132/arvo:42495001-fix",
+      "digest": "sha256:809681949f0f989d915fbd538749b4bb055ecb2b773a3f1b756aba67cb402ee1"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/php-src/Zend/zend_string.h:346",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/php-src/Zend/zend_string.h:346"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

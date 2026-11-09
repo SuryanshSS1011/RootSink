@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042513893",
+  "chain": "CWE-416->CWE-125",
+  "project": "ghostpdl",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42513893",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "cca48284c537fd9e32167fcf1066d9a8eb313157",
+      "fix_commits": [
+        "cca48284c537fd9e32167fcf1066d9a8eb313157"
+      ],
+      "repo": "https://cgit.ghostscript.com/ghostpdl.git"
+    },
+    "patch": "From cca48284c537fd9e32167fcf1066d9a8eb313157 Mon Sep 17 00:00:00 2001\nFrom: Chris Liddell <chris.liddell@artifex.com>\nDate: Wed, 27 Jul 2022 13:58:20 +0100\nSubject: [PATCH] oss-fuzz 49528: Free tiff context and related data correctly\n\nFreeing the tiff \"context\" for a tiff file flushes the underlying file\ndescriptor, so we cannot close the file before doing so.\n\nBut freeing the tiff context also frees some memory that we need to access\nin order to complete our part of closing the file.\n\nSo, we need to retrieve the file name we need, store it locally, free the\ntiff file context, then close our file, in order to avoid accessing memory\nafter it's been freed.\n---\n base/gstiffio.c    |  7 ------\n base/gstiffio.h    |  1 -\n devices/gdevtsep.c | 58 ++++++++++++++++++++++++++++++++--------------\n 3 files changed, 41 insertions(+), 25 deletions(-)\n\ndiff --git a/base/gstiffio.c b/base/gstiffio.c\nindex 880c296..919ffab 100644\n--- a/base/gstiffio.c\n+++ b/base/gstiffio.c\n@@ -176,13 +176,6 @@ int tiff_filename_from_tiff(TIFF *t, char **name)\n     return 0;\n }\n \n-int tiff_free_private_tiff(gx_device_printer *dev, TIFF *t)\n-{\n-    thandle_t h = TIFFClientdata(t);\n-    gs_free(dev->memory, h, sizeof(tifs_io_private), 1, \"tiffsep_free_private\");\n-    return 0;\n-}\n-\n static void\n gs_tifsWarningHandlerEx(thandle_t client_data, const char* module, const char* fmt, va_list ap)\n {\ndiff --git a/base/gstiffio.h b/base/gstiffio.h\nindex 297ef05..9ab9bfa 100644\n--- a/base/gstiffio.h\n+++ b/base/gstiffio.h\n@@ -24,6 +24,5 @@ TIFF *\n tiff_from_filep(gx_device_printer *dev,  const char *name, gp_file *filep, int big_endian, bool usebigtiff);\n void tiff_set_handlers (void);\n int tiff_filename_from_tiff(TIFF *t, char **name);\n-int tiff_free_private_tiff(gx_device_printer *dev, TIFF *t);\n \n #endif /* gstiffio_INCLUDED */\ndiff --git a/devices/gdevtsep.c b/devices/gdevtsep.c\nindex 834993c..8eff537 100644\n--- a/devices/gdevtsep.c\n+++ b/devices/gdevtsep.c\n@@ -1274,23 +1274,36 @@ tiffsep1_prn_close(gx_device * pdev)\n     build_comp_to_sep_map((tiffsep_device *)tfdev, map_comp_to_sep);\n     /* Close the separation files */\n     for (comp_num = 0; comp_num < tfdev->page_num_comps; comp_num++ ) {\n+        char *lname = NULL;\n         if (tfdev->sep_file[comp_num] != NULL) {\n             tiff_filename_from_tiff(tfdev->tiff[comp_num], &name);\n-            code = gx_device_close_output_file(pdev, name, tfdev->sep_file[comp_num]);\n-            if (code >= 0)\n-                code = gs_remove_outputfile_control_path(pdev->memory, name);\n-            if (code < 0) {\n-                goto done;\n+            if (name != NULL) {\n+                lname = (char *)gs_alloc_bytes(tfdev->memory, strlen(name) + 1, \"tiffsep1_prn_close\");\n+                if (lname == NULL) {\n+                    code = gs_note_error(gs_error_VMerror);\n+                    goto done;\n+                }\n+                memcpy(lname, name, strlen(name) + 1);\n             }\n-            tfdev->sep_file[comp_num] = NULL;\n         }\n+\n         if (tfdev->tiff[comp_num]) {\n-            void *t;\n+            void *t = TIFFClientdata(tfdev->tiff[comp_num]);\n \n-            tiff_free_private_tiff((gx_device_printer *)tfdev, tfdev->tiff[comp_num]);\n             TIFFCleanup(tfdev->tiff[comp_num]);\n+            gs_free(pdev->memory, t, sizeof(tifs_io_private), 1, \"tiffsep1_prn_close\");\n             tfdev->tiff[comp_num] = NULL;\n         }\n+        if (tfdev->sep_file[comp_num] != NULL) {\n+            code = gx_device_close_output_file(pdev, lname, tfdev->sep_file[comp_num]);\n+            if (code >= 0)\n+                code = gs_remove_outputfile_control_path(pdev->memory, lname);\n+            if (code < 0) {\n+                goto done;\n+            }\n+            tfdev->sep_file[comp_num] = NULL;\n+        }\n+        gs_free_object(tfdev->memory, lname, \"tiffsep1_prn_close\");\n     }\n \n done:\n@@ -1732,8 +1745,9 @@ tiffsep_prn_close(gx_device * pdev)\n         return_error(gs_error_VMerror);\n \n     if (pdevn->tiff_comp) {\n-        tiff_free_private_tiff((gx_device_printer *)pdevn, pdevn->tiff_comp);\n+        void *t = TIFFClientdata(pdevn->tiff_comp);\n         TIFFCleanup(pdevn->tiff_comp);\n+        gs_free(pdev->memory, t, sizeof(tifs_io_private), 1, \"tiffsep_prn_close\");\n         pdevn->tiff_comp = NULL;\n     }\n     code = gdev_prn_close(pdev);\n@@ -1744,24 +1758,34 @@ tiffsep_prn_close(gx_device * pdev)\n     build_comp_to_sep_map(pdevn, map_comp_to_sep);\n     /* Close the separation files */\n     for (comp_num = 0; comp_num < pdevn->page_num_comps; comp_num++ ) {\n+        char *lname = NULL;\n         if (pdevn->sep_file[comp_num] != NULL) {\n             tiff_filename_from_tiff(pdevn->tiff[comp_num], &name);\n+            if (name != NULL) {\n+                lname = (char *)gs_alloc_bytes(pdevn->memory, strlen(name) + 1, \"tiffsep1_prn_close\");\n+                if (lname == NULL) {\n+                    code = gs_note_error(gs_error_VMerror);\n+                    goto done;\n+                }\n+                memcpy(lname, name, strlen(name) + 1);\n+            }\n \n-            code = gx_device_close_output_file((gx_device *)pdevn, name, pdevn->sep_file[comp_num]);\n+            if (pdevn->tiff[comp_num]) {\n+                void *t = TIFFClientdata(pdevn->tiff[comp_num]);\n+                TIFFCleanup(pdevn->tiff[comp_num]);\n+                gs_free(pdevn->memory, t, sizeof(tifs_io_private), 1, \"tiffsep_prn_close\");\n+                pdevn->tiff[comp_num] = NULL;\n+            }\n+\n+            code = gx_device_close_output_file((gx_device *)pdevn, lname, pdevn->sep_file[comp_num]);\n             if (code >= 0)\n                 code = gs_remove_outputfile_control_path(pdevn->memory, name);\n             if (code < 0) {\n                 goto done;\n             }\n             pdevn->sep_file[comp_num] = NULL;\n-            if (pdevn->tiff[comp_num]) {\n-                void *t;\n-\n-                tiff_free_private_tiff((gx_device_printer *)pdevn, pdevn->tiff[comp_num]);\n-                TIFFCleanup(pdevn->tiff[comp_num]);\n-                pdevn->tiff[comp_num] = NULL;\n-            }\n         }\n+        gs_free_object(pdevn->memory, lname, \"tiffsep1_prn_close\");\n     }\n \n done:\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42513893-vul",
+      "digest": "sha256:02d1dfe3a55472d4afa6fb205f7ac8987c1fe9107f649283ad31d971a861d81e"
+    },
+    "patched": {
+      "ref": "n132/arvo:42513893-fix",
+      "digest": "sha256:9856bdc76faf170a051c7af2a50d88eb81c6295d52fbd8d383ebcb85e16a49e8"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/ghostpdl/./base/gp.h:238",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/ghostpdl/./base/gp.h:238"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

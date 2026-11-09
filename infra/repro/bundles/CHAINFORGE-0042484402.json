@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042484402",
+  "chain": "CWE-1284->CWE-787",
+  "project": "libraw",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42484402",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "e70ded8b0bc231f7ed3fd5d2e83d61bd18ef5e94",
+      "fix_commits": [
+        "e70ded8b0bc231f7ed3fd5d2e83d61bd18ef5e94"
+      ],
+      "repo": "https://github.com/libraw/libraw"
+    },
+    "patch": "diff --git a/src/libraw_datastream.cpp b/src/libraw_datastream.cpp\nindex 606e5de73..eaf071ee4 100644\n--- a/src/libraw_datastream.cpp\n+++ b/src/libraw_datastream.cpp\n@@ -422,7 +422,7 @@ char *LibRaw_buffer_datastream::gets(char *s, int sz)\n   psrc = buf + streampos;\n   pdest = str;\n   if(streampos >= streamsize) return NULL;\n-  while ((size_t(psrc - buf) < streamsize) && ((pdest - str) < sz))\n+  while ((size_t(psrc - buf) < streamsize) && ((pdest - str) < (sz-1)))\n   {\n     *pdest = *psrc;\n     if (*psrc == '\\n')\n@@ -432,8 +432,11 @@ char *LibRaw_buffer_datastream::gets(char *s, int sz)\n   }\n   if (size_t(psrc - buf) < streamsize)\n     psrc++;\n-  if ((pdest - str) < sz)\n+  if ((pdest - str) < sz-1)\n     *(++pdest) = 0;\n+  else\n+    s[sz - 1] = 0; // ensure trailing zero\n+\n   streampos = psrc - buf;\n   return s;\n }\ndiff --git a/src/metadata/misc_parsers.cpp b/src/metadata/misc_parsers.cpp\nindex 4e36e9400..7a74c9f14 100644\n--- a/src/metadata/misc_parsers.cpp\n+++ b/src/metadata/misc_parsers.cpp\n@@ -304,7 +304,6 @@ void LibRaw::parse_rollei()\n     line[0] = 0;\n     if (!fgets(line, 128, ifp))\n       break;\n-    line[127] = 0;\n     if(!line[0]) break; // zero-length\n     if ((val = strchr(line, '=')))\n       *val++ = 0;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42484402-vul",
+      "digest": "sha256:f9d9735dc5e4a11d17ccbdf1439f9368f0903d396c4d2399fa3e5882f5927c33"
+    },
+    "patched": {
+      "ref": "n132/arvo:42484402-fix",
+      "digest": "sha256:3435c289c976dc962bbd1bc27f24e1484c130a1c7d8dca8a6f489663f8c93491"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/libraw/src/libraw_datastream.cpp:436",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/libraw/src/libraw_datastream.cpp:436"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042504635",
+  "chain": "CWE-416->CWE-125",
+  "project": "php-src",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42504635",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "81007bd86ab119ccc3dce619a48ae18960c489ad",
+      "fix_commits": [
+        "81007bd86ab119ccc3dce619a48ae18960c489ad"
+      ],
+      "repo": "https://github.com/php/php-src"
+    },
+    "patch": "diff --git a/ext/opcache/jit/zend_jit_arm64.dasc b/ext/opcache/jit/zend_jit_arm64.dasc\nindex b6e8c91c460b..a5a8c65d1868 100644\n--- a/ext/opcache/jit/zend_jit_arm64.dasc\n+++ b/ext/opcache/jit/zend_jit_arm64.dasc\n@@ -3594,6 +3594,15 @@ static int zend_jit_load_var(dasm_State **Dst, uint32_t info, int var, zend_reg\n \treturn zend_jit_load_reg(Dst, src, dst, info);\n }\n \n+static int zend_jit_invalidate_var_if_necessary(dasm_State **Dst, zend_uchar op_type, zend_jit_addr addr, znode_op op)\n+{\n+\tif ((op_type & (IS_TMP_VAR|IS_VAR)) && Z_MODE(addr) == IS_REG && !Z_LOAD(addr) && !Z_STORE(addr)) {\n+\t\tzend_jit_addr dst = ZEND_ADDR_MEM_ZVAL(ZREG_FP, op.var);\n+\t\t|\tSET_ZVAL_TYPE_INFO dst, IS_UNDEF, TMP1w, TMP2\n+\t}\n+\treturn 1;\n+}\n+\n static int zend_jit_update_regs(dasm_State **Dst, uint32_t var, zend_jit_addr src, zend_jit_addr dst, uint32_t info)\n {\n \tif (!zend_jit_same_addr(src, dst)) {\n@@ -4654,6 +4663,8 @@ static int zend_jit_long_math_helper(dasm_State    **Dst,\n \t\t\t\tif (EXPECTED(op2_lval > 0)) {\n \t\t\t\t\t|\tmov Rx(result_reg), xzr\n \t\t\t\t} else {\n+\t\t\t\t\tzend_jit_invalidate_var_if_necessary(Dst, op1_type, op1_addr, op1);\n+\t\t\t\t\tzend_jit_invalidate_var_if_necessary(Dst, op2_type, op2_addr, op2);\n \t\t\t\t\t|\tSET_EX_OPLINE opline, REG0\n \t\t\t\t\t|\tb ->negative_shift\n \t\t\t\t}\n@@ -4683,6 +4694,8 @@ static int zend_jit_long_math_helper(dasm_State    **Dst,\n \t\t\t\t|\tmov Rx(result_reg), xzr\n \t\t\t\t|\tcmp Rx(op2_reg), xzr\n \t\t\t\t|\tbgt >1\n+\t\t\t\tzend_jit_invalidate_var_if_necessary(Dst, op1_type, op1_addr, op1);\n+\t\t\t\tzend_jit_invalidate_var_if_necessary(Dst, op2_type, op2_addr, op2);\n \t\t\t\t|\tSET_EX_OPLINE opline, REG0\n \t\t\t\t|\tb ->negative_shift\n \t\t\t\t|.code\n@@ -4700,6 +4713,8 @@ static int zend_jit_long_math_helper(dasm_State    **Dst,\n \t\t\t\tif (EXPECTED(op2_lval > 0)) {\n \t\t\t\t\t|\tasr Rx(result_reg), Rx(result_reg), #((SIZEOF_ZEND_LONG * 8) - 1)\n \t\t\t\t} else {\n+\t\t\t\t\tzend_jit_invalidate_var_if_necessary(Dst, op1_type, op1_addr, op1);\n+\t\t\t\t\tzend_jit_invalidate_var_if_necessary(Dst, op2_type, op2_addr, op2);\n \t\t\t\t\t|\tSET_EX_OPLINE opline, REG0\n \t\t\t\t\t|\tb ->negative_shift\n \t\t\t\t}\n@@ -4725,6 +4740,8 @@ static int zend_jit_long_math_helper(dasm_State    **Dst,\n \t\t\t\t|\tcmp Rx(op2_reg), xzr\n \t\t\t\t|\tmov Rx(op2_reg), #((SIZEOF_ZEND_LONG * 8) - 1)\n \t\t\t\t|\tbgt >1\n+\t\t\t\tzend_jit_invalidate_var_if_necessary(Dst, op1_type, op1_addr, op1);\n+\t\t\t\tzend_jit_invalidate_var_if_necessary(Dst, op2_type, op2_addr, op2);\n \t\t\t\t|\tSET_EX_OPLINE opline, REG0\n \t\t\t\t|\tb ->negative_shift\n \t\t\t\t|.code\n@@ -4737,6 +4754,8 @@ static int zend_jit_long_math_helper(dasm_State    **Dst,\n \t\t\tzend_long op2_lval = Z_LVAL_P(Z_ZV(op2_addr));\n \n \t\t\tif (op2_lval == 0) {\n+\t\t\t\t\tzend_jit_invalidate_var_if_necessary(Dst, op1_type, op1_addr, op1);\n+\t\t\t\t\tzend_jit_invalidate_var_if_necessary(Dst, op2_type, op2_addr, op2);\n \t\t\t\t|\tSET_EX_OPLINE opline, REG0\n \t\t\t\t|\tb ->mod_by_zero\n \t\t\t} else if (op2_lval == -1) {\n@@ -4771,6 +4790,8 @@ static int zend_jit_long_math_helper(dasm_State    **Dst,\n \t\t\t\t|\tcbz Rx(op2_reg), >1\n \t\t\t\t|.cold_code\n \t\t\t\t|1:\n+\t\t\t\tzend_jit_invalidate_var_if_necessary(Dst, op1_type, op1_addr, op1);\n+\t\t\t\tzend_jit_invalidate_var_if_necessary(Dst, op2_type, op2_addr, op2);\n \t\t\t\t|\tSET_EX_OPLINE opline, REG0\n \t\t\t\t|\tb ->mod_by_zero\n \t\t\t\t|.code\ndiff --git a/ext/opcache/jit/zend_jit_x86.dasc b/ext/opcache/jit/zend_jit_x86.dasc\nindex b082dd75a571..6f4cc36870fb 100644\n--- a/ext/opcache/jit/zend_jit_x86.dasc\n+++ b/ext/opcache/jit/zend_jit_x86.dasc\n@@ -3939,6 +3939,15 @@ static int zend_jit_load_var(dasm_State **Dst, uint32_t info, int var, zend_reg\n \treturn zend_jit_load_reg(Dst, src, dst, info);\n }\n \n+static int zend_jit_invalidate_var_if_necessary(dasm_State **Dst, zend_uchar op_type, zend_jit_addr addr, znode_op op)\n+{\n+\tif ((op_type & (IS_TMP_VAR|IS_VAR)) && Z_MODE(addr) == IS_REG && !Z_LOAD(addr) && !Z_STORE(addr)) {\n+\t\tzend_jit_addr dst = ZEND_ADDR_MEM_ZVAL(ZREG_FP, op.var);\n+\t\t|\tSET_ZVAL_TYPE_INFO dst, IS_UNDEF\n+\t}\n+\treturn 1;\n+}\n+\n static int zend_jit_update_regs(dasm_State **Dst, uint32_t var, zend_jit_addr src, zend_jit_addr dst, uint32_t info)\n {\n \tif (!zend_jit_same_addr(src, dst)) {\n@@ -5081,6 +5090,8 @@ static int zend_jit_long_math_helper(dasm_State    **Dst,\n \t\t\t\tif (EXPECTED(op2_lval > 0)) {\n \t\t\t\t\t|\txor Ra(result_reg), Ra(result_reg)\n \t\t\t\t} else {\n+\t\t\t\t\tzend_jit_invalidate_var_if_necessary(Dst, op1_type, op1_addr, op1);\n+\t\t\t\t\tzend_jit_invalidate_var_if_necessary(Dst, op2_type, op2_addr, op2);\n \t\t\t\t\t|\tSET_EX_OPLINE opline, r0\n \t\t\t\t\t|\tjmp ->negative_shift\n \t\t\t\t}\n@@ -5104,6 +5115,8 @@ static int zend_jit_long_math_helper(dasm_State    **Dst,\n \t\t\t\t|\tcmp r1, 0\n \t\t\t\t|\tmov Ra(result_reg), 0\n \t\t\t\t|\tjg >1\n+\t\t\t\tzend_jit_invalidate_var_if_necessary(Dst, op1_type, op1_addr, op1);\n+\t\t\t\tzend_jit_invalidate_var_if_necessary(Dst, op2_type, op2_addr, op2);\n \t\t\t\t|\tSET_EX_OPLINE opline, r0\n \t\t\t\t|\tjmp ->negative_shift\n \t\t\t\t|.code\n@@ -5121,6 +5134,8 @@ static int zend_jit_long_math_helper(dasm_State    **Dst,\n \t\t\t\tif (EXPECTED(op2_lval > 0)) {\n \t\t\t\t\t|\tsar Ra(result_reg), (SIZEOF_ZEND_LONG * 8) - 1\n \t\t\t\t} else {\n+\t\t\t\t\tzend_jit_invalidate_var_if_necessary(Dst, op1_type, op1_addr, op1);\n+\t\t\t\t\tzend_jit_invalidate_var_if_necessary(Dst, op2_type, op2_addr, op2);\n \t\t\t\t\t|\tSET_EX_OPLINE opline, r0\n \t\t\t\t\t|\tjmp ->negative_shift\n \t\t\t\t}\n@@ -5141,6 +5156,8 @@ static int zend_jit_long_math_helper(dasm_State    **Dst,\n \t\t\t\t|\tcmp r1, 0\n \t\t\t\t|\tmov r1, (SIZEOF_ZEND_LONG * 8) - 1\n \t\t\t\t|\tjg >1\n+\t\t\t\tzend_jit_invalidate_var_if_necessary(Dst, op1_type, op1_addr, op1);\n+\t\t\t\tzend_jit_invalidate_var_if_necessary(Dst, op2_type, op2_addr, op2);\n \t\t\t\t|\tSET_EX_OPLINE opline, r0\n \t\t\t\t|\tjmp ->negative_shift\n \t\t\t\t|.code\n@@ -5153,6 +5170,8 @@ static int zend_jit_long_math_helper(dasm_State    **Dst,\n \t\t\tzend_long op2_lval = Z_LVAL_P(Z_ZV(op2_addr));\n \n \t\t\tif (op2_lval == 0) {\n+\t\t\t\tzend_jit_invalidate_var_if_necessary(Dst, op1_type, op1_addr, op1);\n+\t\t\t\tzend_jit_invalidate_var_if_necessary(Dst, op2_type, op2_addr, op2);\n \t\t\t\t|\tSET_EX_OPLINE opline, r0\n \t\t\t\t|\tjmp ->mod_by_zero\n \t\t\t} else if (zend_long_is_power_of_two(op2_lval) && op1_range && op1_range->min >= 0) {\n@@ -5192,6 +5211,8 @@ static int zend_jit_long_math_helper(dasm_State    **Dst,\n \t\t\t\t|\tjz >1\n \t\t\t\t|.cold_code\n \t\t\t\t|1:\n+\t\t\t\tzend_jit_invalidate_var_if_necessary(Dst, op1_type, op1_addr, op1);\n+\t\t\t\tzend_jit_invalidate_var_if_necessary(Dst, op2_type, op2_addr, op2);\n \t\t\t\t|\tSET_EX_OPLINE opline, r0\n \t\t\t\t|\tjmp ->mod_by_zero\n \t\t\t\t|.code\ndiff --git a/ext/opcache/tests/jit/shift_right_004.phpt b/ext/opcache/tests/jit/shift_right_004.phpt\nnew file mode 100644\nindex 000000000000..7a59c19dfb22\n--- /dev/null\n+++ b/ext/opcache/tests/jit/shift_right_004.phpt\n@@ -0,0 +1,40 @@\n+--TEST--\n+JIT Shift Right: 004\n+--INI--\n+opcache.enable=1\n+opcache.enable_cli=1\n+opcache.file_update_protection=0\n+opcache.jit_buffer_size=1M\n+opcache.protect_memory=1\n+--FILE--\n+<?php\n+function test() {\n+\t$j = 2;\n+    for ($i = 0; $i < 10;\n+    \t$i + $b = $a + $a = $a + $a = $a +\n+\t\t    $a = !$a +\n+\t\t\t$c[0] .= 0xfff0001/34028236692903846346336*6) {\n+\t    $a =!$a + $a &= 74444444 - 444 >> 4 - $j++;\n+        if ($j > 14) break;\n+    }\n+}\n+test();\n+?>\n+--EXPECTF--\n+Warning: Undefined variable $a in %sshift_right_004.php on line 8\n+\n+Warning: Undefined variable $a in %sshift_right_004.php on line 8\n+\n+Warning: Undefined variable $c in %sshift_right_004.php on line 7\n+\n+Warning: Undefined array key 0 in %sshift_right_004.php on line 7\n+\n+Warning: A non-numeric value encountered in %sshift_right_004.php on line 7\n+\n+Warning: A non-numeric value encountered in %sshift_right_004.php on line 7\n+\n+Fatal error: Uncaught ArithmeticError: Bit shift by negative number in %sshift_right_004.php:8\n+Stack trace:\n+#0 %sshift_right_004.php(12): test()\n+#1 {main}\n+  thrown in %sshift_right_004.php on line 8\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42504635-vul",
+      "digest": "sha256:c01ed10c5d883227d5369e316f116b3b5f740ad31c3063f9c136f0cf33a5f15e"
+    },
+    "patched": {
+      "ref": "n132/arvo:42504635-fix",
+      "digest": "sha256:47d3f8b6ff6680a841f5cb462d99c0d57722dc23210a07bfb08e7a64dd1ebe59"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/php-src/Zend/zend_types.h:1195",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/php-src/Zend/zend_types.h:1195"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

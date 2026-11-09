@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042475709",
+  "chain": "CWE-20->CWE-787",
+  "project": "open62541",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42475709",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "054f460d6e9e98deba186eee6bd956756dfc89e0",
+      "fix_commits": [
+        "054f460d6e9e98deba186eee6bd956756dfc89e0"
+      ],
+      "repo": "https://github.com/open62541/open62541"
+    },
+    "patch": "diff --git a/src/server/ua_services_view.c b/src/server/ua_services_view.c\nindex c7e90f6ed60..8aca3c12596 100644\n--- a/src/server/ua_services_view.c\n+++ b/src/server/ua_services_view.c\n@@ -93,8 +93,9 @@ void RefTree_clear(RefTree *rt) {\n static UA_StatusCode\n RefTree_double(RefTree *rt) {\n     size_t capacity = rt->capacity * 2;\n+    UA_assert(capacity > 0);\n     size_t space = (sizeof(UA_NodeId) + sizeof(RefEntry)) * capacity;\n-    UA_NodeId *newTargets = (UA_NodeId*)realloc(rt->targets, space);\n+    UA_NodeId *newTargets = (UA_NodeId*)UA_realloc(rt->targets, space);\n     if(!newTargets)\n         return UA_STATUSCODE_BADOUTOFMEMORY;\n \n@@ -473,7 +474,11 @@ Operation_Browse(UA_Server *server, UA_Session *session, const struct BrowseOpts\n         return;\n \n     ContinuationPoint cp;\n-    ContinuationPoint_init(&cp, maxRefs, bo->recursive);\n+    result->statusCode = ContinuationPoint_init(&cp, maxRefs, bo->recursive);\n+    if(result->statusCode != UA_STATUSCODE_GOOD) {\n+        RefResult_clear(&rr);\n+        return;\n+    }\n     cp.bd = *descr; /* Deep-copy only when the cp is persisted in the session */\n \n     /* Add the initial node to the RefTree */\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42475709-vul",
+      "digest": "sha256:0590d999bd396132d1b842e8715d582004bba563105f03d1cc7d0ed7e9fe0d60"
+    },
+    "patched": {
+      "ref": "n132/arvo:42475709-fix",
+      "digest": "sha256:3fe808e5a1659e329c8863e43dccc659140c37a8723339983b4945c9be48a42d"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/open62541/src/ua_types.c:1012",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/open62541/src/ua_types.c:1012"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

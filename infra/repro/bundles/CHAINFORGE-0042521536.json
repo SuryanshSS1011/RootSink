@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042521536",
+  "chain": "CWE-456->CWE-457",
+  "project": "mupdf",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42521536",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "dac34508c049d12c801416727652f94daed4fd4b",
+      "fix_commits": [
+        "dac34508c049d12c801416727652f94daed4fd4b"
+      ],
+      "repo": "git://git.ghostscript.com/mupdf.git"
+    },
+    "patch": "From dac34508c049d12c801416727652f94daed4fd4b Mon Sep 17 00:00:00 2001\nFrom: Sebastian Rasmussen <sebras@gmail.com>\nDate: Sun, 12 Aug 2018 20:55:17 +0800\nSubject: [PATCH] Bug 699631: Handle unsupported triangle mesh edge flags.\n\nThere were two issues with the code parsing the triangle mesh's\nedge flags:\n\n  * meshes were not require to start with an independent triangle\n  * out of range edge flags caused vertices to be ignored\n\nA mesh where the edge flag of the first vertice is out of range,\nand the edge flag of the second vertex indicates continuation\nof a prior triangle would result in trying to create a triangle\nwhere the third coordinate would be uninitialized.\n\nThis commit requires the edge flag of the first vertex to indicate\na new independent triangle and if out of range edge flags are\nencountered they are treated as if they indicate a new triangle.\n\nThanks to oss-fuzz for reporting.\n---\n source/fitz/shade.c | 15 +++++++++++++++\n 1 file changed, 15 insertions(+)\n\ndiff --git a/source/fitz/shade.c b/source/fitz/shade.c\nindex faf8b67..6308923 100644\n--- a/source/fitz/shade.c\n+++ b/source/fitz/shade.c\n@@ -314,6 +314,7 @@ fz_process_shade_type4(fz_context *ctx, fz_shade *shade, fz_matrix ctm, fz_mesh_\n \tconst float *c0 = shade->u.m.c0;\n \tconst float *c1 = shade->u.m.c1;\n \tfloat x, y, c[FZ_MAX_COLORS];\n+\tint first_triangle = 1;\n \n \tfz_try(ctx)\n \t{\n@@ -326,8 +327,22 @@ fz_process_shade_type4(fz_context *ctx, fz_shade *shade, fz_matrix ctm, fz_mesh_\n \t\t\t\tc[i] = read_sample(ctx, stream, bpcomp, c0[i], c1[i]);\n \t\t\tfz_prepare_vertex(ctx, painter, vd, ctm, x, y, c);\n \n+\t\t\tif (first_triangle)\n+\t\t\t{\n+\t\t\t\tif (flag != 0)\n+\t\t\t\t{\n+\t\t\t\t\tfz_warn(ctx, \"ignoring non-zero edge flags for first vertex in mesh\");\n+\t\t\t\t\tflag = 0;\n+\t\t\t\t}\n+\t\t\t\tfirst_triangle = 0;\n+\t\t\t}\n+\n \t\t\tswitch (flag)\n \t\t\t{\n+\t\t\tdefault:\n+\t\t\t\tfz_warn(ctx, \"ignoring out of range edge flag in mesh\");\n+\t\t\t\t/* fallthrough */\n+\n \t\t\tcase 0: /* start new triangle */\n \t\t\t\tSWAP(va, vd);\n \n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42521536-vul",
+      "digest": "sha256:6897c2a7352719abddd4f92b1d5d15397e69870cfb47d73154365ca720e43d11"
+    },
+    "patched": {
+      "ref": "n132/arvo:42521536-fix",
+      "digest": "sha256:a9da3b527e565de38ab9f4951cb878815f8004d2a453194ee3e3b500783e7ffe"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/mupdf/source/fitz/draw-mesh.c:111",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/mupdf/source/fitz/draw-mesh.c:111"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

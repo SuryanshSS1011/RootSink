@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042481187",
+  "chain": "CWE-20->CWE-125",
+  "project": "samba",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42481187",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "14182350f8397d27d7642dae595dc52691f0acfe",
+      "fix_commits": [
+        "14182350f8397d27d7642dae595dc52691f0acfe"
+      ],
+      "repo": "https://gitlab.com/samba-team/samba"
+    },
+    "patch": "diff --git a/librpc/ndr/ndr.c b/librpc/ndr/ndr.c\nindex c772d53f6edc0cf94f58af76a2e82c7c82e7af00..f96a0bca08b3a22857b1ddb3e525347a860cddc8 100644\n--- a/librpc/ndr/ndr.c\n+++ b/librpc/ndr/ndr.c\n@@ -199,12 +199,8 @@ _PUBLIC_ enum ndr_err_code ndr_pull_pop(struct ndr_pull *ndr)\n */\n _PUBLIC_ enum ndr_err_code ndr_pull_advance(struct ndr_pull *ndr, uint32_t size)\n {\n+\tNDR_PULL_NEED_BYTES(ndr, size);\n \tndr->offset += size;\n-\tif (ndr->offset > ndr->data_size) {\n-\t\treturn ndr_pull_error(ndr, NDR_ERR_BUFSIZE,\n-\t\t\t\t      \"ndr_pull_advance by %u failed\",\n-\t\t\t\t      size);\n-\t}\n \treturn NDR_ERR_SUCCESS;\n }\n \ndiff --git a/selftest/knownfail.d/bug-14236 b/selftest/knownfail.d/bug-14236\nindex 3c36d148ba7ea44bf157e3db207923a1ad4b9bd3..8131b070b37455d19b41b1470b671cf9fc65deba 100644\n--- a/selftest/knownfail.d/bug-14236\n+++ b/selftest/knownfail.d/bug-14236\n@@ -1,2 +1 @@\n-^samba.tests.blackbox.ndrdump.samba.tests.blackbox.ndrdump.NdrDumpTests.test_ndrdump_fuzzed_ndr_compression\n-^librpc.ndr.ndr.test_ndr_pull_advance\n+^samba.tests.blackbox.ndrdump.samba.tests.blackbox.ndrdump.NdrDumpTests.test_ndrdump_fuzzed_NULL_struct_ntlmssp_CHALLENGE_MESSAGE\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42481187-vul",
+      "digest": "sha256:33d4fce5a468235a72cd20e583e29c2dcbb7b74a2b1112fed3d7480754612284"
+    },
+    "patched": {
+      "ref": "n132/arvo:42481187-fix",
+      "digest": "sha256:cb9a3f43fbc2cea2e1e379103c6ae0bec4f49209cf13a80a70f1bd72adc0151f"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/samba/bin/default/../../lib/compression/lzxpress.c:257",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/samba/bin/default/../../lib/compression/lzxpress.c:257"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

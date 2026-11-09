@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042527008",
+  "chain": "CWE-416->CWE-125",
+  "project": "libxml2",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42527008",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "5db5a704eb6b030e6bebec9d358d739f1eb24fed",
+      "fix_commits": [
+        "5db5a704eb6b030e6bebec9d358d739f1eb24fed"
+      ],
+      "repo": "https://gitlab.gnome.org/GNOME/libxml2.git"
+    },
+    "patch": "From 5db5a704eb6b030e6bebec9d358d739f1eb24fed Mon Sep 17 00:00:00 2001\nFrom: Nick Wellnhofer <wellnhofer@aevum.de>\nDate: Wed, 9 Aug 2023 18:39:14 +0200\nSubject: [PATCH] html: Fix UAF in htmlCurrentChar\n\nShort-lived regression found by OSS-Fuzz.\n---\n HTMLparser.c | 2 +-\n 1 file changed, 1 insertion(+), 1 deletion(-)\n\ndiff --git a/HTMLparser.c b/HTMLparser.c\nindex ba3eb16..c2d05ba 100644\n--- a/HTMLparser.c\n+++ b/HTMLparser.c\n@@ -445,7 +445,6 @@ htmlCurrentChar(xmlParserCtxtPtr ctxt, int *len) {\n             xmlSwitchEncoding(ctxt, XML_CHAR_ENCODING_8859_1);\n         } else {\n             handler = xmlFindCharEncodingHandler((const char *) guess);\n-            xmlFree(guess);\n             if (handler != NULL) {\n                 /*\n                  * Don't use UTF-8 encoder which isn't required and\n@@ -457,6 +456,7 @@ htmlCurrentChar(xmlParserCtxtPtr ctxt, int *len) {\n                 htmlParseErr(ctxt, XML_ERR_INVALID_ENCODING,\n                              \"Unsupported encoding %s\", guess, NULL);\n             }\n+            xmlFree(guess);\n         }\n         ctxt->input->flags |= XML_INPUT_HAS_ENCODING;\n     }\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42527008-vul",
+      "digest": "sha256:6cf3dd15dd7971da7bd19c9492f3d60e41c1969e5a638f5142278eddd46a989e"
+    },
+    "patched": {
+      "ref": "n132/arvo:42527008-fix",
+      "digest": "sha256:65272182d798b095625e590f5cbef255e927d3d85c3d63d61245cb7c061e8bee"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/libxml2/error.c:529",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/libxml2/error.c:529"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

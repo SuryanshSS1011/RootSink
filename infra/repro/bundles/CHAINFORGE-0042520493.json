@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042520493",
+  "chain": "CWE-20->CWE-787",
+  "project": "imagemagick",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42520493",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "147814adf1c657f647ee7e73027dbedde5ac2467",
+      "fix_commits": [
+        "147814adf1c657f647ee7e73027dbedde5ac2467"
+      ],
+      "repo": "https://github.com/imagemagick/imagemagick"
+    },
+    "patch": "diff --git a/coders/dds.c b/coders/dds.c\nindex e3778fd6100..85e33a59183 100644\n--- a/coders/dds.c\n+++ b/coders/dds.c\n@@ -2113,7 +2113,7 @@ static MagickBooleanType ReadDXT3Pixels(Image *image,\n       {\n         for (i = 0; i < 4; i++)\n         {\n-          if ((x + i) < (ssize_t) image->rows && (y + j) < (ssize_t) image->columns)\n+          if ((x + i) < (ssize_t) image->columns && (y + j) < (ssize_t) image->rows)\n             {\n               code = (bits >> ((4*j+i)*2)) & 0x3;\n               SetPixelRed(image,ScaleCharToQuantum(colors.r[code]),q);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42520493-vul",
+      "digest": "sha256:0a550c4a471c6c0b8d2c5b511b436e81dab7d05f2816aff2acbed1d5bb962af2"
+    },
+    "patched": {
+      "ref": "n132/arvo:42520493-fix",
+      "digest": "sha256:495fa42522fbe2ff002533b6aec912a46397db2120a5338303a6210205b92bf8"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/imagemagick/./MagickCore/pixel-accessor.h:844",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/imagemagick/./MagickCore/pixel-accessor.h:844"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

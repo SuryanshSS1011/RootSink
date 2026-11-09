@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042522273",
+  "chain": "CWE-1285->CWE-125",
+  "project": "libxml2",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42522273",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "ca2bfecea9c23f8d2e11741fff7c6a5372c56bb8",
+      "fix_commits": [
+        "ca2bfecea9c23f8d2e11741fff7c6a5372c56bb8"
+      ],
+      "repo": "https://gitlab.gnome.org/GNOME/libxml2.git"
+    },
+    "patch": "diff --git a/HTMLparser.c b/HTMLparser.c\nindex 509e029ebe2399bd4d6f61290822f5d423677371..0830584f57259211009fe38fedeb118d3d2f164f 100644\n--- a/HTMLparser.c\n+++ b/HTMLparser.c\n@@ -410,6 +410,11 @@ htmlCurrentChar(xmlParserCtxtPtr ctxt, int *len) {\n \t*len = 0;\n \treturn(ctxt->token);\n     }\n+\n+    if ((ctxt->input->end - ctxt->input->cur < 4) &&\n+        (xmlParserGrow(ctxt) < 0))\n+        return(0);\n+\n     if (ctxt->charset != XML_CHAR_ENCODING_UTF8) {\n         xmlChar * guess;\n         xmlCharEncodingHandlerPtr handler;\n@@ -470,29 +475,21 @@ htmlCurrentChar(xmlParserCtxtPtr ctxt, int *len) {\n     cur = ctxt->input->cur;\n     c = *cur;\n     if (c & 0x80) {\n+        size_t avail;\n+\n         if ((c & 0x40) == 0)\n             goto encoding_error;\n-        if (cur[1] == 0) {\n-            xmlParserGrow(ctxt);\n-            cur = ctxt->input->cur;\n-        }\n-        if ((cur[1] & 0xc0) != 0x80)\n+\n+        avail = ctxt->input->end - ctxt->input->cur;\n+\n+        if ((avail < 2) || ((cur[1] & 0xc0) != 0x80))\n             goto encoding_error;\n         if ((c & 0xe0) == 0xe0) {\n-\n-            if (cur[2] == 0) {\n-                xmlParserGrow(ctxt);\n-                cur = ctxt->input->cur;\n-            }\n-            if ((cur[2] & 0xc0) != 0x80)\n+            if ((avail < 3) || ((cur[2] & 0xc0) != 0x80))\n                 goto encoding_error;\n             if ((c & 0xf0) == 0xf0) {\n-                if (cur[3] == 0) {\n-                    xmlParserGrow(ctxt);\n-                    cur = ctxt->input->cur;\n-                }\n                 if (((c & 0xf8) != 0xf0) ||\n-                    ((cur[3] & 0xc0) != 0x80))\n+                    (avail < 4) || ((cur[3] & 0xc0) != 0x80))\n                     goto encoding_error;\n                 /* 4-byte code */\n                 *len = 4;\ndiff --git a/parserInternals.c b/parserInternals.c\nindex a7f0aa95aae6630d234e2a13be87338b36ffb1e2..c0281be27563c75032366061a5f168a16e121d3d 100644\n--- a/parserInternals.c\n+++ b/parserInternals.c\n@@ -554,8 +554,11 @@ xmlNextChar(xmlParserCtxtPtr ctxt)\n \treturn;\n     }\n \n-    if ((ctxt->input->cur >= ctxt->input->end) && (xmlParserGrow(ctxt) <= 0)) {\n-        return;\n+    if (ctxt->input->end - ctxt->input->cur < 4) {\n+        if (xmlParserGrow(ctxt) < 0)\n+            return;\n+        if (ctxt->input->cur >= ctxt->input->end)\n+            return;\n     }\n \n     if (ctxt->charset == XML_CHAR_ENCODING_UTF8) {\n@@ -588,30 +591,23 @@ xmlNextChar(xmlParserCtxtPtr ctxt)\n \n         c = *cur;\n         if (c & 0x80) {\n+            size_t avail;\n+\n             if (c == 0xC0)\n \t        goto encoding_error;\n-            if (cur[1] == 0) {\n-                xmlParserGrow(ctxt);\n-                cur = ctxt->input->cur;\n-            }\n-            if ((cur[1] & 0xc0) != 0x80)\n+\n+            avail = ctxt->input->end - ctxt->input->cur;\n+\n+            if ((avail < 2) || (cur[1] & 0xc0) != 0x80)\n                 goto encoding_error;\n             if ((c & 0xe0) == 0xe0) {\n                 unsigned int val;\n \n-                if (cur[2] == 0) {\n-                    xmlParserGrow(ctxt);\n-                    cur = ctxt->input->cur;\n-                }\n-                if ((cur[2] & 0xc0) != 0x80)\n+                if ((avail < 3) || (cur[2] & 0xc0) != 0x80)\n                     goto encoding_error;\n                 if ((c & 0xf0) == 0xf0) {\n-                    if (cur[3] == 0) {\n-                        xmlParserGrow(ctxt);\n-                        cur = ctxt->input->cur;\n-                    }\n                     if (((c & 0xf8) != 0xf0) ||\n-                        ((cur[3] & 0xc0) != 0x80))\n+                        (avail < 4) || ((cur[3] & 0xc0) != 0x80))\n                         goto encoding_error;\n                     /* 4-byte code */\n                     ctxt->input->cur += 4;\n@@ -652,8 +648,6 @@ xmlNextChar(xmlParserCtxtPtr ctxt)\n             ctxt->input->col++;\n         ctxt->input->cur++;\n     }\n-    if (*ctxt->input->cur == 0)\n-        xmlParserGrow(ctxt);\n     return;\n encoding_error:\n     /*\n@@ -707,6 +701,10 @@ xmlCurrentChar(xmlParserCtxtPtr ctxt, int *len) {\n     if (ctxt->instate == XML_PARSER_EOF)\n \treturn(0);\n \n+    if ((ctxt->input->end - ctxt->input->cur < 4) &&\n+        (xmlParserGrow(ctxt) < 0))\n+        return(0);\n+\n     if ((*ctxt->input->cur >= 0x20) && (*ctxt->input->cur <= 0x7F)) {\n \t    *len = 1;\n \t    return(*ctxt->input->cur);\n@@ -729,28 +727,21 @@ xmlCurrentChar(xmlParserCtxtPtr ctxt, int *len) {\n \n \tc = *cur;\n \tif (c & 0x80) {\n+            size_t avail;\n+\n \t    if (((c & 0x40) == 0) || (c == 0xC0))\n \t\tgoto encoding_error;\n-\t    if (cur[1] == 0) {\n-\t\txmlParserGrow(ctxt);\n-                cur = ctxt->input->cur;\n-            }\n-\t    if ((cur[1] & 0xc0) != 0x80)\n+\n+            avail = ctxt->input->end - ctxt->input->cur;\n+\n+\t    if ((avail < 2) || (cur[1] & 0xc0) != 0x80)\n \t\tgoto encoding_error;\n \t    if ((c & 0xe0) == 0xe0) {\n-\t\tif (cur[2] == 0) {\n-\t\t    xmlParserGrow(ctxt);\n-                    cur = ctxt->input->cur;\n-                }\n-\t\tif ((cur[2] & 0xc0) != 0x80)\n+\t\tif ((avail < 3) || (cur[2] & 0xc0) != 0x80)\n \t\t    goto encoding_error;\n \t\tif ((c & 0xf0) == 0xf0) {\n-\t\t    if (cur[3] == 0) {\n-\t\t\txmlParserGrow(ctxt);\n-                        cur = ctxt->input->cur;\n-                    }\n \t\t    if (((c & 0xf8) != 0xf0) ||\n-\t\t\t((cur[3] & 0xc0) != 0x80))\n+\t\t\t(avail < 4) || ((cur[3] & 0xc0) != 0x80))\n \t\t\tgoto encoding_error;\n \t\t    /* 4-byte code */\n \t\t    *len = 4;\n@@ -785,8 +776,6 @@ xmlCurrentChar(xmlParserCtxtPtr ctxt, int *len) {\n \t} else {\n \t    /* 1-byte code */\n \t    *len = 1;\n-\t    if (*ctxt->input->cur == 0)\n-\t\txmlParserGrow(ctxt);\n \t    if ((*ctxt->input->cur == 0) &&\n \t        (ctxt->input->end > ctxt->input->cur)) {\n \t        xmlErrEncodingInt(ctxt, XML_ERR_INVALID_CHAR,\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42522273-vul",
+      "digest": "sha256:779ae88d28fd2a441f16cb1fe8194c5637706f39a38f71e32a24ba175eb34eef"
+    },
+    "patched": {
+      "ref": "n132/arvo:42522273-fix",
+      "digest": "sha256:fa77aa42556fc228d13f186d7af13b798da010b5694207be86a8920d2c45fdd6"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "global-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/libxml2/parserInternals.c:500",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "global-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/libxml2/parserInternals.c:500"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

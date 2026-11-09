@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042532498",
+  "chain": "CWE-416->CWE-125",
+  "project": "leptonica",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42532498",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "f86cdab8d685ce5d2ea0d133c076611e3394c6c8",
+      "fix_commits": [
+        "f86cdab8d685ce5d2ea0d133c076611e3394c6c8"
+      ],
+      "repo": "https://github.com/DanBloomberg/leptonica"
+    },
+    "patch": "From f86cdab8d685ce5d2ea0d133c076611e3394c6c8 Mon Sep 17 00:00:00 2001\nFrom: danblooomberg <dan.bloomberg@gmail.com>\nDate: Mon, 29 Jan 2024 10:50:58 -0800\nSubject: [PATCH] Fixed fuzzing issue #66279 (asan oss-fuzz in\n pixa_recog_fuzzer) * test for index before doing lookup in font and baseline\n tables\n\n---\n src/bmf.c | 6 ++++++\n 1 file changed, 6 insertions(+)\n\ndiff --git a/src/bmf.c b/src/bmf.c\nindex 7cd3116..f03889a 100644\n--- a/src/bmf.c\n+++ b/src/bmf.c\n@@ -208,6 +208,8 @@ PIXA    *pixa;\n         return NULL;\n     if (!bmf)\n         return (PIX *)ERROR_PTR(\"bmf not defined\", __func__, NULL);\n+    if (index < 32 || index >= 127)\n+        return (PIX *)ERROR_PTR(\"invalid index\", __func__, NULL);\n \n     i = bmf->fonttab[index];\n     if (i == UNDEF) {\n@@ -245,6 +247,8 @@ PIXA    *pixa;\n         return ERROR_INT(\"bmf not defined\", __func__, 1);\n     if ((index = (l_int32)chr) == 10)  /* NL */\n         return 0;\n+    if (index < 32 || index >= 127)\n+        return ERROR_INT(\"invalid index\", __func__, 1);\n \n     i = bmf->fonttab[index];\n     if (i == UNDEF) {\n@@ -281,6 +285,8 @@ l_int32  bl, index;\n         return ERROR_INT(\"bmf not defined\", __func__, 1);\n     if ((index = (l_int32)chr) == 10)  /* NL */\n         return 0;\n+    if (index < 32 || index >= 127)\n+        return ERROR_INT(\"invalid index\", __func__, 1);\n \n     bl = bmf->baselinetab[index];\n     if (bl == UNDEF) {\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42532498-vul",
+      "digest": "sha256:0ec353ecef4f11482c0903cdf49d87a0b7a5e9b6e710317ea0fc992070d0a1ac"
+    },
+    "patched": {
+      "ref": "n132/arvo:42532498-fix",
+      "digest": "sha256:f32976b6ea52e04d45c5e82d32b3d76942d94579df51d6320335fc0e25dba13f"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/leptonica/src/bmf.c:256",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/leptonica/src/bmf.c:256"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

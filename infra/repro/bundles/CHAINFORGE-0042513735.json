@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042513735",
+  "chain": "CWE-1285->CWE-125",
+  "project": "lcms",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42513735",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "1394d740d96886b501e0ad04fe926a72eca3f01c",
+      "fix_commits": [
+        "1394d740d96886b501e0ad04fe926a72eca3f01c"
+      ],
+      "repo": "https://github.com/mm2/Little-CMS"
+    },
+    "patch": "diff --git a/src/cmsio0.c b/src/cmsio0.c\nindex 2c24d118d..d261451df 100644\n--- a/src/cmsio0.c\n+++ b/src/cmsio0.c\n@@ -783,6 +783,7 @@ cmsBool _cmsReadHeader(_cmsICCPROFILE* Icc)\n         if (!_cmsReadUInt32Number(io, &Tag.size)) return FALSE;\n \n         // Perform some sanity check. Offset + size should fall inside file.\n+        if (Tag.size == 0 || Tag.offset == 0) continue;\n         if (Tag.offset + Tag.size > HeaderSize ||\n             Tag.offset + Tag.size < Tag.offset)\n                   continue;\n@@ -805,7 +806,12 @@ cmsBool _cmsReadHeader(_cmsICCPROFILE* Icc)\n         Icc ->TagCount++;\n     }\n \n-    return TRUE;\n+    if (Icc->TagCount == 0) {\n+        cmsSignalError(Icc->ContextID, cmsERROR_RANGE, \"Corrupted profile: no tags found\");\n+        return FALSE;\n+    }\n+        \n+     return TRUE;\n }\n \n // Saves profile header\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42513735-vul",
+      "digest": "sha256:7efc612d964f1aad7a186b2476117a5c2301f91a20a8fe9551ca65933837d49f"
+    },
+    "patched": {
+      "ref": "n132/arvo:42513735-fix",
+      "digest": "sha256:fac711f26b384780c7982b94d6720cd76dd54ffb3563b43f8321693163907dd6"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/lcms/src/cmsintrp.c:767",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/lcms/src/cmsintrp.c:767"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-958362343",
+  "chain": "CWE-129->CWE-119",
+  "project": "serenity",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42518802",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/SerenityOS/serenity/commit/f58c5ff569a738339349a2aaee36d175eddff891",
+      "fix_commits": [
+        "f58c5ff569a738339349a2aaee36d175eddff891"
+      ],
+      "repo": "https://github.com/SerenityOS/serenity"
+    },
+    "patch": "diff --git a/Userland/Libraries/LibVideo/VP9/Decoder.cpp b/Userland/Libraries/LibVideo/VP9/Decoder.cpp\nindex 09fb9058d3356f..01628bf6e95273 100644\n--- a/Userland/Libraries/LibVideo/VP9/Decoder.cpp\n+++ b/Userland/Libraries/LibVideo/VP9/Decoder.cpp\n@@ -295,9 +295,9 @@ DecoderErrorOr<void> Decoder::adapt_non_coef_probs(FrameContext const& frame_con\n             probs.single_ref_prob()[i][j] = adapt_prob(probs.single_ref_prob()[i][j], counter.m_counts_single_ref[i][j]);\n     }\n     ADAPT_TREE(inter_mode, inter_mode, inter_mode, INTER_MODE_CONTEXTS);\n-    ADAPT_TREE(intra_mode, y_mode, intra_mode, INTER_MODE_CONTEXTS);\n-    ADAPT_TREE(intra_mode, uv_mode, uv_mode, INTER_MODE_CONTEXTS);\n-    ADAPT_TREE(partition, partition, partition, INTER_MODE_CONTEXTS);\n+    ADAPT_TREE(intra_mode, y_mode, intra_mode, BLOCK_SIZE_GROUPS);\n+    ADAPT_TREE(intra_mode, uv_mode, uv_mode, INTRA_MODES);\n+    ADAPT_TREE(partition, partition, partition, PARTITION_CONTEXTS);\n     ADAPT_PROB_TABLE(skip, SKIP_CONTEXTS);\n     if (frame_context.interpolation_filter == Switchable) {\n         ADAPT_TREE(interp_filter, interp_filter, interp_filter, INTERP_FILTER_CONTEXTS);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42518802-vul",
+      "digest": "sha256:c23c60b5e201bf4a5bf3b263b919cd0e68433bdc38c675ec3a37080347bc29f5"
+    },
+    "patched": {
+      "ref": "n132/arvo:42518802-fix",
+      "digest": "sha256:3ebcdb70709fe7cc985634bdd200143173b83d73c1c33a44c02ddf120f211508"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "crash_site": "/src/serenity/Userland/Libraries/LibVideo/VP9/Decoder.cpp:295",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 129,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 119,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "site": "/src/serenity/Userland/Libraries/LibVideo/VP9/Decoder.cpp:295"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

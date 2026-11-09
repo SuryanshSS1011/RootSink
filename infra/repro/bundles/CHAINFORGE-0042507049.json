@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042507049",
+  "chain": "CWE-1285->CWE-125",
+  "project": "zstd",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42507049",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "4d8a2132d0e453232a46dd448e5137035ba25bee",
+      "fix_commits": [
+        "4d8a2132d0e453232a46dd448e5137035ba25bee"
+      ],
+      "repo": "https://github.com/facebook/zstd"
+    },
+    "patch": "diff --git a/lib/compress/zstd_opt.c b/lib/compress/zstd_opt.c\nindex 2fa10816f9f..1b1ddad4289 100644\n--- a/lib/compress/zstd_opt.c\n+++ b/lib/compress/zstd_opt.c\n@@ -269,7 +269,16 @@ static U32 ZSTD_rawLiteralsCost(const BYTE* const literals, U32 const litLength,\n  * cost of literalLength symbol */\n static U32 ZSTD_litLengthPrice(U32 const litLength, const optState_t* const optPtr, int optLevel)\n {\n-    if (optPtr->priceType == zop_predef) return WEIGHT(litLength, optLevel);\n+    assert(litLength <= ZSTD_BLOCKSIZE_MAX);\n+    if (optPtr->priceType == zop_predef)\n+        return WEIGHT(litLength, optLevel);\n+    /* We can't compute the litLength price for sizes >= ZSTD_BLOCKSIZE_MAX\n+     * because it isn't representable in the zstd format. So instead just\n+     * call it 1 bit more than ZSTD_BLOCKSIZE_MAX - 1. In this case the block\n+     * would be all literals.\n+     */\n+    if (litLength == ZSTD_BLOCKSIZE_MAX)\n+        return BITCOST_MULTIPLIER + ZSTD_litLengthPrice(ZSTD_BLOCKSIZE_MAX - 1, optPtr, optLevel);\n \n     /* dynamic statistics */\n     {   U32 const llCode = ZSTD_LLcode(litLength);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42507049-vul",
+      "digest": "sha256:c87fb2e12fbf0bf2ea638bccf57c23f80200043c53bd98134c1e3d7d5ff0fab2"
+    },
+    "patched": {
+      "ref": "n132/arvo:42507049-fix",
+      "digest": "sha256:63deb88c28d917eef1c1e92400d8536f7ed32eb021ccad79d1a0fa4311de0550"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "global-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/zstd/tests/fuzz/../../lib/compress/zstd_opt.c:274",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "global-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/zstd/tests/fuzz/../../lib/compress/zstd_opt.c:274"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

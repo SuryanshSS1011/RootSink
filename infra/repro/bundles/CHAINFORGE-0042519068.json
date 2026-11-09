@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042519068",
+  "chain": "CWE-1285->CWE-787",
+  "project": "assimp",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42519068",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "54f5d01190d0952c5d4fcae1f34d7e3bba0a14e5",
+      "fix_commits": [
+        "54f5d01190d0952c5d4fcae1f34d7e3bba0a14e5"
+      ],
+      "repo": "https://github.com/assimp/assimp"
+    },
+    "patch": "diff --git a/code/AssetLib/Obj/ObjFileImporter.cpp b/code/AssetLib/Obj/ObjFileImporter.cpp\nindex cf45157949..173ef20746 100644\n--- a/code/AssetLib/Obj/ObjFileImporter.cpp\n+++ b/code/AssetLib/Obj/ObjFileImporter.cpp\n@@ -323,7 +323,7 @@ aiMesh *ObjFileImporter::createTopology(const ObjFile::Model *pModel, const ObjF\n         return nullptr;\n     }\n \n-    aiMesh *pMesh = new aiMesh;\n+    std::unique_ptr<aiMesh> pMesh(new aiMesh);\n     if (!pObjMesh->m_name.empty()) {\n         pMesh->mName.Set(pObjMesh->m_name);\n     }\n@@ -385,9 +385,9 @@ aiMesh *ObjFileImporter::createTopology(const ObjFile::Model *pModel, const ObjF\n     }\n \n     // Create mesh vertices\n-    createVertexArray(pModel, pData, meshIndex, pMesh, uiIdxCount);\n+    createVertexArray(pModel, pData, meshIndex, pMesh.get(), uiIdxCount);\n \n-    return pMesh;\n+    return pMesh.release();\n }\n \n // ------------------------------------------------------------------------------------------------\n@@ -498,6 +498,10 @@ void ObjFileImporter::createVertexArray(const ObjFile::Model *pModel,\n \n                 if (vertexIndex) {\n                     if (!last) {\n+                        if (pMesh->mNumVertices <= newIndex + 1) {\n+                            throw DeadlyImportError(\"OBJ: bad vertex index\");\n+                        }\n+\n                         pMesh->mVertices[newIndex + 1] = pMesh->mVertices[newIndex];\n                         if (!sourceFace->m_normals.empty() && !pModel->mNormals.empty()) {\n                             pMesh->mNormals[newIndex + 1] = pMesh->mNormals[newIndex];\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42519068-vul",
+      "digest": "sha256:a6371aee3d8de1e0a7a4df5926cd4d867218269804d28564386ec2aafe4861e7"
+    },
+    "patched": {
+      "ref": "n132/arvo:42519068-fix",
+      "digest": "sha256:b595f605f842b5f668a45327252ffb95f9575d8e1948efccbe02670755ccc929"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/assimp/code/AssetLib/Obj/ObjFileImporter.cpp:502",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/assimp/code/AssetLib/Obj/ObjFileImporter.cpp:502"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

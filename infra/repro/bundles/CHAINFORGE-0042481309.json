@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042481309",
+  "chain": "CWE-1285->CWE-125",
+  "project": "samba",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42481309",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "3bc7acc62646b105b03fd3c65e9170a373f95392",
+      "fix_commits": [
+        "3bc7acc62646b105b03fd3c65e9170a373f95392"
+      ],
+      "repo": "https://gitlab.com/samba-team/samba"
+    },
+    "patch": "diff --git a/source3/libsmb/nmblib.c b/source3/libsmb/nmblib.c\nindex 84cbb054b8eb4eec1688e406c06e74175c2b0131..c05fac2bba96bab3d8227347ae15da34a9a68f2e 100644\n--- a/source3/libsmb/nmblib.c\n+++ b/source3/libsmb/nmblib.c\n@@ -160,6 +160,9 @@ static bool handle_name_ptrs(unsigned char *ubuf,int *offset,int length,\n \t\tif (!*got_pointer)\n \t\t\t(*ret) += 2;\n \t\t(*got_pointer)=True;\n+\t\tif (*offset > length - 2) {\n+\t\t\treturn False;\n+\t\t}\n \t\t(*offset) = ((ubuf[*offset] & ~0xC0)<<8) | ubuf[(*offset)+1];\n \t\tif (loop_count++ == 10 ||\n \t\t\t\t(*offset) < 0 || (*offset)>(length-2)) {\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42481309-vul",
+      "digest": "sha256:e0c22790a7e986e27fdbd2ca2fc90e5187bebd30e5b0b99d8fa1ac8567bc7762"
+    },
+    "patched": {
+      "ref": "n132/arvo:42481309-fix",
+      "digest": "sha256:a72491caa5b7ad24926e9b86e773efccfe1af04beb8c65e8ea33330f74c8658f"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/samba/bin/default/../../source3/libsmb/nmblib.c:163",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/samba/bin/default/../../source3/libsmb/nmblib.c:163"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

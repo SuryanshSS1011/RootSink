@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042521569",
+  "chain": "CWE-456->CWE-457",
+  "project": "skia",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42521569",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "efb25fd8093b5c9bfca38e7c43bc1bbbbd2b6fb9",
+      "fix_commits": [
+        "efb25fd8093b5c9bfca38e7c43bc1bbbbd2b6fb9"
+      ],
+      "repo": "https://skia.googlesource.com/skia.git"
+    },
+    "patch": "diff --git a/src/core/SkDraw_vertices.cpp b/src/core/SkDraw_vertices.cpp\nindex 799e430..4c71d65 100644\n--- a/src/core/SkDraw_vertices.cpp\n+++ b/src/core/SkDraw_vertices.cpp\n@@ -55,8 +55,9 @@\n     return doAntiAlias ? SkScan::AntiHairLine : SkScan::HairLine;\n }\n \n-static bool texture_to_matrix(const VertState& state, const SkPoint verts[],\n-                              const SkPoint texs[], SkMatrix* matrix) {\n+static bool SK_WARN_UNUSED_RESULT\n+texture_to_matrix(const VertState& state, const SkPoint verts[], const SkPoint texs[],\n+                  SkMatrix* matrix) {\n     SkPoint src[3], dst[3];\n \n     src[0] = texs[state.f0];\n@@ -108,9 +109,9 @@\n }\n #endif\n \n-static bool update_tricolor_matrix(const SkMatrix& ctmInv,\n-                                   const SkPoint pts[], const SkPM4f colors[],\n-                                   int index0, int index1, int index2, Matrix43* result) {\n+static bool SK_WARN_UNUSED_RESULT\n+update_tricolor_matrix(const SkMatrix& ctmInv, const SkPoint pts[], const SkPM4f colors[],\n+                       int index0, int index1, int index2, Matrix43* result) {\n     SkMatrix m, im;\n     m.reset();\n     m.set(0, pts[index1].fX - pts[index0].fX);\n@@ -271,7 +272,9 @@\n                 SkMatrix tmpCtm;\n                 if (textures) {\n                     SkMatrix localM;\n-                    texture_to_matrix(state, vertices, textures, &localM);\n+                    if (!texture_to_matrix(state, vertices, textures, &localM)) {\n+                        continue;\n+                    }\n                     tmpCtm = SkMatrix::Concat(*fMatrix, localM);\n                     ctm = &tmpCtm;\n                 }\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42521569-vul",
+      "digest": "sha256:8d4cfea1be2a1b82a98b5369a77a5f0f4f92041e0dbc9821ee507ce515a065b2"
+    },
+    "patched": {
+      "ref": "n132/arvo:42521569-fix",
+      "digest": "sha256:91465f843d1ad5a8723e22ef5d37704379bca057b26960755a39802a9607cae4"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/skia/out/Fuzz/../../include/core/SkMatrix.h:128",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/skia/out/Fuzz/../../include/core/SkMatrix.h:128"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

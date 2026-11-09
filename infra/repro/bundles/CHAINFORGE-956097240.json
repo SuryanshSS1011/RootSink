@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-956097240",
+  "chain": "CWE-129->CWE-125",
+  "project": "assimp",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42500529",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/assimp/assimp/commit/6a3ac623b960905b3450b78e7614453dae0540ed",
+      "fix_commits": [
+        "6a3ac623b960905b3450b78e7614453dae0540ed"
+      ],
+      "repo": "https://github.com/assimp/assimp"
+    },
+    "patch": "diff --git a/contrib/openddlparser/code/OpenDDLParser.cpp b/contrib/openddlparser/code/OpenDDLParser.cpp\nindex 0c9e0bd980..e2bef97a74 100644\n--- a/contrib/openddlparser/code/OpenDDLParser.cpp\n+++ b/contrib/openddlparser/code/OpenDDLParser.cpp\n@@ -292,12 +292,15 @@ char *OpenDDLParser::parseHeader(char *in, char *end) {\n \n         Property *first(nullptr);\n         in = lookForNextToken(in, end);\n-        if (*in == Grammar::OpenPropertyToken[0]) {\n+        if (in != end && *in == Grammar::OpenPropertyToken[0]) {\n             in++;\n             Property *prop(nullptr), *prev(nullptr);\n-            while (*in != Grammar::ClosePropertyToken[0] && in != end) {\n+            while (in != end && *in != Grammar::ClosePropertyToken[0]) {\n                 in = OpenDDLParser::parseProperty(in, end, &prop);\n                 in = lookForNextToken(in, end);\n+                if(in == end) {\n+                    break;\n+                }\n \n                 if (*in != Grammar::CommaSeparator[0] && *in != Grammar::ClosePropertyToken[0]) {\n                     logInvalidTokenError(in, Grammar::ClosePropertyToken, m_logCallback);\n@@ -314,7 +317,9 @@ char *OpenDDLParser::parseHeader(char *in, char *end) {\n                     prev = prop;\n                 }\n             }\n-            ++in;\n+            if(in != end) {\n+                ++in;\n+            }\n         }\n \n         // set the properties\n@@ -479,7 +484,7 @@ void OpenDDLParser::normalizeBuffer(std::vector<char> &buffer) {\n         // check for a comment\n         if (isCommentOpenTag(c, end)) {\n             ++readIdx;\n-            while (!isCommentCloseTag(&buffer[readIdx], end)) {\n+            while (readIdx < len && !isCommentCloseTag(&buffer[readIdx], end)) {\n                 ++readIdx;\n             }\n             ++readIdx;\n@@ -489,7 +494,7 @@ void OpenDDLParser::normalizeBuffer(std::vector<char> &buffer) {\n             if (isComment<char>(c, end)) {\n                 ++readIdx;\n                 // skip the comment and the rest of the line\n-                while (!isEndofLine(buffer[readIdx])) {\n+                while (readIdx < len && !isEndofLine(buffer[readIdx])) {\n                     ++readIdx;\n                 }\n             }\n@@ -548,8 +553,7 @@ char *OpenDDLParser::parseIdentifier(char *in, char *end, Text **id) {\n     // get size of id\n     size_t idLen(0);\n     char *start(in);\n-    while (!isSeparator(*in) &&\n-            !isNewLine(*in) && (in != end) &&\n+    while ((in != end) && !isSeparator(*in) && !isNewLine(*in) &&\n             *in != Grammar::OpenPropertyToken[0] &&\n             *in != Grammar::ClosePropertyToken[0] &&\n             *in != '$') {\n@@ -861,7 +865,7 @@ char *OpenDDLParser::parseProperty(char *in, char *end, Property **prop) {\n     in = parseIdentifier(in, end, &id);\n     if (nullptr != id) {\n         in = lookForNextToken(in, end);\n-        if (*in == '=') {\n+        if (in != end && *in == '=') {\n             ++in;\n             in = getNextToken(in, end);\n             Value *primData(nullptr);\ndiff --git a/contrib/openddlparser/include/openddlparser/OpenDDLParserUtils.h b/contrib/openddlparser/include/openddlparser/OpenDDLParserUtils.h\nindex 5f177f2525..42ad675f8d 100644\n--- a/contrib/openddlparser/include/openddlparser/OpenDDLParserUtils.h\n+++ b/contrib/openddlparser/include/openddlparser/OpenDDLParserUtils.h\n@@ -318,7 +318,8 @@ static const unsigned char chartype_table[256] = {\n \n template <class T>\n inline bool isNumeric(const T in) {\n-    return (chartype_table[static_cast<size_t>(in)] == 1);\n+    size_t idx = static_cast<size_t>(in);\n+    return idx < sizeof(chartype_table) && (chartype_table[idx] == 1);\n }\n \n template <class T>\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42500529-vul",
+      "digest": "sha256:5f704aaa376caa57fc1ea37ce86f77ba364e860da23bf22654a9a46b28b60e4c"
+    },
+    "patched": {
+      "ref": "n132/arvo:42500529-fix",
+      "digest": "sha256:7e3ee41f89f327f58aad68e096b28196ce992f88f1ad629a23a508e2bd6db7d2"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "crash_site": "/src/assimp/code/../contrib/openddlparser/include/openddlparser/OpenDDLParserUtils.h:321",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 129,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "site": "/src/assimp/code/../contrib/openddlparser/include/openddlparser/OpenDDLParserUtils.h:321"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

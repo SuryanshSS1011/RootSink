@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042497729",
+  "chain": "CWE-416->CWE-125",
+  "project": "serenity",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42497729",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "4e8e1b7b3a2cd25ab4b69cebea32232496f4a5d3",
+      "fix_commits": [
+        "4e8e1b7b3a2cd25ab4b69cebea32232496f4a5d3"
+      ],
+      "repo": "https://github.com/SerenityOS/serenity"
+    },
+    "patch": "From 4e8e1b7b3a2cd25ab4b69cebea32232496f4a5d3 Mon Sep 17 00:00:00 2001\nFrom: TheFightingCatfish <seekingblues@gmail.com>\nDate: Thu, 5 Aug 2021 00:29:06 +0800\nSubject: [PATCH] AK: Improve the parsing of data urls\n\nImprove the parsing of data urls in URLParser to bring it more up-to-\nspec. At the moment, we cannot parse the components of the MIME type\nsince it is represented as a string, but the spec requires it to be\nparsed as a \"MIME type record\".\n---\n AK/URLParser.cpp     | 26 +++++++++++++++-----------\n Tests/AK/TestURL.cpp | 40 ++++++++++++++++++++++++++++++++++++++++\n 2 files changed, 55 insertions(+), 11 deletions(-)\n\ndiff --git a/AK/URLParser.cpp b/AK/URLParser.cpp\nindex 5479e79..7edf6c6 100644\n--- a/AK/URLParser.cpp\n+++ b/AK/URLParser.cpp\n@@ -116,7 +116,7 @@ constexpr bool is_double_dot_path_segment(StringView const& input)\n }\n \n // https://fetch.spec.whatwg.org/#data-urls\n-// FIXME: This only loosely follow the spec, as we use the same class for \"regular\" and data URLs, unlike the spec.\n+// FIXME: This only loosely follows the spec, as we use the same class for \"regular\" and data URLs, unlike the spec.\n Optional<URL> URLParser::parse_data_url(StringView const& raw_input)\n {\n     dbgln_if(URL_PARSER_DEBUG, \"URLParser::parse_data_url: Parsing '{}'.\", raw_input);\n@@ -125,24 +125,28 @@ Optional<URL> URLParser::parse_data_url(StringView const& raw_input)\n     auto comma_offset = input.find(',');\n     if (!comma_offset.has_value())\n         return {};\n-    auto mime_type = input.substring_view(0, comma_offset.value());\n-    // FIXME: Strip leading and trailing ASCII whitespace from mimeType\n+    auto mime_type = StringUtils::trim(input.substring_view(0, comma_offset.value()), \"\\t\\n\\f\\r \", TrimMode::Both);\n     auto encoded_body = input.substring_view(comma_offset.value() + 1);\n     auto body = URL::percent_decode(encoded_body);\n-    bool is_base_64_encoded = false;\n-    if (mime_type.ends_with(\";base64\", CaseSensitivity::CaseInsensitive)) {\n-        is_base_64_encoded = true;\n-        mime_type = mime_type.substring_view(0, mime_type.length() - 7);\n+    bool is_base64_encoded = false;\n+    if (mime_type.ends_with(\"base64\", CaseSensitivity::CaseInsensitive)) {\n+        auto substring_view = mime_type.substring_view(0, mime_type.length() - 6);\n+        auto trimmed_substring_view = StringUtils::trim(substring_view, \" \", TrimMode::Right);\n+        if (trimmed_substring_view.ends_with(';')) {\n+            is_base64_encoded = true;\n+            mime_type = trimmed_substring_view.substring_view(0, trimmed_substring_view.length() - 1);\n+        }\n     }\n \n-    if (mime_type.starts_with(\";\")) {\n-        StringBuilder builder;\n+    StringBuilder builder;\n+    if (mime_type.starts_with(\";\") || mime_type.is_empty()) {\n         builder.append(\"text/plain\");\n         builder.append(mime_type);\n-        mime_type = builder.to_string();\n+        mime_type = builder.string_view();\n     }\n \n-    URL url { mime_type, move(body), is_base_64_encoded };\n+    // FIXME: Parse the MIME type's components according to https://mimesniff.spec.whatwg.org/#parse-a-mime-type\n+    URL url { StringUtils::trim(mime_type, \"\\n\\r\\t \", TrimMode::Both), move(body), is_base64_encoded };\n     dbgln_if(URL_PARSER_DEBUG, \"URLParser::parse_data_url: Parsed data URL to be '{}'.\", url.serialize());\n     return url;\n }\ndiff --git a/Tests/AK/TestURL.cpp b/Tests/AK/TestURL.cpp\nindex 1fc2a06..0c45ce2 100644\n--- a/Tests/AK/TestURL.cpp\n+++ b/Tests/AK/TestURL.cpp\n@@ -1,5 +1,6 @@\n /*\n  * Copyright (c) 2018-2020, Andreas Kling <kling@serenityos.org>\n+ * Copyright (c) 2021, the SerenityOS developers.\n  *\n  * SPDX-License-Identifier: BSD-2-Clause\n  */\n@@ -215,9 +216,22 @@ TEST_CASE(data_url)\n     EXPECT(url.host().is_null());\n     EXPECT_EQ(url.data_mime_type(), \"text/html\");\n     EXPECT_EQ(url.data_payload(), \"test\");\n+    EXPECT(!url.data_payload_is_base64());\n     EXPECT_EQ(url.serialize(), \"data:text/html,test\");\n }\n \n+TEST_CASE(data_url_default_mime_type)\n+{\n+    URL url(\"data:,test\");\n+    EXPECT(url.is_valid());\n+    EXPECT_EQ(url.scheme(), \"data\");\n+    EXPECT(url.host().is_null());\n+    EXPECT_EQ(url.data_mime_type(), \"text/plain\");\n+    EXPECT_EQ(url.data_payload(), \"test\");\n+    EXPECT(!url.data_payload_is_base64());\n+    EXPECT_EQ(url.serialize(), \"data:text/plain,test\");\n+}\n+\n TEST_CASE(data_url_encoded)\n {\n     URL url(\"data:text/html,Hello%20friends%2C%0X%X0\");\n@@ -226,6 +240,7 @@ TEST_CASE(data_url_encoded)\n     EXPECT(url.host().is_null());\n     EXPECT_EQ(url.data_mime_type(), \"text/html\");\n     EXPECT_EQ(url.data_payload(), \"Hello friends,%0X%X0\");\n+    EXPECT(!url.data_payload_is_base64());\n     EXPECT_EQ(url.serialize(), \"data:text/html,Hello friends,%0X%X0\");\n }\n \n@@ -237,9 +252,34 @@ TEST_CASE(data_url_base64_encoded)\n     EXPECT(url.host().is_null());\n     EXPECT_EQ(url.data_mime_type(), \"text/html\");\n     EXPECT_EQ(url.data_payload(), \"test\");\n+    EXPECT(url.data_payload_is_base64());\n     EXPECT_EQ(url.serialize(), \"data:text/html;base64,test\");\n }\n \n+TEST_CASE(data_url_base64_encoded_default_mime_type)\n+{\n+    URL url(\"data:;base64,test\");\n+    EXPECT(url.is_valid());\n+    EXPECT_EQ(url.scheme(), \"data\");\n+    EXPECT(url.host().is_null());\n+    EXPECT_EQ(url.data_mime_type(), \"text/plain\");\n+    EXPECT_EQ(url.data_payload(), \"test\");\n+    EXPECT(url.data_payload_is_base64());\n+    EXPECT_EQ(url.serialize(), \"data:text/plain;base64,test\");\n+}\n+\n+TEST_CASE(data_url_base64_encoded_with_whitespace)\n+{\n+    URL url(\"data: text/html ;     bAsE64 , test with whitespace \");\n+    EXPECT(url.is_valid());\n+    EXPECT_EQ(url.scheme(), \"data\");\n+    EXPECT(url.host().is_null());\n+    EXPECT_EQ(url.data_mime_type(), \"text/html\");\n+    EXPECT_EQ(url.data_payload(), \" test with whitespace \");\n+    EXPECT(url.data_payload_is_base64());\n+    EXPECT_EQ(url.serialize(), \"data:text/html;base64, test with whitespace \");\n+}\n+\n TEST_CASE(trailing_slash_with_complete_url)\n {\n     EXPECT_EQ(URL(\"http://a/b/\").complete_url(\"c/\").serialize(), \"http://a/b/c/\");\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42497729-vul",
+      "digest": "sha256:264433b652171e5bd1e87f103a2653298feadda0be92882bec3c0f53a8650f5c"
+    },
+    "patched": {
+      "ref": "n132/arvo:42497729-fix",
+      "digest": "sha256:5ca72d922b875217ab76f11688f7518874adc1e9dc16b92641cdce8a2b31b866"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/serenity/AK/StringImpl.cpp:75",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/serenity/AK/StringImpl.cpp:75"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

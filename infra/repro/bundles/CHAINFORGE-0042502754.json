@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042502754",
+  "chain": "CWE-20->CWE-125",
+  "project": "wget2",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42502754",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "e8892c59a4d413d747644cec8f1e6d29ec22f733",
+      "fix_commits": [
+        "e8892c59a4d413d747644cec8f1e6d29ec22f733"
+      ],
+      "repo": "https://gitlab.com/gnuwget/wget2.git"
+    },
+    "patch": "diff --git a/src/options.c b/src/options.c\nindex 8595bac2b458529898188ea78fddc0160f7e80fe..7066096df8402adf5a10c0d50c1fa97e66d13f01 100644\n--- a/src/options.c\n+++ b/src/options.c\n@@ -2030,7 +2030,7 @@ static int _parse_option(char *linep, char **name, char **val)\n \t\t\tchar *src = linep + 1, *dst = linep, c;\n \n \t\t\twhile ((c = *src) != quote && c) {\n-\t\t\t\tif (c == '\\\\') {\n+\t\t\t\tif (c == '\\\\' && src[1]) {\n \t\t\t\t\t// we could extend \\r, \\n etc to control codes here\n \t\t\t\t\t// but it is not needed so far\n \t\t\t\t\t*dst++ = src[1];\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42502754-vul",
+      "digest": "sha256:9cfee7ed00d926d87eef6220eabe07bfdac5f9b5dbf4d8980836ae1ed1850999"
+    },
+    "patched": {
+      "ref": "n132/arvo:42502754-fix",
+      "digest": "sha256:7b3c251adf8898be6159223b1564f96154e867474a51eca1d5d51d8afdef8ce9"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/wget2/src/options.c:2032",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/wget2/src/options.c:2032"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042519046",
+  "chain": "CWE-1284->CWE-125",
+  "project": "pjsip",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42519046",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "d8440f4d711a654b511f50f79c0445b26f9dd1e1",
+      "fix_commits": [
+        "d8440f4d711a654b511f50f79c0445b26f9dd1e1"
+      ],
+      "repo": "https://github.com/pjsip/pjproject"
+    },
+    "patch": "diff --git a/pjnath/include/pjnath/stun_msg.h b/pjnath/include/pjnath/stun_msg.h\nindex b52f95c586..e49f096f3a 100644\n--- a/pjnath/include/pjnath/stun_msg.h\n+++ b/pjnath/include/pjnath/stun_msg.h\n@@ -442,6 +442,7 @@ typedef enum pj_stun_status\n \n    \\endverbatim\n  */\n+#pragma pack(1)\n typedef struct pj_stun_msg_hdr\n {\n     /**\n@@ -473,6 +474,7 @@ typedef struct pj_stun_msg_hdr\n     pj_uint8_t          tsx_id[12];\n \n } pj_stun_msg_hdr;\n+#pragma pack()\n \n \n /**\n@@ -490,6 +492,7 @@ typedef struct pj_stun_msg_hdr\n \n    \\endverbatim\n  */\n+#pragma pack(1)\n typedef struct pj_stun_attr_hdr\n {\n     /**\n@@ -506,6 +509,7 @@ typedef struct pj_stun_attr_hdr\n     pj_uint16_t         length;\n \n } pj_stun_attr_hdr;\n+#pragma pack()\n \n \n /**\ndiff --git a/pjnath/src/pjnath/stun_msg.c b/pjnath/src/pjnath/stun_msg.c\nindex 3def6b3eac..e904a0ba47 100644\n--- a/pjnath/src/pjnath/stun_msg.c\n+++ b/pjnath/src/pjnath/stun_msg.c\n@@ -746,7 +746,7 @@ PJ_DEF(int) pj_stun_set_padding_char(int chr)\n \n #define INIT_ATTR(a,t,l)    (a)->hdr.type=(pj_uint16_t)(t), \\\n                             (a)->hdr.length=(pj_uint16_t)(l)\n-#define ATTR_HDR_LEN        4\n+#define ATTR_HDR_LEN        sizeof(pj_stun_attr_hdr)\n \n static pj_uint16_t GETVAL16H(const pj_uint8_t *buf, unsigned pos)\n {\n@@ -2327,6 +2327,14 @@ PJ_DEF(pj_status_t) pj_stun_msg_decode(pj_pool_t *pool,\n         status = pj_stun_msg_check(pdu, pdu_len, options);\n         if (status != PJ_SUCCESS)\n             return status;\n+    } else {\n+        /* For safety, verify packet length at least */\n+        pj_uint32_t msg_len = GETVAL16H(pdu, 2) + 20;\n+        if (msg_len > pdu_len ||\n+            ((options & PJ_STUN_IS_DATAGRAM) && msg_len != pdu_len))\n+        {\n+            return PJNATH_EINSTUNMSGLEN;\n+        }\n     }\n \n     /* Create the message, copy the header, and convert to host byte order */\n@@ -2345,7 +2353,7 @@ PJ_DEF(pj_status_t) pj_stun_msg_decode(pj_pool_t *pool,\n         p_response = NULL;\n \n     /* Parse attributes */\n-    while (pdu_len >= 4) {\n+    while (pdu_len >= ATTR_HDR_LEN) {\n         unsigned attr_type, attr_val_len;\n         const struct attr_desc *adesc;\n \n@@ -2357,7 +2365,7 @@ PJ_DEF(pj_status_t) pj_stun_msg_decode(pj_pool_t *pool,\n         attr_val_len = (attr_val_len + 3) & (~3);\n \n         /* Check length */\n-        if (pdu_len < attr_val_len) {\n+        if (pdu_len < attr_val_len + ATTR_HDR_LEN) {\n             pj_str_t err_msg;\n             char err_msg_buf[80];\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42519046-vul",
+      "digest": "sha256:9a25efb4ba309cb817e00e7c61bce2ef0b21db1996ea3147605d0863f782f636"
+    },
+    "patched": {
+      "ref": "n132/arvo:42519046-fix",
+      "digest": "sha256:2db84c9d82adc283b60a99596f5eb02441649d3815d7a45746ffc66189ac96e8"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/pjsip/pjlib/build/../include/pj/string.h:797",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/pjsip/pjlib/build/../include/pj/string.h:797"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

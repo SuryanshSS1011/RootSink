@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042529931",
+  "chain": "CWE-456->CWE-457",
+  "project": "lcms",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42529931",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "f75ee893a2cc0edbcc5d7d9fc898654eb31785ac",
+      "fix_commits": [
+        "f75ee893a2cc0edbcc5d7d9fc898654eb31785ac"
+      ],
+      "repo": "https://github.com/mm2/Little-CMS"
+    },
+    "patch": "From f75ee893a2cc0edbcc5d7d9fc898654eb31785ac Mon Sep 17 00:00:00 2001\nFrom: Marti Maria <marti.maria@littlecms.com>\nDate: Sun, 3 Dec 2023 11:52:06 +0100\nSubject: [PATCH] Final changes to 2.16\n\n2.16 is closed\n---\n include/lcms2.h |  2 +-\n src/cmsps2.c    | 19 +++++++++++--------\n src/cmstypes.c  |  2 +-\n 3 files changed, 13 insertions(+), 10 deletions(-)\n\ndiff --git a/include/lcms2.h b/include/lcms2.h\nindex 1a7048b..7c72047 100644\n--- a/include/lcms2.h\n+++ b/include/lcms2.h\n@@ -23,7 +23,7 @@\n //\n //---------------------------------------------------------------------------------\n //\n-// Version 2.16rc1\n+// Version 2.16\n //\n \n #ifndef _lcms2_H\ndiff --git a/src/cmsps2.c b/src/cmsps2.c\nindex cef22b9..eea1629 100644\n--- a/src/cmsps2.c\n+++ b/src/cmsps2.c\n@@ -661,18 +661,21 @@ void WriteCLUT(cmsIOHANDLER* m, cmsStage* mpe, const char* PreMaj,\n     sc.FixWhite = FixWhite;\n     sc.ColorSpace = ColorSpace;\n \n-    _cmsIOPrintf(m, \"[\");\n+    if (sc.Pipeline != NULL && sc.Pipeline->Params != NULL) {\n \n-    for (i=0; i < sc.Pipeline->Params->nInputs; i++)\n-        _cmsIOPrintf(m, \" %d \", sc.Pipeline->Params->nSamples[i]);\n+        _cmsIOPrintf(m, \"[\");\n \n-    _cmsIOPrintf(m, \" [\\n\");\n+        for (i = 0; i < sc.Pipeline->Params->nInputs; i++)\n+            _cmsIOPrintf(m, \" %d \", sc.Pipeline->Params->nSamples[i]);\n \n-    cmsStageSampleCLut16bit(mpe, OutputValueSampler, (void*) &sc, SAMPLER_INSPECT);\n+        _cmsIOPrintf(m, \" [\\n\");\n \n-    _cmsIOPrintf(m, PostMin);\n-    _cmsIOPrintf(m, PostMaj);\n-    _cmsIOPrintf(m, \"] \");\n+        cmsStageSampleCLut16bit(mpe, OutputValueSampler, (void*)&sc, SAMPLER_INSPECT);\n+\n+        _cmsIOPrintf(m, PostMin);\n+        _cmsIOPrintf(m, PostMaj);\n+        _cmsIOPrintf(m, \"] \");\n+    }\n \n }\n \ndiff --git a/src/cmstypes.c b/src/cmstypes.c\nindex 214bced..8eabe1f 100644\n--- a/src/cmstypes.c\n+++ b/src/cmstypes.c\n@@ -972,7 +972,7 @@ void *Type_Text_Description_Read(struct _cms_typehandler_struct* self, cmsIOHAND\n \n     if (UnicodeCount == 0 || SizeOfTag < UnicodeCount*sizeof(cmsUInt16Number)) goto Done;\n \n-    UnicodeString = (wchar_t*)_cmsMalloc(self->ContextID, (UnicodeCount + 1) * sizeof(wchar_t));\n+    UnicodeString = (wchar_t*)_cmsMallocZero(self->ContextID, (UnicodeCount + 1) * sizeof(wchar_t));\n     if (UnicodeString == NULL) goto Done;\n \n     if (!_cmsReadWCharArray(io, UnicodeCount, UnicodeString)) {\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42529931-vul",
+      "digest": "sha256:65d5ee9d1b62e1d3b8c68ff4c6bf5a33e4ebcb949d6c8738a4e00aada68b3538"
+    },
+    "patched": {
+      "ref": "n132/arvo:42529931-fix",
+      "digest": "sha256:fda80835aa124d4cf759a20ba1bcfc5f4f0eab57ab03a9b463251aa45f6ea7bc"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/lcms/src/cmsnamed.c:406",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/lcms/src/cmsnamed.c:406"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

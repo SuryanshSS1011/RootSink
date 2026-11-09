@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042526976",
+  "chain": "CWE-1284->CWE-125",
+  "project": "ntpsec",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42526976",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "caf0eb5df3c6ddbfc2941389bff0f9146835c021",
+      "fix_commits": [
+        "caf0eb5df3c6ddbfc2941389bff0f9146835c021"
+      ],
+      "repo": "https://gitlab.com/NTPsec/ntpsec"
+    },
+    "patch": "diff --git a/ntpd/nts_client.c b/ntpd/nts_client.c\nindex 541102249e78cb9ccbdb310a07f68348b4b2b755..454f655f8ab5a7525cd61d3b4a73977011c0f4b5 100644\n--- a/ntpd/nts_client.c\n+++ b/ntpd/nts_client.c\n@@ -626,6 +626,10 @@ bool nts_client_process_response_core(uint8_t *buff, int transferred, struct pee\n \t\tchar server[MAX_SERVER];\n \n \t\ttype = ke_next_record(&buf, &length);\n+\t\tif(buf.left < length){\n+\t\t\tmsyslog(LOG_ERR, \"NTSc: length cannot be more than buf.left: %d\", length);\n+\t\t\treturn false;\n+\t\t}\n \t\tif (NTS_CRITICAL & type) {\n \t\t\tcritical = true;\n \t\t\ttype &= ~NTS_CRITICAL;\n@@ -634,25 +638,30 @@ bool nts_client_process_response_core(uint8_t *buff, int transferred, struct pee\n \t\t\tmsyslog(LOG_ERR, \"NTSc: Record: T=%d, L=%d, C=%d\", type, length, critical);\n \t\tswitch (type) {\n \t\t    case nts_error:\n-\t\t\tdata = next_uint16(&buf);\n-\t\t\tif (sizeof(data) != length)\n+\t\t\tif (sizeof(data) != length) {\n \t\t\t\tmsyslog(LOG_ERR, \"NTSc: wrong length on error: %d\", length);\n+\t\t\t\treturn false;\n+\t\t\t}\n+\t\t\tdata = next_uint16(&buf);\n \t\t\tmsyslog(LOG_ERR, \"NTSc: error: %d\", data);\n \t\t\treturn false;\n \t\t    case nts_next_protocol_negotiation:\n+\t\t\tif (sizeof(data) != length) {\n+\t\t\t\tmsyslog(LOG_ERR, \"NTSc: NPN-Wrong length: %d\", length);\n+\t\t\t\treturn false;\n+\t\t\t}\n \t\t\tdata = next_uint16(&buf);\n-\t\t\tif ((sizeof(data) != length) || (data != nts_protocol_NTP)) {\n-\t\t\t\tmsyslog(LOG_ERR, \"NTSc: NPN-Wrong length or bad data: %d, %d\",\n-\t\t\t\t\tlength, data);\n+\t\t\tif (data != nts_protocol_NTP) {\n+\t\t\t\tmsyslog(LOG_ERR, \"NTSc: NPN-Bad data: %d\", data);\n \t\t\t\treturn false;\n \t\t\t}\n \t\t\tbreak;\n \t\t    case nts_algorithm_negotiation:\n-\t\t\tdata = next_uint16(&buf);\n \t\t\tif (sizeof(data) != length) {\n \t\t\t\tmsyslog(LOG_ERR, \"NTSc: AN-Wrong length: %d\", length);\n \t\t\t\treturn false;\n \t\t\t}\n+\t\t\tdata = next_uint16(&buf);\n \t\t\tkeylength = nts_get_key_length(data);\n \t\t\tif (0 == keylength) {\n \t\t\t\tmsyslog(LOG_ERR, \"NTSc: AN-Unsupported AEAN type: %d\", data);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42526976-vul",
+      "digest": "sha256:3d88b2307ce49ee0277364cb4dbed40f472d425bf79874ad57b8180249a58b48"
+    },
+    "patched": {
+      "ref": "n132/arvo:42526976-fix",
+      "digest": "sha256:e95d6258edc8da9d23aea19604b7a3a88c16bcc7e3159c8dd5f393e7ec8964a1"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/ntpsec/build/main/../../ntpd/nts.c:403",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/ntpsec/build/main/../../ntpd/nts.c:403"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

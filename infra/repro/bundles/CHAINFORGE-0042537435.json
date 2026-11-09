@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042537435",
+  "chain": "CWE-416->CWE-125",
+  "project": "libdwarf",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42537435",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "46fa96f95e043bac9b98ca6f7a9a542dae8f46cd",
+      "fix_commits": [
+        "46fa96f95e043bac9b98ca6f7a9a542dae8f46cd"
+      ],
+      "repo": "https://github.com/davea42/libdwarf-code"
+    },
+    "patch": "From 46fa96f95e043bac9b98ca6f7a9a542dae8f46cd Mon Sep 17 00:00:00 2001\nFrom: David Anderson <davea42@linuxmail.org>\nDate: Sat, 27 Jul 2024 10:30:02 -0700\nSubject: [PATCH] Correcting use-after-free with a specific corrupted DWARF\n section. ossfuzz 70721 DW202407-010. The bug has been in the source for\n several years. \tmodified:   src/lib/libdwarf/dwarf_die_deliv.c\n\n---\n src/lib/libdwarf/dwarf_die_deliv.c | 10 ++++++----\n 1 file changed, 6 insertions(+), 4 deletions(-)\n\ndiff --git a/src/lib/libdwarf/dwarf_die_deliv.c b/src/lib/libdwarf/dwarf_die_deliv.c\nindex 5caf83c..ab0270b 100644\n--- a/src/lib/libdwarf/dwarf_die_deliv.c\n+++ b/src/lib/libdwarf/dwarf_die_deliv.c\n@@ -1747,6 +1747,7 @@ finish_up_cu_context_from_cudie(Dwarf_Debug dbg,\n \n     Invariant: cc_debug_offset in strictly\n         ascending order in the list.\n+    Never returns DW_DLV_NO_ENTRY\n */\n static int\n insert_into_cu_context_list(Dwarf_Debug_InfoTypes dis,\n@@ -1866,9 +1867,13 @@ _dwarf_create_a_new_cu_context_record_on_list(\n         local_dealloc_cu_context(dbg,cu_context);\n         return res;\n     }\n-    /*  Add the new cu_context to a list of contexts */\n+    /*  Add the new cu_context to a list of contexts \n+        Never returns DW_DLV_NO_ENTRY */\n     icres = insert_into_cu_context_list(dis,cu_context);\n     if (icres == DW_DLV_ERROR) {\n+        /*  Correcting ossfuzz70721 DW202407-010  */\n+        dwarf_dealloc_die(*cudie_return);\n+        *cudie_return = 0;\n         local_dealloc_cu_context(dbg,cu_context);\n         _dwarf_error_string(dbg,error,DW_DLE_DIE_NO_CU_CONTEXT,\n             \"DW_DLE_DIE_NO_CU_CONTEXT\"\n@@ -2025,9 +2030,6 @@ _dwarf_next_cu_header_internal(Dwarf_Debug dbg,\n             dbg,dis,is_info,section_size,new_offset,\n             &cu_context,&local_cudie,error);\n         if (res != DW_DLV_OK) {\n-            if (local_cudie) {\n-                dwarf_dealloc_die(local_cudie);\n-            }\n             return res;\n         }\n     }\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42537435-vul",
+      "digest": "sha256:b3246755c7241e9d07fe05811ee8ab2037c995145a28344b55ab09d03b8c6be0"
+    },
+    "patched": {
+      "ref": "n132/arvo:42537435-fix",
+      "digest": "sha256:98571eb9eb4598e5ac5b8b5a03169c68bff4744078ba78e90ed52a33653dfffe"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/libdwarf/src/lib/libdwarf/dwarf_alloc.c:750",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/libdwarf/src/lib/libdwarf/dwarf_alloc.c:750"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

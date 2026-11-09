@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042535009",
+  "chain": "CWE-456->CWE-457",
+  "project": "flac",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42535009",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "15ea6ef8224bf282c2863cdde44160cf6446e0ff",
+      "fix_commits": [
+        "15ea6ef8224bf282c2863cdde44160cf6446e0ff"
+      ],
+      "repo": "https://github.com/xiph/flac"
+    },
+    "patch": "From 15ea6ef8224bf282c2863cdde44160cf6446e0ff Mon Sep 17 00:00:00 2001\nFrom: Martijn van Beurden <mvanb1@gmail.com>\nDate: Thu, 11 Jul 2024 07:24:01 +0200\nSubject: [PATCH] Fix analyze mode trying to get positions from stdin (#720)\n\nCredit: Oss-Fuzz\nIssue: https://bugs.chromium.org/p/oss-fuzz/issues/detail?id=68539\n---\n src/flac/analyze.c |  7 +++++--\n src/flac/analyze.h |  2 +-\n src/flac/decode.c  | 12 ++++++++----\n 3 files changed, 14 insertions(+), 7 deletions(-)\n\ndiff --git a/src/flac/analyze.c b/src/flac/analyze.c\nindex f17178c..0db89c3 100644\n--- a/src/flac/analyze.c\n+++ b/src/flac/analyze.c\n@@ -62,7 +62,7 @@ void flac__analyze_init(analysis_options aopts)\n \t}\n }\n \n-void flac__analyze_frame(const FLAC__Frame *frame, uint32_t frame_number, FLAC__uint64 frame_offset, FLAC__uint64 frame_bytes, analysis_options aopts, FILE *fout)\n+void flac__analyze_frame(const FLAC__Frame *frame, uint32_t frame_number, FLAC__bool decode_position_valid, FLAC__uint64 frame_offset, FLAC__uint64 frame_bytes, analysis_options aopts, FILE *fout)\n {\n \tconst uint32_t channels = frame->header.channels;\n \tchar outfilename[1024];\n@@ -70,7 +70,10 @@ void flac__analyze_frame(const FLAC__Frame *frame, uint32_t frame_number, FLAC__\n \tuint32_t i, channel, partitions;\n \n \t/* do the human-readable part first */\n-\tfprintf(fout, \"frame=%u\\toffset=%\" PRIu64 \"\\tbits=%\" PRIu64 \"\\tblocksize=%u\\tsample_rate=%u\\tchannels=%u\\tchannel_assignment=%s\\n\", frame_number, frame_offset, frame_bytes*8, frame->header.blocksize, frame->header.sample_rate, channels, FLAC__ChannelAssignmentString[frame->header.channel_assignment]);\n+\tif(decode_position_valid)\n+\t\tfprintf(fout, \"frame=%u\\toffset=%\" PRIu64 \"\\tbits=%\" PRIu64 \"\\tblocksize=%u\\tsample_rate=%u\\tchannels=%u\\tchannel_assignment=%s\\n\", frame_number, frame_offset, frame_bytes*8, frame->header.blocksize, frame->header.sample_rate, channels, FLAC__ChannelAssignmentString[frame->header.channel_assignment]);\n+\telse\n+\t\tfprintf(fout, \"frame=%u\\toffset=?\\tbits=?\\tblocksize=%u\\tsample_rate=%u\\tchannels=%u\\tchannel_assignment=%s\\n\", frame_number, frame->header.blocksize, frame->header.sample_rate, channels, FLAC__ChannelAssignmentString[frame->header.channel_assignment]);\n \tfor(channel = 0; channel < channels; channel++) {\n \t\tconst FLAC__Subframe *subframe = frame->subframes+channel;\n \t\tconst FLAC__bool is_rice2 = subframe->data.fixed.entropy_coding_method.type == FLAC__ENTROPY_CODING_METHOD_PARTITIONED_RICE2;\ndiff --git a/src/flac/analyze.h b/src/flac/analyze.h\nindex ce07b14..b30161d 100644\n--- a/src/flac/analyze.h\n+++ b/src/flac/analyze.h\n@@ -26,7 +26,7 @@ typedef struct {\n } analysis_options;\n \n void flac__analyze_init(analysis_options aopts);\n-void flac__analyze_frame(const FLAC__Frame *frame, uint32_t frame_number, FLAC__uint64 frame_offset, FLAC__uint64 frame_bytes, analysis_options aopts, FILE *fout);\n+void flac__analyze_frame(const FLAC__Frame *frame, uint32_t frame_number, FLAC__bool decode_position_valid, FLAC__uint64 frame_offset, FLAC__uint64 frame_bytes, analysis_options aopts, FILE *fout);\n void flac__analyze_finish(analysis_options aopts);\n \n #endif\ndiff --git a/src/flac/decode.c b/src/flac/decode.c\nindex 5c4f907..2f55d8f 100644\n--- a/src/flac/decode.c\n+++ b/src/flac/decode.c\n@@ -87,6 +87,7 @@ typedef struct {\n \n \t/* these are used only in analyze mode */\n \tFLAC__uint64 decode_position;\n+\tFLAC__bool decode_position_valid;\n \n \tFLAC__StreamDecoder *decoder;\n \n@@ -249,6 +250,7 @@ FLAC__bool DecoderSession_construct(DecoderSession *d, FLAC__bool is_ogg, FLAC__\n \td->channel_mask = 0;\n \n \td->decode_position = 0;\n+\td->decode_position_valid = true;\n \n \td->decoder = 0;\n \n@@ -401,7 +403,8 @@ FLAC__bool DecoderSession_process(DecoderSession *d)\n \t}\n \n \tif(d->analysis_mode)\n-\t\tFLAC__stream_decoder_get_decode_position(d->decoder, &d->decode_position);\n+\t\tif(!FLAC__stream_decoder_get_decode_position(d->decoder, &d->decode_position))\n+\t\t\td->decode_position_valid = false;\n \n \tif(d->abort_flag)\n \t\treturn false;\n@@ -1231,9 +1234,10 @@ FLAC__StreamDecoderWriteStatus write_callback(const FLAC__StreamDecoder *decoder\n \t\t}\n \t}\n \n-\tif(decoder_session->analysis_mode) {\n+\tif(decoder_session->analysis_mode && decoder_session->decode_position_valid) {\n \t\tFLAC__uint64 dpos;\n-\t\tFLAC__stream_decoder_get_decode_position(decoder_session->decoder, &dpos);\n+\t\tif(!FLAC__stream_decoder_get_decode_position(decoder_session->decoder, &dpos))\n+\t\t\tdecoder_session->decode_position_valid = false;\n \t\tframe_bytes = (dpos-decoder_session->decode_position);\n \t\tdecoder_session->decode_position = dpos;\n \t}\n@@ -1280,7 +1284,7 @@ FLAC__StreamDecoderWriteStatus write_callback(const FLAC__StreamDecoder *decoder\n \n \n \t\tif(decoder_session->analysis_mode) {\n-\t\t\tflac__analyze_frame(frame, decoder_session->frame_counter-1, decoder_session->decode_position-frame_bytes, frame_bytes, decoder_session->aopts, fout);\n+\t\t\tflac__analyze_frame(frame, decoder_session->frame_counter-1, decoder_session->decode_position_valid, decoder_session->decode_position_valid?(decoder_session->decode_position-frame_bytes):0, frame_bytes, decoder_session->aopts, fout);\n \t\t}\n \t\telse if(!decoder_session->test_only) {\n \t\t\tif(shift && !decoder_session->replaygain.apply) {\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42535009-vul",
+      "digest": "sha256:25162b5a4bca86464becd22a281af7398c2b1798ccbd4da751762fabf14cf6f6"
+    },
+    "patched": {
+      "ref": "n132/arvo:42535009-fix",
+      "digest": "sha256:45f49774b3222912a5d46503787d9c2709786a4b44c9aed23f9013b6f3da2e3d"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/flac/oss-fuzz/../src/flac/decode.c:1283",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/flac/oss-fuzz/../src/flac/decode.c:1283"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

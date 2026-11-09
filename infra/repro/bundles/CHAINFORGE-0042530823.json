@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042530823",
+  "chain": "CWE-20->CWE-787",
+  "project": "jq",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42530823",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "c9a51565214eece8f1053089739aea73145bfd6b",
+      "fix_commits": [
+        "c9a51565214eece8f1053089739aea73145bfd6b"
+      ],
+      "repo": "https://github.com/jqlang/jq"
+    },
+    "patch": "diff --git a/NEWS.md b/NEWS.md\nindex fffdbd97f2..913be89879 100644\n--- a/NEWS.md\n+++ b/NEWS.md\n@@ -3,7 +3,7 @@\n ## Security\n \n - CVE-2023-50246: ....\n-- CVE-2023-50268: ....\n+- CVE-2023-50268: fix stack-buffer-overflow if comparing nan with payload\n \n ## CLI changes\n \ndiff --git a/src/jv.c b/src/jv.c\nindex 4031dc62f4..6ca1e1d0fd 100644\n--- a/src/jv.c\n+++ b/src/jv.c\n@@ -740,15 +740,19 @@ int jvp_number_cmp(jv a, jv b) {\n \n #ifdef USE_DECNUM\n   if (JVP_HAS_FLAGS(a, JVP_FLAGS_NUMBER_LITERAL) && JVP_HAS_FLAGS(b, JVP_FLAGS_NUMBER_LITERAL)) {\n-    decNumber res;\n-    decNumberCompare(&res,\n+    struct {\n+      decNumber number;\n+      decNumberUnit units[1];\n+    } res;\n+\n+    decNumberCompare(&res.number,\n                      jvp_dec_number_ptr(a),\n                      jvp_dec_number_ptr(b),\n                      DEC_CONTEXT()\n                      );\n-    if (decNumberIsZero(&res)) {\n+    if (decNumberIsZero(&res.number)) {\n       return 0;\n-    } else if (decNumberIsNegative(&res)) {\n+    } else if (decNumberIsNegative(&res.number)) {\n       return -1;\n     } else {\n       return 1;\ndiff --git a/tests/shtest b/tests/shtest\nindex 469ea1d256..a426c79f3b 100755\n--- a/tests/shtest\n+++ b/tests/shtest\n@@ -594,6 +594,11 @@ if ! x=$($JQ -n \"1 # foo$cr + 2\") || [ \"$x\" != 1 ]; then\n   exit 1\n fi\n \n+# CVE-2023-50268: No stack overflow comparing a nan with a large payload\n+$VALGRIND $Q $JQ '1 != .' <<\\EOF >/dev/null\n+Nan4000\n+EOF\n+\n # Allow passing the inline jq script before -- #2919\n if ! r=$($JQ --args -rn -- '$ARGS.positional[0]' bar) || [ \"$r\" != bar ]; then\n     echo \"passing the inline script after -- didn't work\"\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42530823-vul",
+      "digest": "sha256:f6b50e925052b9df216bc65cc4894bf8d5ed27b160fc6e5da3f4088d35ce9a9c"
+    },
+    "patched": {
+      "ref": "n132/arvo:42530823-fix",
+      "digest": "sha256:86b867e92f7d30691cefb1799f7a6895020a14bd4a3d0e60562f53f1ebe6e306"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/jq/src/decNumber/decNumber.c:3375",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/jq/src/decNumber/decNumber.c:3375"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

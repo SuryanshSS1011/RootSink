@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042501106",
+  "chain": "CWE-416->CWE-125",
+  "project": "php-src",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42501106",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "4fcf0db649835339837a502589732e11f0ce6b57",
+      "fix_commits": [
+        "4fcf0db649835339837a502589732e11f0ce6b57"
+      ],
+      "repo": "https://github.com/php/php-src"
+    },
+    "patch": "From 4fcf0db649835339837a502589732e11f0ce6b57 Mon Sep 17 00:00:00 2001\nFrom: Nikita Popov <nikita.ppv@gmail.com>\nDate: Fri, 27 Aug 2021 11:34:22 +0200\nSubject: [PATCH] Fix use after free when rebinding __call closure\n\nWe would end up freeing the function name twice here, once for\nthe original closure, and once for the rebound one.\n\nRather than further special casing the zend_closure_call_magic\ncase, always addref the function_name for internal functions,\nthe same we do for userland functions. To compensate, we need to\nrelease the original function name when creating from callable\nor call frame.\n\nFixes oss-fuzz #37695.\n---\n Zend/tests/closure_call_bind.phpt | 20 ++++++++++++++++++++\n Zend/zend_closures.c              | 11 ++++++++++-\n 2 files changed, 30 insertions(+), 1 deletion(-)\n create mode 100644 Zend/tests/closure_call_bind.phpt\n\ndiff --git a/Zend/tests/closure_call_bind.phpt b/Zend/tests/closure_call_bind.phpt\nnew file mode 100644\nindex 00000000..0e2ab765\n--- /dev/null\n+++ b/Zend/tests/closure_call_bind.phpt\n@@ -0,0 +1,20 @@\n+--TEST--\n+Calling bindTo() on __call() closure\n+--FILE--\n+<?php\n+\n+class Foo {\n+    function __call($name, $args) {\n+        echo \"__call($name)\\n\";\n+    }\n+}\n+\n+$foo = new Foo;\n+$name = \"foo\";\n+Closure::fromCallable([$foo, $name . \"bar\"])->bindTo(new Foo)();\n+$foo->{$name . \"bar\"}(...)->bindTo(new Foo)();\n+\n+?>\n+--EXPECT--\n+__call(foobar)\n+__call(foobar)\ndiff --git a/Zend/zend_closures.c b/Zend/zend_closures.c\nindex ceeac235..d29feb3a 100644\n--- a/Zend/zend_closures.c\n+++ b/Zend/zend_closures.c\n@@ -341,6 +341,10 @@ static zend_result zend_create_closure_from_callable(zval *return_value, zval *c\n \t\tzend_create_fake_closure(return_value, mptr, mptr->common.scope, fcc.called_scope, NULL);\n \t}\n \n+\tif (&mptr->internal_function == &call) {\n+\t\tzend_string_release(mptr->common.function_name);\n+\t}\n+\n \treturn SUCCESS;\n }\n /* }}} */\n@@ -482,7 +486,7 @@ static void zend_closure_free_storage(zend_object *object) /* {{{ */\n \t\t\tzend_destroy_static_vars(&closure->func.op_array);\n \t\t}\n \t\tdestroy_op_array(&closure->func.op_array);\n-\t} else if (closure->orig_internal_handler == zend_closure_call_magic) {\n+\t} else if (closure->func.type == ZEND_INTERNAL_FUNCTION) {\n \t\tzend_string_release(closure->func.common.function_name);\n \t}\n \n@@ -739,6 +743,7 @@ static void zend_create_closure_ex(zval *res, zend_function *func, zend_class_en\n \t\t\tclosure->orig_internal_handler = closure->func.internal_function.handler;\n \t\t}\n \t\tclosure->func.internal_function.handler = zend_closure_internal_handler;\n+\t\tzend_string_addref(closure->func.op_array.function_name);\n \t\tif (!func->common.scope) {\n \t\t\t/* if it's a free function, we won't set scope & this since they're meaningless */\n \t\t\tthis_ptr = NULL;\n@@ -811,6 +816,10 @@ void zend_closure_from_frame(zval *return_value, zend_execute_data *call) { /* {\n \t} else {\n \t\tzend_create_fake_closure(return_value, mptr, mptr->common.scope, Z_CE(call->This), NULL);\n \t}\n+\n+\tif (&mptr->internal_function == &trampoline) {\n+\t\tzend_string_release(mptr->common.function_name);\n+\t}\n } /* }}} */\n \n void zend_closure_bind_var(zval *closure_zv, zend_string *var_name, zval *var) /* {{{ */\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42501106-vul",
+      "digest": "sha256:91e21bcd37c35ae854a45f93b31d38a762740c82c3e9d995ffd8c2b9239145e6"
+    },
+    "patched": {
+      "ref": "n132/arvo:42501106-fix",
+      "digest": "sha256:b58d17dafc5bc4a08ab281c939e31e6a8cc10cf20410f020724dd6e4e22e422c"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/php-src/Zend/zend_string.h:311",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/php-src/Zend/zend_string.h:311"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

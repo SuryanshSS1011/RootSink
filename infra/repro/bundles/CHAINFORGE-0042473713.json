@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042473713",
+  "chain": "CWE-456->CWE-457",
+  "project": "gnutls",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42473713",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "30e25e94177ccc0a2ef4f106cee8220fd1e459e2",
+      "fix_commits": [
+        "30e25e94177ccc0a2ef4f106cee8220fd1e459e2"
+      ],
+      "repo": "https://gitlab.com/gnutls/gnutls.git"
+    },
+    "patch": "diff --git a/src/benchmark.c b/src/benchmark.c\nindex bcc12a903798e1904f60160ebf0f88d70f8b81cc..d6b7cbaf9161c05d67a81643542ecde31ea0df2a 100644\n--- a/src/benchmark.c\n+++ b/src/benchmark.c\n@@ -47,7 +47,7 @@ static void alarm_handler(int signo)\n #endif\n \n static void\n-value2human(unsigned long bytes, double time, double *data, double *speed,\n+value2human(uint64_t bytes, double time, double *data, double *speed,\n \t    char *metric)\n {\n \tif (bytes > 1000 && bytes < 1000 * 1000) {\ndiff --git a/src/benchmark.h b/src/benchmark.h\nindex a59e088e29f9d1b497209fd5bb2ca2ea35fe0357..77ea44eb36726ae621183d19dac03bdec43acb9f 100644\n--- a/src/benchmark.h\n+++ b/src/benchmark.h\n@@ -24,6 +24,9 @@\n #include <windows.h>\n #endif\n \n+/* for uint64_t */\n+# include <stdint.h>\n+\n #if defined(HAVE_CLOCK_GETTIME) && defined(CLOCK_PROCESS_CPUTIME_ID)\n #undef gettime\n #define gettime(x) clock_gettime(CLOCK_PROCESS_CPUTIME_ID, x)\n@@ -44,7 +47,7 @@ void benchmark_tls(int debug_level, int ciphers);\n \n struct benchmark_st {\n \tstruct timespec start;\n-\tunsigned long size;\n+\tuint64_t size;\n \tsighandler_t old_handler;\n #if defined(_WIN32)\n \tHANDLE wtimer;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42473713-vul",
+      "digest": "sha256:3b3205cdc9025cf86528f2a416025cebfc567312e11d9db9398676e6a7a3ae56"
+    },
+    "patched": {
+      "ref": "n132/arvo:42473713-fix",
+      "digest": "sha256:3baec3505b181450be3370b6c8e043a91716fe9fbb56389068cbdd794b4efad2"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/libidn2/lib/puny_decode.c:166",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/libidn2/lib/puny_decode.c:166"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

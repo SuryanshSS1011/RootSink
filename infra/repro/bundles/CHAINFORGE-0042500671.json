@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042500671",
+  "chain": "CWE-20->CWE-125",
+  "project": "lua",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42500671",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "cf613cdc6fa367257fc61c256f63d917350858b5",
+      "fix_commits": [
+        "cf613cdc6fa367257fc61c256f63d917350858b5"
+      ],
+      "repo": "https://github.com/lua/lua"
+    },
+    "patch": "diff --git a/ldo.c b/ldo.c\nindex f282a773ea..a48e35f9db 100644\n--- a/ldo.c\n+++ b/ldo.c\n@@ -530,10 +530,10 @@ int luaD_pretailcall (lua_State *L, CallInfo *ci, StkId func,\n       int fsize = p->maxstacksize;  /* frame size */\n       int nfixparams = p->numparams;\n       int i;\n+      checkstackGCp(L, fsize - delta, func);\n       ci->func -= delta;  /* restore 'func' (if vararg) */\n       for (i = 0; i < narg1; i++)  /* move down function and arguments */\n         setobjs2s(L, ci->func + i, func + i);\n-      checkstackGC(L, fsize);\n       func = ci->func;  /* moved-down function */\n       for (; narg1 <= nfixparams; narg1++)\n         setnilvalue(s2v(func + narg1));  /* complete missing arguments */\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42500671-vul",
+      "digest": "sha256:27eb28b799fc3a8c81b884e99fba55ba29dce08f58d7ea419db957131fac3b5a"
+    },
+    "patched": {
+      "ref": "n132/arvo:42500671-fix",
+      "digest": "sha256:e97590a3cf7765b9be3e0021d9297411b8fe2e726aec3518bc9bd32c6c01fdde"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/lua/ldebug.c:91",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/lua/ldebug.c:91"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

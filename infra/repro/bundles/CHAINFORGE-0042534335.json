@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042534335",
+  "chain": "CWE-416->CWE-125",
+  "project": "ghostpdl",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42534335",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "5fb7114f814645ebf679a8228350e9770bf3f009",
+      "fix_commits": [
+        "5fb7114f814645ebf679a8228350e9770bf3f009"
+      ],
+      "repo": "https://cgit.ghostscript.com/ghostpdl.git"
+    },
+    "patch": "From 5fb7114f814645ebf679a8228350e9770bf3f009 Mon Sep 17 00:00:00 2001\nFrom: Ken Sharp <Ken.Sharp@artifex.com>\nDate: Wed, 10 Apr 2024 16:44:26 +0100\nSubject: [PATCH] graphics library - clean up tile clipper device on\n initialisation error\n\nOSS-fuzz bug #67932\n\nThis turns out to be another case like Bug #705722 and I've opted to fix\nit in exactly the same way. I've also scanned the other cases where\ntile_fill_init() is used, and fixed those too.\n\nQuoting the text from commit a003e870a11d13659666311e8b3059ba9fda3651\n\n-----------------------------------------------------------------------\nIf initialisation for tile filling fails, make sure to cleanup the tile\nclipper device if it was setup. The reason being that clipper device forwards\ndrawing operations to a memory device, embedded in itself (i.e. not a separate\nmemory allocation just for the memory device).\n\nThis means if the clipper device (with its target set to that internal memory\ndevice) persists until a gc run occurs, when the garbager attempts to reloc the\nclipper's target pointer, it will access adjacent values in device structure,\nnot the memory manager header it expects. Thus it will reloc to a nonsensical\nlocation, and ultimately, will crash.\n---\n base/gxp1fill.c | 23 ++++++++++++++++++-----\n 1 file changed, 18 insertions(+), 5 deletions(-)\n\ndiff --git a/base/gxp1fill.c b/base/gxp1fill.c\nindex 6b5b43b..4941064 100644\n--- a/base/gxp1fill.c\n+++ b/base/gxp1fill.c\n@@ -1,4 +1,4 @@\n-/* Copyright (C) 2001-2023 Artifex Software, Inc.\n+/* Copyright (C) 2001-2024 Artifex Software, Inc.\n    All Rights Reserved.\n \n    This software is provided AS-IS with no warranty, either express or\n@@ -518,7 +518,7 @@ gx_dc_pure_masked_fill_rect(const gx_device_color * pdevc,\n      */\n     code = tile_fill_init(&state, pdevc, dev, true);\n     if (code < 0)\n-        return code;\n+        goto exit;\n     if (state.pcdev == dev || ptile->is_simple)\n         code = (*gx_dc_type_data_pure.fill_rectangle)\n             (pdevc, x, y, w, h, state.pcdev, lop, source);\n@@ -529,6 +529,7 @@ gx_dc_pure_masked_fill_rect(const gx_device_color * pdevc,\n         code = tile_by_steps(&state, x, y, w, h, ptile, &ptile->tmask,\n                              tile_masked_fill);\n     }\n+exit:\n     if (CLIPDEV_INSTALLED) {\n         tile_clip_free((gx_device_tile_clip *)state.cdev);\n         state.cdev = NULL;\n@@ -552,7 +553,7 @@ gx_dc_devn_masked_fill_rect(const gx_device_color * pdevc,\n      */\n     code = tile_fill_init(&state, pdevc, dev, true);\n     if (code < 0)\n-        return code;\n+        goto exit;\n     if (state.pcdev == dev || ptile->is_simple) {\n         gx_device_color dcolor = *pdevc;\n \n@@ -574,6 +575,7 @@ gx_dc_devn_masked_fill_rect(const gx_device_color * pdevc,\n         code = tile_by_steps(&state, x, y, w, h, ptile, &ptile->tmask,\n                              tile_masked_fill);\n     }\n+exit:\n     if (CLIPDEV_INSTALLED) {\n         tile_clip_free((gx_device_tile_clip *)state.cdev);\n         state.cdev = NULL;\n@@ -593,7 +595,7 @@ gx_dc_binary_masked_fill_rect(const gx_device_color * pdevc,\n \n     code = tile_fill_init(&state, pdevc, dev, true);\n     if (code < 0)\n-        return code;\n+        goto exit;\n     if (state.pcdev == dev || ptile->is_simple)\n         code = (*gx_dc_type_data_ht_binary.fill_rectangle)\n             (pdevc, x, y, w, h, state.pcdev, lop, source);\n@@ -604,6 +606,7 @@ gx_dc_binary_masked_fill_rect(const gx_device_color * pdevc,\n         code = tile_by_steps(&state, x, y, w, h, ptile, &ptile->tmask,\n                              tile_masked_fill);\n     }\n+exit:\n     if (CLIPDEV_INSTALLED) {\n         tile_clip_free((gx_device_tile_clip *)state.cdev);\n         state.cdev = NULL;\n@@ -623,7 +626,7 @@ gx_dc_colored_masked_fill_rect(const gx_device_color * pdevc,\n \n     code = tile_fill_init(&state, pdevc, dev, true);\n     if (code < 0)\n-        return code;\n+        goto exit;\n     if (state.pcdev == dev || ptile->is_simple)\n         code = (*gx_dc_type_data_ht_colored.fill_rectangle)\n             (pdevc, x, y, w, h, state.pcdev, lop, source);\n@@ -634,6 +637,7 @@ gx_dc_colored_masked_fill_rect(const gx_device_color * pdevc,\n         code = tile_by_steps(&state, x, y, w, h, ptile, &ptile->tmask,\n                              tile_masked_fill);\n     }\n+exit:\n     if (CLIPDEV_INSTALLED) {\n         tile_clip_free((gx_device_tile_clip *)state.cdev);\n         state.cdev = NULL;\n@@ -1397,6 +1401,15 @@ gx_trans_pattern_fill_rect(int xmin, int ymin, int xmax, int ymax,\n             gx_strip_bitmap tbits;\n \n             code = tile_fill_init(&state_clist_trans, pdevc, dev, false);\n+            if (code < 0)\n+            {\n+                /* Can't use CLIPDEV_INSTALLED macro because it assumes a tile_fill_state_t structure, called 'state' */\n+                if (state_clist_trans.cdev != NULL) {\n+                    tile_clip_free((gx_device_tile_clip *)state_clist_trans.cdev);\n+                    state_clist_trans.cdev = NULL;\n+                }\n+                return code;\n+            }\n \n             state_clist_trans.phase.x = phase.x;\n             state_clist_trans.phase.y = phase.y;\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42534335-vul",
+      "digest": "sha256:fd2c15d73d8e9a1d16d3aaab77496a37acef78229279ecb0b2c4d71d13bf3233"
+    },
+    "patched": {
+      "ref": "n132/arvo:42534335-fix",
+      "digest": "sha256:12aefbbb56b036d90e2d31245e3d797a7f0c956e5784256030084eeffec8ab7b"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/ghostpdl/./base/gdevnfwd.c:33",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/ghostpdl/./base/gdevnfwd.c:33"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

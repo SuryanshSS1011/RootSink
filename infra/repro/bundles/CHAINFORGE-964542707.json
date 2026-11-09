@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-964542707",
+  "chain": "CWE-456->CWE-457",
+  "project": "pjsip",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42535147",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/pjsip/pjproject/commit/f406002f688eb58c3461cb90f6ac9c5b3459fbfd",
+      "fix_commits": [
+        "f406002f688eb58c3461cb90f6ac9c5b3459fbfd"
+      ],
+      "repo": "https://github.com/pjsip/pjproject"
+    },
+    "patch": "diff --git a/tests/fuzz/fuzz-crypto.c b/tests/fuzz/fuzz-crypto.c\nindex 38a5ab1edc..dcf5cbdd84 100644\n--- a/tests/fuzz/fuzz-crypto.c\n+++ b/tests/fuzz/fuzz-crypto.c\n@@ -45,7 +45,7 @@ void encode_base64_differential(const uint8_t *Data, size_t Size) {\n \n     //OPENSSL\n     BIO *bio, *bio_mem;\n-    char *ssl_output;\n+    char *ssl_output = NULL;\n     int  ssl_output_len;\n \n     bio = BIO_new(BIO_f_base64());\n@@ -58,6 +58,9 @@ void encode_base64_differential(const uint8_t *Data, size_t Size) {\n     BIO_flush(bio);\n \n     ssl_output_len = BIO_get_mem_data(bio_mem, &ssl_output);\n+    if (ssl_output_len <= 0) {\n+        abort();\n+    }\n \n     //Differential\n     int result = memcmp(pj_output, ssl_output, ssl_output_len);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42535147-vul",
+      "digest": "sha256:c7f8210aae7d576b2f3bb772254acf45045d23a1935eb455b131d532a4c5ea9a"
+    },
+    "patched": {
+      "ref": "n132/arvo:42535147-fix",
+      "digest": "sha256:dbd06e5137c9cc3658e86b0a8630d2cc5af5dca2f5c8def112ca0cf1027d09c9"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/pjsip/tests/fuzz/fuzz-crypto.c:63",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/pjsip/tests/fuzz/fuzz-crypto.c:63"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

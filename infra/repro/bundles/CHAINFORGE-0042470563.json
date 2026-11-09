@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042470563",
+  "chain": "CWE-456->CWE-457",
+  "project": "imagemagick",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42470563",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "0033b0e643e44ef020058f6e2bcf3272c13cde27",
+      "fix_commits": [
+        "0033b0e643e44ef020058f6e2bcf3272c13cde27"
+      ],
+      "repo": "https://github.com/imagemagick/imagemagick"
+    },
+    "patch": "From 0033b0e643e44ef020058f6e2bcf3272c13cde27 Mon Sep 17 00:00:00 2001\nFrom: Cristy <urban-warrior@imagemagick.org>\nDate: Sat, 13 Oct 2018 12:29:32 -0400\nSubject: [PATCH] https://github.com/ImageMagick/ImageMagick/issues/1343\n\n---\n coders/png.c | 3 ++-\n 1 file changed, 2 insertions(+), 1 deletion(-)\n\ndiff --git a/coders/png.c b/coders/png.c\nindex 6ff2ece..b1cf322 100644\n--- a/coders/png.c\n+++ b/coders/png.c\n@@ -8923,7 +8923,8 @@ static MagickBooleanType WriteOnePNGImage(MngInfo *mng_info,\n   tried_333 = MagickFalse;\n   tried_444 = MagickFalse;\n \n-  image->depth=GetImageDepth(image,exception);\n+  if (image->depth != GetImageDepth(image,exception))\n+    (void) SetImageDepth(image,image->depth,exception);\n   for (j=0; j<6; j++)\n   {\n     /*\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42470563-vul",
+      "digest": "sha256:c3b770a21e48b3a5883ca528a891b60a0dfa3090cae778b5b612650af969103a"
+    },
+    "patched": {
+      "ref": "n132/arvo:42470563-fix",
+      "digest": "sha256:5c7e36a220eccc4b4d8b2920443c4db5a97329a30fbf9bb08296d8301921a2ab"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/zlib/deflate.c:1350",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/zlib/deflate.c:1350"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

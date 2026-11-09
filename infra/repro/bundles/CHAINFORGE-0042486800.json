@@ -1,0 +1,74 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042486800",
+  "chain": "CWE-416->CWE-787",
+  "project": "libzmq",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42486800",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "2fb04c101823bbecc31ce2f9d253eeafbba1b92f\n5b0956c38198652c3ab41d325e93cd89a076635f\n8cc56d9f0f2f36fad30d7b48775fffc1715ad02a",
+      "fix_commits": [
+        "2fb04c101823bbecc31ce2f9d253eeafbba1b92f",
+        "5b0956c38198652c3ab41d325e93cd89a076635f",
+        "8cc56d9f0f2f36fad30d7b48775fffc1715ad02a"
+      ],
+      "repo": "https://github.com/zeromq/libzmq"
+    },
+    "patch": "diff --git a/src/options.cpp b/src/options.cpp\nindex a5c61f2484..3edc5fcde5 100644\n--- a/src/options.cpp\n+++ b/src/options.cpp\n@@ -761,7 +761,8 @@ int zmq::options_t::setsockopt (int option_,\n \n         case ZMQ_METADATA:\n             if (optvallen_ > 0 && !is_int) {\n-                const std::string s (static_cast<const char *> (optval_));\n+                const std::string s (static_cast<const char *> (optval_),\n+                                     optvallen_);\n                 const size_t pos = s.find (':');\n                 if (pos != std::string::npos && pos != 0\n                     && pos != s.length () - 1) {\ndiff --git a/tests/test_socket_options_fuzzer.cpp b/tests/test_socket_options_fuzzer.cpp\nindex dd9ee8f75c..adbac6c4a3 100644\n--- a/tests/test_socket_options_fuzzer.cpp\n+++ b/tests/test_socket_options_fuzzer.cpp\n@@ -31,31 +31,36 @@\n #include <fuzzer/FuzzedDataProvider.h>\n #endif\n \n-#include <string>\n-#include <stdlib.h>\n-\n #include \"testutil.hpp\"\n #include \"testutil_unity.hpp\"\n \n+#ifdef ZMQ_DISCONNECT_MSG\n+#define LAST_OPTION ZMQ_DISCONNECT_MSG\n+#else\n+#define LAST_OPTION ZMQ_BINDTODEVICE\n+#endif\n+\n extern \"C\" int LLVMFuzzerTestOneInput (const uint8_t *data, size_t size)\n {\n-    setup_test_context ();\n-    void *s = test_context_socket (ZMQ_XPUB);\n     int option;\n+    void *ctx = zmq_ctx_new ();\n+    TEST_ASSERT_NOT_NULL (ctx);\n+    void *server = zmq_socket (ctx, ZMQ_XPUB);\n+    TEST_ASSERT_NOT_NULL (server);\n \n-    //  A lot of options expect a well-formatted string\n-    ((uint8_t *)data)[size - 1] = 0;\n+    if (!size)\n+        return 0;\n \n-    for (option = ZMQ_AFFINITY; option < ZMQ_BINDTODEVICE + 1; ++option) {\n-        uint8_t out[512];\n-        size_t out_size = 512;\n+    for (option = ZMQ_AFFINITY; option <= LAST_OPTION; ++option) {\n+        uint8_t out[8192];\n+        size_t out_size = 8192;\n \n-        zmq_setsockopt(s, option, data, size);\n-        zmq_getsockopt(s, option, out, &out_size);\n+        zmq_setsockopt (server, option, data, size);\n+        zmq_getsockopt (server, option, out, &out_size);\n     }\n \n-    test_context_socket_close_zero_linger (s);\n-    teardown_test_context ();\n+    zmq_close (server);\n+    zmq_ctx_term (ctx);\n \n     return 0;\n }\n@@ -66,8 +71,8 @@ void test_socket_options_fuzzer ()\n     uint8_t **data;\n     size_t *len, num_cases = 0;\n     if (fuzzer_corpus_encode (\n-          \"tests/libzmq-fuzz-corpora/test_socket_options_fuzzer_seed_corpus\", &data,\n-          &len, &num_cases)\n+          \"tests/libzmq-fuzz-corpora/test_socket_options_fuzzer_seed_corpus\",\n+          &data, &len, &num_cases)\n         != 0)\n         exit (77);\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42486800-vul",
+      "digest": "sha256:7551135785d76b54dcc769862faa97c4815fc67b571cfc5bf52a3309375e5635"
+    },
+    "patched": {
+      "ref": "n132/arvo:42486800-fix",
+      "digest": "sha256:7f160ee02de3f31ec03945579c03bb54f10c5b69236703a2e0c88dc8743574d3"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/libzmq/tests/test_socket_options_fuzzer.cpp:47",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/libzmq/tests/test_socket_options_fuzzer.cpp:47"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

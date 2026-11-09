@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042494459",
+  "chain": "CWE-20->CWE-125",
+  "project": "libredwg",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42494459",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "c130b29c943a645150de67f3fd12180366a5d529",
+      "fix_commits": [
+        "c130b29c943a645150de67f3fd12180366a5d529"
+      ],
+      "repo": "https://github.com/LibreDWG/libredwg"
+    },
+    "patch": "diff --git a/src/bits.c b/src/bits.c\nindex b46b6d707d..6823d90f75 100644\n--- a/src/bits.c\n+++ b/src/bits.c\n@@ -2471,7 +2471,7 @@ bit_utf8_to_TV (char *restrict dest, const unsigned char *restrict src,\n     {\n       if (dest >= endp)\n         return NULL;\n-      else if (cquoted && c == '\\\\' && dest+1 < endp &&\n+      else if (cquoted && c == '\\\\' && dest+1 < endp && s + 1 <= ends &&\n           // skip \\\" to \" and \\\\ to \\.\n           (*s == '\"' || *s == '\\\\' || *s == 'r' || *s == 'n'))\n         {\n@@ -2487,7 +2487,7 @@ bit_utf8_to_TV (char *restrict dest, const unsigned char *restrict src,\n               }\n         }\n       // \\uxxxx => \\U+XXXX as in bit_embed_TU\n-      else if (c == '\\\\' && dest+7 < endp && *s == 'u')\n+      else if (c == '\\\\' && dest+7 < endp && *s == 'u' && s + 5 <= ends)\n         {\n           *dest++ = c;\n           *dest++ = 'U';\n@@ -2502,7 +2502,7 @@ bit_utf8_to_TV (char *restrict dest, const unsigned char *restrict src,\n         {\n           *dest++ = c;\n         }\n-      else if ((c & 0xe0) == 0xc0)\n+      else if ((c & 0xe0) == 0xc0 && s + 1 <= ends)\n         {\n           /* ignore invalid utf8 for now */\n           if (dest+7 < endp)\n@@ -2523,7 +2523,7 @@ bit_utf8_to_TV (char *restrict dest, const unsigned char *restrict src,\n       else if ((c & 0xf0) == 0xe0)\n         {\n           /* warn on invalid utf8 */\n-          if (dest+2 < endp &&\n+          if (dest+2 < endp && s + 1 <= ends &&\n               (*s < 0x80 || *s > 0xBF || *(s+1) < 0x80 || *(s+1) > 0xBF))\n             {\n               LOG_WARN (\"utf-8: BAD_CONTINUATION_BYTE %s\", s);\n@@ -2532,7 +2532,7 @@ bit_utf8_to_TV (char *restrict dest, const unsigned char *restrict src,\n             {\n               LOG_WARN (\"utf-8: NON_SHORTEST %s\", s);\n             }\n-          if (dest+7 < endp)\n+          if (dest+7 < endp && s + 1 <= ends)\n             {\n               BITCODE_RS wc = ((c & 0x0f) << 12) | ((*s & 0x3f) << 6) | (*(s+1) & 0x3f);\n               *dest++ = '\\\\';\n@@ -2545,6 +2545,8 @@ bit_utf8_to_TV (char *restrict dest, const unsigned char *restrict src,\n             }\n           else\n             return NULL;\n+          if (s + 2 > ends)\n+            break;\n           s++;\n           s++;\n         }\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42494459-vul",
+      "digest": "sha256:210385974d6097ed1ffe7cb9d49f16fb448248bb04e31b4ea89ad8a8440e9d97"
+    },
+    "patched": {
+      "ref": "n132/arvo:42494459-fix",
+      "digest": "sha256:f945fdc3e087952b0644a1264ceb9bee85bb0a703a469cc626ea53cc435e2f33"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/libredwg/src/bits.c:2499",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/libredwg/src/bits.c:2499"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

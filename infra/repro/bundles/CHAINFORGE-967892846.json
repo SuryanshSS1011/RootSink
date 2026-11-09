@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-967892846",
+  "chain": "CWE-456->CWE-457",
+  "project": "capstonenext",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42474170",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/aquynh/capstone/commit/ed16aa859f5e03289fed8e259373a172755532ea",
+      "fix_commits": [
+        "ed16aa859f5e03289fed8e259373a172755532ea"
+      ],
+      "repo": "https://github.com/aquynh/capstone"
+    },
+    "patch": "diff --git a/arch/ARM/ARMGenInstrInfo.inc b/arch/ARM/ARMGenInstrInfo.inc\nindex 4c948ecab2..7d22b5f0c0 100644\n--- a/arch/ARM/ARMGenInstrInfo.inc\n+++ b/arch/ARM/ARMGenInstrInfo.inc\n@@ -2979,6 +2979,7 @@ enum {\n \tARM_tUDF\t= 3213,\n \tARM_tUXTB\t= 3214,\n \tARM_tUXTH\t= 3215,\n+\tARM_t__brkdiv0\t= 3216,\n \tARM_INSTRUCTION_LIST_END = 3217\n };\n \ndiff --git a/arch/ARM/ARMMappingInsn.inc b/arch/ARM/ARMMappingInsn.inc\nindex 80db83a433..fa9d908084 100644\n--- a/arch/ARM/ARMMappingInsn.inc\n+++ b/arch/ARM/ARMMappingInsn.inc\n@@ -18769,3 +18769,10 @@\n \t{ 0 }, { 0 }, { ARM_GRP_THUMB, ARM_GRP_THUMB1ONLY, ARM_GRP_V6, 0 }, 0, 0\n #endif\n },\n+\n+{\n+\tARM_t__brkdiv0, ARM64_INS_BRK,\n+#ifndef CAPSTONE_DIET\n+\t{ 0 }, { 0 }, { ARM_GRP_THUMB, ARM_GRP_THUMB1ONLY, ARM_GRP_V6, 0 }, 0, 0\n+#endif\n+},\ndiff --git a/arch/ARM/ARMMappingInsnOp.inc b/arch/ARM/ARMMappingInsnOp.inc\nindex 2c654a118a..7cfb8f1d88 100644\n--- a/arch/ARM/ARMMappingInsnOp.inc\n+++ b/arch/ARM/ARMMappingInsnOp.inc\n@@ -10726,3 +10726,7 @@\n {\t/* ARM_tUXTH, ARM_INS_UXTH: uxth */\n \t{ CS_AC_WRITE, CS_AC_READ, 0 }\n },\n+\n+{\t/* ARM_t__brkdiv0, ARM_INS_BRK: brkdiv0 */\n+\t{ CS_AC_WRITE, CS_AC_READ, 0 }\n+},\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42474170-vul",
+      "digest": "sha256:6d06e5e4f8d27da40c25eddde01bcc3fddf7f8d19a8c21dc5a256e752b116950"
+    },
+    "patched": {
+      "ref": "n132/arvo:42474170-fix",
+      "digest": "sha256:7aaa7007e6600657068a9f7c7280270acbd14e512daea72f7eb0c5420e93315e"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/capstonenext/arch/ARM/ARMInstPrinter.c:408",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/capstonenext/arch/ARM/ARMInstPrinter.c:408"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

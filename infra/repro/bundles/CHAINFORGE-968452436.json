@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-968452436",
+  "chain": "CWE-456->CWE-457",
+  "project": "boringssl",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42470159",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://boringssl.googlesource.com/boringssl/+/371305f58ac47a98d32f30a9edc6fafa72e842be%5E%21/",
+      "fix_commits": [
+        "371305f58ac47a98d32f30a9edc6fafa72e842be"
+      ],
+      "repo": "https://boringssl.googlesource.com/boringssl"
+    },
+    "patch": "From 371305f58ac47a98d32f30a9edc6fafa72e842be Mon Sep 17 00:00:00 2001\nFrom: David Benjamin <davidben@google.com>\nDate: Tue, 18 Sep 2018 13:14:53 -0700\nSubject: [PATCH] Push an error on sigalg mismatch in X509_verify.\n\nIt was failing but not pushing an error. See\nhttps://github.com/google/conscrypt/pull/537\n\nChange-Id: Iafba1a5c0c7ef8e0535b335aa93df6f520c3803e\nReviewed-on: https://boringssl-review.googlesource.com/32044\nReviewed-by: Adam Langley <agl@google.com>\n---\n crypto/err/x509.errordata |  1 +\n crypto/x509/x509_test.cc  | 45 +++++++++++++++++++++++++++++++++++++++\n crypto/x509/x_all.c       |  4 +++-\n include/openssl/x509.h    |  1 +\n 4 files changed, 50 insertions(+), 1 deletion(-)\n\ndiff --git a/crypto/err/x509.errordata b/crypto/err/x509.errordata\nindex 1a8c4f1..6ed8fa3 100644\n--- a/crypto/err/x509.errordata\n+++ b/crypto/err/x509.errordata\n@@ -28,6 +28,7 @@ X509,124,NO_CRL_NUMBER\n X509,125,PUBLIC_KEY_DECODE_ERROR\n X509,126,PUBLIC_KEY_ENCODE_ERROR\n X509,127,SHOULD_RETRY\n+X509,137,SIGNATURE_ALGORITHM_MISMATCH\n X509,128,UNKNOWN_KEY_TYPE\n X509,129,UNKNOWN_NID\n X509,130,UNKNOWN_PURPOSE_ID\ndiff --git a/crypto/x509/x509_test.cc b/crypto/x509/x509_test.cc\nindex 551bd8c..9ed1b52 100644\n--- a/crypto/x509/x509_test.cc\n+++ b/crypto/x509/x509_test.cc\n@@ -627,6 +627,38 @@ static const char kNoBasicConstraintsNetscapeCALeaf[] =\n     \"XyPwWPbymSTpzKhB4xB7qQ==\\n\"\n     \"-----END CERTIFICATE-----\\n\";\n \n+static const char kSelfSignedMismatchAlgorithms[] =\n+    \"-----BEGIN CERTIFICATE-----\\n\"\n+    \"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\\n\"\n+    \"-----END CERTIFICATE-----\\n\";\n+\n // CertFromPEM parses the given, NUL-terminated pem block and returns an\n // |X509*|.\n static bssl::UniquePtr<X509> CertFromPEM(const char *pem) {\n@@ -1504,3 +1536,16 @@ TEST(X509Test, NoBasicConstraintsNetscapeCA) {\n   EXPECT_EQ(X509_V_ERR_INVALID_CA,\n             Verify(leaf.get(), {root.get()}, {intermediate.get()}, {}, 0));\n }\n+\n+TEST(X509Test, MismatchAlgorithms) {\n+  bssl::UniquePtr<X509> cert(CertFromPEM(kSelfSignedMismatchAlgorithms));\n+  ASSERT_TRUE(cert);\n+\n+  bssl::UniquePtr<EVP_PKEY> pkey(X509_get_pubkey(cert.get()));\n+  ASSERT_TRUE(pkey);\n+\n+  EXPECT_FALSE(X509_verify(cert.get(), pkey.get()));\n+  uint32_t err = ERR_get_error();\n+  EXPECT_EQ(ERR_LIB_X509, ERR_GET_LIB(err));\n+  EXPECT_EQ(X509_R_SIGNATURE_ALGORITHM_MISMATCH, ERR_GET_REASON(err));\n+}\ndiff --git a/crypto/x509/x_all.c b/crypto/x509/x_all.c\nindex 2a93b87..064c89c 100644\n--- a/crypto/x509/x_all.c\n+++ b/crypto/x509/x_all.c\n@@ -65,8 +65,10 @@\n \n int X509_verify(X509 *a, EVP_PKEY *r)\n {\n-    if (X509_ALGOR_cmp(a->sig_alg, a->cert_info->signature))\n+    if (X509_ALGOR_cmp(a->sig_alg, a->cert_info->signature)) {\n+        OPENSSL_PUT_ERROR(X509, X509_R_SIGNATURE_ALGORITHM_MISMATCH);\n         return 0;\n+    }\n     return (ASN1_item_verify(ASN1_ITEM_rptr(X509_CINF), a->sig_alg,\n                              a->signature, a->cert_info, r));\n }\ndiff --git a/include/openssl/x509.h b/include/openssl/x509.h\nindex 72f7314..ee3eccc 100644\n--- a/include/openssl/x509.h\n+++ b/include/openssl/x509.h\n@@ -1200,5 +1200,6 @@ BSSL_NAMESPACE_END\n #define X509_R_WRONG_TYPE 134\n #define X509_R_NAME_TOO_LONG 135\n #define X509_R_INVALID_PARAMETER 136\n+#define X509_R_SIGNATURE_ALGORITHM_MISMATCH 137\n \n #endif\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42470159-vul",
+      "digest": "sha256:e3880860e6ba9e6a1a04f42a987a334291258b8fc147a4655296b6ef5d6d21a6"
+    },
+    "patched": {
+      "ref": "n132/arvo:42470159-fix",
+      "digest": "sha256:44b8a48e372623c94531515ba6ac0221b0b37226f7c38c4458fef889f78aa187"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/boringssl/crypto/pem/pem_lib.c:640",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/boringssl/crypto/pem/pem_lib.c:640"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

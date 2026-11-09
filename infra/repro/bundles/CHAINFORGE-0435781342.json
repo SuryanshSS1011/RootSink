@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0435781342",
+  "chain": "CWE-416->CWE-125",
+  "project": "libxml2",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "435781342",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "152fbb60a9e16cce502ce541f0fa63b2097d9a12",
+      "fix_commits": [
+        "152fbb60a9e16cce502ce541f0fa63b2097d9a12"
+      ],
+      "repo": "https://gitlab.gnome.org/GNOME/libxml2.git"
+    },
+    "patch": "From 152fbb60a9e16cce502ce541f0fa63b2097d9a12 Mon Sep 17 00:00:00 2001\nFrom: Nick Wellnhofer <wellnhofer@aevum.de>\nDate: Sat, 2 Aug 2025 21:27:32 +0200\nSubject: [PATCH] parser: Make sure to stop parser before checking max errors\n\nShort-lived regression from 7a41b18c.\n---\n parserInternals.c | 51 +++++++++++++++++++++++------------------------\n 1 file changed, 25 insertions(+), 26 deletions(-)\n\ndiff --git a/parserInternals.c b/parserInternals.c\nindex e68af7a..c3eec13 100644\n--- a/parserInternals.c\n+++ b/parserInternals.c\n@@ -330,11 +330,31 @@ xmlCtxtVErr(xmlParserCtxt *ctxt, xmlNode *node, xmlErrorDomain domain,\n             return;\n         ctxt->nbWarnings += 1;\n     } else {\n-        /* Report at least one fatal error. */\n-        if ((ctxt->nbErrors >= XML_MAX_ERRORS) &&\n-            ((level < XML_ERR_FATAL) || (ctxt->wellFormed == 0)) &&\n-            (!xmlIsCatastrophicError(level, code)))\n-            return;\n+        /*\n+         * By long-standing design, the parser isn't completely\n+         * stopped on well-formedness errors. Only SAX callbacks\n+         * are disabled.\n+         *\n+         * In some situations, we really want to abort as fast\n+         * as possible.\n+         */\n+        if (xmlIsCatastrophicError(level, code) ||\n+            code == XML_ERR_RESOURCE_LIMIT ||\n+            code == XML_ERR_ENTITY_LOOP) {\n+            ctxt->disableSAX = 2; /* really stop parser */\n+        } else {\n+            /* Report at least one fatal error. */\n+            if (ctxt->nbErrors >= XML_MAX_ERRORS &&\n+                (level < XML_ERR_FATAL || ctxt->wellFormed == 0))\n+                return;\n+\n+            if (level == XML_ERR_FATAL && ctxt->recovery == 0)\n+                ctxt->disableSAX = 1;\n+        }\n+\n+        if (level == XML_ERR_FATAL)\n+            ctxt->wellFormed = 0;\n+        ctxt->errNo = code;\n         ctxt->nbErrors += 1;\n     }\n \n@@ -384,27 +404,6 @@ xmlCtxtVErr(xmlParserCtxt *ctxt, xmlNode *node, xmlErrorDomain domain,\n         xmlCtxtErrMemory(ctxt);\n         return;\n     }\n-\n-    if (level >= XML_ERR_ERROR)\n-        ctxt->errNo = code;\n-    if (level == XML_ERR_FATAL) {\n-        ctxt->wellFormed = 0;\n-\n-        /*\n-         * By long-standing design, the parser isn't completely\n-         * stopped on well-formedness errors. Only SAX callbacks\n-         * are disabled.\n-         *\n-         * In some situations, we really want to abort as fast\n-         * as possible.\n-         */\n-        if (xmlCtxtIsCatastrophicError(ctxt) ||\n-            code == XML_ERR_RESOURCE_LIMIT ||\n-            code == XML_ERR_ENTITY_LOOP)\n-            ctxt->disableSAX = 2; /* really stop parser */\n-        else if (ctxt->recovery == 0)\n-            ctxt->disableSAX = 1;\n-    }\n }\n \n /**\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:435781342-vul",
+      "digest": "sha256:ee15aec1aa42474cc5d6759531d2e12f9720f9aee5590eb04a42f6fa4a949e03"
+    },
+    "patched": {
+      "ref": "n132/arvo:435781342-fix",
+      "digest": "sha256:21c2411209c9d1a6feabdd2ab76dd76d170d3fbb582245d90e3c3acb5a3dc228"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/libxml2/valid.c:2366",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/libxml2/valid.c:2366"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

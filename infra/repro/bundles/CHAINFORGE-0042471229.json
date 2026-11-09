@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042471229",
+  "chain": "CWE-456->CWE-457",
+  "project": "skia",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42471229",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "68825776f4b4226dde4bbe13b07077e9448a9a3b",
+      "fix_commits": [
+        "68825776f4b4226dde4bbe13b07077e9448a9a3b"
+      ],
+      "repo": "https://skia.googlesource.com/skia.git"
+    },
+    "patch": "diff --git a/src/codec/SkSwizzler.cpp b/src/codec/SkSwizzler.cpp\nindex e5068dc..1d52cfd 100644\n--- a/src/codec/SkSwizzler.cpp\n+++ b/src/codec/SkSwizzler.cpp\n@@ -1186,11 +1186,22 @@\n     SkASSERT(sampleX > 0);\n \n     fSampleX = sampleX;\n-    fSrcOffsetUnits = (get_start_coord(sampleX) + fSrcOffset) * fSrcBPP;\n     fDstOffsetBytes = (fDstOffset / sampleX) * fDstBPP;\n     fSwizzleWidth = get_scaled_dimension(fSrcWidth, sampleX);\n     fAllocatedWidth = get_scaled_dimension(fDstWidth, sampleX);\n \n+    int frameSampleX = sampleX;\n+    if (fSrcWidth < fDstWidth) {\n+        // Although SkSampledCodec adjusted sampleX so that it will never be\n+        // larger than the width of the image (or subset, if applicable), it\n+        // doesn't account for the width of a subset frame (i.e. gif). As a\n+        // result, get_start_coord(sampleX) could result in fSrcOffsetUnits\n+        // being wider than fSrcWidth. Compute a sampling rate based on the\n+        // frame width to ensure that fSrcOffsetUnits is sensible.\n+        frameSampleX = fSrcWidth / fSwizzleWidth;\n+    }\n+    fSrcOffsetUnits = (get_start_coord(frameSampleX) + fSrcOffset) * fSrcBPP;\n+\n     if (fDstOffsetBytes > 0) {\n         const size_t dstSwizzleBytes   = fSwizzleWidth   * fDstBPP;\n         const size_t dstAllocatedBytes = fAllocatedWidth * fDstBPP;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42471229-vul",
+      "digest": "sha256:553c831ade21cf90dc454c4f381a499ed04508a9bf231f696b1aa582527fda85"
+    },
+    "patched": {
+      "ref": "n132/arvo:42471229-fix",
+      "digest": "sha256:29f573c9a13adbca71afc00a8c53451eeb801d82567899e9ea52dd1aa47c5498"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/skia/out/Fuzz/../../src/codec/SkSwizzler.cpp:236",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/skia/out/Fuzz/../../src/codec/SkSwizzler.cpp:236"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

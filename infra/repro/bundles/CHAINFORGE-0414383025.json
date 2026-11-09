@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0414383025",
+  "chain": "CWE-20->CWE-125",
+  "project": "ghostpdl",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "414383025",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "52e638cef835f3bf0b7e23c09c708e24126911ba",
+      "fix_commits": [
+        "52e638cef835f3bf0b7e23c09c708e24126911ba"
+      ],
+      "repo": "https://cgit.ghostscript.com/ghostpdl.git"
+    },
+    "patch": "From 52e638cef835f3bf0b7e23c09c708e24126911ba Mon Sep 17 00:00:00 2001\nFrom: Ken Sharp <Ken.Sharp@artifex.com>\nDate: Wed, 30 Apr 2025 08:33:04 +0100\nSubject: [PATCH] OpenJPEG stream code - prevent buffer overrun\n\nOSS-fuzz #414383025\n\nThe fuzzed file ends up processing what appears to be a YCC image, which\nonly has one component, I think this is potentially possible for Indexed\ncolour, it is certainly possible for RGB.\n\nThe code didn't check for the number of components but simply calls our\nown YCC to RGB code.\n\nObviously that shouldn't happen because at this point we don't have YCC\ncolours. THe problem occurs because the width of the image is not a\nmultiple of 3; because we loop over the data using an unsigned counter\nit is possible to decrement below 0 and the counter simply 'wraps round'\nto a very large value. We then use that to index into the image data and\nthat accesses invalid memory.\n\nSo two fixes; firstly don't do a YCC to RGB conversion if we don't have\n3 components. Secondly, in both the 8 and 16-bit YCC to RGB routines,\ncheck the number of bytes is a multiple of the sample size. If it is\nnot, then reduce it until it is. That might cause a single image sample\nto be incorrectly coloured but it avoids the invalid memory access.\n---\n base/sjpx_openjpeg.c | 24 ++++++++++++++++++++++--\n 1 file changed, 22 insertions(+), 2 deletions(-)\n\ndiff --git a/base/sjpx_openjpeg.c b/base/sjpx_openjpeg.c\nindex a4e3644..7ebcb35 100644\n--- a/base/sjpx_openjpeg.c\n+++ b/base/sjpx_openjpeg.c\n@@ -1,4 +1,4 @@\n-/* Copyright (C) 2001-2023 Artifex Software, Inc.\n+/* Copyright (C) 2001-2025 Artifex Software, Inc.\n    All Rights Reserved.\n \n    This software is provided AS-IS with no warranty, either express or\n@@ -318,6 +318,17 @@ ycc_to_rgb_8(unsigned char *row, unsigned long row_size)\n     unsigned char y;\n     signed char u, v;\n     int r,g,b;\n+\n+    /* extra code for OSS-fuzz 414383025, the test file should not get here now\n+     * but as a belt and braces approach, check the width of the row is a\n+     * multiple of 3. If it isn't, reduce it until it is. This prevents\n+     * row_size being decreased *below* 0, failing to exit the loop and\n+     * reading from illegal memory locations\n+     */\n+    if (row_size < 3)\n+        return;\n+    row_size = row_size - row_size % 3;\n+\n     do\n     {\n         y = row[0];\n@@ -353,6 +364,14 @@ ycc_to_rgb_16(unsigned char *row, unsigned long row_size)\n     unsigned short y;\n     signed short u, v;\n     int r,g,b;\n+\n+    /* As per the 8-bit case above, make sure that row-size is a mutiple of 6\n+     * so that we don't decrement it below 0 in the loop.\n+     */\n+    if (row_size < 6)\n+        return;\n+    row_size = row_size - row_size % 6;\n+\n     do\n     {\n         y = (row[0]<<8) | row[1];\n@@ -669,7 +688,8 @@ static int process_one_trunk(stream_jpxd_state * const state, stream_cursor_writ\n                 }\n             }\n \n-            if (state->image->color_space == OPJ_CLRSPC_SYCC || state->image->color_space == OPJ_CLRSPC_EYCC)\n+            /* Check the number of components, if it's not 3 then we could be dealing with an indexed space and must not do this conversion */\n+            if ((state->image->color_space == OPJ_CLRSPC_SYCC || state->image->color_space == OPJ_CLRSPC_EYCC) && state->image->numcomps == 3)\n             {\n                 /* bpp >= 8 always, as bpp < 8 only for grayscale */\n                 if (state->bpp == 8)\n-- \n2.55.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:414383025-vul",
+      "digest": "sha256:934195b3dc8cd84e35e0cd07b9f8718069870ca7fd15bb5e73390796322af744"
+    },
+    "patched": {
+      "ref": "n132/arvo:414383025-fix",
+      "digest": "sha256:b776f818af3f5df4e81ab3992c16fc27db4039318552108b19740fcc212e8369"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/ghostpdl/./base/sjpx_openjpeg.c:324",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/ghostpdl/./base/sjpx_openjpeg.c:324"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

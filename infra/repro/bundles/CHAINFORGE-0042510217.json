@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042510217",
+  "chain": "CWE-416->CWE-125",
+  "project": "imagemagick",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42510217",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "8f8db6bc26668552d7f07d587dedb36439fa9dab",
+      "fix_commits": [
+        "8f8db6bc26668552d7f07d587dedb36439fa9dab"
+      ],
+      "repo": "https://github.com/imagemagick/imagemagick"
+    },
+    "patch": "From 8f8db6bc26668552d7f07d587dedb36439fa9dab Mon Sep 17 00:00:00 2001\nFrom: Cristy <urban-warrior@imagemagick.org>\nDate: Fri, 1 Apr 2022 19:57:38 -0400\nSubject: [PATCH] check to see if ICC property exists before its created\n\n---\n MagickCore/property.c | 29 ++++++++++++++++++++++++-----\n 1 file changed, 24 insertions(+), 5 deletions(-)\n\ndiff --git a/MagickCore/property.c b/MagickCore/property.c\nindex df8540c..a08be9a 100644\n--- a/MagickCore/property.c\n+++ b/MagickCore/property.c\n@@ -1686,20 +1686,32 @@ static MagickBooleanType GetEXIFProperty(const Image *image,\n   return(status);\n }\n \n-static MagickBooleanType GetICCProperty(const Image *image,const char *property,\n+static const char *GetICCProperty(const Image *image,const char *key,\n   ExceptionInfo *exception)\n {\n+  const char\n+    *value;\n+\n   const StringInfo\n     *profile;\n \n-  magick_unreferenced(property);\n+  /*\n+    Return ICC profile property.\n+  */\n+  if (image->properties != (void *) NULL)\n+    {\n+      value=(const char *) GetValueFromSplayTree((SplayTreeInfo *)\n+        image->properties,key);\n+      if (value != (const char *) NULL)\n+        return(value);\n+    }\n   profile=GetImageProfile(image,\"icc\");\n   if (profile == (StringInfo *) NULL)\n     profile=GetImageProfile(image,\"icm\");\n   if (profile == (StringInfo *) NULL)\n-    return(MagickFalse);\n+    return((const char *) NULL);\n   if (GetStringInfoLength(profile) < 128)\n-    return(MagickFalse);  /* minimum ICC profile length */\n+    return((const char *) NULL);  /* minimum ICC profile length */\n #if defined(MAGICKCORE_LCMS_DELEGATE)\n   {\n     cmsHPROFILE\n@@ -1774,7 +1786,14 @@ static MagickBooleanType GetICCProperty(const Image *image,const char *property,\n       }\n   }\n #endif\n-  return(MagickTrue);\n+  if (image->properties != (void *) NULL)\n+    {\n+      value=(const char *) GetValueFromSplayTree((SplayTreeInfo *)\n+        image->properties,key);\n+      if (value != (const char *) NULL)\n+        return(value);\n+    }\n+  return((const char *) NULL);\n }\n \n static MagickBooleanType SkipXMPValue(const char *value)\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42510217-vul",
+      "digest": "sha256:2ec34f3af5ef83560fea64034865de5049e6eace748a1233b4da373c5a1c49e6"
+    },
+    "patched": {
+      "ref": "n132/arvo:42510217-fix",
+      "digest": "sha256:4b48344a6504e3c1a0cedf59706469db5f53ca2a52649b69e9d22ca5bd2e2b54"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/imagemagick/MagickCore/locale.c:1416",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/imagemagick/MagickCore/locale.c:1416"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

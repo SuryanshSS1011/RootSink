@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042532020",
+  "chain": "CWE-416->CWE-125",
+  "project": "binutils-gdb",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42532020",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "597de453a2291a798024471a3d7c5c0b79201f94",
+      "fix_commits": [
+        "597de453a2291a798024471a3d7c5c0b79201f94"
+      ],
+      "repo": "git://sourceware.org/git/binutils-gdb.git"
+    },
+    "patch": "diff --git a/gas/dw2gencfi.c b/gas/dw2gencfi.c\nindex 2ca71977117..fbeb697af09 100644\n--- a/gas/dw2gencfi.c\n+++ b/gas/dw2gencfi.c\n@@ -406,9 +406,9 @@ static struct cie_entry *cie_root;\n static struct fde_entry *\n alloc_fde_entry (void)\n {\n-  struct fde_entry *fde = XCNEW (struct fde_entry);\n+  struct fde_entry *fde = notes_calloc (1, sizeof (*fde));\n \n-  frchain_now->frch_cfi_data = XCNEW (struct frch_cfi_data);\n+  frchain_now->frch_cfi_data = notes_calloc (1, sizeof (struct frch_cfi_data));\n   frchain_now->frch_cfi_data->cur_fde_data = fde;\n   *last_fde_data = fde;\n   last_fde_data = &fde->next;\n@@ -440,7 +440,7 @@ static struct fde_entry *last_fde;\n static struct cfi_insn_data *\n alloc_cfi_insn_data (void)\n {\n-  struct cfi_insn_data *insn = XCNEW (struct cfi_insn_data);\n+  struct cfi_insn_data *insn = notes_calloc (1, sizeof (*insn));\n   struct fde_entry *cur_fde_data = frchain_now->frch_cfi_data->cur_fde_data;\n \n   *cur_fde_data->last = insn;\n@@ -465,7 +465,6 @@ void\n cfi_end_fde (symbolS *label)\n {\n   frchain_now->frch_cfi_data->cur_fde_data->end_address = label;\n-  free (frchain_now->frch_cfi_data);\n   frchain_now->frch_cfi_data = NULL;\n }\n \n@@ -559,12 +558,10 @@ cfi_add_advance_loc (symbolS *label)\n void\n cfi_add_label (const char *name)\n {\n-  unsigned int len = strlen (name) + 1;\n   struct cfi_insn_data *insn = alloc_cfi_insn_data ();\n \n   insn->insn = CFI_label;\n-  obstack_grow (&notes, name, len);\n-  insn->u.sym_name = (char *) obstack_finish (&notes);\n+  insn->u.sym_name = notes_strdup (name);\n }\n \n /* Add a DW_CFA_offset record to the CFI data.  */\n@@ -658,7 +655,7 @@ cfi_add_CFA_remember_state (void)\n \n   cfi_add_CFA_insn (DW_CFA_remember_state);\n \n-  p = XNEW (struct cfa_save_data);\n+  p = notes_alloc (sizeof (*p));\n   p->cfa_offset = frchain_now->frch_cfi_data->cur_cfa_offset;\n   p->next = frchain_now->frch_cfi_data->cfa_save_stack;\n   frchain_now->frch_cfi_data->cfa_save_stack = p;\n@@ -676,7 +673,6 @@ cfi_add_CFA_restore_state (void)\n     {\n       frchain_now->frch_cfi_data->cur_cfa_offset = p->cfa_offset;\n       frchain_now->frch_cfi_data->cfa_save_stack = p->next;\n-      free (p);\n     }\n   else\n     as_bad (_(\"CFI state restore without previous remember\"));\n@@ -951,7 +947,7 @@ dot_cfi_escape (int ignored ATTRIBUTE_UNUSED)\n   tail = &head;\n   do\n     {\n-      e = XNEW (struct cfi_escape_data);\n+      e = notes_alloc (sizeof (*e));\n       do_parse_cons_expression (&e->exp, 1);\n       *tail = e;\n       tail = &e->next;\n@@ -2333,13 +2329,6 @@ cfi_finish (void)\n \t  ccseg = NULL;\n \t  seek_next_seg = 0;\n \n-\t  for (cie = cie_root; cie; cie = cie_next)\n-\t    {\n-\t      cie_next = cie->next;\n-\t      free ((void *) cie);\n-\t    }\n-\t  cie_root = NULL;\n-\n \t  for (fde = all_fde_data; fde ; fde = fde->next)\n \t    {\n \t      if ((fde->sections & CFI_EMIT_eh_frame) == 0\n@@ -2396,6 +2385,13 @@ cfi_finish (void)\n \t      output_fde (fde, cie, true, first,\n \t\t\t  fde->next == NULL ? EH_FRAME_ALIGNMENT : 2);\n \t    }\n+\n+\t  for (cie = cie_root; cie; cie = cie_next)\n+\t    {\n+\t      cie_next = cie->next;\n+\t      free (cie);\n+\t    }\n+\t  cie_root = NULL;\n \t}\n       while (EH_FRAME_LINKONCE && seek_next_seg == 2);\n \n@@ -2527,13 +2523,6 @@ cfi_finish (void)\n \t  ccseg = NULL;\n \t  seek_next_seg = 0;\n \n-\t  for (cie = cie_root; cie; cie = cie_next)\n-\t    {\n-\t      cie_next = cie->next;\n-\t      free ((void *) cie);\n-\t    }\n-\t  cie_root = NULL;\n-\n \t  for (fde = all_fde_data; fde ; fde = fde->next)\n \t    {\n \t      if ((fde->sections & CFI_EMIT_debug_frame) == 0)\n@@ -2572,6 +2561,13 @@ cfi_finish (void)\n \t      cie = select_cie_for_fde (fde, false, &first, alignment);\n \t      output_fde (fde, cie, false, first, alignment);\n \t    }\n+\n+\t  for (cie = cie_root; cie; cie = cie_next)\n+\t    {\n+\t      cie_next = cie->next;\n+\t      free (cie);\n+\t    }\n+\t  cie_root = NULL;\n \t}\n       while (SUPPORT_FRAME_LINKONCE && seek_next_seg == 2);\n \n@@ -2579,8 +2575,17 @@ cfi_finish (void)\n \tfor (fde = all_fde_data; fde ; fde = fde->next)\n \t  SET_HANDLED (fde, 0);\n     }\n+  all_fde_data = NULL;\n+  last_fde_data = &all_fde_data;\n+  cfi_sections_set = false;\n+  cfi_sections = CFI_EMIT_eh_frame;\n+  all_cfi_sections = 0;\n+  last_fde = NULL;\n   if (dwcfi_hash)\n-    htab_delete (dwcfi_hash);\n+    {\n+      htab_delete (dwcfi_hash);\n+      dwcfi_hash = NULL;\n+    }\n }\n \n #else /* TARGET_USE_CFIPOP */\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42532020-vul",
+      "digest": "sha256:7d2152215d2ad1be9e04651517765fac02d39b7213a747803ad934292d295516"
+    },
+    "patched": {
+      "ref": "n132/arvo:42532020-fix",
+      "digest": "sha256:7e1484ddf9eca28930c1b8427a87b65ef0cefce8c6d600c1580620db2af8b883"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/binutils-gdb/gas/dw2gencfi.c:1613",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/binutils-gdb/gas/dw2gencfi.c:1613"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

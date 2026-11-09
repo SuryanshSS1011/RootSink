@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042511065",
+  "chain": "CWE-416->CWE-787",
+  "project": "libredwg",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42511065",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "580e8bbebf18579b97e2c20b032368b9079624ca",
+      "fix_commits": [
+        "580e8bbebf18579b97e2c20b032368b9079624ca"
+      ],
+      "repo": "https://github.com/LibreDWG/libredwg"
+    },
+    "patch": "diff --git a/include/dwg.h b/include/dwg.h\nindex 730fac01f1..2e50d9f437 100644\n--- a/include/dwg.h\n+++ b/include/dwg.h\n@@ -8624,10 +8624,11 @@ typedef enum DWG_SECTION_TYPE_R11 /* tables */\n   SECTION_STYLE = 3,\n   SECTION_LTYPE = 5,\n   SECTION_VIEW  = 6,\n-  // since r11:\n+  // since r10:\n   SECTION_UCS   = 7,\n   SECTION_VPORT = 8,\n   SECTION_APPID = 9,\n+  // since r11:\n   SECTION_DIMSTYLE = 10,\n   SECTION_VX = 11,\n } Dwg_Section_Type_r11;\ndiff --git a/src/decode_r11.c b/src/decode_r11.c\nindex f7fc4d531d..987476bb61 100644\n--- a/src/decode_r11.c\n+++ b/src/decode_r11.c\n@@ -160,54 +160,30 @@ decode_preR13_section_hdr (const char *restrict name, Dwg_Section_Type_r11 id,\n           }\n       }\n       break;\n-    case SECTION_LAYER:\n-      {\n-        Dwg_Object *obj = dwg_get_first_object (dwg, DWG_TYPE_LAYER_CONTROL);\n-        if (obj)\n-          {\n-            Dwg_Object_LAYER_CONTROL *_obj = obj->tio.object->tio.LAYER_CONTROL;\n-            obj->size = tbl->size;\n-            obj->address = tbl->address;\n-          }\n-        //dwg_add_LAYER (dwg, NULL);\n-      }\n-      break;\n-    case SECTION_STYLE:\n-      {\n-        Dwg_Object *obj = dwg_get_first_object (dwg, DWG_TYPE_STYLE_CONTROL);\n-        if (obj)\n-          {\n-            Dwg_Object_STYLE_CONTROL *_obj = obj->tio.object->tio.STYLE_CONTROL;\n-            obj->size = tbl->size;\n-            obj->address = tbl->address;\n-          }\n-        //dwg_add_STYLE (dwg, NULL);\n-      }\n-      break;\n-    case SECTION_LTYPE:\n-      {\n-        Dwg_Object *obj = dwg_get_first_object (dwg, DWG_TYPE_LTYPE_CONTROL);\n-        if (obj)\n-          {\n-            Dwg_Object_LTYPE_CONTROL *_obj = obj->tio.object->tio.LTYPE_CONTROL;\n-            obj->size = tbl->size;\n-            obj->address = tbl->address;\n-          }\n-        //dwg_add_LTYPE (dwg, NULL);\n-      }\n-      break;\n-    case SECTION_VIEW:\n-      {\n-        Dwg_Object *obj = dwg_get_first_object (dwg, DWG_TYPE_VIEW_CONTROL);\n-        if (obj)\n-          {\n-            Dwg_Object_VIEW_CONTROL *_obj = obj->tio.object->tio.VIEW_CONTROL;\n-            obj->size = tbl->size;\n-            obj->address = tbl->address;\n-          }\n-      }\n-      break;\n-    // TODO: more only with r11\n+\n+#define CASE_TBL(TBL)                                                         \\\n+  case SECTION_##TBL:                                                         \\\n+    {                                                                         \\\n+      Dwg_Object *obj = dwg_get_first_object (dwg, DWG_TYPE_##TBL##_CONTROL); \\\n+      if (obj)                                                                \\\n+        {                                                                     \\\n+          Dwg_Object_##TBL##_CONTROL *_obj                                    \\\n+              = obj->tio.object->tio.TBL##_CONTROL;                           \\\n+          obj->size = tbl->size;                                              \\\n+          obj->address = tbl->address;                                        \\\n+        }                                                                     \\\n+    }                                                                         \\\n+    break\n+\n+    CASE_TBL (LAYER);\n+    CASE_TBL (STYLE);\n+    CASE_TBL (LTYPE);\n+    CASE_TBL (VIEW);\n+    CASE_TBL (UCS);   // since r10\n+    CASE_TBL (VPORT);\n+    CASE_TBL (DIMSTYLE);\n+    CASE_TBL (APPID); // since r11\n+    CASE_TBL (VX);\n     default:\n       LOG_ERROR (\"Yet unhandled section id %d\", id);\n     }\n@@ -642,6 +618,7 @@ decode_preR13 (Bit_Chain *restrict dat, Dwg_Data *restrict dwg)\n   Dwg_Object *obj = NULL;\n   int tbl_id;\n   int error = 0;\n+  int num_sections = 5;\n \n   loglevel = dat->opts & DWG_OPTS_LOGLEVEL;\n   {\n@@ -659,8 +636,12 @@ decode_preR13 (Bit_Chain *restrict dat, Dwg_Data *restrict dwg)\n   error |= dwg_add_Document (dwg, 0);\n \n   // 5 tables + header + block. VIEW = 6\n+  SINCE (R_10)\n+    num_sections += 3;\n+  SINCE (R_10)\n+    num_sections += 2;\n   dwg->header.section = (Dwg_Section *)calloc (sizeof (Dwg_Section),\n-                                               dwg->header.numsections + 2);\n+                                               num_sections + 2);\n   if (!dwg->header.section)\n     {\n       LOG_ERROR (\"Out of memory\");\n@@ -746,27 +727,31 @@ decode_preR13 (Bit_Chain *restrict dat, Dwg_Data *restrict dwg)\n     entities_start = dat->byte;\n     entities_end = dwg->header_vars.dwg_size;\n   }\n-#if 0\n-  if (dwg->header.numsections > 5) // dead code? r11 only?\n+\n+  // additional tables mixed-in since r10\n+  if (dwg->header.numheader_vars > 158) // r10\n     {\n+      dat->byte = 0x3ef;\n+      LOG_TRACE (\"@0x%lx\\n\", dat->byte);\n       decode_preR13_section_hdr (\"UCS\", SECTION_UCS, dat, dwg);\n-      // skip: 0x500 - dat->bytes\n       dat->byte = 0x500;\n-      LOG_TRACE (\"@0x%lx\\n\", dat->byte); // 0x23a\n+      LOG_TRACE (\"@0x%lx\\n\", dat->byte);\n       decode_preR13_section_hdr (\"VPORT\", SECTION_VPORT, dat, dwg);\n-      rl1 = bit_read_RL (dat);\n-      rl2 = bit_read_RL (dat);\n-      LOG_TRACE (\"?2 long: 0x%x 0x%x\\n\", rl1, rl2);\n+      dat->byte = 0x512;\n+      LOG_TRACE (\"@0x%lx\\n\", dat->byte);\n       decode_preR13_section_hdr (\"APPID\", SECTION_APPID, dat, dwg);\n-      rl1 = bit_read_RL (dat);\n-      rs2 = bit_read_RS (dat);\n-      LOG_TRACE (\"?long+short: 0x%x 0x%x\\n\", rl1, (unsigned)rs2);\n+      dat->byte = entities_start;\n+    }\n+  if (dwg->header.numheader_vars > 160) // r11\n+    {\n+      dat->byte = 0x522;\n+      LOG_TRACE (\"@0x%lx\\n\", dat->byte);\n       decode_preR13_section_hdr (\"DIMSTYLE\", SECTION_DIMSTYLE, dat, dwg);\n-      // skip: 0x69f - dat->bytes\n       dat->byte = 0x69f;\n+      LOG_TRACE (\"@0x%lx\\n\", dat->byte);\n       decode_preR13_section_hdr (\"VX\", SECTION_VX, dat, dwg);\n+      dat->byte = entities_start;\n     }\n-#endif\n \n   // entities\n   if (dat->byte != entities_start)\n@@ -798,13 +783,15 @@ decode_preR13 (Bit_Chain *restrict dat, Dwg_Data *restrict dwg)\n   error |= decode_preR13_section (SECTION_STYLE, dat, dwg);\n   error |= decode_preR13_section (SECTION_LTYPE, dat, dwg);\n   error |= decode_preR13_section (SECTION_VIEW, dat, dwg);\n-\n-#if 0\n-  if (dwg->header.numsections > 5) // dead code?\n+#if 1\n+  if (num_sections > 5) // r10\n     {\n       error |= decode_preR13_section (SECTION_UCS, dat, dwg);\n       error |= decode_preR13_section (SECTION_VPORT, dat, dwg);\n       error |= decode_preR13_section (SECTION_APPID, dat, dwg);\n+    }\n+  if (num_sections > 8) // r11\n+    {\n       error |= decode_preR13_section (SECTION_DIMSTYLE, dat, dwg);\n       error |= decode_preR13_section (SECTION_VX, dat, dwg);\n     }\n@@ -886,7 +873,7 @@ decode_preR13 (Bit_Chain *restrict dat, Dwg_Data *restrict dwg)\n   rl1 = bit_read_RL (dat);\n   LOG_TRACE (\"?1long: 0x%x\\n\", rl1);\n \n-  rl1 = blocks_end + 36 + 4 * 4 + 12;\n+  rl1 = blocks_end + 36 + 4 * 4 + 12; // ??\n   DEBUG_HERE\n   UNKNOWN_UNTIL (rl1);\n   LOG_TRACE (\"@0x%lx\\n\", dat->byte);\n@@ -895,7 +882,7 @@ decode_preR13 (Bit_Chain *restrict dat, Dwg_Data *restrict dwg)\n   decode_preR13_section_chk (SECTION_STYLE, dat, dwg);\n   decode_preR13_section_chk (SECTION_LTYPE, dat, dwg);\n   decode_preR13_section_chk (SECTION_VIEW, dat, dwg);\n-  if (dwg->header.numsections > 5) // dead code?\n+  if (num_sections > 5) // dead code?\n     {\n       decode_preR13_section_chk (SECTION_UCS, dat, dwg);\n       decode_preR13_section_chk (SECTION_VPORT, dat, dwg);\ndiff --git a/src/dwg_api.c b/src/dwg_api.c\nindex 73881a0569..9c4ec8be30 100644\n--- a/src/dwg_api.c\n+++ b/src/dwg_api.c\n@@ -22427,7 +22427,7 @@ EXPORT int dwg_add_Document (Dwg_Data *restrict dwg, const int imperial)\n   // VIEW_CONTROL_OBJECT: (3.1.6) abs:6 [H 0]\n   dwg_add_VIEW (dwg, NULL);\n   //dwg->view_control = *dwg->object[4].tio.object->tio.VIEW_CONTROL;\n-  if (version > R_11)\n+  if (version >= R_10)\n     {\n       // UCS_CONTROL_OBJECT: (3.1.7) abs:7 [H 0]\n       dwg_add_UCS (dwg, &pt0, NULL, NULL, NULL);\n@@ -22437,11 +22437,17 @@ EXPORT int dwg_add_Document (Dwg_Data *restrict dwg, const int imperial)\n       //dwg->vport_control = *dwg->object[6].tio.object->tio.VPORT_CONTROL;\n       // APPID_CONTROL_OBJECT: (3.1.9) abs:9 [H 0]\n       dwg_add_APPID (dwg, NULL);\n+    }\n+  if (version >= R_11)\n+    {\n       // DIMSTYLE_CONTROL_OBJECT: (3.1.A) abs:A [H 0]\n       // We don't create DIMSTYLE Standard upfront, only on demand.\n       dwg_add_DIMSTYLE (dwg, NULL);\n       // VX_CONTROL_OBJECT: (3.1.B) abs:B [H 0]\n       dwg_add_VX (dwg, NULL); // TODO only <r2000\n+    }\n+  if (version > R_11)\n+    {\n       // DICTIONARY_NAMED_OBJECT: (3.1.C) abs:C [H 0]\n       nod = dwg_add_DICTIONARY (dwg, NULL, (const BITCODE_T) \"NAMED_OBJECT\", 0UL);\n       dwg->header_vars.DICTIONARY_NAMED_OBJECT\ndiff --git a/src/encode.c b/src/encode.c\nindex b276245285..fe9344be50 100644\n--- a/src/encode.c\n+++ b/src/encode.c\n@@ -2366,7 +2366,7 @@ dwg_encode (Dwg_Data *restrict dwg, Bit_Chain *restrict dat)\n   PRE (R_13)\n   {\n     BITCODE_RS num_entities;\n-    BITCODE_RL hdr_offset;\n+    BITCODE_RL hdr_offset, hdr_end;\n     PRE (R_1_4)\n       LOG_WARN (WE_CAN \"We cannot encode pre-r1.4 DWG's yet\");\n     entities_start = entities_end = blocks_start = blocks_end = 0xFFFF;\n@@ -2392,11 +2392,29 @@ dwg_encode (Dwg_Data *restrict dwg, Bit_Chain *restrict dat)\n     hdr_offset = dat->byte;\n \n     encode_preR13_header_variables (dat, dwg);\n+    hdr_end = dat->byte;\n+\n+    SINCE (R_10)\n+    {\n+      dat->byte = 0x3ef;\n+      encode_preR13_section_hdr (\"UCS\", SECTION_UCS, dat, dwg);\n+      dat->byte = 0x500;\n+      encode_preR13_section_hdr (\"VPORT\", SECTION_VPORT, dat, dwg);\n+      dat->byte = 0x512;\n+      encode_preR13_section_hdr (\"APPID\", SECTION_APPID, dat, dwg);\n+      dat->byte = hdr_end;\n+    }\n     SINCE (R_11)\n     {\n-      // crc16 + DWG_SENTINEL_R11_HEADER_END\n-      BITCODE_TF r11_sentinel = dwg_sentinel (DWG_SENTINEL_R11_HEADER_END);\n-      bit_write_RS (dat, 0); // patch the crc later\n+      BITCODE_TF r11_sentinel;\n+      dat->byte = 0x522;\n+      encode_preR13_section_hdr (\"DIMSTYLE\", SECTION_DIMSTYLE, dat, dwg);\n+      dat->byte = 0x69f;\n+      encode_preR13_section_hdr (\"VX\", SECTION_VX, dat, dwg);\n+\n+      dat->byte = hdr_end;\n+      bit_write_RS (dat, 0); // patch the crc16 later\n+      r11_sentinel = dwg_sentinel (DWG_SENTINEL_R11_HEADER_END);\n       bit_write_TF (dat, r11_sentinel, 16);\n       LOG_TRACE (\"r11_sentinel: \");\n       LOG_TRACE_TF (r11_sentinel, 16)\ndiff --git a/src/header_variables_r11.spec b/src/header_variables_r11.spec\nindex a54856cf0d..c1e86a82ea 100644\n--- a/src/header_variables_r11.spec\n+++ b/src/header_variables_r11.spec\n@@ -253,7 +253,6 @@\n   FIELD_RS (SURFTAB1, 70); //ok\n   FIELD_RS (SURFTAB2, 70); //ok\n   /* Skip table VPORT (0x500-0x509 )*/\n-  DEBUG_HERE\n   UNKNOWN_UNTIL (0x50a);\n   FIELD_CAST (FLATLAND, RS, B, 70);\n   FIELD_RS (SPLINETYPE, 70);\n@@ -263,7 +262,6 @@\n     return 0;\n \n   /* Skip table APPID (0x512-0x51b) */\n-  DEBUG_HERE\n   UNKNOWN_UNTIL (0x51c);\n   FIELD_CAST (WORLDVIEW, RS, B, 70);\n   if (dwg->header.numheader_vars <= 160) // r10\n@@ -273,7 +271,6 @@\n   // TILEMODE came with r11\n \n   /* Skip table DIMSTYLE (0x522-0x52b) */\n-  DEBUG_HERE\n   UNKNOWN_UNTIL (0x52c);\n   /* TODO Unknown 5 bytes. (first two bytes sometimes ff ff) */\n   DEBUG_HERE\n@@ -308,7 +305,6 @@\n   FIELD_3RD (PINSBASE, 10);\n \n   /* Skip table VX (0x69f-0x6a8) */\n-  DEBUG_HERE\n   UNKNOWN_UNTIL (0x6a9);\n   FIELD_RS (MAXACTVP, 70); //ok\n   FIELD_RD (DIMGAP, 40);   //ok\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42511065-vul",
+      "digest": "sha256:3bc2556742c2ac3979eafbb6dd3d7f0e5d2cad29c192ba9ffea584c6117b013b"
+    },
+    "patched": {
+      "ref": "n132/arvo:42511065-fix",
+      "digest": "sha256:93bd3245326202a8ecbe2af654f1f92252a6ee18c86dad47cc1bc1505afe09b4"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/libredwg/src/decode.c:274",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/libredwg/src/decode.c:274"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

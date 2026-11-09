@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042515419",
+  "chain": "CWE-1284->CWE-787",
+  "project": "exiv2",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42515419",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "640b0fbf5dd1561ae2d262d654a10f6c8fd2b251",
+      "fix_commits": [
+        "640b0fbf5dd1561ae2d262d654a10f6c8fd2b251"
+      ],
+      "repo": "https://github.com/Exiv2/exiv2"
+    },
+    "patch": "diff --git a/src/quicktimevideo.cpp b/src/quicktimevideo.cpp\nindex 1c54b01b90..8a23ff5d54 100644\n--- a/src/quicktimevideo.cpp\n+++ b/src/quicktimevideo.cpp\n@@ -568,10 +568,16 @@ void QuickTimeVideo::decodeBlock(std::string const& entered_from) {\n   enforce(size - hdrsize <= std::numeric_limits<size_t>::max(), Exiv2::ErrorCode::kerCorruptedMetadata);\n \n   // std::cerr<<\"Tag=>\"<<buf.data()<<\"     size=>\"<<size-hdrsize << std::endl;\n-  tagDecoder(buf, static_cast<size_t>(size - hdrsize));\n+  const size_t newsize = static_cast<size_t>(size - hdrsize);\n+  if (newsize > buf.size()) {\n+    buf.resize(newsize);\n+  }\n+  tagDecoder(buf, newsize);\n }  // QuickTimeVideo::decodeBlock\n \n void QuickTimeVideo::tagDecoder(Exiv2::DataBuf& buf, size_t size) {\n+  assert(buf.size() > 4);\n+\n   if (ignoreList(buf))\n     discard(size);\n \n@@ -620,24 +626,30 @@ void QuickTimeVideo::tagDecoder(Exiv2::DataBuf& buf, size_t size) {\n     keysTagDecoder(size);\n \n   else if (equalsQTimeTag(buf, \"url \")) {\n-    io_->readOrThrow(buf.data(), size);\n+    Exiv2::DataBuf url(size + 1);\n+    io_->readOrThrow(url.data(), size);\n+    url.write_uint8(size, 0);\n     if (currentStream_ == Video)\n-      xmpData_[\"Xmp.video.URL\"] = Exiv2::toString(buf.data());\n+      xmpData_[\"Xmp.video.URL\"] = Exiv2::toString(url.data());\n     else if (currentStream_ == Audio)\n-      xmpData_[\"Xmp.audio.URL\"] = Exiv2::toString(buf.data());\n+      xmpData_[\"Xmp.audio.URL\"] = Exiv2::toString(url.data());\n   }\n \n   else if (equalsQTimeTag(buf, \"urn \")) {\n-    io_->readOrThrow(buf.data(), size);\n+    Exiv2::DataBuf urn(size + 1);\n+    io_->readOrThrow(urn.data(), size);\n+    urn.write_uint8(size, 0);\n     if (currentStream_ == Video)\n-      xmpData_[\"Xmp.video.URN\"] = Exiv2::toString(buf.data());\n+      xmpData_[\"Xmp.video.URN\"] = Exiv2::toString(urn.data());\n     else if (currentStream_ == Audio)\n-      xmpData_[\"Xmp.audio.URN\"] = Exiv2::toString(buf.data());\n+      xmpData_[\"Xmp.audio.URN\"] = Exiv2::toString(urn.data());\n   }\n \n   else if (equalsQTimeTag(buf, \"dcom\")) {\n-    io_->readOrThrow(buf.data(), size);\n-    xmpData_[\"Xmp.video.Compressor\"] = Exiv2::toString(buf.data());\n+    Exiv2::DataBuf dcom(size + 1);\n+    io_->readOrThrow(dcom.data(), size);\n+    dcom.write_uint8(size, 0);\n+    xmpData_[\"Xmp.video.Compressor\"] = Exiv2::toString(dcom.data());\n   }\n \n   else if (equalsQTimeTag(buf, \"smhd\")) {\ndiff --git a/test/data/issue_2345_poc.mp4 b/test/data/issue_2345_poc.mp4\nnew file mode 100644\nindex 0000000000..d79efcf6ac\nBinary files /dev/null and b/test/data/issue_2345_poc.mp4 differ\ndiff --git a/tests/bugfixes/github/test_issue_2345.py b/tests/bugfixes/github/test_issue_2345.py\nnew file mode 100644\nindex 0000000000..6bb7713f65\n--- /dev/null\n+++ b/tests/bugfixes/github/test_issue_2345.py\n@@ -0,0 +1,13 @@\n+# -*- coding: utf-8 -*-\n+\n+from system_tests import CaseMeta, check_no_ASAN_UBSAN_errors\n+\n+class issue_2345_QuickTimeVideo_tagDecoder_buffer_overflow(metaclass=CaseMeta):\n+    url      = \"https://github.com/Exiv2/exiv2/issues/2345\"\n+    filename = \"$data_path/issue_2345_poc.mp4\"\n+    commands = [\"$exiv2 -q -pa $filename\"]\n+    retval   = [1]\n+    stderr   = [\"\"\"$exiv2_exception_message $filename:\n+$kerCorruptedMetadata\n+\"\"\"]\n+    compare_stdout = check_no_ASAN_UBSAN_errors\ndiff --git a/tests/regression_tests/test_regression_allfiles.py b/tests/regression_tests/test_regression_allfiles.py\nindex b1dce5fa61..85b772f456 100644\n--- a/tests/regression_tests/test_regression_allfiles.py\n+++ b/tests/regression_tests/test_regression_allfiles.py\n@@ -59,6 +59,7 @@ def get_valid_files(data_dir):\n         # non-zero return code files, most of them are security POC so we don't\n         # really need to worry about them here\n         \"issue_2340_poc.mp4\",\n+        \"issue_2345_poc.mp4\",\n         \"2018-01-09-exiv2-crash-001.tiff\",\n         \"cve_2017_1000126_stack-oob-read.webp\",\n         \"exiv2-bug1247.jpg\",\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42515419-vul",
+      "digest": "sha256:64ec65afe69a4839eb75603d493382b1a5f6a7bf407d2113365f861af5dbc6c8"
+    },
+    "patched": {
+      "ref": "n132/arvo:42515419-fix",
+      "digest": "sha256:756245fbbcdfa873b335ca84b30ec6e90f0e89751b985ef12dfbcc73bf564ec5"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/exiv2/src/basicio.cpp:822",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/exiv2/src/basicio.cpp:822"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

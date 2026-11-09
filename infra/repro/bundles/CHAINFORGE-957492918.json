@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-957492918",
+  "chain": "CWE-129->CWE-787",
+  "project": "openh264",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42509538",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/cisco/openh264/commit/062f9cbc065cba3d0688853e8680856f9bd26bf9",
+      "fix_commits": [
+        "062f9cbc065cba3d0688853e8680856f9bd26bf9"
+      ],
+      "repo": "https://github.com/cisco/openh264"
+    },
+    "patch": "diff --git a/codec/decoder/core/src/manage_dec_ref.cpp b/codec/decoder/core/src/manage_dec_ref.cpp\nindex 7b50fe059d..88099b60ef 100644\n--- a/codec/decoder/core/src/manage_dec_ref.cpp\n+++ b/codec/decoder/core/src/manage_dec_ref.cpp\n@@ -367,12 +367,12 @@ int32_t WelsInitRefList (PWelsDecoderContext pCtx, int32_t iPoc) {\n \n   int32_t i, iCount = 0;\n   //short\n-  for (i = 0; i < pCtx->sRefPic.uiShortRefCount[LIST_0]; ++i) {\n+  for (i = 0; i < pCtx->sRefPic.uiShortRefCount[LIST_0] && iCount < MAX_REF_PIC_COUNT; ++i) {\n     pCtx->sRefPic.pRefList[LIST_0][iCount++ ] = ppShoreRefList[i];\n   }\n \n   //long\n-  for (i = 0; i < pCtx->sRefPic.uiLongRefCount[LIST_0] ; ++i) {\n+  for (i = 0; i < pCtx->sRefPic.uiLongRefCount[LIST_0] && iCount < MAX_REF_PIC_COUNT; ++i) {\n     pCtx->sRefPic.pRefList[LIST_0][iCount++  ] = ppLongRefList[i];\n   }\n   pCtx->sRefPic.uiRefCount[LIST_0] = iCount;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42509538-vul",
+      "digest": "sha256:dd0fbef43df11d990855a45f7c02380cdaeb8416af2b832b29cc755f1cbce322"
+    },
+    "patched": {
+      "ref": "n132/arvo:42509538-fix",
+      "digest": "sha256:5b5eed8e000d7ddfa5cdeaae7829c91afcfd873e54dd6515216e16c0ec6a60d3"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "crash_site": "/src/openh264/codec/decoder/core/src/manage_dec_ref.cpp:376",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 129,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "site": "/src/openh264/codec/decoder/core/src/manage_dec_ref.cpp:376"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

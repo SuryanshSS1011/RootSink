@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042512406",
+  "chain": "CWE-456->CWE-457",
+  "project": "librawspeed",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42512406",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "bcd1c6fa54908199b1fba6d0dd38f9bf6c51a4ce",
+      "fix_commits": [
+        "bcd1c6fa54908199b1fba6d0dd38f9bf6c51a4ce"
+      ],
+      "repo": "https://github.com/darktable-org/rawspeed"
+    },
+    "patch": "From bcd1c6fa54908199b1fba6d0dd38f9bf6c51a4ce Mon Sep 17 00:00:00 2001\nFrom: Roman Lebedev <lebedev.ri@gmail.com>\nDate: Fri, 29 Dec 2017 00:20:59 +0300\nSubject: [PATCH] DcrDecoder::decodeRawInternal(): don't catch IOException.\n\n---\n src/librawspeed/decoders/DcrDecoder.cpp | 6 +-----\n 1 file changed, 1 insertion(+), 5 deletions(-)\n\ndiff --git a/src/librawspeed/decoders/DcrDecoder.cpp b/src/librawspeed/decoders/DcrDecoder.cpp\nindex 8655a76..0b563c7 100644\n--- a/src/librawspeed/decoders/DcrDecoder.cpp\n+++ b/src/librawspeed/decoders/DcrDecoder.cpp\n@@ -92,11 +92,7 @@ RawImage DcrDecoder::decodeRawInternal() {\n       mRaw->metadata.wbCoeffs[2] = 2048.0F / blob->getU16(22);\n     }\n \n-    try {\n-      decodeKodak65000(&input, width, height);\n-    } catch (IOException &) {\n-      mRaw->setError(\"IO error occurred while reading image. Returning partial result.\");\n-    }\n+    decodeKodak65000(&input, width, height);\n   } else\n     ThrowRDE(\"Unsupported compression %d\", compression);\n \n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42512406-vul",
+      "digest": "sha256:30d7189c00acf3ff68996f245783731aa25466fac6dcb6e2f3d0dbca7dabda2b"
+    },
+    "patched": {
+      "ref": "n132/arvo:42512406-fix",
+      "digest": "sha256:56f6c711eed37311b728bf5ff8f0df4a7119db40846601f1ea508f082185397e"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/librawspeed/src/librawspeed/common/RawImage.cpp:168",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/librawspeed/src/librawspeed/common/RawImage.cpp:168"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

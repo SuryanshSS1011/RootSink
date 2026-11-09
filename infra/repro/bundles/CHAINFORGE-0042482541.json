@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042482541",
+  "chain": "CWE-456->CWE-457",
+  "project": "libspectre",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42482541",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "48735999ca27fca8f154aa15c078c4576ab64ae5",
+      "fix_commits": [
+        "48735999ca27fca8f154aa15c078c4576ab64ae5"
+      ],
+      "repo": "https://gitlab.freedesktop.org/libspectre/libspectre.git"
+    },
+    "patch": "From 48735999ca27fca8f154aa15c078c4576ab64ae5 Mon Sep 17 00:00:00 2001\nFrom: Albert Astals Cid <aacid@kde.org>\nDate: Wed, 8 Apr 2020 23:52:43 +0200\nSubject: [PATCH] Fix uninitialized memory read on malformed documents\n\n---\n libspectre/ps.c | 4 ++--\n 1 file changed, 2 insertions(+), 2 deletions(-)\n\ndiff --git a/libspectre/ps.c b/libspectre/ps.c\nindex 491eddc..4374272 100644\n--- a/libspectre/ps.c\n+++ b/libspectre/ps.c\n@@ -2213,8 +2213,8 @@ ps_read_doseps(fd,doseps)\n     FileData fd;\n     DOSEPS *doseps;\n {\n-    fread(doseps->id, 1, 4, FD_FILE);\n-    if (! ((doseps->id[0]==0xc5) && (doseps->id[1]==0xd0) \n+    const size_t read = fread(doseps->id, 1, 4, FD_FILE);\n+    if (! ((read == 4) && (doseps->id[0]==0xc5) && (doseps->id[1]==0xd0)\n \t   && (doseps->id[2]==0xd3) && (doseps->id[3]==0xc6)) ) {\n         /* id is \"EPSF\" with bit 7 set */\n         ps_io_rewind(fd);\n-- \n2.55.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42482541-vul",
+      "digest": "sha256:65a2e6160cbbcbd6d38ab43368e5301998552d852c22d2ed9a2effaddf314d65"
+    },
+    "patched": {
+      "ref": "n132/arvo:42482541-fix",
+      "digest": "sha256:9869e5c25a5426a06b7c08d3d1ec9d6eaf7c51173f34272914d65a09873f434b"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/libspectre/libspectre/ps.c:2215",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/libspectre/libspectre/ps.c:2215"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

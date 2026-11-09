@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042513614",
+  "chain": "CWE-416->CWE-125",
+  "project": "libjxl",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42513614",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "66afb51bb4f132f205ba16d236993ebf8fdba89f",
+      "fix_commits": [
+        "66afb51bb4f132f205ba16d236993ebf8fdba89f"
+      ],
+      "repo": "https://github.com/libjxl/libjxl"
+    },
+    "patch": "From 66afb51bb4f132f205ba16d236993ebf8fdba89f Mon Sep 17 00:00:00 2001\nFrom: Zoltan Szabadka <szabadka@google.com>\nDate: Mon, 18 Jul 2022 17:15:10 +0200\nSubject: [PATCH] Fix ASAN crash after #1624\n\n---\n lib/jxl/alpha.cc                       |  9 +++++++++\n lib/jxl/alpha.h                        |  1 +\n lib/jxl/jxl_test.cc                    |  2 +-\n lib/jxl/render_pipeline/stage_write.cc | 15 ++++-----------\n 4 files changed, 15 insertions(+), 12 deletions(-)\n\ndiff --git a/lib/jxl/alpha.cc b/lib/jxl/alpha.cc\nindex 77ac902..f0ab39a 100644\n--- a/lib/jxl/alpha.cc\n+++ b/lib/jxl/alpha.cc\n@@ -108,4 +108,13 @@ void UnpremultiplyAlpha(float* JXL_RESTRICT r, float* JXL_RESTRICT g,\n   }\n }\n \n+void UnpremultiplyAlpha(float* JXL_RESTRICT rgba, size_t num_pixels) {\n+  for (size_t x = 0, ix = 0; x < num_pixels; ++x, ix += 4) {\n+    const float multiplier = 1.f / std::max(kSmallAlpha, rgba[ix + 3]);\n+    rgba[ix] *= multiplier;\n+    rgba[ix + 1] *= multiplier;\n+    rgba[ix + 2] *= multiplier;\n+  }\n+}\n+\n }  // namespace jxl\ndiff --git a/lib/jxl/alpha.h b/lib/jxl/alpha.h\nindex efb76c8..f49790b 100644\n--- a/lib/jxl/alpha.h\n+++ b/lib/jxl/alpha.h\n@@ -60,6 +60,7 @@ void PremultiplyAlpha(float* JXL_RESTRICT r, float* JXL_RESTRICT g,\n void UnpremultiplyAlpha(float* JXL_RESTRICT r, float* JXL_RESTRICT g,\n                         float* JXL_RESTRICT b, const float* JXL_RESTRICT a,\n                         size_t num_pixels);\n+void UnpremultiplyAlpha(float* JXL_RESTRICT rgba, size_t num_pixels);\n \n }  // namespace jxl\n \ndiff --git a/lib/jxl/jxl_test.cc b/lib/jxl/jxl_test.cc\nindex 9ebb5cb..47c8b16 100644\n--- a/lib/jxl/jxl_test.cc\n+++ b/lib/jxl/jxl_test.cc\n@@ -890,7 +890,7 @@ TEST(JxlTest, RoundtripAlphaPremultiplied) {\n           EXPECT_THAT(\n               ButteraugliDistance(io, io2, cparams.ba_params, GetJxlCms(),\n                                   /*distmap=*/nullptr, pool),\n-              IsSlightlyBelow(1.2));\n+              IsSlightlyBelow(1.25));\n           io2.Main().UnpremultiplyAlpha();\n         }\n         EXPECT_THAT(ButteraugliDistance(io_nopremul, io2, cparams.ba_params,\ndiff --git a/lib/jxl/render_pipeline/stage_write.cc b/lib/jxl/render_pipeline/stage_write.cc\nindex ccf137b..2462fd1 100644\n--- a/lib/jxl/render_pipeline/stage_write.cc\n+++ b/lib/jxl/render_pipeline/stage_write.cc\n@@ -311,17 +311,6 @@ class WriteToPixelCallbackStage : public RenderPipelineStage {\n       // No xextra offset; opaque_alpha_ is a way to set all values to 1.0f.\n       line_buffers[3] = opaque_alpha_.data();\n     }\n-    if (has_alpha_ && rgba_ && unpremul_alpha_) {\n-      ImageF tmp(xsize + 2 * xextra, 3);\n-      for (size_t c = 0; c < 3; ++c) {\n-        memcpy(tmp.Row(c), line_buffers[c], sizeof(float) * tmp.xsize());\n-      }\n-      UnpremultiplyAlpha(tmp.Row(0), tmp.Row(1), tmp.Row(2), line_buffers[3],\n-                         tmp.xsize());\n-      for (size_t c = 0; c < 3; ++c) {\n-        line_buffers[c] = tmp.Row(c);\n-      }\n-    }\n \n     // TODO(veluca): SIMD.\n     ssize_t limit = std::min(xextra + xsize, width_ - xpos);\n@@ -338,6 +327,10 @@ class WriteToPixelCallbackStage : public RenderPipelineStage {\n           temp[j++] = line_buffers[3][ix];\n         }\n       }\n+      if (has_alpha_ && rgba_ && unpremul_alpha_) {\n+        // TODO(szabadka) SIMDify (possibly in a separate pipeline stage).\n+        UnpremultiplyAlpha(temp, ix);\n+      }\n       pixel_callback_.run(run_opaque_, thread_id, xpos + x0, ypos, ix, temp);\n       for (size_t c = 0; c < 3; c++) line_buffers[c] += kMaxPixelsPerCall;\n       if (has_alpha_) line_buffers[3] += kMaxPixelsPerCall;\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42513614-vul",
+      "digest": "sha256:8d4d14e3fd14ee53ec58fbed00a2e03b94d2c70a897460b10e06cc4efcda2032"
+    },
+    "patched": {
+      "ref": "n132/arvo:42513614-fix",
+      "digest": "sha256:b0e92551272298a55a2229e3fbba05210e3c0d650ad349e4aed0c5a8a524795d"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/libjxl/lib/jxl/render_pipeline/stage_write.cc:334",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/libjxl/lib/jxl/render_pipeline/stage_write.cc:334"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

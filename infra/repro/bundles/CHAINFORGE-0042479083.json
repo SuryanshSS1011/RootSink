@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042479083",
+  "chain": "CWE-1284->CWE-125",
+  "project": "gdal",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42479083",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "2d46f394fbb74c366b8195e8607f9400953b869c",
+      "fix_commits": [
+        "2d46f394fbb74c366b8195e8607f9400953b869c"
+      ],
+      "repo": "https://github.com/OSGeo/gdal"
+    },
+    "patch": "diff --git a/gdal/ogr/ogrsf_frmts/ntf/ntffilereader.cpp b/gdal/ogr/ogrsf_frmts/ntf/ntffilereader.cpp\nindex 7a4ba4c22815..f2fa10928c03 100644\n--- a/gdal/ogr/ogrsf_frmts/ntf/ntffilereader.cpp\n+++ b/gdal/ogr/ogrsf_frmts/ntf/ntffilereader.cpp\n@@ -278,7 +278,7 @@ int NTFFileReader::Open( const char * pszFilenameIn )\n /* -------------------------------------------------------------------- */\n /*      Handle feature class name records.                              */\n /* -------------------------------------------------------------------- */\n-        if( poRecord->GetType() == NRT_FCR )\n+        if( poRecord->GetType() == NRT_FCR && poRecord->GetLength() >= 37 )\n         {\n             nFCCount++;\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42479083-vul",
+      "digest": "sha256:5811a3a75b792b124691b12acb5619641252adce9c6f988ac528f24c8aed042f"
+    },
+    "patched": {
+      "ref": "n132/arvo:42479083-fix",
+      "digest": "sha256:cb19fb66229b93f2c26d1bcb236d3e472d49ef87e21a1e1aa138688d05645a5c"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/gdal/gdal/ogr/ogrsf_frmts/ntf/ntffilereader.cpp:292",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/gdal/gdal/ogr/ogrsf_frmts/ntf/ntffilereader.cpp:292"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

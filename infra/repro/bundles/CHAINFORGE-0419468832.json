@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0419468832",
+  "chain": "CWE-416->CWE-787",
+  "project": "wamr",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "419468832",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "93ef19b0cab66009a08c407ec21eb2afdbcca1a5",
+      "fix_commits": [
+        "93ef19b0cab66009a08c407ec21eb2afdbcca1a5"
+      ],
+      "repo": "https://github.com/bytecodealliance/wasm-micro-runtime"
+    },
+    "patch": "diff --git a/core/iwasm/interpreter/wasm_loader.c b/core/iwasm/interpreter/wasm_loader.c\nindex 40ea697a91..6317badc55 100644\n--- a/core/iwasm/interpreter/wasm_loader.c\n+++ b/core/iwasm/interpreter/wasm_loader.c\n@@ -3282,6 +3282,13 @@ load_import_section(const uint8 *buf, const uint8 *buf_end, WASMModule *module,\n                     CHECK_BUF(p, p_end, 1);\n                     /* 0x70 */\n                     u8 = read_uint8(p);\n+#if WASM_ENABLE_GC != 0\n+                    if (wasm_is_reftype_htref_nullable(u8)) {\n+                        int32 heap_type;\n+                        read_leb_int32(p, p_end, heap_type);\n+                        (void)heap_type;\n+                    }\n+#endif\n                     read_leb_uint32(p, p_end, flags);\n                     read_leb_uint32(p, p_end, u32);\n                     if (flags & 1)\n@@ -3329,7 +3336,7 @@ load_import_section(const uint8 *buf, const uint8 *buf_end, WASMModule *module,\n                     /* valtype */\n                     CHECK_BUF(p, p_end, 1);\n                     global_type = read_uint8(p);\n-                    if (wasm_is_type_multi_byte_type(global_type)) {\n+                    if (wasm_is_reftype_htref_nullable(global_type)) {\n                         int32 heap_type;\n                         read_leb_int32(p, p_end, heap_type);\n                         (void)heap_type;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:419468832-vul",
+      "digest": "sha256:01f807b48c14898d725385e45efcd8559aa165a26835653282296077fbc99172"
+    },
+    "patched": {
+      "ref": "n132/arvo:419468832-fix",
+      "digest": "sha256:d79b9503fdd092b36c4a994b93f496098529dda4a6e748b875aab937b214982b"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/wamr/core/iwasm/interpreter/wasm_loader.c:3041",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/wamr/core/iwasm/interpreter/wasm_loader.c:3041"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042512167",
+  "chain": "CWE-456->CWE-457",
+  "project": "binutils-gdb",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42512167",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "633de7089179f455d94d0fef54c68c298f545242",
+      "fix_commits": [
+        "633de7089179f455d94d0fef54c68c298f545242"
+      ],
+      "repo": "git://sourceware.org/git/binutils-gdb.git"
+    },
+    "patch": "diff --git a/gas/input-file.c b/gas/input-file.c\nindex f1085c1f..d7cf56cc 100644\n--- a/gas/input-file.c\n+++ b/gas/input-file.c\n@@ -170,20 +170,20 @@ input_file_open (const char *filename,\n       c = getc (f_in);\n       if (c == 'N')\n \t{\n-\t  if (fgets (buf, sizeof (buf), f_in)\n-\t      && startswith (buf, \"O_APP\") && ISSPACE (buf[5]))\n+\t  char *p = fgets (buf, sizeof (buf), f_in);\n+\t  if (p && startswith (p, \"O_APP\") && ISSPACE (p[5]))\n \t    preprocess = 0;\n-\t  if (!strchr (buf, '\\n'))\n-\t    ungetc ('#', f_in);\t/* It was longer.  */\n+\t  if (!p || !strchr (p, '\\n'))\n+\t    ungetc ('#', f_in);\n \t  else\n \t    ungetc ('\\n', f_in);\n \t}\n       else if (c == 'A')\n \t{\n-\t  if (fgets (buf, sizeof (buf), f_in)\n-\t      && startswith (buf, \"PP\") && ISSPACE (buf[2]))\n+\t  char *p = fgets (buf, sizeof (buf), f_in);\n+\t  if (p && startswith (p, \"PP\") && ISSPACE (p[2]))\n \t    preprocess = 1;\n-\t  if (!strchr (buf, '\\n'))\n+\t  if (!p || !strchr (p, '\\n'))\n \t    ungetc ('#', f_in);\n \t  else\n \t    ungetc ('\\n', f_in);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42512167-vul",
+      "digest": "sha256:2b169469fb14eeca3c0917a1f17f87a75c132a59ab0ff6f1bde40184dc4deac6"
+    },
+    "patched": {
+      "ref": "n132/arvo:42512167-fix",
+      "digest": "sha256:24e5562e1b7f7d35084d898433153a49a8b57bddb68c32c0903515c813a222d0"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/binutils-gdb/gas/input-file.c:176",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/binutils-gdb/gas/input-file.c:176"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

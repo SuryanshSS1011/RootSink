@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042493228",
+  "chain": "CWE-416->CWE-125",
+  "project": "serenity",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42493228",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "a72276407ba4a438d4e34edd0d5ebf48cd6d9b63",
+      "fix_commits": [
+        "a72276407ba4a438d4e34edd0d5ebf48cd6d9b63"
+      ],
+      "repo": "https://github.com/SerenityOS/serenity"
+    },
+    "patch": "From a72276407ba4a438d4e34edd0d5ebf48cd6d9b63 Mon Sep 17 00:00:00 2001\nFrom: Linus Groh <mail@linusgroh.de>\nDate: Wed, 24 Feb 2021 09:48:29 +0100\nSubject: [PATCH] LibJS: Make ArrayPrototype an Array object\n\nhttps://tc39.es/ecma262/#sec-properties-of-the-array-prototype-object\n\nThe Array prototype object: [...] is an Array exotic object and has the\ninternal methods specified for such objects.\n\nNOTE: The Array prototype object is specified to be an Array exotic\nobject to ensure compatibility with ECMAScript code that was created\nprior to the ECMAScript 2015 specification.\n---\n Userland/Libraries/LibJS/Runtime/Array.cpp                  | 5 +++++\n Userland/Libraries/LibJS/Runtime/Array.h                    | 3 ++-\n Userland/Libraries/LibJS/Runtime/ArrayPrototype.cpp         | 5 ++---\n Userland/Libraries/LibJS/Runtime/ArrayPrototype.h           | 6 +++---\n .../Libraries/LibJS/Tests/builtins/Array/Array.isArray.js   | 3 +--\n 5 files changed, 13 insertions(+), 9 deletions(-)\n\ndiff --git a/Userland/Libraries/LibJS/Runtime/Array.cpp b/Userland/Libraries/LibJS/Runtime/Array.cpp\nindex 2509d13..dabf19f 100644\n--- a/Userland/Libraries/LibJS/Runtime/Array.cpp\n+++ b/Userland/Libraries/LibJS/Runtime/Array.cpp\n@@ -38,8 +38,13 @@ Array* Array::create(GlobalObject& global_object)\n \n Array::Array(Object& prototype)\n     : Object(prototype)\n+{\n+}\n+\n+void Array::initialize(GlobalObject& global_object)\n {\n     auto& vm = this->vm();\n+    Object::initialize(global_object);\n     define_native_property(vm.names.length, length_getter, length_setter, Attribute::Writable);\n }\n \ndiff --git a/Userland/Libraries/LibJS/Runtime/Array.h b/Userland/Libraries/LibJS/Runtime/Array.h\nindex 2ee4727..5beeefa 100644\n--- a/Userland/Libraries/LibJS/Runtime/Array.h\n+++ b/Userland/Libraries/LibJS/Runtime/Array.h\n@@ -30,13 +30,14 @@\n \n namespace JS {\n \n-class Array final : public Object {\n+class Array : public Object {\n     JS_OBJECT(Array, Object);\n \n public:\n     static Array* create(GlobalObject&);\n \n     explicit Array(Object& prototype);\n+    virtual void initialize(GlobalObject&) override;\n     virtual ~Array() override;\n \n     static Array* typed_this(VM&, GlobalObject&);\ndiff --git a/Userland/Libraries/LibJS/Runtime/ArrayPrototype.cpp b/Userland/Libraries/LibJS/Runtime/ArrayPrototype.cpp\nindex 311ea37..d4aba04 100644\n--- a/Userland/Libraries/LibJS/Runtime/ArrayPrototype.cpp\n+++ b/Userland/Libraries/LibJS/Runtime/ArrayPrototype.cpp\n@@ -44,14 +44,14 @@ namespace JS {\n static HashTable<Object*> s_array_join_seen_objects;\n \n ArrayPrototype::ArrayPrototype(GlobalObject& global_object)\n-    : Object(*global_object.object_prototype())\n+    : Array(*global_object.object_prototype())\n {\n }\n \n void ArrayPrototype::initialize(GlobalObject& global_object)\n {\n     auto& vm = this->vm();\n-    Object::initialize(global_object);\n+    Array::initialize(global_object);\n     u8 attr = Attribute::Writable | Attribute::Configurable;\n \n     define_native_function(vm.names.filter, filter, 1, attr);\n@@ -81,7 +81,6 @@ void ArrayPrototype::initialize(GlobalObject& global_object)\n     define_native_function(vm.names.fill, fill, 1, attr);\n     define_native_function(vm.names.values, values, 0, attr);\n     define_native_function(vm.names.flat, flat, 0, attr);\n-    define_property(vm.names.length, Value(0), Attribute::Configurable);\n \n     // Use define_property here instead of define_native_function so that\n     // Object.is(Array.prototype[Symbol.iterator], Array.prototype.values)\ndiff --git a/Userland/Libraries/LibJS/Runtime/ArrayPrototype.h b/Userland/Libraries/LibJS/Runtime/ArrayPrototype.h\nindex 92ffafe..906e0af 100644\n--- a/Userland/Libraries/LibJS/Runtime/ArrayPrototype.h\n+++ b/Userland/Libraries/LibJS/Runtime/ArrayPrototype.h\n@@ -27,12 +27,12 @@\n \n #pragma once\n \n-#include <LibJS/Runtime/Object.h>\n+#include <LibJS/Runtime/Array.h>\n \n namespace JS {\n \n-class ArrayPrototype final : public Object {\n-    JS_OBJECT(ArrayPrototype, Object);\n+class ArrayPrototype final : public Array {\n+    JS_OBJECT(ArrayPrototype, Array);\n \n public:\n     ArrayPrototype(GlobalObject&);\ndiff --git a/Userland/Libraries/LibJS/Tests/builtins/Array/Array.isArray.js b/Userland/Libraries/LibJS/Tests/builtins/Array/Array.isArray.js\nindex bbe12a8..e0577a7 100644\n--- a/Userland/Libraries/LibJS/Tests/builtins/Array/Array.isArray.js\n+++ b/Userland/Libraries/LibJS/Tests/builtins/Array/Array.isArray.js\n@@ -21,6 +21,5 @@ test(\"arguments that evaluate to true\", () => {\n     expect(Array.isArray(new Array())).toBeTrue();\n     expect(Array.isArray(new Array(10))).toBeTrue();\n     expect(Array.isArray(new Array(\"a\", \"b\", \"c\"))).toBeTrue();\n-    // FIXME: Array.prototype is supposed to be an array!\n-    // expect(Array.isArray(Array.prototype)).toBeTrue();\n+    expect(Array.isArray(Array.prototype)).toBeTrue();\n });\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42493228-vul",
+      "digest": "sha256:d10890d53cd7bbc049522ae8454af69574b4ffd5f6cb4082e681470d954293b9"
+    },
+    "patched": {
+      "ref": "n132/arvo:42493228-fix",
+      "digest": "sha256:2370c054ae622c72d9cd733c1c789f7415ef014e214593fa1f050b8e9f86e3e3"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/serenity/Meta/Lagom/build/../../../AK/NonnullOwnPtr.h:125",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/serenity/Meta/Lagom/build/../../../AK/NonnullOwnPtr.h:125"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

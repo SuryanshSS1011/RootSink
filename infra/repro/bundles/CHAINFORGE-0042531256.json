@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042531256",
+  "chain": "CWE-1284->CWE-787",
+  "project": "ffmpeg",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42531256",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "36a986d9a193e39382de4bac95e2e314cc30ca7a",
+      "fix_commits": [
+        "36a986d9a193e39382de4bac95e2e314cc30ca7a"
+      ],
+      "repo": "https://git.ffmpeg.org/ffmpeg.git"
+    },
+    "patch": "From 36a986d9a193e39382de4bac95e2e314cc30ca7a Mon Sep 17 00:00:00 2001\nFrom: Frank Plowman <post@frankplowman.com>\nDate: Tue, 30 Jan 2024 09:40:57 +0000\nSubject: [PATCH] lavc/vvc: Add check to num_multi_layer_olss\n\nCheck that vps_each_layer_is_an_ols_flag, which indicates that \"at\nleast one OLS specified by the VPS contains more than one layer,\" is\nset if num_multi_layer_olss is non-zero.\n\nFixes: 65160/clusterfuzz-testcase-minimized-ffmpeg_BSF_VVC_METADATA_fuzzer-4665241535119360\n\nFound-by: continuous fuzzing process https://github.com/google/oss-fuzz/tree/master/projects/ffmpeg\nSigned-off-by: Frank Plowman <post@frankplowman.com>\nSigned-off-by: James Almer <jamrial@gmail.com>\n---\n libavcodec/cbs_h266_syntax_template.c | 2 ++\n 1 file changed, 2 insertions(+)\n\ndiff --git a/libavcodec/cbs_h266_syntax_template.c b/libavcodec/cbs_h266_syntax_template.c\nindex 2f3478e..37dc3ac 100644\n--- a/libavcodec/cbs_h266_syntax_template.c\n+++ b/libavcodec/cbs_h266_syntax_template.c\n@@ -911,6 +911,8 @@ static int FUNC(vps) (CodedBitstreamContext *ctx, RWContext *rw,\n                 num_multi_layer_olss++;\n             }\n         }\n+        if (!current->vps_each_layer_is_an_ols_flag && num_multi_layer_olss == 0)\n+            return AVERROR_INVALIDDATA;\n     }\n \n     for (i = 0; i <= current->vps_num_ptls_minus1; i++) {\n-- \n2.55.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42531256-vul",
+      "digest": "sha256:05ab7760f7a5f15c56d638b24eeed35a5df63dc177f1228f53c363abd9619e26"
+    },
+    "patched": {
+      "ref": "n132/arvo:42531256-fix",
+      "digest": "sha256:a3835bda2050b004f39446bb424faf39ab4c8b52386904f59bb9dd2d23773887"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/ffmpeg/libavcodec/cbs_h266_syntax_template.c:936",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/ffmpeg/libavcodec/cbs_h266_syntax_template.c:936"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

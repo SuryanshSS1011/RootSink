@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0390646669",
+  "chain": "CWE-456->CWE-457",
+  "project": "libical",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "390646669",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "6b7b9c2612dc5c8ee1f7d2604c417666e883a2e6",
+      "fix_commits": [
+        "6b7b9c2612dc5c8ee1f7d2604c417666e883a2e6"
+      ],
+      "repo": "https://github.com/libical/libical"
+    },
+    "patch": "From 6b7b9c2612dc5c8ee1f7d2604c417666e883a2e6 Mon Sep 17 00:00:00 2001\nFrom: Allen Winter <winter@kde.org>\nDate: Tue, 21 Jan 2025 15:28:09 -0500\nSubject: [PATCH] Some MSAN fixes for uninitialized memory\n\n---\n src/libical/icalrecur.c    | 7 +++----\n src/libical/icaltimezone.c | 7 ++++---\n src/libical/icaltz-util.c  | 4 ++--\n src/libical/icalvalue.c    | 2 +-\n src/libicalvcal/vobject.c  | 1 +\n 5 files changed, 11 insertions(+), 10 deletions(-)\n\ndiff --git a/src/libical/icalrecur.c b/src/libical/icalrecur.c\nindex 1041236..009a098 100644\n--- a/src/libical/icalrecur.c\n+++ b/src/libical/icalrecur.c\n@@ -776,12 +776,11 @@ struct icalrecurrencetype *icalrecurrencetype_clone(struct icalrecurrencetype *r\n \n struct icalrecurrencetype *icalrecurrencetype_new_from_string(const char *str)\n {\n-    struct icalrecur_parser parser;\n+    struct icalrecur_parser parser = {0};\n     icalrecurrencetype_byrule byrule;\n \n     icalerror_check_arg_re(str != 0, \"str\", 0);\n \n-    memset(&parser, 0, sizeof(parser));\n     parser.rt = icalrecurrencetype_new();\n     if (!parser.rt) {\n         return NULL;\n@@ -961,7 +960,7 @@ char *icalrecurrencetype_as_string_r(struct icalrecurrencetype *recur)\n     char *str;\n     char *str_p;\n     size_t buf_sz = 200;\n-    char temp[20];\n+    char temp[20] = {0};\n     int i, j;\n \n     if (recur == 0 || recur->freq == ICAL_NO_RECURRENCE) {\n@@ -1632,7 +1631,7 @@ static int initialize_rscale(icalrecur_iterator *impl)\n {\n     struct icalrecurrencetype *rule = impl->rule;\n     struct icaltimetype dtstart = impl->dtstart;\n-    char locale[ULOC_KEYWORD_AND_VALUES_CAPACITY] = \"\";\n+    char locale[ULOC_KEYWORD_AND_VALUES_CAPACITY] = {0};\n     UErrorCode status = U_ZERO_ERROR;\n     UChar *tzid = (UChar *)UCAL_UNKNOWN_ZONE_ID;\n     bool is_hebrew = false;\ndiff --git a/src/libical/icaltimezone.c b/src/libical/icaltimezone.c\nindex 3773648..b448643 100644\n--- a/src/libical/icaltimezone.c\n+++ b/src/libical/icaltimezone.c\n@@ -812,7 +812,8 @@ void icaltimezone_convert_time(struct icaltimetype *tt,\n \n int icaltimezone_get_utc_offset(icaltimezone *zone, struct icaltimetype *tt, int *is_daylight)\n {\n-    icaltimezonechange *zone_change, *prev_zone_change, tt_change, tmp_change;\n+    icaltimezonechange *zone_change, *prev_zone_change;\n+    icaltimezonechange tt_change = {0}, tmp_change = {0};\n     size_t change_num, change_num_to_use;\n     int found_change;\n     int step, utc_offset_change, cmp;\n@@ -1650,8 +1651,8 @@ static void icaltimezone_parse_zone_tab(void)\n     const char *zonedir, *zonetab;\n     char *filename;\n     FILE *fp;\n-    char buf[1024];      /* Used to store each line of zones.tab as it is read. */\n-    char location[1024]; /* Stores the city name when parsing buf. */\n+    char buf[1024] = {0};      /* Used to store each line of zones.tab as it is read. */\n+    char location[1024] = {0}; /* Stores the city name when parsing buf. */\n     size_t filename_len;\n     int latitude_degrees = 0, latitude_minutes = 0, latitude_seconds = 0;\n     int longitude_degrees = 0, longitude_minutes = 0, longitude_seconds = 0;\ndiff --git a/src/libical/icaltz-util.c b/src/libical/icaltz-util.c\nindex 5a5b7d5..09eb01a 100644\n--- a/src/libical/icaltz-util.c\n+++ b/src/libical/icaltz-util.c\n@@ -188,7 +188,7 @@ static char *zname_from_stridx(char *str, size_t idx)\n \n static void set_zoneinfopath(void)\n {\n-    char file_path[MAXPATHLEN];\n+    char file_path[MAXPATHLEN] = {0};\n     const char *fname = ZONES_TAB_SYSTEM_FILENAME;\n     size_t i, num_zi_search_paths;\n \n@@ -697,7 +697,7 @@ icalcomponent *icaltzutil_fetch_timezone(const char *location)\n                 /* No rule, so ignore the TZ string */\n                 tzstr = NULL;\n             } else {\n-                struct icaltimetype std_trans, dst_trans;\n+                struct icaltimetype std_trans = {0}, dst_trans = {0};\n \n                 /* Parse std->dst rule */\n                 p = parse_posix_rule(++p, /* skip ',' */\ndiff --git a/src/libical/icalvalue.c b/src/libical/icalvalue.c\nindex 61e2527..0f04eee 100644\n--- a/src/libical/icalvalue.c\n+++ b/src/libical/icalvalue.c\n@@ -1030,7 +1030,7 @@ void print_datetime_to_string(char *str, const struct icaltimetype *data)\n #pragma GCC diagnostic push\n #pragma GCC diagnostic ignored \"-Wstringop-truncation\"\n #endif\n-    char temp[20];\n+    char temp[20] = {0};\n \n     str[0] = '\\0';\n     if (data != 0) {\ndiff --git a/src/libicalvcal/vobject.c b/src/libicalvcal/vobject.c\nindex ca37d0e..1136a21 100644\n--- a/src/libicalvcal/vobject.c\n+++ b/src/libicalvcal/vobject.c\n@@ -101,6 +101,7 @@ char* dupStr(const char *s, size_t size)\n         }\n     t = (char*)malloc(size+1);\n     if (t) {\n+        memset(t,0,size+1);\n         memcpy(t,s,size);\n         t[size] = 0;\n         return t;\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:390646669-vul",
+      "digest": "sha256:8695b777a179269d1adf6a8dce63a5277b2076ad2d26b55df5c9eba82bf57809"
+    },
+    "patched": {
+      "ref": "n132/arvo:390646669-fix",
+      "digest": "sha256:36ab56a7786d1ef8ea2cbf16d5571044d79e95163e608c5af971f92e6dbedd47"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/libical/src/libical/icalmemory.c:257",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/libical/src/libical/icalmemory.c:257"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

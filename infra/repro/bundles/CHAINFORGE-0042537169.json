@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042537169",
+  "chain": "CWE-456->CWE-457",
+  "project": "flac",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42537169",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "defad5b5442550a9bd678076fe7ad125edb9f087",
+      "fix_commits": [
+        "defad5b5442550a9bd678076fe7ad125edb9f087"
+      ],
+      "repo": "https://github.com/xiph/flac"
+    },
+    "patch": "From defad5b5442550a9bd678076fe7ad125edb9f087 Mon Sep 17 00:00:00 2001\nFrom: Martijn van Beurden <mvanb1@gmail.com>\nDate: Tue, 23 Jul 2024 08:24:20 +0200\nSubject: [PATCH] Turn replaygain application off when impossible\n\nAddition to commit 808efb3. That commit threw a warning, but did\nnot actually turn off replaygain application.\n\nCredit: Oss-Fuzz\nIssue: https://bugs.chromium.org/p/oss-fuzz/issues/detail?id=70482\n---\n src/flac/decode.c | 1 +\n 1 file changed, 1 insertion(+)\n\ndiff --git a/src/flac/decode.c b/src/flac/decode.c\nindex 6a89b14..099348b 100644\n--- a/src/flac/decode.c\n+++ b/src/flac/decode.c\n@@ -1590,6 +1590,7 @@ void metadata_callback(const FLAC__StreamDecoder *decoder, const FLAC__StreamMet\n \t\t\t\t\tdecoder_session->abort_flag = true;\n \t\t\t\t\treturn;\n \t\t\t\t}\n+\t\t\t\tdecoder_session->replaygain.apply = false;\n \t\t\t}\n \t\t\telse {\n \t\t\t\tconst char *ls[] = { \"no\", \"peak\", \"hard\" };\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42537169-vul",
+      "digest": "sha256:3243fad981928a58a6c47dcf79677eedeaf7f98687697959e10a0779ab641d26"
+    },
+    "patched": {
+      "ref": "n132/arvo:42537169-fix",
+      "digest": "sha256:78c557af6062db5b7c6f8c193f98001901f2dc94bd6568fbac8be4c9608e1bb9"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/flac/src/share/replaygain_synthesis/replaygain_synthesis.c:250",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/flac/src/share/replaygain_synthesis/replaygain_synthesis.c:250"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

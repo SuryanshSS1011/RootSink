@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-969547201",
+  "chain": "CWE-456->CWE-457",
+  "project": "skia",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42538646",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://skia.googlesource.com/skia.git/+/c4e384e5ad85250920cac6e8ee0e2a14b69d67e0%5E%21/",
+      "fix_commits": [
+        "c4e384e5ad85250920cac6e8ee0e2a14b69d67e0"
+      ],
+      "repo": "https://skia.googlesource.com/skia.git"
+    },
+    "patch": "From c4e384e5ad85250920cac6e8ee0e2a14b69d67e0 Mon Sep 17 00:00:00 2001\nFrom: Mike Reed <reed@google.com>\nDate: Thu, 19 Apr 2018 11:30:18 -0400\nSubject: [PATCH] check if we fail to eval the conic in pathmeasure\n\nBug: oss-fuzz:7201\nChange-Id: I9d40225b7827239d2a229dc056f7f2caa8a4eb31\nReviewed-on: https://skia-review.googlesource.com/122420\nReviewed-by: Cary Clark <caryclark@google.com>\nCommit-Queue: Mike Reed <reed@google.com>\n---\n src/core/SkPathMeasure.cpp | 3 +++\n 1 file changed, 3 insertions(+)\n\ndiff --git a/src/core/SkPathMeasure.cpp b/src/core/SkPathMeasure.cpp\nindex 4ddb5a5..905c176 100644\n--- a/src/core/SkPathMeasure.cpp\n+++ b/src/core/SkPathMeasure.cpp\n@@ -258,6 +258,9 @@ SkScalar SkPathMeasure::compute_conic_segs(const SkConic& conic, SkScalar distan\n                                            int maxt, const SkPoint& maxPt, unsigned ptIndex) {\n     int halft = (mint + maxt) >> 1;\n     SkPoint halfPt = conic.evalAt(tValue2Scalar(halft));\n+    if (!halfPt.isFinite()) {\n+        return 0;\n+    }\n     if (tspan_big_enough(maxt - mint) && conic_too_curvy(minPt, halfPt, maxPt)) {\n         distance = this->compute_conic_segs(conic, distance, mint, minPt, halft, halfPt, ptIndex);\n         distance = this->compute_conic_segs(conic, distance, halft, halfPt, maxt, maxPt, ptIndex);\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42538646-vul",
+      "digest": "sha256:06f447a961d6b0957319ce0c2d4c88e63dfda6b8a269b1a01fe971cfc7079ced"
+    },
+    "patched": {
+      "ref": "n132/arvo:42538646-fix",
+      "digest": "sha256:2077ad2bd7ae54e2ef00c1e3cd8be48f31866fbea7fdd89828557c54a222d244"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/skia/out/Fuzz/../../src/core/../opts/SkNx_sse.h:51",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/skia/out/Fuzz/../../src/core/../opts/SkNx_sse.h:51"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

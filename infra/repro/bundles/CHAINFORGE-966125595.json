@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-966125595",
+  "chain": "CWE-456->CWE-457",
+  "project": "file",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42481904",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/file/file/commit/4f1887eb56f4abdf448274afc5abdc8f9d078929",
+      "fix_commits": [
+        "4f1887eb56f4abdf448274afc5abdc8f9d078929"
+      ],
+      "repo": "https://github.com/file/file"
+    },
+    "patch": "diff --git a/src/funcs.c b/src/funcs.c\nindex e4db9116d7..52fd870f23 100644\n--- a/src/funcs.c\n+++ b/src/funcs.c\n@@ -27,7 +27,7 @@\n #include \"file.h\"\n \n #ifndef\tlint\n-FILE_RCSID(\"@(#)$File: funcs.c,v 1.111 2020/02/14 13:50:28 christos Exp $\")\n+FILE_RCSID(\"@(#)$File: funcs.c,v 1.112 2020/02/15 00:59:43 christos Exp $\")\n #endif\t/* lint */\n \n #include \"magic.h\"\n@@ -103,7 +103,8 @@ file_vprintf(struct magic_set *ms, const char *fmt, va_list ap)\n \tlen = vasprintf(&buf, fmt, ap);\n \tif (len < 0 || (size_t)len > 1024 || len + ms->o.blen > 1024 * 1024) {\n \t\tms->event_flags |= EVENT_HAD_ERR;\n-\t\tfprintf(stderr, \"Output buffer space exceeded\\n\");\n+\t\tfprintf(stderr, \"Output buffer space exceeded %d+%zu\\n\", len,\n+\t\t    ms->o.blen);\n \t\treturn -1;\n \t}\n \n@@ -661,6 +662,7 @@ file_push_buffer(struct magic_set *ms)\n \t\treturn NULL;\n \n \tpb->buf = ms->o.buf;\n+\tpb->blen = ms->o.blen;\n \tpb->offset = ms->offset;\n \n \tms->o.buf = NULL;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42481904-vul",
+      "digest": "sha256:7accc1b3f6d681d3ded9d0167c2fdaf207de295a53fd3b8c9c68d20cf56f1b68"
+    },
+    "patched": {
+      "ref": "n132/arvo:42481904-fix",
+      "digest": "sha256:cfcfdbcdad9e850352c3ef444d7bd43380650798958e3d3b8a4f81a623b0c3d6"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/file/src/funcs.c:104",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/file/src/funcs.c:104"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

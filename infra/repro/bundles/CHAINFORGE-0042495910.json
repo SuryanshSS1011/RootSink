@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042495910",
+  "chain": "CWE-416->CWE-125",
+  "project": "php-src",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42495910",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "08dafda1232ffb70d878cb9b334982163aa32357",
+      "fix_commits": [
+        "08dafda1232ffb70d878cb9b334982163aa32357"
+      ],
+      "repo": "https://github.com/php/php-src"
+    },
+    "patch": "From 08dafda1232ffb70d878cb9b334982163aa32357 Mon Sep 17 00:00:00 2001\nFrom: Dmitry Stogov <dmitry@zend.com>\nDate: Mon, 19 Apr 2021 18:16:14 +0300\nSubject: [PATCH] Fixed use-after-free introduced by\n ca49e53670631ed9754810d7ec6d56ede0d06cca\n\n---\n Zend/tests/exception_026.phpt | 26 ++++++++++++++++++++++++++\n Zend/zend_objects.c           |  5 +++++\n 2 files changed, 31 insertions(+)\n create mode 100644 Zend/tests/exception_026.phpt\n\ndiff --git a/Zend/tests/exception_026.phpt b/Zend/tests/exception_026.phpt\nnew file mode 100644\nindex 00000000..0c47a449\n--- /dev/null\n+++ b/Zend/tests/exception_026.phpt\n@@ -0,0 +1,26 @@\n+--TEST--\n+Nested exceptions in destructors\n+--FILE--\n+<?php\n+class A {\n+    static $max=0;\n+    function __destruct() {\n+        if (self::$max--<0)\n+            X;  \n+        $a = new A;\n+        Y;      \n+    }\n+}\n+new A;\n+?>\n+--EXPECTF--\n+Fatal error: Uncaught Error: Undefined constant \"Y\" in %s:8\n+Stack trace:\n+#0 %s(11): A->__destruct()\n+#1 {main}\n+\n+Next Error: Undefined constant \"X\" in %s:6\n+Stack trace:\n+#0 %s(11): A->__destruct()\n+#1 {main}\n+  thrown in %s on line 6\ndiff --git a/Zend/zend_objects.c b/Zend/zend_objects.c\nindex c0eb532a..7e3fa039 100644\n--- a/Zend/zend_objects.c\n+++ b/Zend/zend_objects.c\n@@ -156,6 +156,11 @@ ZEND_API void zend_objects_destroy_object(zend_object *object)\n \t\t\tif (EG(exception) == object) {\n \t\t\t\tzend_error_noreturn(E_CORE_ERROR, \"Attempt to destruct pending exception\");\n \t\t\t} else {\n+\t\t\t\tif (EG(current_execute_data)\n+\t\t\t\t && EG(current_execute_data)->func\n+\t\t\t\t && ZEND_USER_CODE(EG(current_execute_data)->func->common.type)) {\n+\t\t\t\t\tzend_rethrow_exception(EG(current_execute_data));\n+\t\t\t\t}\n \t\t\t\told_exception = EG(exception);\n \t\t\t\told_opline_before_exception = EG(opline_before_exception);\n \t\t\t\tEG(exception) = NULL;\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42495910-vul",
+      "digest": "sha256:278d31e2b87f1dbb5d3303b008a19268a3b4cb604356a397a9897a4936abd33c"
+    },
+    "patched": {
+      "ref": "n132/arvo:42495910-fix",
+      "digest": "sha256:0361f166a83d22c02feedce80d95aa9ec9510717c8af1f90e266cf912f0f4c8c"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/php-src/Zend/zend_types.h:1190",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/php-src/Zend/zend_types.h:1190"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

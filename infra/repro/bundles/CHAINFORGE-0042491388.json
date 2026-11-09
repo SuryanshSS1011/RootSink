@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042491388",
+  "chain": "CWE-20->CWE-125",
+  "project": "serenity",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42491388",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "51b880b0383089822f513330cd64f93b54b9f21c",
+      "fix_commits": [
+        "51b880b0383089822f513330cd64f93b54b9f21c"
+      ],
+      "repo": "https://github.com/SerenityOS/serenity"
+    },
+    "patch": "diff --git a/Libraries/LibJS/Heap/Heap.cpp b/Libraries/LibJS/Heap/Heap.cpp\nindex 099daf4185e666..8385b8ff1e1f08 100644\n--- a/Libraries/LibJS/Heap/Heap.cpp\n+++ b/Libraries/LibJS/Heap/Heap.cpp\n@@ -124,7 +124,7 @@ void Heap::gather_roots(HashTable<Cell*>& roots)\n #endif\n }\n \n-void Heap::gather_conservative_roots(HashTable<Cell*>& roots)\n+__attribute__((no_sanitize(\"address\"))) void Heap::gather_conservative_roots(HashTable<Cell*>& roots)\n {\n     FlatPtr dummy;\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42491388-vul",
+      "digest": "sha256:58ac060d4d96b54d8615e9811409c9305ac07b1f006415ba7dc08b172c2a2e46"
+    },
+    "patched": {
+      "ref": "n132/arvo:42491388-fix",
+      "digest": "sha256:cf87ea8b10f1dfed62ffdc85c8884adc6d56bb23df9608d8694ba37f5e750a5e"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/serenity/Libraries/LibJS/Heap/Heap.cpp:149",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/serenity/Libraries/LibJS/Heap/Heap.cpp:149"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

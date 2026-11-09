@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042474837",
+  "chain": "CWE-20->CWE-125",
+  "project": "zstd",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42474837",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "0fd322f812211e653a83492c0c114b933f8b6bc5",
+      "fix_commits": [
+        "0fd322f812211e653a83492c0c114b933f8b6bc5"
+      ],
+      "repo": "https://github.com/facebook/zstd"
+    },
+    "patch": "diff --git a/lib/legacy/zstd_v01.c b/lib/legacy/zstd_v01.c\nindex 35d8497679c..ae8cba2a3fa 100644\n--- a/lib/legacy/zstd_v01.c\n+++ b/lib/legacy/zstd_v01.c\n@@ -1358,8 +1358,6 @@ static unsigned ZSTD_isLittleEndian(void)\n \n static U16    ZSTD_read16(const void* p) { U16 r; memcpy(&r, p, sizeof(r)); return r; }\n \n-static U32    ZSTD_read32(const void* p) { U32 r; memcpy(&r, p, sizeof(r)); return r; }\n-\n static void   ZSTD_copy4(void* dst, const void* src) { memcpy(dst, src, 4); }\n \n static void   ZSTD_copy8(void* dst, const void* src) { memcpy(dst, src, 8); }\n@@ -1384,16 +1382,9 @@ static U16 ZSTD_readLE16(const void* memPtr)\n     }\n }\n \n-\n-static U32 ZSTD_readLE32(const void* memPtr)\n+static U32 ZSTD_readLE24(const void* memPtr)\n {\n-    if (ZSTD_isLittleEndian())\n-        return ZSTD_read32(memPtr);\n-    else\n-    {\n-        const BYTE* p = (const BYTE*)memPtr;\n-        return (U32)((U32)p[0] + ((U32)p[1]<<8) + ((U32)p[2]<<16) + ((U32)p[3]<<24));\n-    }\n+    return ZSTD_readLE16(memPtr) + (((const BYTE*)memPtr)[2] << 16);\n }\n \n static U32 ZSTD_readBE32(const void* memPtr)\n@@ -1707,13 +1698,13 @@ static void ZSTD_decodeSequence(seq_t* seq, seqState_t* seqState)\n     seqState->prevOffset = seq->offset;\n     if (litLength == MaxLL)\n     {\n-        U32 add = dumps<de ? *dumps++ : 0;\n+        const U32 add = dumps<de ? *dumps++ : 0;\n         if (add < 255) litLength += add;\n         else\n         {\n             if (dumps<=(de-3))\n             {\n-                litLength = ZSTD_readLE32(dumps) & 0xFFFFFF;  /* no pb : dumps is always followed by seq tables > 1 byte */\n+                litLength = ZSTD_readLE24(dumps);\n                 dumps += 3;\n             }\n         }\n@@ -1735,13 +1726,13 @@ static void ZSTD_decodeSequence(seq_t* seq, seqState_t* seqState)\n     matchLength = FSE_decodeSymbol(&(seqState->stateML), &(seqState->DStream));\n     if (matchLength == MaxML)\n     {\n-        U32 add = dumps<de ? *dumps++ : 0;\n+        const U32 add = dumps<de ? *dumps++ : 0;\n         if (add < 255) matchLength += add;\n         else\n         {\n             if (dumps<=(de-3))\n             {\n-                matchLength = ZSTD_readLE32(dumps) & 0xFFFFFF;  /* no pb : dumps is always followed by seq tables > 1 byte */\n+                matchLength = ZSTD_readLE24(dumps);\n                 dumps += 3;\n             }\n         }\ndiff --git a/lib/legacy/zstd_v02.c b/lib/legacy/zstd_v02.c\nindex 561bc412e9a..793df6024bb 100644\n--- a/lib/legacy/zstd_v02.c\n+++ b/lib/legacy/zstd_v02.c\n@@ -217,6 +217,11 @@ MEM_STATIC void MEM_writeLE16(void* memPtr, U16 val)\n     }\n }\n \n+MEM_STATIC U32 MEM_readLE24(const void* memPtr)\n+{\n+    return MEM_readLE16(memPtr) + (((const BYTE*)memPtr)[2] << 16);\n+}\n+\n MEM_STATIC U32 MEM_readLE32(const void* memPtr)\n {\n     if (MEM_isLittleEndian())\n@@ -3043,11 +3048,11 @@ static void ZSTD_decodeSequence(seq_t* seq, seqState_t* seqState)\n     seqState->prevOffset = seq->offset;\n     if (litLength == MaxLL)\n     {\n-        U32 add = *dumps++;\n+        const U32 add = dumps<de ? *dumps++ : 0;\n         if (add < 255) litLength += add;\n-        else\n+        else if (dumps + 3 <= de)\n         {\n-            litLength = MEM_readLE32(dumps) & 0xFFFFFF;  /* no pb : dumps is always followed by seq tables > 1 byte */\n+            litLength = MEM_readLE24(dumps);\n             dumps += 3;\n         }\n         if (dumps >= de) dumps = de-1;   /* late correction, to avoid read overflow (data is now corrupted anyway) */\n@@ -3073,11 +3078,11 @@ static void ZSTD_decodeSequence(seq_t* seq, seqState_t* seqState)\n     matchLength = FSE_decodeSymbol(&(seqState->stateML), &(seqState->DStream));\n     if (matchLength == MaxML)\n     {\n-        U32 add = *dumps++;\n+        const U32 add = dumps<de ? *dumps++ : 0;\n         if (add < 255) matchLength += add;\n-        else\n+        else if (dumps + 3 <= de)\n         {\n-            matchLength = MEM_readLE32(dumps) & 0xFFFFFF;  /* no pb : dumps is always followed by seq tables > 1 byte */\n+            matchLength = MEM_readLE24(dumps);\n             dumps += 3;\n         }\n         if (dumps >= de) dumps = de-1;   /* late correction, to avoid read overflow (data is now corrupted anyway) */\ndiff --git a/lib/legacy/zstd_v03.c b/lib/legacy/zstd_v03.c\nindex a1bf0fa9b5c..7a0e7c9b69f 100644\n--- a/lib/legacy/zstd_v03.c\n+++ b/lib/legacy/zstd_v03.c\n@@ -219,6 +219,11 @@ MEM_STATIC void MEM_writeLE16(void* memPtr, U16 val)\n     }\n }\n \n+MEM_STATIC U32 MEM_readLE24(const void* memPtr)\n+{\n+    return MEM_readLE16(memPtr) + (((const BYTE*)memPtr)[2] << 16);\n+}\n+\n MEM_STATIC U32 MEM_readLE32(const void* memPtr)\n {\n     if (MEM_isLittleEndian())\n@@ -2684,11 +2689,11 @@ static void ZSTD_decodeSequence(seq_t* seq, seqState_t* seqState)\n     seqState->prevOffset = seq->offset;\n     if (litLength == MaxLL)\n     {\n-        U32 add = *dumps++;\n+        const U32 add = dumps<de ? *dumps++ : 0;\n         if (add < 255) litLength += add;\n-        else\n+        else if (dumps + 3 <= de)\n         {\n-            litLength = MEM_readLE32(dumps) & 0xFFFFFF;  /* no pb : dumps is always followed by seq tables > 1 byte */\n+            litLength = MEM_readLE24(dumps);\n             dumps += 3;\n         }\n         if (dumps >= de) dumps = de-1;   /* late correction, to avoid read overflow (data is now corrupted anyway) */\n@@ -2714,11 +2719,11 @@ static void ZSTD_decodeSequence(seq_t* seq, seqState_t* seqState)\n     matchLength = FSE_decodeSymbol(&(seqState->stateML), &(seqState->DStream));\n     if (matchLength == MaxML)\n     {\n-        U32 add = *dumps++;\n+        const U32 add = dumps<de ? *dumps++ : 0;\n         if (add < 255) matchLength += add;\n-        else\n+        else if (dumps + 3 <= de)\n         {\n-            matchLength = MEM_readLE32(dumps) & 0xFFFFFF;  /* no pb : dumps is always followed by seq tables > 1 byte */\n+            matchLength = MEM_readLE24(dumps);\n             dumps += 3;\n         }\n         if (dumps >= de) dumps = de-1;   /* late correction, to avoid read overflow (data is now corrupted anyway) */\ndiff --git a/lib/legacy/zstd_v04.c b/lib/legacy/zstd_v04.c\nindex 4342330e255..645a6e313c0 100644\n--- a/lib/legacy/zstd_v04.c\n+++ b/lib/legacy/zstd_v04.c\n@@ -189,6 +189,11 @@ MEM_STATIC void MEM_writeLE16(void* memPtr, U16 val)\n     }\n }\n \n+MEM_STATIC U32 MEM_readLE24(const void* memPtr)\n+{\n+    return MEM_readLE16(memPtr) + (((const BYTE*)memPtr)[2] << 16);\n+}\n+\n MEM_STATIC U32 MEM_readLE32(const void* memPtr)\n {\n     if (MEM_isLittleEndian())\n@@ -2808,13 +2813,12 @@ static void ZSTD_decodeSequence(seq_t* seq, seqState_t* seqState)\n     litLength = FSE_decodeSymbol(&(seqState->stateLL), &(seqState->DStream));\n     prevOffset = litLength ? seq->offset : seqState->prevOffset;\n     if (litLength == MaxLL) {\n-        U32 add = *dumps++;\n+        const U32 add = dumps<de ? *dumps++ : 0;\n         if (add < 255) litLength += add;\n-        else {\n-            litLength = dumps[0] + (dumps[1]<<8) + (dumps[2]<<16);\n+        else if (dumps + 3 <= de) {\n+            litLength = MEM_readLE24(dumps);\n             dumps += 3;\n         }\n-        if (dumps > de) { litLength = MaxLL+255; }  /* late correction, to avoid using uninitialized memory */\n         if (dumps >= de) { dumps = de-1; }  /* late correction, to avoid read overflow (data is now corrupted anyway) */\n     }\n \n@@ -2837,13 +2841,12 @@ static void ZSTD_decodeSequence(seq_t* seq, seqState_t* seqState)\n     /* MatchLength */\n     matchLength = FSE_decodeSymbol(&(seqState->stateML), &(seqState->DStream));\n     if (matchLength == MaxML) {\n-        U32 add = *dumps++;\n+        const U32 add = dumps<de ? *dumps++ : 0;\n         if (add < 255) matchLength += add;\n-        else {\n-            matchLength = dumps[0] + (dumps[1]<<8) + (dumps[2]<<16);\n+        else if (dumps + 3 <= de){\n+            matchLength = MEM_readLE24(dumps);\n             dumps += 3;\n         }\n-        if (dumps > de) { matchLength = MaxML+255; }  /* late correction, to avoid using uninitialized memory */\n         if (dumps >= de) { dumps = de-1; }  /* late correction, to avoid read overflow (data is now corrupted anyway) */\n     }\n     matchLength += MINMATCH;\ndiff --git a/lib/legacy/zstd_v05.c b/lib/legacy/zstd_v05.c\nindex 800aa15e77a..a7ea6066fb0 100644\n--- a/lib/legacy/zstd_v05.c\n+++ b/lib/legacy/zstd_v05.c\n@@ -218,6 +218,11 @@ MEM_STATIC void MEM_writeLE16(void* memPtr, U16 val)\n     }\n }\n \n+MEM_STATIC U32 MEM_readLE24(const void* memPtr)\n+{\n+    return MEM_readLE16(memPtr) + (((const BYTE*)memPtr)[2] << 16);\n+}\n+\n MEM_STATIC U32 MEM_readLE32(const void* memPtr)\n {\n     if (MEM_isLittleEndian())\n@@ -3151,14 +3156,13 @@ static void ZSTDv05_decodeSequence(seq_t* seq, seqState_t* seqState)\n     litLength = FSEv05_peakSymbol(&(seqState->stateLL));\n     prevOffset = litLength ? seq->offset : seqState->prevOffset;\n     if (litLength == MaxLL) {\n-        U32 add = *dumps++;\n+        const U32 add = *dumps++;\n         if (add < 255) litLength += add;\n-        else {\n-            litLength = MEM_readLE32(dumps) & 0xFFFFFF;  /* no risk : dumps is always followed by seq tables > 1 byte */\n+        else if (dumps + 3 <= de) {\n+            litLength = MEM_readLE24(dumps);\n             if (litLength&1) litLength>>=1, dumps += 3;\n             else litLength = (U16)(litLength)>>1, dumps += 2;\n         }\n-        if (dumps > de) { litLength = MaxLL+255; }  /* late correction, to avoid using uninitialized memory */\n         if (dumps >= de) { dumps = de-1; }  /* late correction, to avoid read overflow (data is now corrupted anyway) */\n     }\n \n@@ -3185,14 +3189,13 @@ static void ZSTDv05_decodeSequence(seq_t* seq, seqState_t* seqState)\n     /* MatchLength */\n     matchLength = FSEv05_decodeSymbol(&(seqState->stateML), &(seqState->DStream));\n     if (matchLength == MaxML) {\n-        U32 add = *dumps++;\n+        const U32 add = dumps<de ? *dumps++ : 0;\n         if (add < 255) matchLength += add;\n-        else {\n-            matchLength = MEM_readLE32(dumps) & 0xFFFFFF;  /* no pb : dumps is always followed by seq tables > 1 byte */\n+        else if (dumps + 3 <= de) {\n+            matchLength = MEM_readLE24(dumps);\n             if (matchLength&1) matchLength>>=1, dumps += 3;\n             else matchLength = (U16)(matchLength)>>1, dumps += 2;\n         }\n-        if (dumps > de) { matchLength = MaxML+255; }  /* late correction, to avoid using uninitialized memory */\n         if (dumps >= de) { dumps = de-1; }  /* late correction, to avoid read overflow (data is now corrupted anyway) */\n     }\n     matchLength += MINMATCH;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42474837-vul",
+      "digest": "sha256:3725cf878db116af0363eba5f37b51be79a476d4f1e1caef31b78ddf631fa0bd"
+    },
+    "patched": {
+      "ref": "n132/arvo:42474837-fix",
+      "digest": "sha256:610b7392d26bee498fdf02cd4d03069f41b436b03c5e41d5dec8c7b7bfb5d645"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/zstd/tests/fuzz/../../lib/common/mem.h:171",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/zstd/tests/fuzz/../../lib/common/mem.h:171"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

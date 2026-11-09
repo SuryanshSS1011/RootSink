@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042541538",
+  "chain": "CWE-20->CWE-125",
+  "project": "boringssl",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42541538",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "ddedf6d455e33d6a0b3bc40581700f3d252029d7",
+      "fix_commits": [
+        "ddedf6d455e33d6a0b3bc40581700f3d252029d7"
+      ],
+      "repo": "https://boringssl.googlesource.com/boringssl"
+    },
+    "patch": "diff --git a/fuzz/ssl_ctx_api.cc b/fuzz/ssl_ctx_api.cc\nindex c050770..4b47734 100644\n--- a/fuzz/ssl_ctx_api.cc\n+++ b/fuzz/ssl_ctx_api.cc\n@@ -479,7 +479,11 @@\n         SSL_CTX_set1_sigalgs(ctx, (const int *)CBS_data(cbs), CBS_len(cbs) / 2);\n       },\n       [](SSL_CTX *ctx, CBS *cbs) {\n-        SSL_CTX_set1_sigalgs_list(ctx, (const char *) CBS_data(cbs));\n+        std::string sigalgs;\n+        if (!GetString(&sigalgs, cbs)) {\n+          return;\n+        }\n+        SSL_CTX_set1_sigalgs_list(ctx, sigalgs.c_str());\n       },\n   };\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42541538-vul",
+      "digest": "sha256:48a78ab80826836b10fd243788efbef42ebc577186d1428bbe70c12bf7a0eec0"
+    },
+    "patched": {
+      "ref": "n132/arvo:42541538-fix",
+      "digest": "sha256:439942f505d02537ba24ea80fa6e0a4f7d3c9acaa3423aed3e3ebbe8b91b84fa"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/boringssl/ssl/ssl_privkey.cc:614",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/boringssl/ssl/ssl_privkey.cc:614"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042497487",
+  "chain": "CWE-1285->CWE-125",
+  "project": "libucl",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42497487",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "f9e544672e24d349f0c69074495f14427b5c8f4e",
+      "fix_commits": [
+        "f9e544672e24d349f0c69074495f14427b5c8f4e"
+      ],
+      "repo": "https://github.com/vstakhov/libucl"
+    },
+    "patch": "diff --git a/src/ucl_parser.c b/src/ucl_parser.c\nindex 5c4f9df..c8c5a1e 100644\n--- a/src/ucl_parser.c\n+++ b/src/ucl_parser.c\n@@ -520,7 +520,7 @@ ucl_expand_variable (struct ucl_parser *parser, unsigned char **dst,\n \n \tp = src;\n \twhile (p != end) {\n-\t\tif (*p == '$') {\n+\t\tif (*p == '$' && p + 1 != end) {\n \t\t\tp = ucl_check_variable (parser, p + 1, end - p - 1, &out_len, &vars_found);\n \t\t}\n \t\telse {\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42497487-vul",
+      "digest": "sha256:2d9b57607673d38c1f6a72338eedeca9982130ccaeb80e910b61054a00ae8971"
+    },
+    "patched": {
+      "ref": "n132/arvo:42497487-fix",
+      "digest": "sha256:314ce81bd1d9121e2248dab27edc885fb85cad61dc67059a51d4490f245d2642"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/libucl/src/ucl_parser.c:376",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/libucl/src/ucl_parser.c:376"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

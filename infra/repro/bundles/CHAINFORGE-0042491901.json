@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042491901",
+  "chain": "CWE-1284->CWE-125",
+  "project": "mupdf",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42491901",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "e27ceb2b0e64b9a56ba79d844ea96553d87dc113",
+      "fix_commits": [
+        "e27ceb2b0e64b9a56ba79d844ea96553d87dc113"
+      ],
+      "repo": "git://git.ghostscript.com/mupdf.git"
+    },
+    "patch": "diff --git a/source/pdf/pdf-xref.c b/source/pdf/pdf-xref.c\nindex a160d20b1d..4b58d356f4 100644\n--- a/source/pdf/pdf-xref.c\n+++ b/source/pdf/pdf-xref.c\n@@ -301,7 +301,7 @@ pdf_xref_entry *pdf_get_xref_entry(fz_context *ctx, pdf_document *doc, int i)\n \tif (i < 0)\n \t\tfz_throw(ctx, FZ_ERROR_GENERIC, \"Negative object number requested\");\n \n-\tif (i <= doc->max_xref_len)\n+\tif (i < doc->max_xref_len)\n \t\tj = doc->xref_index[i];\n \telse\n \t\tj = 0;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42491901-vul",
+      "digest": "sha256:8676b7d8e7b361e489c0b6f4435d3cf8f65febe8d616194cda1fe8f4e56fd627"
+    },
+    "patched": {
+      "ref": "n132/arvo:42491901-fix",
+      "digest": "sha256:7cf24bea390bcab5ef45d0cc742572073a357c89e71e3743ca6413a38837c598"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/mupdf/source/pdf/pdf-xref.c:305",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/mupdf/source/pdf/pdf-xref.c:305"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

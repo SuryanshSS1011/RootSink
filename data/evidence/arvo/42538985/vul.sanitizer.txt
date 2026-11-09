@@ -1,0 +1,74 @@
+======================= INFO =========================
+This binary is built for AFL-fuzz.
+To run the target function on individual input(s) execute this:
+  /out/encoder_heic_fuzzer < INPUT_FILE
+or
+  /out/encoder_heic_fuzzer INPUT_FILE1 [INPUT_FILE2 ... ]
+To fuzz with afl-fuzz execute this:
+  afl-fuzz [afl-flags] /out/encoder_heic_fuzzer [-N]
+afl-fuzz will run N iterations before re-spawning the process (default: 1000)
+======================================================
+Reading 4924 bytes from /tmp/poc
+=================================================================
+==7==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x602000002c91 at pc 0x0000004e8f35 bp 0x7fff76519cd0 sp 0x7fff76519480
+WRITE of size 4920 at 0x602000002c91 thread T0
+SCARINESS: 45 (multi-byte-write-heap-buffer-overflow)
+    #0 0x4e8f34 in __asan_memcpy /src/llvm/projects/compiler-rt/lib/asan/asan_interceptors_memintrinsics.cc:23
+    #1 0x5e2c26 in ReadBlob /src/imagemagick/MagickCore/blob.c:3650:14
+    #2 0x9f4a43 in ReadHEICImage /src/imagemagick/coders/heic.c:1256:13
+    #3 0x635e16 in ReadImage /src/imagemagick/MagickCore/constitute.c:500:13
+    #4 0x5d784f in BlobToImage /src/imagemagick/MagickCore/blob.c:469:13
+    #5 0x52faa4 in Magick::Image::read(Magick::Blob const&) /src/imagemagick/Magick++/lib/Image.cpp:4015:12
+    #6 0x52629b in LLVMFuzzerTestOneInput /src/imagemagick/Magick++/fuzz/encoder_fuzzer.cc:43:11
+    #7 0x52698f in ExecuteFilesOnyByOne(int, char**) /src/libfuzzer/afl/afl_driver.cpp:279:5
+    #8 0x526f2f in main /src/libfuzzer/afl/afl_driver.cpp:316:12
+    #9 0x7f9d6447d82f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+    #10 0x41dff8 in _start (/out/encoder_heic_fuzzer+0x41dff8)
+
+DEDUP_TOKEN: __asan_memcpy--ReadBlob--ReadHEICImage
+0x602000002c91 is located 0 bytes to the right of 1-byte region [0x602000002c90,0x602000002c91)
+allocated by thread T0 here:
+    #0 0x4ea018 in malloc /src/llvm/projects/compiler-rt/lib/asan/asan_malloc_linux.cc:88
+    #1 0x9f49dd in ReadHEICImage /src/imagemagick/coders/heic.c:1248:32
+    #2 0x635e16 in ReadImage /src/imagemagick/MagickCore/constitute.c:500:13
+    #3 0x5d784f in BlobToImage /src/imagemagick/MagickCore/blob.c:469:13
+    #4 0x52faa4 in Magick::Image::read(Magick::Blob const&) /src/imagemagick/Magick++/lib/Image.cpp:4015:12
+    #5 0x52629b in LLVMFuzzerTestOneInput /src/imagemagick/Magick++/fuzz/encoder_fuzzer.cc:43:11
+    #6 0x52698f in ExecuteFilesOnyByOne(int, char**) /src/libfuzzer/afl/afl_driver.cpp:279:5
+    #7 0x526f2f in main /src/libfuzzer/afl/afl_driver.cpp:316:12
+    #8 0x7f9d6447d82f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+
+DEDUP_TOKEN: malloc--ReadHEICImage--ReadImage
+SUMMARY: AddressSanitizer: heap-buffer-overflow /src/llvm/projects/compiler-rt/lib/asan/asan_interceptors_memintrinsics.cc:23 in __asan_memcpy
+Shadow bytes around the buggy address:
+  0x0c047fff8540: fa fa 00 00 fa fa 00 01 fa fa 06 fa fa fa 00 00
+  0x0c047fff8550: fa fa 00 01 fa fa 04 fa fa fa 00 00 fa fa 00 01
+  0x0c047fff8560: fa fa 04 fa fa fa 03 fa fa fa 00 00 fa fa 00 01
+  0x0c047fff8570: fa fa 04 fa fa fa 00 00 fa fa 00 01 fa fa 04 fa
+  0x0c047fff8580: fa fa 00 00 fa fa 00 00 fa fa 00 fa fa fa 00 00
+=>0x0c047fff8590: fa fa[01]fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c047fff85a0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c047fff85b0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c047fff85c0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c047fff85d0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c047fff85e0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+==7==ABORTING

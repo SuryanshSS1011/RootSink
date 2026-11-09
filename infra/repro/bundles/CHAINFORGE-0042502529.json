@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042502529",
+  "chain": "CWE-416->CWE-125",
+  "project": "php-src",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42502529",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "04dd327493676ef6855df841d7595874d60c3b65",
+      "fix_commits": [
+        "04dd327493676ef6855df841d7595874d60c3b65"
+      ],
+      "repo": "https://github.com/php/php-src"
+    },
+    "patch": "diff --git a/ext/opcache/jit/zend_jit_arm64.dasc b/ext/opcache/jit/zend_jit_arm64.dasc\nindex f47d96a65129..f1f0502759f5 100644\n--- a/ext/opcache/jit/zend_jit_arm64.dasc\n+++ b/ext/opcache/jit/zend_jit_arm64.dasc\n@@ -5556,6 +5556,7 @@ static int zend_jit_assign_to_typed_ref(dasm_State         **Dst,\n                                        const zend_op        *opline,\n                                        zend_uchar            val_type,\n                                        zend_jit_addr         val_addr,\n+                                       zend_jit_addr         res_addr,\n                                        bool                  check_exception)\n {\n \t|\t// if (UNEXPECTED(ZEND_REF_HAS_TYPE_SOURCES(Z_REF_P(variable_ptr)))) {\n@@ -5580,6 +5581,12 @@ static int zend_jit_assign_to_typed_ref(dasm_State         **Dst,\n \t} else {\n \t\tZEND_UNREACHABLE();\n \t}\n+\tif (res_addr) {\n+\t\tzend_jit_addr ret_addr = ZEND_ADDR_MEM_ZVAL(ZREG_X0, 0); // RETVAL\n+\n+\t\t|\tZVAL_COPY_VALUE res_addr, -1, ret_addr, -1, ZREG_REG1, ZREG_REG2, ZREG_TMP1, ZREG_TMP2, ZREG_FPR0\n+\t\t|\tTRY_ADDREF -1, REG1w, REG2, TMP1w\n+\t}\n \tif (check_exception) {\n \t\t|\t// if (UNEXPECTED(EG(exception) != NULL)) {\n \t\t|\tMEM_LOAD_64_ZTS ldr, REG0, executor_globals, exception, TMP1\n@@ -5710,7 +5717,7 @@ static int zend_jit_assign_to_variable(dasm_State    **Dst,\n \t\t|\tIF_NOT_Z_TYPE Rx(ref_reg), IS_REFERENCE, >1, TMP1w\n \t\t|\t// if (UNEXPECTED(ZEND_REF_HAS_TYPE_SOURCES(Z_REF_P(variable_ptr)))) {\n \t\t|\tGET_Z_PTR FCARG1x, Rx(ref_reg)\n-\t\tif (!zend_jit_assign_to_typed_ref(Dst, opline, val_type, val_addr, check_exception)) {\n+\t\tif (!zend_jit_assign_to_typed_ref(Dst, opline, val_type, val_addr, res_addr, check_exception)) {\n \t\t\treturn 0;\n \t\t}\n \t\t|\tadd Rx(ref_reg), FCARG1x, #offsetof(zend_reference, val)\ndiff --git a/ext/opcache/jit/zend_jit_helpers.c b/ext/opcache/jit/zend_jit_helpers.c\nindex ecb29fa21796..d378a8ce9e0d 100644\n--- a/ext/opcache/jit/zend_jit_helpers.c\n+++ b/ext/opcache/jit/zend_jit_helpers.c\n@@ -1752,30 +1752,30 @@ static void ZEND_FASTCALL zend_jit_vm_stack_free_args_helper(zend_execute_data *\n \tzend_vm_stack_free_args(call);\n }\n \n-static zend_always_inline void zend_jit_assign_to_typed_ref_helper(zend_reference *ref, zval *value, zend_uchar value_type)\n+static zend_always_inline zval* zend_jit_assign_to_typed_ref_helper(zend_reference *ref, zval *value, zend_uchar value_type)\n {\n \tzval variable;\n \n \tZVAL_REF(&variable, ref);\n-\tzend_assign_to_variable(&variable, value, value_type, ZEND_CALL_USES_STRICT_TYPES(EG(current_execute_data)));\n+\treturn zend_assign_to_variable(&variable, value, value_type, ZEND_CALL_USES_STRICT_TYPES(EG(current_execute_data)));\n }\n \n-static void ZEND_FASTCALL zend_jit_assign_const_to_typed_ref(zend_reference *ref, zval *value)\n+static zval* ZEND_FASTCALL zend_jit_assign_const_to_typed_ref(zend_reference *ref, zval *value)\n {\n-\tzend_jit_assign_to_typed_ref_helper(ref, value, IS_CONST);\n+\treturn zend_jit_assign_to_typed_ref_helper(ref, value, IS_CONST);\n }\n \n-static void ZEND_FASTCALL zend_jit_assign_tmp_to_typed_ref(zend_reference *ref, zval *value)\n+static zval* ZEND_FASTCALL zend_jit_assign_tmp_to_typed_ref(zend_reference *ref, zval *value)\n {\n-\tzend_jit_assign_to_typed_ref_helper(ref, value, IS_TMP_VAR);\n+\treturn zend_jit_assign_to_typed_ref_helper(ref, value, IS_TMP_VAR);\n }\n \n-static void ZEND_FASTCALL zend_jit_assign_var_to_typed_ref(zend_reference *ref, zval *value)\n+static zval* ZEND_FASTCALL zend_jit_assign_var_to_typed_ref(zend_reference *ref, zval *value)\n {\n-\tzend_jit_assign_to_typed_ref_helper(ref, value, IS_VAR);\n+\treturn zend_jit_assign_to_typed_ref_helper(ref, value, IS_VAR);\n }\n \n-static void ZEND_FASTCALL zend_jit_assign_cv_to_typed_ref(zend_reference *ref, zval *value)\n+static zval* ZEND_FASTCALL zend_jit_assign_cv_to_typed_ref(zend_reference *ref, zval *value)\n {\n \tif (UNEXPECTED(Z_TYPE_P(value) == IS_UNDEF)) {\n \t\tconst zend_op *opline = EG(current_execute_data)->opline;\n@@ -1789,7 +1789,7 @@ static void ZEND_FASTCALL zend_jit_assign_cv_to_typed_ref(zend_reference *ref, z\n \t\tzend_jit_undefined_op_helper(var);\n \t\tvalue = &EG(uninitialized_zval);\n \t}\n-\tzend_jit_assign_to_typed_ref_helper(ref, value, IS_CV);\n+\treturn zend_jit_assign_to_typed_ref_helper(ref, value, IS_CV);\n }\n \n \ndiff --git a/ext/opcache/jit/zend_jit_trace.c b/ext/opcache/jit/zend_jit_trace.c\nindex 675176837c75..ebe1af530f46 100644\n--- a/ext/opcache/jit/zend_jit_trace.c\n+++ b/ext/opcache/jit/zend_jit_trace.c\n@@ -4760,7 +4760,12 @@ static const void *zend_jit_trace(zend_jit_trace_rec *trace_buffer, uint32_t par\n \t\t\t\t\t\t\t\t && ssa->vars[ssa_op->op1_def].alias == NO_ALIAS) {\n \t\t\t\t\t\t\t\t\tssa->var_info[ssa_op->op1_def].guarded_reference = 1;\n \t\t\t\t\t\t\t\t}\n-\t\t\t\t\t\t\t\tif (!zend_jit_assign_to_typed_ref(&dasm_state, opline, opline->op2_type, op2_addr, 1)) {\n+\t\t\t\t\t\t\t\tif (opline->result_type == IS_UNUSED) {\n+\t\t\t\t\t\t\t\t\tres_addr = 0;\n+\t\t\t\t\t\t\t\t} else {\n+\t\t\t\t\t\t\t\t\tres_addr = RES_REG_ADDR();\n+\t\t\t\t\t\t\t\t}\n+\t\t\t\t\t\t\t\tif (!zend_jit_assign_to_typed_ref(&dasm_state, opline, opline->op2_type, op2_addr, res_addr, 1)) {\n \t\t\t\t\t\t\t\t\tgoto jit_failure;\n \t\t\t\t\t\t\t\t}\n \t\t\t\t\t\t\t\top1_def_addr = op1_addr;\ndiff --git a/ext/opcache/jit/zend_jit_x86.dasc b/ext/opcache/jit/zend_jit_x86.dasc\nindex a4794a3df20e..bbb70a0ca53c 100644\n--- a/ext/opcache/jit/zend_jit_x86.dasc\n+++ b/ext/opcache/jit/zend_jit_x86.dasc\n@@ -6043,7 +6043,8 @@ static int zend_jit_assign_to_typed_ref(dasm_State         **Dst,\n                                        const zend_op        *opline,\n                                        zend_uchar            val_type,\n                                        zend_jit_addr         val_addr,\n-                                       bool             check_exception)\n+                                       zend_jit_addr         res_addr,\n+                                       bool                  check_exception)\n {\n \t|\t// if (UNEXPECTED(ZEND_REF_HAS_TYPE_SOURCES(Z_REF_P(variable_ptr)))) {\n \t|\tcmp aword [FCARG1a + offsetof(zend_reference, sources.ptr)], 0\n@@ -6067,6 +6068,12 @@ static int zend_jit_assign_to_typed_ref(dasm_State         **Dst,\n \t} else {\n \t\tZEND_UNREACHABLE();\n \t}\n+\tif (res_addr) {\n+\t\tzend_jit_addr ret_addr = ZEND_ADDR_MEM_ZVAL(ZREG_R0, 0);\n+\n+\t\t|\tZVAL_COPY_VALUE res_addr, -1, ret_addr, -1, ZREG_R1, ZREG_R2\n+\t\t|\tTRY_ADDREF -1, ch, r2\n+\t}\n \tif (check_exception) {\n \t\t|\t// if (UNEXPECTED(EG(exception) != NULL)) {\n \t\t|\tMEM_CMP_ZTS aword, executor_globals, exception, 0, r0\n@@ -6196,7 +6203,7 @@ static int zend_jit_assign_to_variable(dasm_State    **Dst,\n \t\t|\tIF_NOT_Z_TYPE, Ra(ref_reg), IS_REFERENCE, >1\n \t\t|\t// if (UNEXPECTED(ZEND_REF_HAS_TYPE_SOURCES(Z_REF_P(variable_ptr)))) {\n \t\t|\tGET_Z_PTR FCARG1a, Ra(ref_reg)\n-\t\tif (!zend_jit_assign_to_typed_ref(Dst, opline, val_type, val_addr, check_exception)) {\n+\t\tif (!zend_jit_assign_to_typed_ref(Dst, opline, val_type, val_addr, res_addr, check_exception)) {\n \t\t\treturn 0;\n \t\t}\n \t\t|\tlea Ra(ref_reg), [FCARG1a + offsetof(zend_reference, val)]\ndiff --git a/ext/opcache/tests/jit/assign_041.phpt b/ext/opcache/tests/jit/assign_041.phpt\nnew file mode 100644\nindex 000000000000..c9b74ffa2b31\n--- /dev/null\n+++ b/ext/opcache/tests/jit/assign_041.phpt\n@@ -0,0 +1,22 @@\n+--TEST--\n+JIT ASSIGN: Assign to typed reference should return modified value\n+--INI--\n+opcache.enable=1\n+opcache.enable_cli=1\n+opcache.file_update_protection=0\n+opcache.jit_buffer_size=1M\n+opcache.protect_memory=1\n+--FILE--\n+<?php\n+class Test {\n+    public ?string $prop;\n+}\n+function test($val) {\n+    $obj = new Test;\n+    $ref =& $obj->prop;\n+    var_dump($ref = $val);\n+}\n+test(0);\n+?>\n+--EXPECT--\n+string(1) \"0\"\n\\ No newline at end of file\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42502529-vul",
+      "digest": "sha256:4d042652d9ba95bcbbfe1fd66ba50b30a4aba96c4b21d9e76418694d11274c89"
+    },
+    "patched": {
+      "ref": "n132/arvo:42502529-fix",
+      "digest": "sha256:bf81a75d9ef04a9e6c183d19b4f2c695f36588207d2b4a0738d0d0bd3b1df623"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/php-src/Zend/zend_types.h:1183",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/php-src/Zend/zend_types.h:1183"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

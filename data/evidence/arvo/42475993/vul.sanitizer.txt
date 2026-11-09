@@ -1,0 +1,75 @@
+======================= INFO =========================
+This binary is built for AFL-fuzz.
+To run the target function on individual input(s) execute this:
+  /out/x509 < INPUT_FILE
+or
+  /out/x509 INPUT_FILE1 [INPUT_FILE2 ... ]
+To fuzz with afl-fuzz execute this:
+  afl-fuzz [afl-flags] /out/x509 [-N]
+afl-fuzz will run N iterations before re-spawning the process (default: 1000)
+======================================================
+Reading 413 bytes from /tmp/poc
+=================================================================
+==1945386==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x6140000001dd at pc 0x0000004d426f bp 0x7ffd157d6990 sp 0x7ffd157d6988
+READ of size 1 at 0x6140000001dd thread T0
+SCARINESS: 12 (1-byte-read-heap-buffer-overflow)
+    #0 0x4d426e in asn1_get_next /src/hostap/src/tls/asn1.c:62:8
+    #1 0x4d22e5 in x509_parse_ext_basic_constraints /src/hostap/src/tls/x509v3.c:861:7
+    #2 0x4d0f05 in x509_parse_extension /src/hostap/src/tls/x509v3.c:1332:8
+    #3 0x4d0898 in x509_parse_extensions /src/hostap/src/tls/x509v3.c:1366:7
+    #4 0x4cd410 in x509_parse_tbs_certificate /src/hostap/src/tls/x509v3.c:1566:6
+    #5 0x4cc372 in x509_certificate_parse /src/hostap/src/tls/x509v3.c:1706:6
+    #6 0x4c8fa6 in LLVMFuzzerTestOneInput /src/hostap/tests/fuzzing/x509/x509.c:22:9
+    #7 0x4c766a in ExecuteFilesOnyByOne /src/libfuzzer/afl/afl_driver.cpp:216:5
+    #8 0x4c766a in main /src/libfuzzer/afl/afl_driver.cpp:253
+    #9 0x147a14c7082f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+    #10 0x41de88 in _start (/out/x509+0x41de88)
+
+DEDUP_TOKEN: asn1_get_next--x509_parse_ext_basic_constraints--x509_parse_extension
+0x6140000001dd is located 0 bytes to the right of 413-byte region [0x614000000040,0x6140000001dd)
+allocated by thread T0 here:
+    #0 0x4c494d in operator new(unsigned long) /src/llvm/projects/compiler-rt/lib/asan/asan_new_delete.cc:99:3
+    #1 0x4c7582 in __libcpp_allocate /usr/local/bin/../include/c++/v1/new:253:10
+    #2 0x4c7582 in allocate /usr/local/bin/../include/c++/v1/memory:1813
+    #3 0x4c7582 in allocate /usr/local/bin/../include/c++/v1/memory:1546
+    #4 0x4c7582 in __vallocate /usr/local/bin/../include/c++/v1/vector:981
+    #5 0x4c7582 in vector /usr/local/bin/../include/c++/v1/vector:1124
+    #6 0x4c7582 in ExecuteFilesOnyByOne /src/libfuzzer/afl/afl_driver.cpp:213
+    #7 0x4c7582 in main /src/libfuzzer/afl/afl_driver.cpp:253
+    #8 0x147a14c7082f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+
+DEDUP_TOKEN: operator new(unsigned long)--__libcpp_allocate--allocate
+SUMMARY: AddressSanitizer: heap-buffer-overflow /src/hostap/src/tls/asn1.c:62:8 in asn1_get_next
+Shadow bytes around the buggy address:
+  0x0c287fff7fe0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c287fff7ff0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c287fff8000: fa fa fa fa fa fa fa fa 00 00 00 00 00 00 00 00
+  0x0c287fff8010: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c287fff8020: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x0c287fff8030: 00 00 00 00 00 00 00 00 00 00 00[05]fa fa fa fa
+  0x0c287fff8040: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c287fff8050: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c287fff8060: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c287fff8070: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c287fff8080: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+  Shadow gap:              cc
+==1945386==ABORTING

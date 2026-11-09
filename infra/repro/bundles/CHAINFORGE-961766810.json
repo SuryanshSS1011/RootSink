@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-961766810",
+  "chain": "CWE-456->CWE-457",
+  "project": "imagemagick",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42475381",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/imagemagick/imagemagick/commit/60d04ffe3007de79f7629264c659227a56ae3173",
+      "fix_commits": [
+        "60d04ffe3007de79f7629264c659227a56ae3173"
+      ],
+      "repo": "https://github.com/imagemagick/imagemagick"
+    },
+    "patch": "diff --git a/coders/tiff.c b/coders/tiff.c\nindex b2d4b4abcf5..2c948be72fb 100644\n--- a/coders/tiff.c\n+++ b/coders/tiff.c\n@@ -1791,13 +1791,7 @@ RestoreMSCWarning\n       }\n     if (rows_per_strip > (uint32) image->rows)\n       rows_per_strip=(uint32) image->rows;\n-    if ((photometric != PHOTOMETRIC_RGB) &&\n-        (photometric != PHOTOMETRIC_CIELAB) &&\n-        (photometric != PHOTOMETRIC_SEPARATED))\n-      method=ReadGenericMethod;\n-    if ((photometric != PHOTOMETRIC_SEPARATED) &&\n-        (interlace == PLANARCONFIG_SEPARATE) && (bits_per_sample < 64))\n-      method=ReadGenericMethod;\n+    method=ReadGenericMethod;\n     if (TIFFIsTiled(tiff) != MagickFalse)\n       method=ReadTileMethod;\n     else\n@@ -1806,6 +1800,8 @@ RestoreMSCWarning\n     if (image->compression == JPEGCompression)\n       method=GetJPEGMethod(image,tiff,photometric,bits_per_sample,\n         samples_per_pixel);\n+    if (photometric == PHOTOMETRIC_LOGLUV)\n+      method=ReadGenericMethod;\n     quantum_info->endian=LSBEndian;\n     quantum_type=RGBQuantum;\n     if (TIFFScanlineSize(tiff) <= 0)\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42475381-vul",
+      "digest": "sha256:501d233ec6dae57c078bf9cb5eb1679f2e17ca1b7f92efeb2665aaf46d046441"
+    },
+    "patched": {
+      "ref": "n132/arvo:42475381-fix",
+      "digest": "sha256:d871c3637bc8cf059d3408ad3654002afc9eea1320502b2497b1d4180c021b11"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/imagemagick/./MagickCore/quantum-private.h:149",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/imagemagick/./MagickCore/quantum-private.h:149"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

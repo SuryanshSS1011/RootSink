@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042537775",
+  "chain": "CWE-456->CWE-457",
+  "project": "mupdf",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42537775",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "30664486071cd8712b17b7da71f1297693619100",
+      "fix_commits": [
+        "30664486071cd8712b17b7da71f1297693619100"
+      ],
+      "repo": "git://git.ghostscript.com/thirdparty-openjpeg.git"
+    },
+    "patch": "From 30664486071cd8712b17b7da71f1297693619100 Mon Sep 17 00:00:00 2001\nFrom: Even Rouault <even.rouault@spatialys.com>\nDate: Mon, 6 May 2024 19:17:37 +0200\nSubject: [PATCH] opj_j2k_decode_tiles(): avoid use of uninitialized\n l_current_tile_no variable\n\nFixes https://bugs.chromium.org/p/oss-fuzz/issues/detail?id=68763\n---\n src/lib/openjp2/j2k.c | 5 +++--\n 1 file changed, 3 insertions(+), 2 deletions(-)\n\ndiff --git a/src/lib/openjp2/j2k.c b/src/lib/openjp2/j2k.c\nindex bcce316..745fade 100644\n--- a/src/lib/openjp2/j2k.c\n+++ b/src/lib/openjp2/j2k.c\n@@ -11661,8 +11661,9 @@ static OPJ_BOOL opj_j2k_decode_tiles(opj_j2k_t *p_j2k,\n             return OPJ_FALSE;\n         }\n \n-        if (! opj_j2k_decode_tile(p_j2k, l_current_tile_no, NULL, 0,\n-                                  p_stream, p_manager)) {\n+        if (!l_go_on ||\n+                ! opj_j2k_decode_tile(p_j2k, l_current_tile_no, NULL, 0,\n+                                      p_stream, p_manager)) {\n             opj_event_msg(p_manager, EVT_ERROR, \"Failed to decode tile 1/1\\n\");\n             return OPJ_FALSE;\n         }\n-- \n2.55.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42537775-vul",
+      "digest": "sha256:04f2aecc0e21eef7b4043dab403693fc9281b7283d9b025e093d2af096fa3391"
+    },
+    "patched": {
+      "ref": "n132/arvo:42537775-fix",
+      "digest": "sha256:da8e62b128c90fc34499e8bb633621606eac7f2c2202cb982c3df7ad9be9b378"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/mupdf/thirdparty/openjpeg/src/lib/openjp2/j2k.c:11664",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/mupdf/thirdparty/openjpeg/src/lib/openjp2/j2k.c:11664"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

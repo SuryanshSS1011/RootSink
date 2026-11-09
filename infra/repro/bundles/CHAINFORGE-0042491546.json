@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042491546",
+  "chain": "CWE-416->CWE-125",
+  "project": "igraph",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42491546",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "47eec2c3a87e0c129766046ad15b074eb60a1213",
+      "fix_commits": [
+        "47eec2c3a87e0c129766046ad15b074eb60a1213"
+      ],
+      "repo": "https://github.com/igraph/igraph"
+    },
+    "patch": "From 47eec2c3a87e0c129766046ad15b074eb60a1213 Mon Sep 17 00:00:00 2001\nFrom: Tamas Nepusz <ntamas@gmail.com>\nDate: Tue, 12 Jan 2021 21:36:54 +0100\nSubject: [PATCH] fix: fix a double-free problem in igraph_read_graph_gml\n\n---\n src/io/gml.c | 1 -\n 1 file changed, 1 deletion(-)\n\ndiff --git a/src/io/gml.c b/src/io/gml.c\nindex 71e5248..635bd37 100644\n--- a/src/io/gml.c\n+++ b/src/io/gml.c\n@@ -222,7 +222,6 @@ int igraph_read_graph_gml(igraph_t *graph, FILE *instream) {\n     if (i >= 0 &&\n         igraph_gml_tree_type(context.tree, i) == IGRAPH_I_GML_TREE_INTEGER &&\n         igraph_gml_tree_get_integer(context.tree, i) != 1) {\n-        igraph_gml_tree_destroy(context.tree);\n         IGRAPH_ERROR(\"Unknown GML version\", IGRAPH_UNIMPLEMENTED);\n         /* RETURN HERE!!!! */\n     }\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42491546-vul",
+      "digest": "sha256:71c422f7f562f25369aa64e15f7394eaa3e37968a3662eb34d47fc6541240b1e"
+    },
+    "patched": {
+      "ref": "n132/arvo:42491546-fix",
+      "digest": "sha256:002b2e89738c476d8c3be9a5d876c762e509dfe73a81fb16fa7d2c8593cffba3"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/igraph/src/core/vector_ptr.c:264",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/igraph/src/core/vector_ptr.c:264"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

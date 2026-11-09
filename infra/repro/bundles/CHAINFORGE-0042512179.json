@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042512179",
+  "chain": "CWE-416->CWE-787",
+  "project": "libical",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42512179",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "d86a86dbcddba0414f0dea13c3357f1c38826cb2",
+      "fix_commits": [
+        "d86a86dbcddba0414f0dea13c3357f1c38826cb2"
+      ],
+      "repo": "https://github.com/libical/libical"
+    },
+    "patch": "diff --git a/src/libical/icalvalue.c b/src/libical/icalvalue.c\nindex c41a69a31..84be221d8 100644\n--- a/src/libical/icalvalue.c\n+++ b/src/libical/icalvalue.c\n@@ -362,7 +362,7 @@ static icalvalue *icalvalue_new_enum(icalvalue_kind kind, int x_type, const char\n  * The code is locale *independent* and does *not* change the locale.\n  * It should be thread safe.\n  */\n-static int simple_str_to_doublestr(const char *from, char *result, char **to)\n+static int simple_str_to_doublestr(const char *from, char *result, int result_len, char **to)\n {\n     char *start = NULL, *end = NULL, *cur = (char *)from;\n \n@@ -390,7 +390,7 @@ static int simple_str_to_doublestr(const char *from, char *result, char **to)\n         ++cur;\n     }\n     end = cur;\n-    if (end - start + 1 > 100) {\n+    if (end - start + 1 > result_len) {\n         /*huh hoh, number is too big. getting out */\n         return 1;\n     }\n@@ -400,7 +400,7 @@ static int simple_str_to_doublestr(const char *from, char *result, char **to)\n      * of the current locale.\n      */\n #if !defined(HAVE_GETNUMBERFORMAT)\n-    for (i = 0; i < end - from; ++i) {\n+    for (i = 0; i < end - start; ++i) {\n         if (start[i] == '.' && loc_data && loc_data->decimal_point && loc_data->decimal_point[0]\n             && loc_data->decimal_point[0] != '.') {\n             /*replace '.' by the digit separator of the current locale */\n@@ -410,7 +410,7 @@ static int simple_str_to_doublestr(const char *from, char *result, char **to)\n         }\n     }\n #else\n-    GetNumberFormat(LOCALE_SYSTEM_DEFAULT, 0, start, NULL, result, TMP_NUM_SIZE);\n+    GetNumberFormat(LOCALE_SYSTEM_DEFAULT, 0, start, NULL, result, result_len);\n #endif\n     if (to) {\n         *to = end;\n@@ -583,7 +583,7 @@ static icalvalue *icalvalue_new_from_string_with_error(icalvalue_kind kind,\n             memset(geo.lat, 0, ICAL_GEO_LEN);\n             memset(geo.lon, 0, ICAL_GEO_LEN);\n \n-            if (simple_str_to_doublestr(str, geo.lat, &cur)) {\n+            if (simple_str_to_doublestr(str, geo.lat, ICAL_GEO_LEN, &cur)) {\n                 goto geo_parsing_error;\n             }\n             /* skip white spaces */\n@@ -603,7 +603,7 @@ static icalvalue *icalvalue_new_from_string_with_error(icalvalue_kind kind,\n                 ++cur;\n             }\n \n-            if (simple_str_to_doublestr(cur, geo.lon, &cur)) {\n+            if (simple_str_to_doublestr(cur, geo.lon, ICAL_GEO_LEN, &cur)) {\n                 goto geo_parsing_error;\n             }\n             value = icalvalue_new_geo(geo);\ndiff --git a/src/test/regression.c b/src/test/regression.c\nindex da3ba9afa..8f0361104 100644\n--- a/src/test/regression.c\n+++ b/src/test/regression.c\n@@ -4407,6 +4407,7 @@ void test_geo_props(void)\n            icalproperty_get_value_as_string(p), \"-0;+0\");\n     icalcomponent_free(c);\n \n+    /* failure situations */\n     estate = icalerror_get_errors_are_fatal();\n     icalerror_set_errors_are_fatal(0);\n     c = icalparser_parse_string(\"BEGIN:VEVENT\\n\" \"GEO:-0a;+0\\n\" \"END:VEVENT\\n\");\n@@ -4418,6 +4419,17 @@ void test_geo_props(void)\n     p = icalcomponent_get_first_property(c, ICAL_GEO_PROPERTY);\n     ok(\"expected fail icalcomponent_get_first_property()\", (p == NULL));\n     icalcomponent_free(c);\n+\n+    c = icalparser_parse_string(\"BEGIN:VEVENT\\n\" \"GEO:16.815151515151515151;+0\\n\" \"END:VEVENT\\n\");\n+    if (!c) {\n+        exit(EXIT_FAILURE);\n+    }\n+    if (VERBOSE)\n+        printf(\"%s\", icalcomponent_as_ical_string(c));\n+    p = icalcomponent_get_first_property(c, ICAL_GEO_PROPERTY);\n+    ok(\"expected fail icalcomponent_get_first_property()\", (p == NULL));\n+    icalcomponent_free(c);\n+\n     icalerror_set_errors_are_fatal(estate);\n }\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42512179-vul",
+      "digest": "sha256:6169fd3f517bfebf65ea4eb54e60d67b735dd4b5a31e302d7f26e06aba6952de"
+    },
+    "patched": {
+      "ref": "n132/arvo:42512179-fix",
+      "digest": "sha256:7314bda7105c9f797d1bbf487ef9ee6778669a9627bca6ed50ebbfd9f8ee47a6"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/libical/src/libical/icalvalue.c:586",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/libical/src/libical/icalvalue.c:586"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

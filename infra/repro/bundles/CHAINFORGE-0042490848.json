@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042490848",
+  "chain": "CWE-1284->CWE-787",
+  "project": "mdbtools",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42490848",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "78bbf4250ecc510c46274300b6f7fed73140147b",
+      "fix_commits": [
+        "78bbf4250ecc510c46274300b6f7fed73140147b"
+      ],
+      "repo": "https://github.com/mdbtools/mdbtools"
+    },
+    "patch": "diff --git a/src/libmdb/data.c b/src/libmdb/data.c\nindex 4ed11c32..fb20a380 100644\n--- a/src/libmdb/data.c\n+++ b/src/libmdb/data.c\n@@ -301,10 +301,10 @@ int mdb_read_row(MdbTableDef *table, unsigned int row)\n \tint row_start;\n \tsize_t row_size;\n \tint delflag, lookupflag;\n-\tMdbField fields[256];\n+\tMdbField *fields;\n \tint num_fields;\n \n-\tif (table->num_rows == 0) \n+\tif (table->num_rows == 0 || table->num_cols == 0)\n \t\treturn 0;\n \n \tif (mdb_find_row(mdb, row, &row_start, &row_size)) {\n@@ -331,10 +331,13 @@ int mdb_read_row(MdbTableDef *table, unsigned int row)\n \t\treturn 0;\n \t}\n \n+\tfields = malloc(sizeof(MdbField) * table->num_cols);\n+\n \tnum_fields = mdb_crack_row(table, row_start, row_size, fields);\n-\tif (num_fields < 0)\n+\tif (num_fields < 0 || !mdb_test_sargs(table, fields, num_fields)) {\n+\t\tfree(fields);\n \t\treturn 0;\n-\tif (!mdb_test_sargs(table, fields, num_fields)) return 0;\n+\t}\n \t\n #if MDB_DEBUG\n \tfprintf(stdout,\"sarg test passed row %d \\n\", row);\n@@ -352,6 +355,8 @@ int mdb_read_row(MdbTableDef *table, unsigned int row)\n \t\t\tfields[i].start, fields[i].siz);\n \t}\n \n+\tfree(fields);\n+\n \treturn 1;\n }\n static int _mdb_attempt_bind(MdbHandle *mdb, \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42490848-vul",
+      "digest": "sha256:f506fef54a68fb8c2ae70fa9464a14a69d86dc94470d7e5e4e8ec1bf086b6c3e"
+    },
+    "patched": {
+      "ref": "n132/arvo:42490848-fix",
+      "digest": "sha256:a002900df9111a4047dc00c91719d6132cea9858fe937d54b1a7a36034dcbe09"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/mdbtools/src/libmdb/write.c:245",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/mdbtools/src/libmdb/write.c:245"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

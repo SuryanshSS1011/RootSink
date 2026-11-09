@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042474100",
+  "chain": "CWE-416->CWE-125",
+  "project": "radare2",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42474100",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "5d65cbe1f7d677a22c0fca593dcae1aebf8cf35b",
+      "fix_commits": [
+        "5d65cbe1f7d677a22c0fca593dcae1aebf8cf35b"
+      ],
+      "repo": "https://github.com/radare/radare2"
+    },
+    "patch": "From 5d65cbe1f7d677a22c0fca593dcae1aebf8cf35b Mon Sep 17 00:00:00 2001\nFrom: Riccardo Schirone <ret2libc@users.noreply.github.com>\nDate: Wed, 13 Mar 2019 12:04:54 +0100\nSubject: [PATCH] bin_art: avoid double free ##bin\n\nao->kv's ownership is moved to RBin through the get_sdb method of\nRBinPlugin, thus the plugins should not free it themselves.\n---\n libr/bin/p/bin_art.c | 1 -\n 1 file changed, 1 deletion(-)\n\ndiff --git a/libr/bin/p/bin_art.c b/libr/bin/p/bin_art.c\nindex 84ab447..2d1fa9a 100644\n--- a/libr/bin/p/bin_art.c\n+++ b/libr/bin/p/bin_art.c\n@@ -83,7 +83,6 @@ static void *load_buffer(RBinFile *bf, RBuffer *buf, ut64 loadaddr, Sdb *sdb) {\n \n static int destroy(RBinFile *bf) {\n \tArtObj *obj = bf->o->bin_obj;\n-\tsdb_free (obj->kv);\n \tr_buf_free (obj->buf);\n \tfree (obj);\n \treturn true;\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42474100-vul",
+      "digest": "sha256:ba9f84c26d8c908e53b490ba1a9a3f54cb75aeba70837a3a1f643a80acf1bd33"
+    },
+    "patched": {
+      "ref": "n132/arvo:42474100-fix",
+      "digest": "sha256:cf0c75c9de6b0c96e26d5f024643673c87b6bce023064a1c08496e685d368cdf"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/radare2/shlr/sdb/src/sdb.c:217",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/radare2/shlr/sdb/src/sdb.c:217"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

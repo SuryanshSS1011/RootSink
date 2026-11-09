@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-964050313",
+  "chain": "CWE-456->CWE-457",
+  "project": "speex",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42534870",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://gitlab.xiph.org/xiph/speex.git630163d19be79c37d28b5e2d25f8a0aed669d639",
+      "fix_commits": [
+        "630163d19be79c37d28b5e2d25f8a0aed669d639"
+      ],
+      "repo": "https://gitlab.xiph.org/xiph/speex.git"
+    },
+    "patch": "From 630163d19be79c37d28b5e2d25f8a0aed669d639 Mon Sep 17 00:00:00 2001\nFrom: Tristan Matthews <tmatth@videolan.org>\nDate: Wed, 22 May 2024 10:12:35 -0400\nSubject: [PATCH] nb_decode: memset innovation memory in null mode\n\nAfter calling nb_decode, sb_decode is reading this memory (as `low_innov_alias`)\nso in the case of returning early, we should make sure it's initialized.\n\nFixes msan error:\n Issue 68413: speex:speex_decode_fuzzer_fixed: Use-of-uninitialized-value in compute_rms16\n\nfound-by: continuous fuzzing process https://github.com/google/oss-fuzz/tree/master/projects/speex\n\nFixes https://gitlab.xiph.org/xiph/speex/-/issues/2047\nFixes https://bugs.chromium.org/p/oss-fuzz/issues/detail?id=68413\n\nSigned-off-by: Tristan Matthews <tmatth@videolan.org>\n---\n libspeex/nb_celp.c | 4 ++++\n 1 file changed, 4 insertions(+)\n\ndiff --git a/libspeex/nb_celp.c b/libspeex/nb_celp.c\nindex 71b950c..ad67207 100644\n--- a/libspeex/nb_celp.c\n+++ b/libspeex/nb_celp.c\n@@ -1472,6 +1472,10 @@ int nb_decode(void *state, SpeexBits *bits, void *vout)\n       /* Final signal synthesis from excitation */\n       iir_mem16(st->exc, lpc, out, NB_FRAME_SIZE, NB_ORDER, st->mem_sp, stack);\n \n+      /* Normally this is written to later but since this is returning early,\n+         avoid reading uninitialized memory in caller */\n+      SPEEX_MEMSET(st->innov_save, 0, NB_NB_SUBFRAMES*NB_SUBFRAME_SIZE);\n+\n       st->count_lost=0;\n       return 0;\n    }\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42534870-vul",
+      "digest": "sha256:0ae956f93bfcdc7f6d6b0c6d97acb73f689d2ea373723db8926fa658e309d966"
+    },
+    "patched": {
+      "ref": "n132/arvo:42534870-fix",
+      "digest": "sha256:8c044f75cd899d683066bf37672776361ec34a54346028ac519697937476f4db"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/speex/libspeex/filters.c:315",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/speex/libspeex/filters.c:315"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

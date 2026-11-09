@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042500380",
+  "chain": "CWE-1284->CWE-787",
+  "project": "open62541",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42500380",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "3455a82ddb781794d1a32b9ee94153f02117c61c",
+      "fix_commits": [
+        "3455a82ddb781794d1a32b9ee94153f02117c61c"
+      ],
+      "repo": "https://github.com/open62541/open62541"
+    },
+    "patch": "diff --git a/src/server/ua_services_discovery.c b/src/server/ua_services_discovery.c\nindex 5d827d7f162..806ce514097 100644\n--- a/src/server/ua_services_discovery.c\n+++ b/src/server/ua_services_discovery.c\n@@ -133,7 +133,16 @@ void Service_FindServers(UA_Server *server, UA_Session *session,\n                 registeredServer_list_entry* current;\n                 LIST_FOREACH(current, &server->registeredServers, pointers) {\n                     if(UA_String_equal(&current->registeredServer.serverUri, &request->serverUris[i])) {\n-                        foundServerFilteredPointer[foundServersSize++] = &current->registeredServer;\n+                        // check if entry already in list:\n+                        UA_Boolean existing = false;\n+                        for (size_t j=0; j<foundServersSize; j++) {\n+                            if (UA_String_equal(&foundServerFilteredPointer[j]->serverUri, &request->serverUris[i])) {\n+                                existing = true;\n+                                break;\n+                            }\n+                        }\n+                        if (!existing)\n+                            foundServerFilteredPointer[foundServersSize++] = &current->registeredServer;\n                         break;\n                     }\n                 }\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42500380-vul",
+      "digest": "sha256:11d609cd053cca9ef68cff7c28da8ca92d7e8cbcad4ddd193de1571700752057"
+    },
+    "patched": {
+      "ref": "n132/arvo:42500380-fix",
+      "digest": "sha256:4459a5ae35ad30518c58c140c81347c9fd33067707cdcc9c1974fa099693b52e"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/open62541/src/server/ua_services_discovery.c:136",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/open62541/src/server/ua_services_discovery.c:136"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

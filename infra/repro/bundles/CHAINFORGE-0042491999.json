@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042491999",
+  "chain": "CWE-1284->CWE-125",
+  "project": "c-blosc2",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42491999",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "5b2009c497d5e3f2e3265795fa1aab12bfd0adcc",
+      "fix_commits": [
+        "5b2009c497d5e3f2e3265795fa1aab12bfd0adcc"
+      ],
+      "repo": "https://github.com/Blosc/c-blosc2"
+    },
+    "patch": "diff --git a/blosc/blosc2.c b/blosc/blosc2.c\nindex 3fd46455a..819464628 100644\n--- a/blosc/blosc2.c\n+++ b/blosc/blosc2.c\n@@ -2296,6 +2296,10 @@ int handle_runlen(blosc2_context* context, uint8_t* src, uint32_t nbytes, uint8_\n   context->header_overhead = BLOSC_EXTENDED_HEADER_LENGTH;  // a Blosc2 chunk\n   int32_t cbytes_chunk = src[BLOSC2_CHUNK_CBYTES];\n   int32_t typesize = src[BLOSC2_CHUNK_TYPESIZE];\n+  // Some checks for malformed headers\n+  if (typesize <= 0 || typesize > BLOSC_MAX_TYPESIZE) {\n+    return -1;\n+  }\n   bool all_zeros = src[BLOSC2_CHUNK_BLOSC2_FLAGS] & (BLOSC2_ZERO_RUNLEN << 4);\n   bool all_nans = src[BLOSC2_CHUNK_BLOSC2_FLAGS] & (BLOSC2_NAN_RUNLEN << 4);\n   if ((cbytes_chunk != context->header_overhead + typesize) && (cbytes_chunk != context->header_overhead)) {\ndiff --git a/blosc/frame.c b/blosc/frame.c\nindex a87d691eb..c61203166 100644\n--- a/blosc/frame.c\n+++ b/blosc/frame.c\n@@ -423,8 +423,8 @@ int get_header_info(blosc2_frame *frame, int32_t *header_len, int64_t *frame_len\n     swap_store(typesize, framep + FRAME_TYPESIZE, sizeof(*typesize));\n   }\n \n-  if (*header_len > *frame_len) {\n-    BLOSC_TRACE_ERROR(\"Header length exceeds length of the frame.\");\n+  if (*header_len <= 0 || *header_len > *frame_len) {\n+    BLOSC_TRACE_ERROR(\"Header length is invalid or exceeds length of the frame.\");\n     return -1;\n   }\n \n@@ -1278,6 +1278,14 @@ int frame_get_metalayers(blosc2_frame* frame, blosc2_schunk* schunk) {\n     swap_store(&offset, idxp, sizeof(offset));\n     idxp += 4;\n \n+    if (offset >= header_len) {\n+      // Offset exceeds header length\n+      if (frame->sdata == NULL) {\n+        free(header);\n+      }\n+      free(ns);\n+      return -1;\n+    }\n     // Go to offset and see if we have the correct marker\n     uint8_t* content_marker = header + offset;\n     if (*content_marker != 0xc6) {\ndiff --git a/tests/fuzz/fuzz_compress_chunk.c b/tests/fuzz/fuzz_compress_chunk.c\nindex 298acf5e3..049393d81 100644\n--- a/tests/fuzz/fuzz_compress_chunk.c\n+++ b/tests/fuzz/fuzz_compress_chunk.c\n@@ -46,6 +46,12 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {\n \n   blosc_cbuffer_sizes(output, &nbytes, &cbytes, &blocksize);\n \n+  /* Don't allow address sanitizer to allocate more than INT32_MAX */\n+  if (cbytes >= INT32_MAX) {\n+    free(output);\n+    return 0;\n+  }\n+\n   input = malloc(cbytes);\n   if (input != NULL) {\n     blosc_decompress(output, input, cbytes);\ndiff --git a/tests/fuzz/fuzz_decompress_frame.c b/tests/fuzz/fuzz_decompress_frame.c\nindex 7179b1e6c..d0af1ee49 100644\n--- a/tests/fuzz/fuzz_decompress_frame.c\n+++ b/tests/fuzz/fuzz_decompress_frame.c\n@@ -25,7 +25,12 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {\n     blosc_destroy();\n     return 0;\n   }\n-\n+  /* Don't allow address sanitizer to allocate more than INT32_MAX */\n+  if (schunk->nbytes >= INT32_MAX) {\n+    blosc2_schunk_free(schunk);\n+    blosc_destroy();\n+    return 0;\n+  }\n   /* Decompress data */\n   uint8_t *uncompressed_data = (uint8_t *)malloc((size_t)schunk->nbytes+1);\n   if (uncompressed_data != NULL) {\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42491999-vul",
+      "digest": "sha256:55d7f9d5d63ef3232889ac9011081ae18e4b085691387a5cb48a156fb0e21d5d"
+    },
+    "patched": {
+      "ref": "n132/arvo:42491999-fix",
+      "digest": "sha256:6479d15dfdf6dd0e13975fdf0b6729521ce1e3f44d5ad84fa5668cc9a7b7e0d8"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/c-blosc2/blosc/blosc-private.h:44",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/c-blosc2/blosc/blosc-private.h:44"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

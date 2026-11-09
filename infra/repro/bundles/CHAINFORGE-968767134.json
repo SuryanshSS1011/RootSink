@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-968767134",
+  "chain": "CWE-456->CWE-457",
+  "project": "wolfssl",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42522715",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/wolfssl/wolfssl/commit/ec9beaab4165d860ebcd7703493cfb3585f5a8ab",
+      "fix_commits": [
+        "ec9beaab4165d860ebcd7703493cfb3585f5a8ab"
+      ],
+      "repo": "https://github.com/wolfssl/wolfssl"
+    },
+    "patch": "diff --git a/linuxkm/linuxkm_memory.c b/linuxkm/linuxkm_memory.c\nindex facee2af268..ee30af987be 100644\n--- a/linuxkm/linuxkm_memory.c\n+++ b/linuxkm/linuxkm_memory.c\n@@ -21,7 +21,7 @@\n \n /* included by wolfcrypt/src/memory.c */\n \n-#if defined(WOLFSSL_LINUXKM_SIMD_X86)\n+#if defined(WOLFSSL_LINUXKM_USE_SAVE_VECTOR_REGISTERS) && defined(CONFIG_X86)\n     #ifdef LINUXKM_SIMD_IRQ\n         #if LINUX_VERSION_CODE < KERNEL_VERSION(5, 16, 0)\n             static union fpregs_state **wolfcrypt_linuxkm_fpu_states = NULL;\n@@ -335,7 +335,7 @@\n \n         return;\n     }\n-#endif /* WOLFSSL_LINUXKM_SIMD_X86 && WOLFSSL_LINUXKM_SIMD_X86_IRQ_ALLOWED */\n+#endif /* WOLFSSL_LINUXKM_USE_SAVE_VECTOR_REGISTERS && CONFIG_X86 */\n \n #if defined(__PIE__) && (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0))\n /* needed in 6.1+ because show_free_areas() static definition in mm.h calls\ndiff --git a/linuxkm/linuxkm_wc_port.h b/linuxkm/linuxkm_wc_port.h\nindex 5a7fb526697..8b839161ca6 100644\n--- a/linuxkm/linuxkm_wc_port.h\n+++ b/linuxkm/linuxkm_wc_port.h\n@@ -119,10 +119,30 @@\n     #endif\n     #include <linux/net.h>\n     #include <linux/slab.h>\n+\n     #if defined(WOLFSSL_AESNI) || defined(USE_INTEL_SPEEDUP) || defined(WOLFSSL_SP_X86_64_ASM)\n         #ifndef CONFIG_X86\n             #error X86 SIMD extensions requested, but CONFIG_X86 is not set.\n         #endif\n+        #ifndef WOLFSSL_LINUXKM_USE_SAVE_VECTOR_REGISTERS\n+            #define WOLFSSL_LINUXKM_USE_SAVE_VECTOR_REGISTERS\n+        #endif\n+    #elif defined(WOLFSSL_ARMASM) || defined(WOLFSSL_SP_ARM32_ASM) || \\\n+          defined(WOLFSSL_SP_ARM64_ASM) || defined(WOLFSSL_SP_ARM_THUMB_ASM) ||\\\n+          defined(WOLFSSL_SP_ARM_CORTEX_M_ASM)\n+        #if !defined(CONFIG_ARM) && !defined(CONFIG_ARM64)\n+            #error ARM SIMD extensions requested, but CONFIG_ARM* is not set.\n+        #endif\n+        #ifndef WOLFSSL_LINUXKM_USE_SAVE_VECTOR_REGISTERS\n+            #define WOLFSSL_LINUXKM_USE_SAVE_VECTOR_REGISTERS\n+        #endif\n+    #else\n+        #ifndef WOLFSSL_NO_ASM\n+            #define WOLFSSL_NO_ASM\n+        #endif\n+    #endif\n+\n+    #if defined(WOLFSSL_LINUXKM_USE_SAVE_VECTOR_REGISTERS) && defined(CONFIG_X86)\n         #define WOLFSSL_LINUXKM_SIMD\n         #define WOLFSSL_LINUXKM_SIMD_X86\n         #if LINUX_VERSION_CODE < KERNEL_VERSION(4, 0, 0)\n@@ -148,28 +168,21 @@\n         #ifndef RESTORE_VECTOR_REGISTERS\n             #define RESTORE_VECTOR_REGISTERS() restore_vector_registers_x86()\n         #endif\n-    #elif defined(WOLFSSL_ARMASM) || defined(WOLFSSL_SP_ARM32_ASM) || \\\n-          defined(WOLFSSL_SP_ARM64_ASM) || defined(WOLFSSL_SP_ARM_THUMB_ASM) ||\\\n-          defined(WOLFSSL_SP_ARM_CORTEX_M_ASM)\n-        #if !defined(CONFIG_ARM) && !defined(CONFIG_ARM64)\n-            #error ARM SIMD extensions requested, but CONFIG_ARM* is not set.\n-        #endif\n+    #elif defined(WOLFSSL_LINUXKM_USE_SAVE_VECTOR_REGISTERS) && (defined(CONFIG_ARM) || defined(CONFIG_ARM64))\n         #define WOLFSSL_LINUXKM_SIMD\n         #define WOLFSSL_LINUXKM_SIMD_ARM\n         #include <asm/fpsimd.h>\n+        #ifdef LINUXKM_SIMD_IRQ\n+            #error LINUXKM_SIMD_IRQ is unavailable on ARM (not implemented)\n+        #endif\n         #ifndef SAVE_VECTOR_REGISTERS\n             #define SAVE_VECTOR_REGISTERS(fail_clause) { int _svr_ret = save_vector_registers_arm(); if (_svr_ret != 0) { fail_clause } }\n         #endif\n         #ifndef RESTORE_VECTOR_REGISTERS\n             #define RESTORE_VECTOR_REGISTERS() restore_vector_registers_arm()\n         #endif\n-        #ifdef LINUXKM_SIMD_IRQ\n-            #error LINUXKM_SIMD_IRQ is unavailable on ARM (not implemented)\n-        #endif\n-    #else\n-        #ifndef WOLFSSL_NO_ASM\n-            #define WOLFSSL_NO_ASM\n-        #endif\n+    #elif defined(WOLFSSL_LINUXKM_USE_SAVE_VECTOR_REGISTERS)\n+        #error WOLFSSL_LINUXKM_USE_SAVE_VECTOR_REGISTERS is set for an unsupported architecture.\n     #endif\n \n     _Pragma(\"GCC diagnostic pop\");\ndiff --git a/linuxkm/module_hooks.c b/linuxkm/module_hooks.c\nindex 7833075272c..3f17217d3af 100644\n--- a/linuxkm/module_hooks.c\n+++ b/linuxkm/module_hooks.c\n@@ -141,13 +141,21 @@ static int wolfssl_init(void)\n \n #ifdef HAVE_LINUXKM_PIE_SUPPORT\n \n-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 5, 0)\n-    #define THIS_MODULE_BASE (THIS_MODULE->core_layout.base)\n+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 4, 0)\n+    /* see linux commit ac3b432839 */\n+    #define THIS_MODULE_TEXT_BASE (THIS_MODULE->mem[MOD_TEXT].base)\n+    #define THIS_MODULE_TEXT_SIZE (THIS_MODULE->mem[MOD_TEXT].size)\n+    #define THIS_MODULE_RO_BASE (THIS_MODULE->mem[MOD_RODATA].base)\n+    #define THIS_MODULE_RO_SIZE (THIS_MODULE->mem[MOD_RODATA].size)\n+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(4, 5, 0)\n+    #define THIS_MODULE_TEXT_BASE (THIS_MODULE->core_layout.base)\n     #define THIS_MODULE_TEXT_SIZE (THIS_MODULE->core_layout.text_size)\n+    #define THIS_MODULE_RO_BASE ((char *)THIS_MODULE->core_layout.base + THIS_MODULE->core_layout.text_size)\n     #define THIS_MODULE_RO_SIZE (THIS_MODULE->core_layout.ro_size)\n #else\n-    #define THIS_MODULE_BASE (THIS_MODULE->module_core)\n+    #define THIS_MODULE_TEXT_BASE (THIS_MODULE->module_core)\n     #define THIS_MODULE_TEXT_SIZE (THIS_MODULE->core_text_size)\n+    #define THIS_MODULE_RO_BASE ((char *)THIS_MODULE->module_core + THIS_MODULE->core_ro_size)\n     #define THIS_MODULE_RO_SIZE (THIS_MODULE->core_ro_size)\n #endif\n \n@@ -159,8 +167,8 @@ static int wolfssl_init(void)\n         unsigned int text_hash, rodata_hash;\n \n         if ((pie_text_start < pie_text_end) &&\n-            (pie_text_start >= (char *)THIS_MODULE_BASE) &&\n-            (pie_text_end - (char *)THIS_MODULE_BASE <= THIS_MODULE_TEXT_SIZE))\n+            (pie_text_start >= (char *)THIS_MODULE_TEXT_BASE) &&\n+            (pie_text_end - (char *)THIS_MODULE_TEXT_BASE <= THIS_MODULE_TEXT_SIZE))\n         {\n             text_hash = hash_span(pie_text_start, pie_text_end);\n         } else {\n@@ -169,14 +177,14 @@ static int wolfssl_init(void)\n                     pie_text_start,\n                     pie_text_end,\n                     pie_text_end-pie_text_start,\n-                    THIS_MODULE_BASE,\n-                    (char *)THIS_MODULE_BASE + THIS_MODULE_TEXT_SIZE);\n+                    THIS_MODULE_TEXT_BASE,\n+                    (char *)THIS_MODULE_TEXT_BASE + THIS_MODULE_TEXT_SIZE);\n             text_hash = 0;\n         }\n \n         if ((pie_rodata_start < pie_rodata_end) && // cppcheck-suppress comparePointers\n-            (pie_rodata_start >= (char *)THIS_MODULE_BASE + THIS_MODULE_TEXT_SIZE) &&\n-            (pie_rodata_end - (char *)THIS_MODULE_BASE <= THIS_MODULE_RO_SIZE))\n+            (pie_rodata_start >= (char *)THIS_MODULE_RO_BASE) &&\n+            (pie_rodata_end - (char *)THIS_MODULE_RO_BASE <= THIS_MODULE_RO_SIZE))\n         {\n             rodata_hash = hash_span(pie_rodata_start, pie_rodata_end);\n         } else {\n@@ -185,8 +193,8 @@ static int wolfssl_init(void)\n                     pie_rodata_start,\n                     pie_rodata_end,\n                     pie_rodata_end-pie_rodata_start,\n-                    (char *)THIS_MODULE_BASE + THIS_MODULE_TEXT_SIZE,\n-                    (char *)THIS_MODULE_BASE + THIS_MODULE_RO_SIZE);\n+                    (char *)THIS_MODULE_RO_BASE,\n+                    (char *)THIS_MODULE_RO_BASE + THIS_MODULE_RO_SIZE);\n             rodata_hash = 0;\n         }\n \n@@ -194,10 +202,10 @@ static int wolfssl_init(void)\n          * the true module start address, which is potentially useful to an\n          * attacker.\n          */\n-        pr_info(\"wolfCrypt container hashes (spans): %x (%lu) %x (%lu), module base %pK\\n\",\n+        pr_info(\"wolfCrypt container hashes (spans): %x (%lu) %x (%lu), text base %pK, ro base %pK\\n\",\n                 text_hash, pie_text_end-pie_text_start,\n                 rodata_hash, pie_rodata_end-pie_rodata_start,\n-                THIS_MODULE_BASE);\n+                THIS_MODULE_TEXT_BASE, THIS_MODULE_RO_BASE);\n     }\n #endif /* HAVE_LINUXKM_PIE_SUPPORT */\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42522715-vul",
+      "digest": "sha256:e940a5aae6de05fcbab806a12b4db76e7bf29ef97520c79380f81649782cbae0"
+    },
+    "patched": {
+      "ref": "n132/arvo:42522715-fix",
+      "digest": "sha256:813287228ce5881c4bef88e86b9949de727a572b2ae3e92f436dbfe2ba729a42"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/wolf-ssl-ssh-fuzzers/oss-fuzz/projects/wolf-ssl-ssh/fuzzers/include/fuzzers/shared.h:239",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/wolf-ssl-ssh-fuzzers/oss-fuzz/projects/wolf-ssl-ssh/fuzzers/include/fuzzers/shared.h:239"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

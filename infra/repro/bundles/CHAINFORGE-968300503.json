@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-968300503",
+  "chain": "CWE-456->CWE-457",
+  "project": "skia",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42471180",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://skia.googlesource.com/skia.git/+/32526b5cb0e3ad65610f3be68f9e54ae1f0cd88a%5E%21/",
+      "fix_commits": [
+        "32526b5cb0e3ad65610f3be68f9e54ae1f0cd88a"
+      ],
+      "repo": "https://skia.googlesource.com/skia.git"
+    },
+    "patch": "From 32526b5cb0e3ad65610f3be68f9e54ae1f0cd88a Mon Sep 17 00:00:00 2001\nFrom: Leon Scroggins III <scroggo@google.com>\nDate: Wed, 31 Oct 2018 15:00:16 -0400\nSubject: [PATCH] Treat start(Incremental/Scanline)Decode errors as failures\n\nBug: oss-fuzz:11070\n\nThese may report kIncompleteInput or kErrorInInput, depending on\nwhether the data was truncated or had an error. In either case, if\nwe reach this error before decoding a row, the SkSampledCodec did not\ndecode anything, so report a hard failure.\n\nChange-Id: Iabd459816f8f6760c4fb9f596c617d8399da90e6\nReviewed-on: https://skia-review.googlesource.com/c/165526\nCommit-Queue: Leon Scroggins <scroggo@google.com>\nCommit-Queue: Mike Klein <mtklein@google.com>\nAuto-Submit: Leon Scroggins <scroggo@google.com>\nReviewed-by: Mike Klein <mtklein@google.com>\n---\n src/codec/SkSampledCodec.cpp | 7 ++++++-\n 1 file changed, 6 insertions(+), 1 deletion(-)\n\ndiff --git a/src/codec/SkSampledCodec.cpp b/src/codec/SkSampledCodec.cpp\nindex 2d0432b..3876d6f 100644\n--- a/src/codec/SkSampledCodec.cpp\n+++ b/src/codec/SkSampledCodec.cpp\n@@ -254,6 +254,9 @@ SkCodec::Result SkSampledCodec::sampledDecode(const SkImageInfo& info, void* pix\n             this->codec()->fillIncompleteImage(info, pixels, rowBytes, options.fZeroInitialized,\n                                                info.height(), rowsDecoded);\n             return incResult;\n+        } else if (startResult == SkCodec::kIncompleteInput\n+                || startResult == SkCodec::kErrorInInput) {\n+            return SkCodec::kInvalidInput;\n         } else if (startResult != SkCodec::kUnimplemented) {\n             return startResult;\n         } // kUnimplemented means use the old method.\n@@ -262,7 +265,9 @@ SkCodec::Result SkSampledCodec::sampledDecode(const SkImageInfo& info, void* pix\n     // Start the scanline decode.\n     SkCodec::Result result = this->codec()->startScanlineDecode(nativeInfo,\n             &sampledOptions);\n-    if (SkCodec::kSuccess != result) {\n+    if (SkCodec::kIncompleteInput == result || SkCodec::kErrorInInput == result) {\n+        return SkCodec::kInvalidInput;\n+    } else if (SkCodec::kSuccess != result) {\n         return result;\n     }\n \n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42471180-vul",
+      "digest": "sha256:6cfbf9da33cf943b019c6114a8c30506fb0a2f6945f945842132de834c1a0c9b"
+    },
+    "patched": {
+      "ref": "n132/arvo:42471180-fix",
+      "digest": "sha256:a69266c0c61b35b9f058fa8de9b786bb3832fd97d70cfd4716fdb34cb20f34bc"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/skia/out/Fuzz/../../src/opts/SkBlitRow_opts.h:83",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/skia/out/Fuzz/../../src/opts/SkBlitRow_opts.h:83"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

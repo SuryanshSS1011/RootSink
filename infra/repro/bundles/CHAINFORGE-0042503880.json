@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042503880",
+  "chain": "CWE-456->CWE-457",
+  "project": "binutils-gdb",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42503880",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "590abc168fb25908cde1df89f4905b575c14e55d",
+      "fix_commits": [
+        "590abc168fb25908cde1df89f4905b575c14e55d"
+      ],
+      "repo": "git://sourceware.org/git/binutils-gdb.git"
+    },
+    "patch": "diff --git a/bfd/coff-x86_64.c b/bfd/coff-x86_64.c\nindex 67f2ee5e..9bd1c573 100644\n--- a/bfd/coff-x86_64.c\n+++ b/bfd/coff-x86_64.c\n@@ -20,10 +20,6 @@\n \n    Written by Kai Tietz, OneVision Software GmbH&CoKg.  */\n \n-#ifndef COFF_WITH_pex64\n-#define COFF_WITH_pex64\n-#endif\n-\n /* Note we have to make sure not to include headers twice.\n    Not all headers are wrapped in #ifdef guards, so we define\n    PEI_HEADERS to prevent double including here.  */\n@@ -33,7 +29,6 @@\n #include \"libbfd.h\"\n #include \"coff/x86_64.h\"\n #include \"coff/internal.h\"\n-#include \"coff/pe.h\"\n #include \"libcoff.h\"\n #include \"libiberty.h\"\n #endif\ndiff --git a/bfd/pe-x86_64.c b/bfd/pe-x86_64.c\nindex 5a777bbf..1c1b23fb 100644\n--- a/bfd/pe-x86_64.c\n+++ b/bfd/pe-x86_64.c\n@@ -20,9 +20,14 @@\n \n    Written by Kai Tietz, OneVision Software GmbH&CoKg.  */\n \n+#define PEI_HEADERS\n #include \"sysdep.h\"\n #include \"bfd.h\"\n+#include \"libbfd.h\"\n+#include \"libiberty.h\"\n+#include \"coff/x86_64.h\"\n #include \"coff/internal.h\"\n+#include \"coff/pe.h\"\n #include \"libcoff.h\"\n \n #define TARGET_SYM\t\tx86_64_pe_vec\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42503880-vul",
+      "digest": "sha256:5803298ff51e4c1509e6e9c483ff59336c53a1284e662d89f3eaa6243023e0cb"
+    },
+    "patched": {
+      "ref": "n132/arvo:42503880-fix",
+      "digest": "sha256:80ffae09f1af8b4a7728a494015a7c64662d83ba640b111ad5028c06cbd052dd"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/binutils-gdb/bfd/cache.c:386",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/binutils-gdb/bfd/cache.c:386"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-960121027",
+  "chain": "CWE-456->CWE-457",
+  "project": "ndpi",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42504902",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/ntop/nDPI/commit/b080a1c136fadb675c42bb72309e7c479ac7d292",
+      "fix_commits": [
+        "b080a1c136fadb675c42bb72309e7c479ac7d292"
+      ],
+      "repo": "https://github.com/ntop/nDPI"
+    },
+    "patch": "diff --git a/fuzz/fuzz_ndpi_reader.c b/fuzz/fuzz_ndpi_reader.c\nindex 84d194ed455..09d1f913d9b 100644\n--- a/fuzz/fuzz_ndpi_reader.c\n+++ b/fuzz/fuzz_ndpi_reader.c\n@@ -13,7 +13,7 @@ int nDPI_LogLevel = 0;\n char *_debug_protocols = NULL;\n u_int32_t current_ndpi_memory = 0, max_ndpi_memory = 0;\n u_int8_t enable_protocol_guess = 1, enable_payload_analyzer = 0;\n-u_int8_t enable_joy_stats = 0;\n+u_int8_t enable_flow_stats = 0;\n u_int8_t human_readeable_string_len = 5;\n u_int8_t max_num_udp_dissected_pkts = 16 /* 8 is enough for most protocols, Signal requires more */, max_num_tcp_dissected_pkts = 80 /* due to telnet */;\n \ndiff --git a/src/lib/ndpi_main.c b/src/lib/ndpi_main.c\nindex 8aaee5b8fb4..b6e346d1463 100644\n--- a/src/lib/ndpi_main.c\n+++ b/src/lib/ndpi_main.c\n@@ -5038,8 +5038,6 @@ ndpi_protocol ndpi_detection_giveup(struct ndpi_detection_module_struct *ndpi_st\n       if(flow->host_server_name[0] != '\\0') {\n         ndpi_protocol_match_result ret_match;\n \n-        memset(&ret_match, 0, sizeof(ret_match));\n-\n         ndpi_match_host_subprotocol(ndpi_str, flow, (char *) flow->host_server_name,\n \t\t\t\t    strlen((const char *) flow->host_server_name), &ret_match,\n \t\t\t\t    NDPI_PROTOCOL_DNS);\n@@ -7110,6 +7108,8 @@ u_int16_t ndpi_match_host_subprotocol(struct ndpi_detection_module_struct *ndpi_\n   u_int16_t rc;\n   ndpi_protocol_category_t id;\n \n+  memset(ret_match, 0, sizeof(*ret_match));\n+\n   rc = ndpi_automa_match_string_subprotocol(ndpi_str, flow, string_to_match, string_to_match_len,\n \t\t\t\t\t    master_protocol_id, ret_match);\n   id = ret_match->protocol_category;\n@@ -7147,7 +7147,6 @@ int ndpi_match_hostname_protocol(struct ndpi_detection_module_struct *ndpi_struc\n   else\n     what = name, what_len = name_len;\n \n-  memset(&ret_match, 0, sizeof(ret_match));\n   subproto = ndpi_match_host_subprotocol(ndpi_struct, flow, what, what_len,\n \t\t\t\t\t &ret_match, master_protocol);\n \ndiff --git a/src/lib/protocols/tls.c b/src/lib/protocols/tls.c\nindex 622fa678f8b..4815275d42d 100644\n--- a/src/lib/protocols/tls.c\n+++ b/src/lib/protocols/tls.c\n@@ -1718,6 +1718,14 @@ int processClientServerHello(struct ndpi_detection_module_struct *ndpi_struct,\n \t      checkExtensions(ndpi_struct, flow, is_dtls,\n \t\t\t      extension_id, extension_len, offset + extension_offset);\n \n+\t      if(offset + 4 + extension_len > total_len) {\n+#ifdef DEBUG_TLS\n+\t        printf(\"[TLS] extension length %u too long (%u, offset %u)\\n\",\n+\t               extension_len, total_len, offset);\n+#endif\n+\t        break;\n+\t      }\n+\n \t      if((extension_id == 0) || (packet->payload[extn_off] != packet->payload[extn_off+1])) {\n \t\t/* Skip GREASE */\n \n@@ -1957,7 +1965,7 @@ int processClientServerHello(struct ndpi_detection_module_struct *ndpi_struct,\n \t\tprintf(\"[SIGNATURE] [is_firefox_tls: %u][is_chrome_tls: %u][is_safari_tls: %u][duplicate_found: %u]\\n\",\n \t\t       flow->protos.tls_quic.browser_heuristics.is_firefox_tls,\n \t\t       flow->protos.tls_quic.browser_heuristics.is_chrome_tls,\n-\t\t       flow->protos..tls_quic.browser_heuristics.is_safari_tls,\n+\t\t       flow->protos.tls_quic.browser_heuristics.is_safari_tls,\n \t\t       duplicate_found);\n #endif\n \ndiff --git a/tests/result/fuzz-2021-10-13.pcap.out b/tests/result/fuzz-2021-10-13.pcap.out\nindex 0fe1189814c..119193b37ce 100644\n--- a/tests/result/fuzz-2021-10-13.pcap.out\n+++ b/tests/result/fuzz-2021-10-13.pcap.out\n@@ -10,4 +10,4 @@ JA3 Host Stats:\n \t1\t 3400:3a30:3035:2f75:706c:6f32:643f:6c3d \t 1      \n \n \n-\t1\tTCP [3400:3a30:3035:2f75:706c:6f32:643f:6c3d]:44288 -> [302e::3d00::8001]:0 [proto: 91/TLS][Encrypted][Confidence: DPI][cat: Web/5][1 pkts/197 bytes -> 0 pkts/0 bytes][Goodput ratio: 75/0][< 1 sec][Risk: ** Known protocol on non standard port **** Obsolete TLS version (older than 1.2) **** TLS suspicious extension **][Risk Score: 250][TLS (0030)][JA3C: c152bb6bf29399e8c17519f036cc048e][PLAIN TEXT (005/uplo2)][Plen Bins: 0,0,0,0,100,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]\n+\t1\tTCP [3400:3a30:3035:2f75:706c:6f32:643f:6c3d]:44288 -> [302e::3d00::8001]:0 [proto: 91/TLS][Encrypted][Confidence: DPI][cat: Web/5][1 pkts/197 bytes -> 0 pkts/0 bytes][Goodput ratio: 75/0][< 1 sec][Risk: ** Known protocol on non standard port **** Obsolete TLS version (older than 1.2) **** TLS suspicious extension **][Risk Score: 250][TLS (0030)][JA3C: a5e5938747ae3199abb5d3fcd94f9e8d][PLAIN TEXT (005/uplo2)][Plen Bins: 0,0,0,0,100,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]\ndiff --git a/tests/result/tls_invalid_reads.pcap.out b/tests/result/tls_invalid_reads.pcap.out\nindex 2f5086a0a22..aa1f02abcd8 100644\n--- a/tests/result/tls_invalid_reads.pcap.out\n+++ b/tests/result/tls_invalid_reads.pcap.out\n@@ -12,5 +12,5 @@ JA3 Host Stats:\n \n \n \t1\tTCP 192.168.10.101:3967 <-> 206.33.61.113:443 [proto: 91/TLS][Encrypted][Confidence: DPI][cat: Web/5][4 pkts/330 bytes <-> 3 pkts/1497 bytes][Goodput ratio: 31/89][0.08 sec][bytes ratio: -0.639 (Download)][IAT c2s/s2c min/avg/max/stddev: 0/38 25/19 58/38 24/19][Pkt Len c2s/s2c min/avg/max/stddev: 54/60 82/499 156/905 43/346][Risk: ** Obsolete TLS version (older than 1.2) **][Risk Score: 100][TLSv1][JA3S: 53611273a714cb4789c8222932efd5a7 (INSECURE)][Cipher: TLS_RSA_WITH_RC4_128_MD5][Plen Bins: 0,0,0,33,0,0,0,0,0,0,0,0,0,0,33,0,0,0,0,0,0,0,0,0,0,0,33,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]\n-\t2\tTCP 10.191.139.17:58552 <-> 54.221.224.45:443 [VLAN: 2][proto: GTP:91.275/TLS.Crashlytics][Encrypted][Confidence: DPI][cat: DataTransfer/4][2 pkts/442 bytes <-> 1 pkts/118 bytes][Goodput ratio: 41/0][0.23 sec][Hostname/SNI: e.crashlytics.com][ALPN: ][Risk: ** TLS suspicious extension **][Risk Score: 100][TLSv1.2][JA3C: 5f704e1e0a47641621b22177875f4e85][Firefox][PLAIN TEXT (e.crashlytics.com)][Plen Bins: 0,0,0,0,0,100,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]\n+\t2\tTCP 10.191.139.17:58552 <-> 54.221.224.45:443 [VLAN: 2][proto: GTP:91.275/TLS.Crashlytics][Encrypted][Confidence: DPI][cat: DataTransfer/4][2 pkts/442 bytes <-> 1 pkts/118 bytes][Goodput ratio: 41/0][0.23 sec][Hostname/SNI: e.crashlytics.com][ALPN: ][Risk: ** TLS suspicious extension **][Risk Score: 100][TLSv1.2][JA3C: 9d5430e6dfce44459702b74d790df353][Firefox][PLAIN TEXT (e.crashlytics.com)][Plen Bins: 0,0,0,0,0,100,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]\n \t3\tTCP 74.80.160.99:3258 -> 67.217.77.28:443 [proto: 91/TLS][Encrypted][Confidence: DPI][cat: Web/5][1 pkts/64 bytes -> 0 pkts/0 bytes][Goodput ratio: 15/0][< 1 sec][Plen Bins: 100,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42504902-vul",
+      "digest": "sha256:08936d7ac634e2dc16b03e7595e88643777baf1a7193e059c8c8eaf31b9d0f0d"
+    },
+    "patched": {
+      "ref": "n132/arvo:42504902-fix",
+      "digest": "sha256:7079b275e25a4f5fc48b840605b9a1beee9109035685457a06dc5f1ad403014c"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/ndpi/src/lib/ndpi_main.c:5467",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/ndpi/src/lib/ndpi_main.c:5467"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

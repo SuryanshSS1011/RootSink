@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042515962",
+  "chain": "CWE-1284->CWE-125",
+  "project": "hunspell",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42515962",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "810859c7e74830d606140a1d28d24ff02977fded",
+      "fix_commits": [
+        "810859c7e74830d606140a1d28d24ff02977fded"
+      ],
+      "repo": "https://github.com/hunspell/hunspell"
+    },
+    "patch": "diff --git a/src/hunspell/affentry.cxx b/src/hunspell/affentry.cxx\nindex 80318cc4a..bfd6cf5bd 100644\n--- a/src/hunspell/affentry.cxx\n+++ b/src/hunspell/affentry.cxx\n@@ -99,7 +99,8 @@ std::string PfxEntry::add(const char* word, size_t len) {\n   std::string result;\n   if ((len > strip.size() || (len == 0 && pmyMgr->get_fullstrip())) &&\n       (len >= numconds) && test_condition(word) &&\n-      (!strip.size() || (strncmp(word, strip.c_str(), strip.size()) == 0))) {\n+      (!strip.size() ||\n+      (len >= strip.size() && strncmp(word, strip.c_str(), strip.size()) == 0))) {\n     /* we have a match so add prefix */\n     result.assign(appnd);\n     result.append(word + strip.size());\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42515962-vul",
+      "digest": "sha256:554e3ec351b6e8ac31a541267b66048dc304b7ee967642d68baca9a22b010eb6"
+    },
+    "patched": {
+      "ref": "n132/arvo:42515962-fix",
+      "digest": "sha256:a92b0f31c932ed4bdb0d805ced92febbb79a52ee6fbd0c3942bf4d6ddcdddf7d"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/hunspell/src/hunspell/affentry.cxx:105",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/hunspell/src/hunspell/affentry.cxx:105"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

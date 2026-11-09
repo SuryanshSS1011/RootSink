@@ -1,0 +1,82 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-30042491468",
+  "chain": "CWE-1285->CWE-190->CWE-125",
+  "project": "serenity",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42491468",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "3e723ec1776d3734b30d0b5bf6daad86ba908a0a",
+      "fix_commits": [
+        "3e723ec1776d3734b30d0b5bf6daad86ba908a0a"
+      ],
+      "repo": "https://github.com/SerenityOS/serenity"
+    },
+    "patch": "diff --git a/Userland/Libraries/LibTTF/Font.cpp b/Userland/Libraries/LibTTF/Font.cpp\nindex e4236c44e9f265..39ef6754a2bd54 100644\n--- a/Userland/Libraries/LibTTF/Font.cpp\n+++ b/Userland/Libraries/LibTTF/Font.cpp\n@@ -241,6 +241,11 @@ RefPtr<Font> Font::load_from_memory(ByteBuffer& buffer, unsigned index)\n // FIXME: \"loca\" and \"glyf\" are not available for CFF fonts.\n RefPtr<Font> Font::load_from_offset(ByteBuffer&& buffer, u32 offset)\n {\n+    if (Checked<u32>::addition_would_overflow(offset, (u32)Sizes::OffsetTable)) {\n+        dbgln(\"Invalid offset in font header\");\n+        return nullptr;\n+    }\n+\n     if (buffer.size() < offset + (u32)Sizes::OffsetTable) {\n         dbgln(\"Font file too small\");\n         return nullptr;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42491468-vul",
+      "digest": "sha256:e88c38668d66705164dfbaa62414ace87196a8a9e6aac38f2662f478ab06dbda"
+    },
+    "patched": {
+      "ref": "n132/arvo:42491468-fix",
+      "digest": "sha256:01908c5a38fe11ba4b195dc9c0ce0c620c7087c8bab00fa85d689fe69449754d"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/serenity/Libraries/LibTTF/Font.cpp:48",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 190,
+      "role": "intermediate",
+      "witness": {
+        "method": "ubsan-rebuild",
+        "recipe": "SANITIZER=undefined compile && $ENTRYPOINT",
+        "ubsan_options": "print_stacktrace=1:halt_on_error=0:silence_unsigned_overflow=0:symbolize=1"
+      },
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/serenity/Libraries/LibTTF/Font.cpp:48"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042528131",
+  "chain": "CWE-1284->CWE-787",
+  "project": "icu",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42528131",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "386e9a10db28af620658ca0c635e1d98915f6306",
+      "fix_commits": [
+        "386e9a10db28af620658ca0c635e1d98915f6306"
+      ],
+      "repo": "https://github.com/unicode-org/icu"
+    },
+    "patch": "diff --git a/icu4c/source/common/uloc_tag.cpp b/icu4c/source/common/uloc_tag.cpp\nindex 7a2b86735860..d261e46b3e28 100644\n--- a/icu4c/source/common/uloc_tag.cpp\n+++ b/icu4c/source/common/uloc_tag.cpp\n@@ -1326,14 +1326,23 @@ _appendKeywordsToLanguageTag(const char* localeID, icu::ByteSink& sink, UBool st\n                         attrBufLength = 0;\n                         for (; i < len; i++) {\n                             if (buf[i] != '-') {\n-                                attrBuf[attrBufLength++] = buf[i];\n+                                if (static_cast<size_t>(attrBufLength) < sizeof(attrBuf)) {\n+                                    attrBuf[attrBufLength++] = buf[i];\n+                                } else {\n+                                    *status = U_ILLEGAL_ARGUMENT_ERROR;\n+                                    return;\n+                                }\n                             } else {\n                                 i++;\n                                 break;\n                             }\n                         }\n                         if (attrBufLength > 0) {\n-                            attrBuf[attrBufLength] = 0;\n+                            if (static_cast<size_t>(attrBufLength) < sizeof(attrBuf)) {\n+                                attrBuf[attrBufLength] = 0;\n+                            } else {\n+                                *status = U_STRING_NOT_TERMINATED_WARNING;\n+                            }\n \n                         } else if (i >= len){\n                             break;\ndiff --git a/icu4c/source/test/intltest/loctest.cpp b/icu4c/source/test/intltest/loctest.cpp\nindex 1c88f77fe638..d72d7acfd32a 100644\n--- a/icu4c/source/test/intltest/loctest.cpp\n+++ b/icu4c/source/test/intltest/loctest.cpp\n@@ -5982,6 +5982,8 @@ void LocaleTest::TestToLanguageTag() {\n       {\"und-1994-biske-rozaj-x-private\", \"und-1994-biske-rozaj-x-private\"},\n       // ICU-22497\n       {\"-ins0-ins17Rz-yqyq-UWLF-uRyq-UWLF-uRRyq-UWLF-uR-UWLF-uRns0-ins17Rz-yq-UWLF-uRyq-UWLF-uRRyq-LF-uRyq-UWLF-uRRyq-UWLF-uRq-UWLF-uRyq-UWLF-uRRyq-UWLF-uR\", \"\"},\n+      // ICU-22504\n+      {\"@attribute=zzo9zzzzzzzs0zzzzzzzzzz55555555555555555555500000000000000000000fffffffffffffffffffffffffzzzzz2mfPAK\", \"\"},\n     };\n     int32_t i;\n     for (i=0; i < UPRV_LENGTHOF(testCases); i++) {\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42528131-vul",
+      "digest": "sha256:c9bf48fea4b8be35fe6c91c02c8098d961a51156de537b7c102fd80f19b29bc3"
+    },
+    "patched": {
+      "ref": "n132/arvo:42528131-fix",
+      "digest": "sha256:dce8a705b6bb27b7b4be14d37f8d21c63ce72549440b5321762f93a294c0fd90"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/icu/icu4c/source/common/uloc_tag.cpp:1336",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/icu/icu4c/source/common/uloc_tag.cpp:1336"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,82 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-933458591",
+  "chain": "CWE-1284->CWE-190->CWE-119",
+  "project": "llama.cpp",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42537424",
+    "commit_range": {
+      "introduced": null,
+      "fixed": null,
+      "fix_commits": [
+        "b72942fac998672a79a1ae3c03b340f7e629980b"
+      ],
+      "repo": "https://github.com/ggerganov/llama.cpp"
+    },
+    "patch": "diff --git a/examples/rpc/README.md b/examples/rpc/README.md\nindex e1da801f285..adedc89090d 100644\n--- a/examples/rpc/README.md\n+++ b/examples/rpc/README.md\n@@ -1,5 +1,9 @@\n ## Overview\n \n+> [!IMPORTANT]\n+> This example and the RPC backend are currently in a proof-of-concept development stage. As such, the functionality is fragile and\n+> insecure. **Never run the RPC server on an open network or in a sensitive environment!**\n+\n The `rpc-server` allows  running `ggml` backend on a remote host.\n The RPC backend communicates with one or several instances of `rpc-server` and offloads computations to them.\n This can be used for distributed LLM inference with `llama.cpp` in the following way:\ndiff --git a/examples/rpc/rpc-server.cpp b/examples/rpc/rpc-server.cpp\nindex 7c15d2aa4ac..6342e648860 100644\n--- a/examples/rpc/rpc-server.cpp\n+++ b/examples/rpc/rpc-server.cpp\n@@ -16,7 +16,7 @@\n #include <stdio.h>\n \n struct rpc_server_params {\n-    std::string host        = \"0.0.0.0\";\n+    std::string host        = \"127.0.0.1\";\n     int         port        = 50052;\n     size_t      backend_mem = 0;\n };\n@@ -114,6 +114,17 @@ int main(int argc, char * argv[]) {\n         fprintf(stderr, \"Invalid parameters\\n\");\n         return 1;\n     }\n+\n+    if (params.host != \"127.0.0.1\") {\n+        fprintf(stderr, \"\\n\");\n+        fprintf(stderr, \"!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\\n\");\n+        fprintf(stderr, \"WARNING: Host ('%s') is != '127.0.0.1'\\n\", params.host.c_str());\n+        fprintf(stderr, \"         Never expose the RPC server to an open network!\\n\");\n+        fprintf(stderr, \"         This is an experimental feature and is not secure!\\n\");\n+        fprintf(stderr, \"!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\\n\");\n+        fprintf(stderr, \"\\n\");\n+    }\n+\n     ggml_backend_t backend = create_backend();\n     if (!backend) {\n         fprintf(stderr, \"Failed to create backend\\n\");\ndiff --git a/ggml/src/ggml-rpc.cpp b/ggml/src/ggml-rpc.cpp\nindex b01ad267446..7757615f5a2 100644\n--- a/ggml/src/ggml-rpc.cpp\n+++ b/ggml/src/ggml-rpc.cpp\n@@ -197,6 +197,10 @@ static std::shared_ptr<socket_t> create_server_socket(const char * host, int por\n         fprintf(stderr, \"Failed to set SO_REUSEADDR\\n\");\n         return nullptr;\n     }\n+    if (inet_addr(host) == INADDR_NONE) {\n+        fprintf(stderr, \"Invalid host address: %s\\n\", host);\n+        return nullptr;\n+    }\n     struct sockaddr_in serv_addr;\n     serv_addr.sin_family = AF_INET;\n     serv_addr.sin_addr.s_addr = inet_addr(host);\n@@ -879,6 +883,14 @@ ggml_tensor * rpc_server::deserialize_tensor(struct ggml_context * ctx, const rp\n     if (result->buffer && buffers.find(result->buffer) == buffers.end()) {\n         return nullptr;\n     }\n+\n+    // require that the tensor data does not go beyond the buffer end\n+    uint64_t tensor_size = (uint64_t) ggml_nbytes(result);\n+    uint64_t buffer_start = (uint64_t) ggml_backend_buffer_get_base(result->buffer);\n+    uint64_t buffer_size = (uint64_t) ggml_backend_buffer_get_size(result->buffer);\n+    GGML_ASSERT(tensor->data + tensor_size >= tensor->data); // check for overflow\n+    GGML_ASSERT(tensor->data >= buffer_start && tensor->data + tensor_size <= buffer_start + buffer_size);\n+\n     result->op = (ggml_op) tensor->op;\n     for (uint32_t i = 0; i < GGML_MAX_OP_PARAMS / sizeof(int32_t); i++) {\n         result->op_params[i] = tensor->op_params[i];\n@@ -898,7 +910,7 @@ bool rpc_server::set_tensor(const std::vector<uint8_t> & input) {\n     const rpc_tensor * in_tensor = (const rpc_tensor *)input.data();\n     uint64_t offset;\n     memcpy(&offset, input.data() + sizeof(rpc_tensor), sizeof(offset));\n-    size_t size = input.size() - sizeof(rpc_tensor) - sizeof(offset);\n+    const size_t size = input.size() - sizeof(rpc_tensor) - sizeof(offset);\n \n     struct ggml_init_params params {\n         /*.mem_size   =*/ ggml_tensor_overhead(),\n@@ -913,6 +925,17 @@ bool rpc_server::set_tensor(const std::vector<uint8_t> & input) {\n         return false;\n     }\n     GGML_PRINT_DEBUG(\"[%s] buffer: %p, data: %p, offset: %\" PRIu64 \", size: %zu\\n\", __func__, (void*)tensor->buffer, tensor->data, offset, size);\n+\n+    // sanitize tensor->data\n+    {\n+        const size_t p0 = (size_t) ggml_backend_buffer_get_base(tensor->buffer);\n+        const size_t p1 = p0 + ggml_backend_buffer_get_size(tensor->buffer);\n+\n+        if (in_tensor->data + offset < p0 || in_tensor->data + offset >= p1 || size > (p1 - in_tensor->data - offset)) {\n+            GGML_ABORT(\"[%s] tensor->data out of bounds\\n\", __func__);\n+        }\n+    }\n+\n     const void * data = input.data() + sizeof(rpc_tensor) + sizeof(offset);\n     ggml_backend_tensor_set(tensor, data, offset, size);\n     ggml_free(ctx);\n@@ -943,6 +966,17 @@ bool rpc_server::get_tensor(const std::vector<uint8_t> & input, std::vector<uint\n         return false;\n     }\n     GGML_PRINT_DEBUG(\"[%s] buffer: %p, data: %p, offset: %\" PRIu64 \", size: %\" PRIu64 \"\\n\", __func__, (void*)tensor->buffer, tensor->data, offset, size);\n+\n+    // sanitize tensor->data\n+    {\n+        const size_t p0 = (size_t) ggml_backend_buffer_get_base(tensor->buffer);\n+        const size_t p1 = p0 + ggml_backend_buffer_get_size(tensor->buffer);\n+\n+        if (in_tensor->data + offset < p0 || in_tensor->data + offset >= p1 || size > (p1 - in_tensor->data - offset)) {\n+            GGML_ABORT(\"[%s] tensor->data out of bounds\\n\", __func__);\n+        }\n+    }\n+\n     // output serialization format: | data (size bytes) |\n     output.resize(size, 0);\n     ggml_backend_tensor_get(tensor, output.data(), offset, size);\ndiff --git a/ggml/src/ggml.c b/ggml/src/ggml.c\nindex c937b5e537c..38990e3a05a 100644\n--- a/ggml/src/ggml.c\n+++ b/ggml/src/ggml.c\n@@ -3724,7 +3724,8 @@ static struct ggml_tensor * ggml_new_tensor_impl(\n         struct ggml_tensor  * view_src,\n         size_t                view_offs) {\n \n-    assert(n_dims >= 1 && n_dims <= GGML_MAX_DIMS);\n+    GGML_ASSERT(type >= 0 && type < GGML_TYPE_COUNT);\n+    GGML_ASSERT(n_dims >= 1 && n_dims <= GGML_MAX_DIMS);\n \n     // find the base tensor and absolute offset\n     if (view_src != NULL && view_src->view_src != NULL) {\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42537424-vul",
+      "digest": "sha256:23eb7b8c6b1e2420a0c363826c4038548b017f7bd57ed48ebf291c92fd93c392"
+    },
+    "patched": {
+      "ref": "n132/arvo:42537424-fix",
+      "digest": "sha256:c577a030c5bfa161cf3f4de1ecc89618b4ab450aa7e88ec47071c0b07ecc995f"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/llama.cpp/ggml/src/ggml.c:21378",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 190,
+      "role": "intermediate",
+      "witness": {
+        "method": "ubsan-rebuild",
+        "recipe": "SANITIZER=undefined compile && $ENTRYPOINT",
+        "ubsan_options": "print_stacktrace=1:halt_on_error=0:silence_unsigned_overflow=0:symbolize=1"
+      },
+      "witnessed": false
+    },
+    {
+      "cwe_id": 119,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/llama.cpp/ggml/src/ggml.c:21378"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

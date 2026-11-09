@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-967965601",
+  "chain": "CWE-456->CWE-457",
+  "project": "botan",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42532477",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/randombit/botan/commit/4361438987347d0f2507b7dcb3c4179b5e38d034",
+      "fix_commits": [
+        "4361438987347d0f2507b7dcb3c4179b5e38d034"
+      ],
+      "repo": "https://github.com/randombit/botan"
+    },
+    "patch": "diff --git a/src/lib/math/mp/mp_core.cpp b/src/lib/math/mp/mp_core.cpp\nindex 8b7b7a8c5e9..a86bbf3c0f3 100644\n--- a/src/lib/math/mp/mp_core.cpp\n+++ b/src/lib/math/mp/mp_core.cpp\n@@ -41,9 +41,9 @@ word bigint_cnd_add(word cnd, word x[], const word y[], size_t size)\n    const word mask = CT::expand_mask(cnd);\n \n    word carry = 0;\n-   word z[8];\n \n    const size_t blocks = size - (size % 8);\n+   word z[8] = { 0 };\n \n    for(size_t i = 0; i != blocks; i += 8)\n       {\n@@ -55,8 +55,8 @@ word bigint_cnd_add(word cnd, word x[], const word y[], size_t size)\n \n    for(size_t i = blocks; i != size; ++i)\n       {\n-      const word z = word_add(x[i], y[i], &carry);\n-      x[i] = CT::select(mask, z, x[i]);\n+      z[0] = word_add(x[i], y[i], &carry);\n+      x[i] = CT::select(mask, z[0], x[i]);\n       }\n \n    return carry & mask;\n@@ -71,9 +71,9 @@ word bigint_cnd_sub(word cnd, word x[], const word y[], size_t size)\n    const word mask = CT::expand_mask(cnd);\n \n    word carry = 0;\n-   word z[8];\n \n    const size_t blocks = size - (size % 8);\n+   word z[8] = { 0 };\n \n    for(size_t i = 0; i != blocks; i += 8)\n       {\n@@ -85,8 +85,8 @@ word bigint_cnd_sub(word cnd, word x[], const word y[], size_t size)\n \n    for(size_t i = blocks; i != size; ++i)\n       {\n-      const word z = word_sub(x[i], y[i], &carry);\n-      x[i] = CT::select(mask, z, x[i]);\n+      z[0] = word_sub(x[i], y[i], &carry);\n+      x[i] = CT::select(mask, z[0], x[i]);\n       }\n \n    return carry & mask;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42532477-vul",
+      "digest": "sha256:c8d8a29ff562c80180a72e00b1e2946188d52a7ed5800400192774e7a58653e2"
+    },
+    "patched": {
+      "ref": "n132/arvo:42532477-fix",
+      "digest": "sha256:7d1e31c0430d71d41e080007117e4ce3158ff8beeebdcf1b9352c343d07ac0b9"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/botan/build/include/botan/internal/mp_asmi.h:119",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/botan/build/include/botan/internal/mp_asmi.h:119"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-959461302",
+  "chain": "CWE-843->CWE-119",
+  "project": "serenity",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42499751",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/SerenityOS/serenity/commit/9191829a39c7774d7cb8dfaa5675ff31a49a4a8f",
+      "fix_commits": [
+        "9191829a39c7774d7cb8dfaa5675ff31a49a4a8f"
+      ],
+      "repo": "https://github.com/SerenityOS/serenity"
+    },
+    "patch": "diff --git a/Userland/Libraries/LibGfx/JPGLoader.cpp b/Userland/Libraries/LibGfx/JPGLoader.cpp\nindex 07fb88fb477e7a..08a2db96c43471 100644\n--- a/Userland/Libraries/LibGfx/JPGLoader.cpp\n+++ b/Userland/Libraries/LibGfx/JPGLoader.cpp\n@@ -420,6 +420,8 @@ static Optional<Vector<Macroblock>> decode_huffman_stream(JPGLoadingContext& con\n \n static inline bool bounds_okay(const size_t cursor, const size_t delta, const size_t bound)\n {\n+    if (Checked<size_t>::addition_would_overflow(delta, cursor))\n+        return false;\n     return (delta + cursor) < bound;\n }\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42499751-vul",
+      "digest": "sha256:fa6920192ce20086dfefd340b0fc22a95d2daca76ea91677e7231275f0854888"
+    },
+    "patched": {
+      "ref": "n132/arvo:42499751-fix",
+      "digest": "sha256:5d6b504629b8f202d292b2c45c4cb41d1a5800b003aa4463256c15c8f72fed60"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "crash_site": "/src/serenity/Meta/Lagom/build/../../../AK/Format.h:260",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 843,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 119,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "site": "/src/serenity/Meta/Lagom/build/../../../AK/Format.h:260"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

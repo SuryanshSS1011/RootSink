@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042484817",
+  "chain": "CWE-416->CWE-125",
+  "project": "php-src",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42484817",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "50c87e92fc22ae3da5dda6f7340d3b786c6117a4",
+      "fix_commits": [
+        "50c87e92fc22ae3da5dda6f7340d3b786c6117a4"
+      ],
+      "repo": "https://github.com/php/php-src"
+    },
+    "patch": "From 50c87e92fc22ae3da5dda6f7340d3b786c6117a4 Mon Sep 17 00:00:00 2001\nFrom: Nikita Popov <nikita.ppv@gmail.com>\nDate: Fri, 12 Jun 2020 14:57:08 +0200\nSubject: [PATCH] Use GC stack in nested data removal\n\nWe should be doing this anyway to prevent stack overflow, but on\nmaster this is important for an additional reason: The temporary\nGC buffer provided for get_gc handlers may get reused if the scan\nis performed recursively instead of indirected via the GC stack.\n\nThis fixes oss-fuzz #23350.\n---\n Zend/tests/gc_043.phpt | 44 ++++++++++++++++++++++++++++++++++++++++++\n Zend/zend_gc.c         | 43 +++++++++++++++++++++++------------------\n 2 files changed, 68 insertions(+), 19 deletions(-)\n create mode 100644 Zend/tests/gc_043.phpt\n\ndiff --git a/Zend/tests/gc_043.phpt b/Zend/tests/gc_043.phpt\nnew file mode 100644\nindex 0000000..06b64de\n--- /dev/null\n+++ b/Zend/tests/gc_043.phpt\n@@ -0,0 +1,44 @@\n+--TEST--\n+GC buffer shouldn't get reused when removing nested data\n+--FILE--\n+<?php\n+$s = <<<'STR'\n+O:8:\"stdClass\":2:{i:5;C:8:\"SplStack\":29:{i:4;:r:1;:O:8:\"stdClass\":0:{}}i:0;O:13:\"RegexIterator\":1:{i:5;C:8:\"SplStack\":29:{i:4;:r:1;:O:8:\"stdClass\":0:{}}}}\n+STR;\n+var_dump(unserialize($s));\n+gc_collect_cycles();\n+?>\n+--EXPECT--\n+object(stdClass)#1 (2) {\n+  [\"5\"]=>\n+  object(SplStack)#2 (2) {\n+    [\"flags\":\"SplDoublyLinkedList\":private]=>\n+    int(4)\n+    [\"dllist\":\"SplDoublyLinkedList\":private]=>\n+    array(2) {\n+      [0]=>\n+      *RECURSION*\n+      [1]=>\n+      object(stdClass)#3 (0) {\n+      }\n+    }\n+  }\n+  [\"0\"]=>\n+  object(RegexIterator)#4 (2) {\n+    [\"replacement\"]=>\n+    NULL\n+    [\"5\"]=>\n+    object(SplStack)#5 (2) {\n+      [\"flags\":\"SplDoublyLinkedList\":private]=>\n+      int(4)\n+      [\"dllist\":\"SplDoublyLinkedList\":private]=>\n+      array(2) {\n+        [0]=>\n+        *RECURSION*\n+        [1]=>\n+        object(stdClass)#6 (0) {\n+        }\n+      }\n+    }\n+  }\n+}\ndiff --git a/Zend/zend_gc.c b/Zend/zend_gc.c\nindex 0b89579..5dd11f1 100644\n--- a/Zend/zend_gc.c\n+++ b/Zend/zend_gc.c\n@@ -1328,14 +1328,14 @@ static int gc_collect_roots(uint32_t *flags, gc_stack *stack)\n \treturn count;\n }\n \n-static int gc_remove_nested_data_from_buffer(zend_refcounted *ref, gc_root_buffer *root)\n+static int gc_remove_nested_data_from_buffer(zend_refcounted *ref, gc_root_buffer *root, gc_stack *stack)\n {\n \tHashTable *ht = NULL;\n \tBucket *p, *end;\n \tzval *zv;\n \tint count = 0;\n+\tGC_STACK_DCL(stack);\n \n-tail_call:\n \tdo {\n \t\tif (root) {\n \t\t\troot = NULL;\n@@ -1348,11 +1348,11 @@ tail_call:\n \t\t} else if (GC_TYPE(ref) == IS_REFERENCE) {\n \t\t\tif (Z_REFCOUNTED(((zend_reference*)ref)->val)) {\n \t\t\t\tref = Z_COUNTED(((zend_reference*)ref)->val);\n-\t\t\t\tgoto tail_call;\n+\t\t\t\tcontinue;\n \t\t\t}\n-\t\t\treturn count;\n+\t\t\tgoto next;\n \t\t} else {\n-\t\t\treturn count;\n+\t\t\tgoto next;\n \t\t}\n \n \t\tif (GC_TYPE(ref) == IS_OBJECT) {\n@@ -1364,10 +1364,10 @@ tail_call:\n \n \t\t\t\tht = obj->handlers->get_gc(obj, &zv, &n);\n \t\t\t\tif (EXPECTED(!ht)) {\n-\t\t\t\t\tif (!n) return count;\n+\t\t\t\t\tif (!n) goto next;\n \t\t\t\t\tend = zv + n;\n \t\t\t\t\twhile (!Z_REFCOUNTED_P(--end)) {\n-\t\t\t\t\t\tif (zv == end) return count;\n+\t\t\t\t\t\tif (zv == end) goto next;\n \t\t\t\t\t}\n \t\t\t\t} else {\n \t\t\t\t\tif (!n) goto handle_ht;\n@@ -1376,13 +1376,13 @@ tail_call:\n \t\t\t\twhile (zv != end) {\n \t\t\t\t\tif (Z_REFCOUNTED_P(zv)) {\n \t\t\t\t\t\tref = Z_COUNTED_P(zv);\n-\t\t\t\t\t\tcount += gc_remove_nested_data_from_buffer(ref, NULL);\n+\t\t\t\t\t\tGC_STACK_PUSH(ref);\n \t\t\t\t\t}\n \t\t\t\t\tzv++;\n \t\t\t\t}\n \t\t\t\tif (EXPECTED(!ht)) {\n \t\t\t\t\tref = Z_COUNTED_P(zv);\n-\t\t\t\t\tgoto tail_call;\n+\t\t\t\t\tcontinue;\n \t\t\t\t}\n handle_ht:\n \t\t\t\tif (GC_REF_ADDRESS(ht) != 0 && GC_REF_CHECK_COLOR(ht, GC_BLACK)) {\n@@ -1390,15 +1390,15 @@ handle_ht:\n \t\t\t\t\tGC_REMOVE_FROM_BUFFER(ht);\n \t\t\t\t}\n \t\t\t} else {\n-\t\t\t\treturn count;\n+\t\t\t\tgoto next;\n \t\t\t}\n \t\t} else if (GC_TYPE(ref) == IS_ARRAY) {\n \t\t\tht = (zend_array*)ref;\n \t\t} else {\n-\t\t\treturn count;\n+\t\t\tgoto next;\n \t\t}\n \n-\t\tif (!ht->nNumUsed) return count;\n+\t\tif (!ht->nNumUsed) goto next;\n \t\tp = ht->arData;\n \t\tend = p + ht->nNumUsed;\n \t\twhile (1) {\n@@ -1410,7 +1410,7 @@ handle_ht:\n \t\t\tif (Z_REFCOUNTED_P(zv)) {\n \t\t\t\tbreak;\n \t\t\t}\n-\t\t\tif (p == end) return count;\n+\t\t\tif (p == end) goto next;\n \t\t}\n \t\twhile (p != end) {\n \t\t\tzv = &p->val;\n@@ -1419,7 +1419,7 @@ handle_ht:\n \t\t\t}\n \t\t\tif (Z_REFCOUNTED_P(zv)) {\n \t\t\t\tref = Z_COUNTED_P(zv);\n-\t\t\t\tcount += gc_remove_nested_data_from_buffer(ref, NULL);\n+\t\t\t\tGC_STACK_PUSH(ref);\n \t\t\t}\n \t\t\tp++;\n \t\t}\n@@ -1428,8 +1428,12 @@ handle_ht:\n \t\t\tzv = Z_INDIRECT_P(zv);\n \t\t}\n \t\tref = Z_COUNTED_P(zv);\n-\t\tgoto tail_call;\n-\t} while (0);\n+\t\tcontinue;\n+\n+next:\n+\t\tref = GC_STACK_POP();\n+\t} while (ref);\n+\treturn count;\n }\n \n static void zend_get_gc_buffer_release();\n@@ -1464,11 +1468,10 @@ ZEND_API int zend_gc_collect_cycles(void)\n \t\tGC_TRACE(\"Collecting roots\");\n \t\tcount = gc_collect_roots(&gc_flags, &stack);\n \n-\t\tgc_stack_free(&stack);\n-\n \t\tif (!GC_G(num_roots)) {\n \t\t\t/* nothing to free */\n \t\t\tGC_TRACE(\"Nothing to free\");\n+\t\t\tgc_stack_free(&stack);\n \t\t\tzend_get_gc_buffer_release();\n \t\t\tGC_G(gc_active) = 0;\n \t\t\treturn 0;\n@@ -1518,7 +1521,7 @@ ZEND_API int zend_gc_collect_cycles(void)\n \t\t\twhile (idx != end) {\n \t\t\t\tif (GC_IS_DTOR_GARBAGE(current->ref)) {\n \t\t\t\t\tp = GC_GET_PTR(current->ref);\n-\t\t\t\t\tcount -= gc_remove_nested_data_from_buffer(p, current);\n+\t\t\t\t\tcount -= gc_remove_nested_data_from_buffer(p, current, &stack);\n \t\t\t\t}\n \t\t\t\tcurrent++;\n \t\t\t\tidx++;\n@@ -1557,6 +1560,8 @@ ZEND_API int zend_gc_collect_cycles(void)\n \t\t\t}\n \t\t}\n \n+\t\tgc_stack_free(&stack);\n+\n \t\t/* Destroy zvals. The root buffer may be reallocated. */\n \t\tGC_TRACE(\"Destroying zvals\");\n \t\tidx = GC_FIRST_ROOT;\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42484817-vul",
+      "digest": "sha256:3905047a7a2e5e7dd095e39ac4fc1ac2972a5af76890e9ba5f3787a60c458cc1"
+    },
+    "patched": {
+      "ref": "n132/arvo:42484817-fix",
+      "digest": "sha256:6ffb099863d38b6ed81e70a75dca49be65e3eba569e70d521b90823aac0bbbbe"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/php-src/Zend/zend_types.h:1147",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/php-src/Zend/zend_types.h:1147"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

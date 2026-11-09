@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042488023",
+  "chain": "CWE-1284->CWE-125",
+  "project": "fluent-bit",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42488023",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "8315c5029f1b8bc855a2263b1986f22d24cd1a3b",
+      "fix_commits": [
+        "8315c5029f1b8bc855a2263b1986f22d24cd1a3b"
+      ],
+      "repo": "https://github.com/fluent/fluent-bit"
+    },
+    "patch": "diff --git a/src/flb_pack_gelf.c b/src/flb_pack_gelf.c\nindex 1a4007232bc..98a25ece8b9 100644\n--- a/src/flb_pack_gelf.c\n+++ b/src/flb_pack_gelf.c\n@@ -671,16 +671,37 @@ flb_sds_t flb_msgpack_to_gelf(flb_sds_t *s, msgpack_object *o,\n                     val = temp;\n                     val_len = snprintf(temp, sizeof(temp) - 1,\n                                        \"%\" PRIu64, v->via.u64);\n+                    /*\n+                     * Check if the value length is larger than our string.\n+                     * this is needed to avoid stack-based overflows.\n+                     */\n+                    if (val_len > sizeof(temp)) {\n+                        return NULL;\n+                    }\n                 }\n                 else if (v->type == MSGPACK_OBJECT_NEGATIVE_INTEGER) {\n                     val = temp;\n                     val_len = snprintf(temp, sizeof(temp) - 1,\n                                        \"%\" PRId64, v->via.i64);\n+                    /*\n+                     * Check if the value length is larger than our string.\n+                     * this is needed to avoid stack-based overflows.\n+                     */\n+                    if (val_len > sizeof(temp)) {\n+                        return NULL;\n+                    }\n                 }\n                 else if (v->type == MSGPACK_OBJECT_FLOAT) {\n                     val = temp;\n                     val_len = snprintf(temp, sizeof(temp) - 1,\n                                        \"%f\", v->via.f64);\n+                    /*\n+                     * Check if the value length is larger than our string.\n+                     * this is needed to avoid stack-based overflows.\n+                     */\n+                    if (val_len > sizeof(temp)) {\n+                        return NULL;\n+                    }\n                 }\n                 else if (v->type == MSGPACK_OBJECT_STR) {\n                     /* String value */\n@@ -715,6 +736,7 @@ flb_sds_t flb_msgpack_to_gelf(flb_sds_t *s, msgpack_object *o,\n                 if (tmp == NULL) {\n                     return NULL;\n                 }\n+\n                 *s = tmp;\n \n                 if (v->type == MSGPACK_OBJECT_EXT) {\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42488023-vul",
+      "digest": "sha256:81da6181ee0fe7d0ca7be33202c7ff3a445557de369e3be9c386102318f32f5e"
+    },
+    "patched": {
+      "ref": "n132/arvo:42488023-fix",
+      "digest": "sha256:85c0be263348caf811a9c084a6f29b0e4465c01d5a51118d6042ce1d897c08ef"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/fluent-bit/src/flb_sds.c:132",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/fluent-bit/src/flb_sds.c:132"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

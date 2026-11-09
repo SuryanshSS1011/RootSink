@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042530317",
+  "chain": "CWE-20->CWE-787",
+  "project": "net-snmp",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42530317",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "3bd6f29d9ecc28d17dca371606992a9a87fa7f13",
+      "fix_commits": [
+        "3bd6f29d9ecc28d17dca371606992a9a87fa7f13"
+      ],
+      "repo": "https://github.com/net-snmp/net-snmp"
+    },
+    "patch": "diff --git a/snmplib/read_config.c b/snmplib/read_config.c\nindex 422878a019..803454cefb 100644\n--- a/snmplib/read_config.c\n+++ b/snmplib/read_config.c\n@@ -939,6 +939,11 @@ read_config(const char *filename,\n \t\t            netsnmp_config_error(\"Blank line following %s token.\", token);\n                         continue;\n                     }\n+                    if (strlen(cptr) + 1 >= SNMP_MAXPATH) {\n+                        netsnmp_config_error(\"File name '%s' is too long\",\n+                                             cptr);\n+                        continue;\n+                    }\n                     if ( cptr[0] == '/' ) {\n                         strlcpy(fname, cptr, SNMP_MAXPATH);\n                     } else {\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42530317-vul",
+      "digest": "sha256:c3168d6e821fe1a9c10c3dc8516d37d71ab163e9f7fbf59405bcdca644d8b71d"
+    },
+    "patched": {
+      "ref": "n132/arvo:42530317-fix",
+      "digest": "sha256:1287f7806240625e380267348d0ccda0e2ba2cea4cef5592d75da0b13dcdf23c"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/net-snmp/snmplib/read_config.c:951",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/net-snmp/snmplib/read_config.c:951"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

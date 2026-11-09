@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042524112",
+  "chain": "CWE-20->CWE-125",
+  "project": "bloaty",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42524112",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "18384d6c6cbb666d08d08c0dabc4a0d1b7623f6f",
+      "fix_commits": [
+        "18384d6c6cbb666d08d08c0dabc4a0d1b7623f6f"
+      ],
+      "repo": "https://github.com/google/bloaty"
+    },
+    "patch": "diff --git a/src/disassemble.cc b/src/disassemble.cc\nindex f0a03650..b1bb710e 100644\n--- a/src/disassemble.cc\n+++ b/src/disassemble.cc\n@@ -46,6 +46,11 @@ static std::string RightPad(const std::string& input, size_t size) {\n }  // anonymous namespace\n \n void DisassembleFindReferences(const DisassemblyInfo& info, RangeSink* sink) {\n+  if (info.arch != CS_ARCH_X86) {\n+    // x86 only for now.\n+    return;\n+  }\n+\n   csh handle;\n   if (cs_open(info.arch, info.mode, &handle) != CS_ERR_OK ||\n       cs_option(handle, CS_OPT_DETAIL, CS_OPT_ON) != CS_ERR_OK) {\ndiff --git a/tests/testdata/fuzz_corpus/f5d4fb20f43ef7131ed49ff29f5c1bee69070ff2 b/tests/testdata/fuzz_corpus/f5d4fb20f43ef7131ed49ff29f5c1bee69070ff2\nnew file mode 100644\nindex 00000000..ee17dbf0\nBinary files /dev/null and b/tests/testdata/fuzz_corpus/f5d4fb20f43ef7131ed49ff29f5c1bee69070ff2 differ\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42524112-vul",
+      "digest": "sha256:f697a347b55019b8fb2d83d0f60d0b1943d12172843a76dda0e4b562cadf110f"
+    },
+    "patched": {
+      "ref": "n132/arvo:42524112-fix",
+      "digest": "sha256:d290b3f457aab63ff5365ae0520297cda8c81cc8b6eee15ecbefe57c5a588bc4"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/bloaty/src/disassemble.cc:78",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/bloaty/src/disassemble.cc:78"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

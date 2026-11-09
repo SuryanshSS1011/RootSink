@@ -1,0 +1,68 @@
+======================= INFO =========================
+This binary is built for AFL-fuzz.
+To run the target function on individual input(s) execute this:
+  /out/odp_target < INPUT_FILE
+or
+  /out/odp_target INPUT_FILE1 [INPUT_FILE2 ... ]
+To fuzz with afl-fuzz execute this:
+  afl-fuzz [afl-flags] /out/odp_target [-N]
+afl-fuzz will run N iterations before re-spawning the process (default: 1000)
+======================================================
+Reading 25 bytes from /tmp/poc
+=================================================================
+==14310==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x60300000003f at pc 0x0000005aa096 bp 0x7ffe9f2d26d0 sp 0x7ffe9f2d26c8
+READ of size 1 at 0x60300000003f thread T0
+SCARINESS: 12 (1-byte-read-heap-buffer-overflow)
+    #0 0x5aa095 in parse_odp_key_mask_attr /src/openvswitch/lib/odp-util.c:5451:7
+    #1 0x59f3c9 in parse_odp_action /src/openvswitch/lib/odp-util.c:2221:18
+    #2 0x59ec99 in odp_actions_from_string /src/openvswitch/lib/odp-util.c:2430:18
+    #3 0x52e497 in parse_actions /src/openvswitch/tests/oss-fuzz/odp_target.c:106:13
+    #4 0x52dd06 in LLVMFuzzerTestOneInput /src/openvswitch/tests/oss-fuzz/odp_target.c:145:5
+    #5 0x52e98e in ExecuteFilesOnyByOne(int, char**) /src/libfuzzer/afl/afl_driver.cpp:301:5
+    #6 0x52eefe in main /src/libfuzzer/afl/afl_driver.cpp:339:12
+    #7 0x7fdcb483382f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+    #8 0x41ee18 in _start (/out/odp_target+0x41ee18)
+
+DEDUP_TOKEN: parse_odp_key_mask_attr--parse_odp_action--odp_actions_from_string
+0x60300000003f is located 1 bytes to the left of 25-byte region [0x603000000040,0x603000000059)
+allocated by thread T0 here:
+    #0 0x4edb4f in __interceptor_malloc /src/llvm/projects/compiler-rt/lib/asan/asan_malloc_linux.cc:146
+    #1 0x576f1b in operator new(unsigned long) (/out/odp_target+0x576f1b)
+    #2 0x52eefe in main /src/libfuzzer/afl/afl_driver.cpp:339:12
+    #3 0x7fdcb483382f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+
+DEDUP_TOKEN: __interceptor_malloc--operator new(unsigned long)--main
+SUMMARY: AddressSanitizer: heap-buffer-overflow /src/openvswitch/lib/odp-util.c:5451:7 in parse_odp_key_mask_attr
+Shadow bytes around the buggy address:
+  0x0c067fff7fb0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c067fff7fc0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c067fff7fd0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c067fff7fe0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c067fff7ff0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x0c067fff8000: fa fa fd fd fd fd fa[fa]00 00 00 01 fa fa fa fa
+  0x0c067fff8010: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c067fff8020: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c067fff8030: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c067fff8040: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c067fff8050: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+  Shadow gap:              cc
+==14310==ABORTING

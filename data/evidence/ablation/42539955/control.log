@@ -1,0 +1,80 @@
+======================= INFO =========================
+This binary is built for AFL-fuzz.
+To run the target function on individual input(s) execute this:
+  /out/ping_mvg_fuzzer < INPUT_FILE
+or
+  /out/ping_mvg_fuzzer INPUT_FILE1 [INPUT_FILE2 ... ]
+To fuzz with afl-fuzz execute this:
+  afl-fuzz [afl-flags] /out/ping_mvg_fuzzer [-N]
+afl-fuzz will run N iterations before re-spawning the process (default: 1000)
+======================================================
+Reading 53 bytes from /tmp/poc
+=================================================================
+==88534==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x7f5bcd761810 at pc 0x0000006836cb bp 0x7ffe745c1b20 sp 0x7ffe745c1b18
+WRITE of size 8 at 0x7f5bcd761810 thread T0
+SCARINESS: 52 (8-byte-write-heap-buffer-overflow-far-from-bounds)
+    #0 0x6836ca in TracePoint /src/imagemagick/MagickCore/draw.c:2351:30
+    #1 0x684cee in TraceBezier /src/imagemagick/MagickCore/draw.c:5941:5
+    #2 0x697bd1 in TraceArcPath /src/imagemagick/MagickCore/draw.c:5851:5
+    #3 0x68631d in TracePath /src/imagemagick/MagickCore/draw.c:6172:11
+    #4 0x67f561 in DrawImage /src/imagemagick/MagickCore/draw.c:4082:21
+    #5 0x92b8eb in ReadMVGImage /src/imagemagick/coders/mvg.c:222:10
+    #6 0x6463a6 in ReadImage /src/imagemagick/MagickCore/constitute.c:500:13
+    #7 0x81f65b in ReadStream /src/imagemagick/MagickCore/stream.c:1043:9
+    #8 0x5f2306 in PingBlob /src/imagemagick/MagickCore/blob.c:3485:13
+    #9 0x552d04 in Magick::Image::ping(Magick::Blob const&) /src/imagemagick/Magick++/lib/Image.cpp:3861:12
+    #10 0x53070b in LLVMFuzzerTestOneInput /src/imagemagick/Magick++/fuzz/ping_fuzzer.cc:43:11
+    #11 0x530e4f in ExecuteFilesOnyByOne(int, char**) /src/libfuzzer/afl/afl_driver.cpp:301:5
+    #12 0x5313fe in main /src/libfuzzer/afl/afl_driver.cpp:339:12
+    #13 0x7f5bcc7d382f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+    #14 0x420148 in _start (/out/ping_mvg_fuzzer+0x420148)
+
+DEDUP_TOKEN: TracePoint--TraceBezier--TraceArcPath
+0x7f5bcd761810 is located 16 bytes to the right of 196608-byte region [0x7f5bcd731800,0x7f5bcd761800)
+allocated by thread T0 here:
+    #0 0x4ede87 in __interceptor_malloc /src/llvm/projects/compiler-rt/lib/asan/asan_malloc_linux.cc:98
+    #1 0x677b2d in DrawImage /src/imagemagick/MagickCore/draw.c:2473:36
+    #2 0x92b8eb in ReadMVGImage /src/imagemagick/coders/mvg.c:222:10
+    #3 0x6463a6 in ReadImage /src/imagemagick/MagickCore/constitute.c:500:13
+    #4 0x81f65b in ReadStream /src/imagemagick/MagickCore/stream.c:1043:9
+    #5 0x5f2306 in PingBlob /src/imagemagick/MagickCore/blob.c:3485:13
+    #6 0x552d04 in Magick::Image::ping(Magick::Blob const&) /src/imagemagick/Magick++/lib/Image.cpp:3861:12
+    #7 0x53070b in LLVMFuzzerTestOneInput /src/imagemagick/Magick++/fuzz/ping_fuzzer.cc:43:11
+    #8 0x530e4f in ExecuteFilesOnyByOne(int, char**) /src/libfuzzer/afl/afl_driver.cpp:301:5
+    #9 0x5313fe in main /src/libfuzzer/afl/afl_driver.cpp:339:12
+    #10 0x7f5bcc7d382f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+
+DEDUP_TOKEN: __interceptor_malloc--DrawImage--ReadMVGImage
+SUMMARY: AddressSanitizer: heap-buffer-overflow /src/imagemagick/MagickCore/draw.c:2351:30 in TracePoint
+Shadow bytes around the buggy address:
+  0x0febf9ae42b0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0febf9ae42c0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0febf9ae42d0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0febf9ae42e0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0febf9ae42f0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x0febf9ae4300: fa fa[fa]fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0febf9ae4310: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0febf9ae4320: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0febf9ae4330: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0febf9ae4340: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0febf9ae4350: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+==88534==ABORTING

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042539440",
+  "chain": "CWE-416->CWE-125",
+  "project": "imagemagick",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42539440",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "fbecf7ae042ff94900eb4a8723577c4e5bab1feb",
+      "fix_commits": [
+        "fbecf7ae042ff94900eb4a8723577c4e5bab1feb"
+      ],
+      "repo": "https://github.com/imagemagick/imagemagick"
+    },
+    "patch": "From fbecf7ae042ff94900eb4a8723577c4e5bab1feb Mon Sep 17 00:00:00 2001\nFrom: Paul Kehrer <paul.l.kehrer@gmail.com>\nDate: Fri, 27 Apr 2018 09:00:20 -1000\nSubject: [PATCH] build against libheif\n\n---\n Magick++/fuzz/build.sh | 10 +++++++++-\n 1 file changed, 9 insertions(+), 1 deletion(-)\n\ndiff --git a/Magick++/fuzz/build.sh b/Magick++/fuzz/build.sh\nindex 3d49aad..73c4911 100644\n--- a/Magick++/fuzz/build.sh\n+++ b/Magick++/fuzz/build.sh\n@@ -68,6 +68,14 @@ make -j$(nproc)\n make install\n popd\n \n+# Build libheif\n+pushd \"$SRC/libheif\"\n+./autogen.sh\n+./configure --disable-shared --prefix=\"$WORK\" PKG_CONFIG_PATH=\"$WORK/lib/pkgconfig\"\n+make -j$(nproc)\n+make install\n+popd\n+\n # Build webp\n pushd \"$SRC/libwebp\"\n ./autogen.sh\n@@ -93,7 +101,7 @@ MAGICK_COMPILER=$CXX\n MAGICK_COMPILER_FLAGS=$CXXFLAGS\n MAGICK_INCLUDE=\"$WORK/include/ImageMagick-7\"\n MAGICK_SRC=\"$SRC/imagemagick/Magick++/fuzz\"\n-MAGICK_LIBS=\"-lFuzzingEngine $WORK/lib/libMagick++-7.Q16HDRI.a $WORK/lib/libMagickWand-7.Q16HDRI.a $WORK/lib/libMagickCore-7.Q16HDRI.a $WORK/lib/libz.a $WORK/lib/liblzma.a $WORK/lib/libpng.a $WORK/lib/libtiff.a $WORK/lib/liblcms2.a $WORK/lib/libde265.a $WORK/lib/libopenjp2.a $WORK/lib/libwebp.a $WORK/lib/libturbojpeg.a $WORK/lib/libjpeg.a $WORK/lib/libfreetype.a $WORK/lib/libraw.a\"\n+MAGICK_LIBS=\"-lFuzzingEngine $WORK/lib/libMagick++-7.Q16HDRI.a $WORK/lib/libMagickWand-7.Q16HDRI.a $WORK/lib/libMagickCore-7.Q16HDRI.a $WORK/lib/libz.a $WORK/lib/liblzma.a $WORK/lib/libpng.a $WORK/lib/libtiff.a $WORK/lib/liblcms2.a $WORK/lib/libheif.a $WORK/lib/libde265.a $WORK/lib/libopenjp2.a $WORK/lib/libwebp.a $WORK/lib/libturbojpeg.a $WORK/lib/libjpeg.a $WORK/lib/libfreetype.a $WORK/lib/libraw.a\"\n MAGICK_OUTPUT=$OUT\n MAGICK_FAST_BUILD=0\n \n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42539440-vul",
+      "digest": "sha256:e7abeddaa35e5020889a33d1bf79e6b01041e047949a1566ef10514b39158e18"
+    },
+    "patched": {
+      "ref": "n132/arvo:42539440-fix",
+      "digest": "sha256:2291b5b7b5abab7f57c52596dd968c50a56c1c6666f33c4a7253f8e8c60f006a"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/libde265/libde265/slice.cc:390",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/libde265/libde265/slice.cc:390"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

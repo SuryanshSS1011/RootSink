@@ -1,0 +1,81 @@
+======================= INFO =========================
+This binary is built for AFL-fuzz.
+To run the target function on individual input(s) execute this:
+  /out/cryptofuzz-openssl-api < INPUT_FILE
+or
+  /out/cryptofuzz-openssl-api INPUT_FILE1 [INPUT_FILE2 ... ]
+To fuzz with afl-fuzz execute this:
+  afl-fuzz [afl-flags] /out/cryptofuzz-openssl-api [-N]
+afl-fuzz will run N iterations before re-spawning the process (default: 1000)
+======================================================
+Reading 141 bytes from /tmp/poc
+=================================================================
+==1634997==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x60200000011f at pc 0x00000049953a bp 0x7ffdb48e23b0 sp 0x7ffdb48e1b78
+WRITE of size 16 at 0x60200000011f thread T0
+SCARINESS: 45 (multi-byte-write-heap-buffer-overflow)
+    #0 0x499539 in __asan_memcpy /src/llvm-project/compiler-rt/lib/asan/asan_interceptors_memintrinsics.cpp:22:3
+    #1 0x7bdda9 in wc_AesFeedbackEncrypt /src/wolfssl-openssl-api/wolfcrypt/src/aes.c:8380:9
+    #2 0x7bee07 in wc_AesOfbEncrypt /src/wolfssl-openssl-api/wolfcrypt/src/aes.c:8759:12
+    #3 0x6d7b06 in evpCipherBlock /src/wolfssl-openssl-api/./wolfcrypt/src/evp.c:465:23
+    #4 0x6d7247 in wolfSSL_EVP_CipherUpdate /src/wolfssl-openssl-api/./wolfcrypt/src/evp.c:699:13
+    #5 0x6b6df0 in cryptofuzz::module::wolfCrypt_OpenSSL_detail::OpSymmetricEncrypt_EVP(cryptofuzz::operation::SymmetricEncrypt&, fuzzing::datasource::Datasource&) /src/cryptofuzz-openssl-api/modules/wolfcrypt-openssl/module.cpp:489:13
+    #6 0x6b7b91 in cryptofuzz::module::wolfCrypt_OpenSSL::OpSymmetricEncrypt(cryptofuzz::operation::SymmetricEncrypt&) /src/cryptofuzz-openssl-api/modules/wolfcrypt-openssl/module.cpp:528:12
+    #7 0x4ea5f2 in cryptofuzz::ExecutorBase<cryptofuzz::component::Ciphertext, cryptofuzz::operation::SymmetricEncrypt>::callModule(std::__1::shared_ptr<cryptofuzz::Module>, cryptofuzz::operation::SymmetricEncrypt&) const /src/cryptofuzz-openssl-api/executor.cpp:220:20
+    #8 0x4e9305 in cryptofuzz::ExecutorBase<cryptofuzz::component::Ciphertext, cryptofuzz::operation::SymmetricEncrypt>::Run(fuzzing::datasource::Datasource&, unsigned char const*, unsigned long) const /src/cryptofuzz-openssl-api/executor.cpp:1352:47
+    #9 0x4cdd28 in cryptofuzz::Driver::Run(unsigned char const*, unsigned long) const /src/cryptofuzz-openssl-api/driver.cpp:74:42
+    #10 0x5f75ce in LLVMFuzzerTestOneInput /src/cryptofuzz-openssl-api/entry.cpp:323:13
+    #11 0x8ea9fe in ExecuteFilesOnyByOne /src/libfuzzer/afl/afl_driver.cpp:207:5
+    #12 0x8ea9fe in main /src/libfuzzer/afl/afl_driver.cpp:244:12
+    #13 0x148afd0f083f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2083f)
+    #14 0x41f228 in _start (/out/cryptofuzz-openssl-api+0x41f228)
+
+DEDUP_TOKEN: __asan_memcpy--wc_AesFeedbackEncrypt--wc_AesOfbEncrypt
+0x60200000011f is located 0 bytes to the right of 15-byte region [0x602000000110,0x60200000011f)
+allocated by thread T0 here:
+    #0 0x49a0dd in malloc /src/llvm-project/compiler-rt/lib/asan/asan_malloc_linux.cpp:145:3
+    #1 0x5cae09 in cryptofuzz::util::malloc(unsigned long) /src/cryptofuzz-openssl-api/util.cpp:346:46
+    #2 0x6b6212 in cryptofuzz::module::wolfCrypt_OpenSSL_detail::OpSymmetricEncrypt_EVP(cryptofuzz::operation::SymmetricEncrypt&, fuzzing::datasource::Datasource&) /src/cryptofuzz-openssl-api/modules/wolfcrypt-openssl/module.cpp:410:20
+    #3 0x6b7b91 in cryptofuzz::module::wolfCrypt_OpenSSL::OpSymmetricEncrypt(cryptofuzz::operation::SymmetricEncrypt&) /src/cryptofuzz-openssl-api/modules/wolfcrypt-openssl/module.cpp:528:12
+    #4 0x4ea5f2 in cryptofuzz::ExecutorBase<cryptofuzz::component::Ciphertext, cryptofuzz::operation::SymmetricEncrypt>::callModule(std::__1::shared_ptr<cryptofuzz::Module>, cryptofuzz::operation::SymmetricEncrypt&) const /src/cryptofuzz-openssl-api/executor.cpp:220:20
+    #5 0x4e9305 in cryptofuzz::ExecutorBase<cryptofuzz::component::Ciphertext, cryptofuzz::operation::SymmetricEncrypt>::Run(fuzzing::datasource::Datasource&, unsigned char const*, unsigned long) const /src/cryptofuzz-openssl-api/executor.cpp:1352:47
+    #6 0x4cdd28 in cryptofuzz::Driver::Run(unsigned char const*, unsigned long) const /src/cryptofuzz-openssl-api/driver.cpp:74:42
+    #7 0x5f75ce in LLVMFuzzerTestOneInput /src/cryptofuzz-openssl-api/entry.cpp:323:13
+    #8 0x8ea9fe in ExecuteFilesOnyByOne /src/libfuzzer/afl/afl_driver.cpp:207:5
+    #9 0x8ea9fe in main /src/libfuzzer/afl/afl_driver.cpp:244:12
+    #10 0x148afd0f083f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2083f)
+
+DEDUP_TOKEN: malloc--cryptofuzz::util::malloc(unsigned long)--cryptofuzz::module::wolfCrypt_OpenSSL_detail::OpSymmetricEncrypt_EVP(cryptofuzz::operation::SymmetricEncrypt&, fuzzing::datasource::Datasource&)
+SUMMARY: AddressSanitizer: heap-buffer-overflow /src/llvm-project/compiler-rt/lib/asan/asan_interceptors_memintrinsics.cpp:22:3 in __asan_memcpy
+Shadow bytes around the buggy address:
+  0x0c047fff7fd0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c047fff7fe0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c047fff7ff0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c047fff8000: fa fa fd fa fa fa fd fa fa fa fd fa fa fa fd fa
+  0x0c047fff8010: fa fa fd fa fa fa fd fa fa fa fd fa fa fa fd fa
+=>0x0c047fff8020: fa fa 00[07]fa fa fd fa fa fa fd fa fa fa fd fa
+  0x0c047fff8030: fa fa fd fd fa fa fd fa fa fa 00 00 fa fa fa fa
+  0x0c047fff8040: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c047fff8050: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c047fff8060: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c047fff8070: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+  Shadow gap:              cc
+==1634997==ABORTING

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042472493",
+  "chain": "CWE-20->CWE-125",
+  "project": "openvswitch",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42472493",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "401eacfb22fc4a3bd5df5752ee77adf598864955",
+      "fix_commits": [
+        "401eacfb22fc4a3bd5df5752ee77adf598864955"
+      ],
+      "repo": "https://github.com/openvswitch/ovs"
+    },
+    "patch": "diff --git a/lib/odp-util.c b/lib/odp-util.c\nindex 778c00ee887..482a0be2f9d 100644\n--- a/lib/odp-util.c\n+++ b/lib/odp-util.c\n@@ -5599,6 +5599,10 @@ parse_odp_key_mask_attr(struct parse_odp_context *context, const char *s,\n                 context->depth--;\n                 return retval;\n             }\n+\n+            if (nl_attr_oversized(key->size - encap - NLA_HDRLEN)) {\n+                return -E2BIG;\n+            }\n             s += retval;\n         }\n         s++;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42472493-vul",
+      "digest": "sha256:f880ce361a412abb1514502fce0947a339224083800ec269a06598c0b928c96d"
+    },
+    "patched": {
+      "ref": "n132/arvo:42472493-fix",
+      "digest": "sha256:78e3c824e1f23cedb1f1c6bbe2d3dafae22978d3d03281a701309f1d332a99b1"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/openvswitch/lib/odp-util.c:2527",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/openvswitch/lib/odp-util.c:2527"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

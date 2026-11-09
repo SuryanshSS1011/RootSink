@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042496484",
+  "chain": "CWE-416->CWE-125",
+  "project": "serenity",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42496484",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "70728b49e266e2e71fe69d675d117a2b30435bdb",
+      "fix_commits": [
+        "70728b49e266e2e71fe69d675d117a2b30435bdb"
+      ],
+      "repo": "https://github.com/SerenityOS/serenity"
+    },
+    "patch": "From 70728b49e266e2e71fe69d675d117a2b30435bdb Mon Sep 17 00:00:00 2001\nFrom: Ali Mohammad Pur <ali.mpfard@gmail.com>\nDate: Sat, 1 May 2021 12:44:09 +0430\nSubject: [PATCH] Shell: Move the heredocs vector to a local value before\n processing it\n\nOtherwise we would end up trying to parse the same heredoc entry, if it\ncontained a sequence terminated by a newline.\ne.g. `<<-x\\n$({` would attempt to read a heredoc entry after `x`, and\nthen after `{` while inside the first heredoc entry.\nTo make this work, we can simply empty the instance vector and keep the\nstate on the stack.\nIssue found through oss-fuzz:\nhttps://bugs.chromium.org/p/oss-fuzz/issues/detail?id=33852\n---\n Userland/Shell/Parser.cpp | 6 +++---\n 1 file changed, 3 insertions(+), 3 deletions(-)\n\ndiff --git a/Userland/Shell/Parser.cpp b/Userland/Shell/Parser.cpp\nindex 7d98090..410b633 100644\n--- a/Userland/Shell/Parser.cpp\n+++ b/Userland/Shell/Parser.cpp\n@@ -1982,8 +1982,10 @@ RefPtr<AST::Node> Parser::parse_heredoc_initiation_record()\n \n bool Parser::parse_heredoc_entries()\n {\n+    auto heredocs = move(m_heredoc_initiations);\n+    m_heredoc_initiations.clear();\n     // Try to parse heredoc entries, as reverse recorded in the initiation records\n-    for (auto& record : m_heredoc_initiations) {\n+    for (auto& record : heredocs) {\n         auto rule_start = push_start();\n         if (m_rule_start_offsets.size() > max_allowed_nested_rule_depth) {\n             record.node->set_is_syntax_error(*create<AST::SyntaxError>(String::formatted(\"Expression nested too deep (max allowed is {})\", max_allowed_nested_rule_depth)));\n@@ -2070,8 +2072,6 @@ bool Parser::parse_heredoc_entries()\n             record.node->set_contents(create<AST::DoubleQuotedString>(move(expr)));\n         }\n     }\n-\n-    m_heredoc_initiations.clear();\n     return true;\n }\n \n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42496484-vul",
+      "digest": "sha256:277937b92e2057e9525152b6d111e09794e30d8faac02026e8376372c9c8baab"
+    },
+    "patched": {
+      "ref": "n132/arvo:42496484-fix",
+      "digest": "sha256:2bddbba62a55b693171dcf69ea008fbe01041f2a94f93f71ed17218ad3105358"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/serenity/Meta/Lagom/build/../../../AK/Atomic.h:246",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/serenity/Meta/Lagom/build/../../../AK/Atomic.h:246"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

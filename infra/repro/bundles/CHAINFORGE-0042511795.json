@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042511795",
+  "chain": "CWE-416->CWE-787",
+  "project": "open62541",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42511795",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "6f689994e1e530142d01988659ac1b1d7dbd7237",
+      "fix_commits": [
+        "6f689994e1e530142d01988659ac1b1d7dbd7237"
+      ],
+      "repo": "https://github.com/open62541/open62541"
+    },
+    "patch": "From 6f689994e1e530142d01988659ac1b1d7dbd7237 Mon Sep 17 00:00:00 2001\nFrom: Julius Pfrommer <julius.pfrommer@web.de>\nDate: Mon, 1 Jan 2018 22:48:38 +0100\nSubject: [PATCH] use connection->releaseSendBuffer everywhere\n\n---\n src/ua_securechannel.c | 3 ++-\n 1 file changed, 2 insertions(+), 1 deletion(-)\n\ndiff --git a/src/ua_securechannel.c b/src/ua_securechannel.c\nindex d1e3cb0..ff273b7 100644\n--- a/src/ua_securechannel.c\n+++ b/src/ua_securechannel.c\n@@ -664,7 +664,8 @@ UA_MessageContext_finish(UA_MessageContext *mc) {\n \n void\n UA_MessageContext_abort(UA_MessageContext *mc) {\n-    UA_ByteString_deleteMembers(&mc->messageBuffer);\n+    UA_Connection *connection = mc->channel->connection;\n+    connection->releaseSendBuffer(connection, &mc->messageBuffer);\n }\n \n UA_StatusCode\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42511795-vul",
+      "digest": "sha256:c0e5c248374907db55dfb7c9505c7bbb4772c33775d0530f0c061d15384e3cea"
+    },
+    "patched": {
+      "ref": "n132/arvo:42511795-fix",
+      "digest": "sha256:d686099c69cbe16f22042174985857cb9f3fa0c6378aad044b692f56f84ee035"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "WRITE",
+        "crash_site": "/src/open62541/src/ua_types_encoding_binary.c:236",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "WRITE",
+        "site": "/src/open62541/src/ua_types_encoding_binary.c:236"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

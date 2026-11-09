@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042473264",
+  "chain": "CWE-416->CWE-125",
+  "project": "pcre2",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42473264",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "45959f1eecb9eb2a06ec492e8d989cc1a1dc1d97",
+      "fix_commits": [
+        "45959f1eecb9eb2a06ec492e8d989cc1a1dc1d97"
+      ],
+      "repo": "https://github.com/PCRE2Project/pcre2"
+    },
+    "patch": "diff --git a/ChangeLog b/ChangeLog\nindex a3d8cfe22..9e20c12fc 100644\n--- a/ChangeLog\n+++ b/ChangeLog\n@@ -122,7 +122,8 @@ tests such as (?(VERSION>=0)...) when the version test was true. Incorrect\n processing or a crash could result.\n \n 30. When PCRE2_UTF is set, allow non-ASCII letters and decimal digits in group \n-names, as Perl does.\n+names, as Perl does. There was a small bug in this new code, found by\n+ClusterFuzz 12950, fixed before release.\n \n \n Version 10.32 10-September-2018\ndiff --git a/src/pcre2_compile.c b/src/pcre2_compile.c\nindex 0c38b5b8c..266d321ac 100644\n--- a/src/pcre2_compile.c\n+++ b/src/pcre2_compile.c\n@@ -2246,8 +2246,8 @@ if (utf && is_group)\n     if (type != ucp_Nd && PRIV(ucp_gentype)[type] != ucp_L &&\n         c != CHAR_UNDERSCORE) break;\n     ptr++;\n-    FORWARDCHAR(ptr);\n     if (ptr >= ptrend) break;\n+    FORWARDCHAR(ptr);\n     GETCHAR(c, ptr);\n     type = UCD_CHARTYPE(c);\n     }\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42473264-vul",
+      "digest": "sha256:9bb6207fcfc2b733b924a521e9d1e418d544a651d209031a24a0fbde235c6f2f"
+    },
+    "patched": {
+      "ref": "n132/arvo:42473264-fix",
+      "digest": "sha256:18f8cb7110e8f707ac1518e689546b6eb057ab8268830d1c24979dcdcd46fbe2"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/pcre2/src/pcre2_compile.c:2249",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/pcre2/src/pcre2_compile.c:2249"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

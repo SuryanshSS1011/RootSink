@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042519137",
+  "chain": "CWE-416->CWE-125",
+  "project": "binutils-gdb",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42519137",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "c799eddb3512a4ce2b5c11bd91f888f30241faf6",
+      "fix_commits": [
+        "c799eddb3512a4ce2b5c11bd91f888f30241faf6"
+      ],
+      "repo": "git://sourceware.org/git/binutils-gdb.git"
+    },
+    "patch": "diff --git a/bfd/elf32-mips.c b/bfd/elf32-mips.c\nindex be28d1a3b1c..0ffa9017d7b 100644\n--- a/bfd/elf32-mips.c\n+++ b/bfd/elf32-mips.c\n@@ -2599,6 +2599,7 @@ static const struct ecoff_debug_swap mips_elf32_ecoff_debug_swap = {\n \t\t\t\t\t_bfd_mips_elf_print_private_bfd_data\n #define bfd_elf32_bfd_relax_section\t_bfd_mips_elf_relax_section\n #define bfd_elf32_mkobject\t\t_bfd_mips_elf_mkobject\n+#define bfd_elf32_close_and_cleanup\t_bfd_mips_elf_close_and_cleanup\n \n /* Support for SGI-ish mips targets.  */\n #define TARGET_LITTLE_SYM\t\tmips_elf32_le_vec\ndiff --git a/bfd/elf64-mips.c b/bfd/elf64-mips.c\nindex 419d9bc6dbd..9b0120b8167 100644\n--- a/bfd/elf64-mips.c\n+++ b/bfd/elf64-mips.c\n@@ -4815,6 +4815,7 @@ const struct elf_size_info mips_elf64_size_info =\n \n #define bfd_elf64_get_dynamic_reloc_upper_bound mips_elf64_get_dynamic_reloc_upper_bound\n #define bfd_elf64_mkobject\t\t_bfd_mips_elf_mkobject\n+#define bfd_elf64_close_and_cleanup\t_bfd_mips_elf_close_and_cleanup\n \n /* The SGI style (n)64 NewABI.  */\n #define TARGET_LITTLE_SYM\t\tmips_elf64_le_vec\ndiff --git a/bfd/elfn32-mips.c b/bfd/elfn32-mips.c\nindex d222d1a5d15..452a2a7b74b 100644\n--- a/bfd/elfn32-mips.c\n+++ b/bfd/elfn32-mips.c\n@@ -4197,6 +4197,7 @@ static const struct ecoff_debug_swap mips_elf32_ecoff_debug_swap = {\n #define bfd_elf32_bfd_print_private_bfd_data \\\n \t\t\t\t\t_bfd_mips_elf_print_private_bfd_data\n #define bfd_elf32_mkobject\t\tmips_elf_n32_mkobject\n+#define bfd_elf32_close_and_cleanup\t_bfd_mips_elf_close_and_cleanup\n \n /* Support for SGI-ish mips targets using n32 ABI.  */\n \ndiff --git a/bfd/elfxx-mips.c b/bfd/elfxx-mips.c\nindex 618fb43540c..f77ccde8409 100644\n--- a/bfd/elfxx-mips.c\n+++ b/bfd/elfxx-mips.c\n@@ -549,6 +549,19 @@ struct mips_htab_traverse_info\n   bool error;\n };\n \n+/* Used to store a REL high-part relocation such as R_MIPS_HI16 or\n+   R_MIPS_GOT16.  REL is the relocation, INPUT_SECTION is the section\n+   that contains the relocation field and DATA points to the start of\n+   INPUT_SECTION.  */\n+\n+struct mips_hi16\n+{\n+  struct mips_hi16 *next;\n+  bfd_byte *data;\n+  asection *input_section;\n+  arelent rel;\n+};\n+\n /* MIPS ELF private object data.  */\n \n struct mips_elf_obj_tdata\n@@ -584,6 +597,8 @@ struct mips_elf_obj_tdata\n   asymbol *elf_text_symbol;\n   asection *elf_data_section;\n   asection *elf_text_section;\n+\n+  struct mips_hi16 *mips_hi16_list;\n };\n \n /* Get MIPS ELF private object data from BFD's tdata.  */\n@@ -1365,6 +1380,23 @@ _bfd_mips_elf_mkobject (bfd *abfd)\n \t\t\t\t  MIPS_ELF_DATA);\n }\n \n+bool\n+_bfd_mips_elf_close_and_cleanup (bfd *abfd)\n+{\n+  struct mips_elf_obj_tdata *tdata = mips_elf_tdata (abfd);\n+  if (tdata != NULL && bfd_get_format (abfd) == bfd_object)\n+    {\n+      BFD_ASSERT (tdata->root.object_id == MIPS_ELF_DATA);\n+      while (tdata->mips_hi16_list != NULL)\n+\t{\n+\t  struct mips_hi16 *hi = tdata->mips_hi16_list;\n+\t  tdata->mips_hi16_list = hi->next;\n+\t  free (hi);\n+\t}\n+    }\n+  return _bfd_elf_close_and_cleanup (abfd);\n+}\n+\n bool\n _bfd_mips_elf_new_section_hook (bfd *abfd, asection *sec)\n {\n@@ -2481,23 +2513,6 @@ _bfd_mips_elf_gprel16_with_gp (bfd *abfd, asymbol *symbol,\n   return bfd_reloc_ok;\n }\n \n-/* Used to store a REL high-part relocation such as R_MIPS_HI16 or\n-   R_MIPS_GOT16.  REL is the relocation, INPUT_SECTION is the section\n-   that contains the relocation field and DATA points to the start of\n-   INPUT_SECTION.  */\n-\n-struct mips_hi16\n-{\n-  struct mips_hi16 *next;\n-  bfd_byte *data;\n-  asection *input_section;\n-  arelent rel;\n-};\n-\n-/* FIXME: This should not be a static variable.  */\n-\n-static struct mips_hi16 *mips_hi16_list;\n-\n /* A howto special_function for REL *HI16 relocations.  We can only\n    calculate the correct value once we've seen the partnering\n    *LO16 relocation, so just save the information for later.\n@@ -2508,12 +2523,13 @@ static struct mips_hi16 *mips_hi16_list;\n    simplies the relocation handling in gcc.  */\n \n bfd_reloc_status_type\n-_bfd_mips_elf_hi16_reloc (bfd *abfd ATTRIBUTE_UNUSED, arelent *reloc_entry,\n+_bfd_mips_elf_hi16_reloc (bfd *abfd, arelent *reloc_entry,\n \t\t\t  asymbol *symbol ATTRIBUTE_UNUSED, void *data,\n \t\t\t  asection *input_section, bfd *output_bfd,\n \t\t\t  char **error_message ATTRIBUTE_UNUSED)\n {\n   struct mips_hi16 *n;\n+  struct mips_elf_obj_tdata *tdata;\n \n   if (reloc_entry->address > bfd_get_section_limit (abfd, input_section))\n     return bfd_reloc_outofrange;\n@@ -2522,11 +2538,12 @@ _bfd_mips_elf_hi16_reloc (bfd *abfd ATTRIBUTE_UNUSED, arelent *reloc_entry,\n   if (n == NULL)\n     return bfd_reloc_outofrange;\n \n-  n->next = mips_hi16_list;\n+  tdata = mips_elf_tdata (abfd);\n+  n->next = tdata->mips_hi16_list;\n   n->data = data;\n   n->input_section = input_section;\n   n->rel = *reloc_entry;\n-  mips_hi16_list = n;\n+  tdata->mips_hi16_list = n;\n \n   if (output_bfd != NULL)\n     reloc_entry->address += input_section->output_offset;\n@@ -2566,6 +2583,7 @@ _bfd_mips_elf_lo16_reloc (bfd *abfd, arelent *reloc_entry, asymbol *symbol,\n {\n   bfd_vma vallo;\n   bfd_byte *location = (bfd_byte *) data + reloc_entry->address;\n+  struct mips_elf_obj_tdata *tdata;\n \n   if (!bfd_reloc_offset_in_range (reloc_entry->howto, abfd, input_section,\n \t\t\t\t  reloc_entry->address))\n@@ -2577,12 +2595,13 @@ _bfd_mips_elf_lo16_reloc (bfd *abfd, arelent *reloc_entry, asymbol *symbol,\n   _bfd_mips_elf_reloc_shuffle (abfd, reloc_entry->howto->type, false,\n \t\t\t       location);\n \n-  while (mips_hi16_list != NULL)\n+  tdata = mips_elf_tdata (abfd);\n+  while (tdata->mips_hi16_list != NULL)\n     {\n       bfd_reloc_status_type ret;\n       struct mips_hi16 *hi;\n \n-      hi = mips_hi16_list;\n+      hi = tdata->mips_hi16_list;\n \n       /* R_MIPS*_GOT16 relocations are something of a special case.  We\n \t want to install the addend in the same way as for a R_MIPS*_HI16\n@@ -2606,7 +2625,7 @@ _bfd_mips_elf_lo16_reloc (bfd *abfd, arelent *reloc_entry, asymbol *symbol,\n       if (ret != bfd_reloc_ok)\n \treturn ret;\n \n-      mips_hi16_list = hi->next;\n+      tdata->mips_hi16_list = hi->next;\n       free (hi);\n     }\n \n@@ -13294,12 +13313,14 @@ _bfd_elf_mips_get_relocated_section_contents\n   reloc_vector = (arelent **) bfd_malloc (reloc_size);\n   if (reloc_vector == NULL)\n     {\n+      struct mips_elf_obj_tdata *tdata;\n       struct mips_hi16 **hip, *hi;\n     error_return:\n       /* If we are going to return an error, remove entries on\n \t mips_hi16_list that point into this section's data.  Data\n \t will typically be freed on return from this function.  */\n-      hip = &mips_hi16_list;\n+      tdata = mips_elf_tdata (abfd);\n+      hip = &tdata->mips_hi16_list;\n       while ((hi = *hip) != NULL)\n \t{\n \t  if (hi->input_section == input_section)\ndiff --git a/bfd/elfxx-mips.h b/bfd/elfxx-mips.h\nindex 6b22fdab3ae..7d40808496d 100644\n--- a/bfd/elfxx-mips.h\n+++ b/bfd/elfxx-mips.h\n@@ -31,6 +31,8 @@ enum reloc_check\n \n extern bool _bfd_mips_elf_mkobject\n   (bfd *);\n+extern bool _bfd_mips_elf_close_and_cleanup\n+  (bfd *);\n extern bool _bfd_mips_elf_new_section_hook\n   (bfd *, asection *);\n extern void _bfd_mips_elf_symbol_processing\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42519137-vul",
+      "digest": "sha256:ba58221703b271ddd68d9c235c13662b66f99d6de1fbd8d3dfb82aa5c2b150b6"
+    },
+    "patched": {
+      "ref": "n132/arvo:42519137-fix",
+      "digest": "sha256:05c89f6b07c10dbfdc5f78e74ab42a01070bdc8575066c63b5606b3b4d442597"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/binutils-gdb/bfd/./bfd.h:6980",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/binutils-gdb/bfd/./bfd.h:6980"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

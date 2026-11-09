@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042479163",
+  "chain": "CWE-416->CWE-787",
+  "project": "open62541",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42479163",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "25c2f47d444f60e7aeadd3a6dacd2ace82f22fb4",
+      "fix_commits": [
+        "25c2f47d444f60e7aeadd3a6dacd2ace82f22fb4"
+      ],
+      "repo": "https://github.com/Pro/mdnsd"
+    },
+    "patch": "diff --git a/libmdnsd/1035.c b/libmdnsd/1035.c\nindex 5fb5b43..667af0b 100644\n--- a/libmdnsd/1035.c\n+++ b/libmdnsd/1035.c\n@@ -174,6 +174,10 @@ static bool _label(struct message *m, const unsigned char **bufp, const unsigned\n \n \t} while (*bufp <= bufEnd);\n \n+    if ((unsigned char*)name >= m->_packet + MAX_PACKET_LEN) {\n+        return false;\n+    }\n+\n \t/* Terminate name and check for cache or cache it */\n \t*name = '\\0';\n \tfor (x = 0; x < MAX_NUM_LABELS && m->_labels[x]; x++) {\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42479163-vul",
+      "digest": "sha256:5a57f4768ad31773eae9ce6774b086bf2f6939be5799a7b28cee1dd3a23d278a"
+    },
+    "patched": {
+      "ref": "n132/arvo:42479163-fix",
+      "digest": "sha256:02c6951f649d5bfee39d6f6ccc06e005de530923018538f380c6da0a83c96409"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/open62541/deps/mdnsd/libmdnsd/1035.c:178",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/open62541/deps/mdnsd/libmdnsd/1035.c:178"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

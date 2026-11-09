@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042472101",
+  "chain": "CWE-456->CWE-457",
+  "project": "skia",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42472101",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "fc97f222ff1f9dc496a4b277f0a41fac51b155b8",
+      "fix_commits": [
+        "fc97f222ff1f9dc496a4b277f0a41fac51b155b8"
+      ],
+      "repo": "https://skia.googlesource.com/skia.git"
+    },
+    "patch": "diff --git a/fuzz/FuzzCanvas.cpp b/fuzz/FuzzCanvas.cpp\nindex 2416f35..8ac43e8 100644\n--- a/fuzz/FuzzCanvas.cpp\n+++ b/fuzz/FuzzCanvas.cpp\n@@ -995,24 +995,26 @@\n         const SkTextBlobBuilder::RunBuffer* buffer;\n         uint8_t runType;\n         fuzz->nextRange(&runType, (uint8_t)0, (uint8_t)2);\n+        const void* textPtr = text.begin();\n+        size_t textLen =  SkToSizeT(text.count());\n         switch (runType) {\n             case 0:\n                 fuzz->next(&x, &y);\n                 // TODO: Test other variations of this.\n                 buffer = &textBlobBuilder.allocRun(font, glyphCount, x, y);\n-                memcpy(buffer->glyphs, text.begin(), SkToSizeT(text.count()));\n+                (void)font.textToGlyphs(textPtr, textLen, encoding, buffer->glyphs, glyphCount);\n                 break;\n             case 1:\n                 fuzz->next(&y);\n                 // TODO: Test other variations of this.\n                 buffer = &textBlobBuilder.allocRunPosH(font, glyphCount, y);\n-                memcpy(buffer->glyphs, text.begin(), SkToSizeT(text.count()));\n+                (void)font.textToGlyphs(textPtr, textLen, encoding, buffer->glyphs, glyphCount);\n                 fuzz->nextN(buffer->pos, glyphCount);\n                 break;\n             case 2:\n                 // TODO: Test other variations of this.\n                 buffer = &textBlobBuilder.allocRunPos(font, glyphCount);\n-                memcpy(buffer->glyphs, text.begin(), SkToSizeT(text.count()));\n+                (void)font.textToGlyphs(textPtr, textLen, encoding, buffer->glyphs, glyphCount);\n                 fuzz->nextN(buffer->pos, glyphCount * 2);\n                 break;\n             default:\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42472101-vul",
+      "digest": "sha256:4e6ed31cd0ae898f128e3e0da6f867e29b3d6a7d4a811bda53043d9fcffcfe42"
+    },
+    "patched": {
+      "ref": "n132/arvo:42472101-fix",
+      "digest": "sha256:826024479d39fef2780438636e2412146c96c6ca310ba8bcf9746474521f8eba"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/skia/out/Fuzz_mem_constraints/../../include/private/SkTHash.h:206",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/skia/out/Fuzz_mem_constraints/../../include/private/SkTHash.h:206"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

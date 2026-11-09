@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042525082",
+  "chain": "CWE-1285->CWE-125",
+  "project": "libdwarf",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42525082",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "c8c54ba5c79b0a2687f0fa2ac331479506c3210f",
+      "fix_commits": [
+        "c8c54ba5c79b0a2687f0fa2ac331479506c3210f"
+      ],
+      "repo": "https://github.com/davea42/libdwarf-code"
+    },
+    "patch": "diff --git a/bugxml/data.txt b/bugxml/data.txt\nindex cb54bf05..a4480122 100644\n--- a/bugxml/data.txt\n+++ b/bugxml/data.txt\n@@ -1,9 +1,79 @@\n \n-# 59519\n-# 59595\n # 59602\n # 59699\n-# 59727\n+\n+id: DW202306-007\n+fuzzer: ossfuzz id: 59602\n+datereported: 2023-06-04\n+reportedby: David Korczynski\n+vulnerability:  Buffer overflow read\n+product: libdwarf\n+description: In _dwarf_read_loc_expr_op()\n+  we read one byte past available data\n+  as the required check for past-end\n+  was missing.\n+datefixed: 2023-06-10\n+references: ossfuzz59602/fuzz_die_cu_attrs_loclist-6737086749999104\n+gitfixid: \n+tarrelease:\n+endrec: DW202306-007\n+\n+id: DW202306-006\n+fuzzer: ossfuzz id: 59727\n+datereported: 2023-06-01\n+reportedby: David Korczynski\n+vulnerability:  Integer Overflow\n+product: libdwarf\n+description: Integer Overflow in\n+  _dwarf_exec_frame_instr() called by\n+  dwarf_expand_frame_instructions.\n+  We now check for overflows in add and\n+  multiply here.\n+  Similar to ossfuzz 59517\n+datefixed: 2023-06-08\n+references: \n+gitfixid: f664f93d456284130afbd3c2e35b39e5f2740366\n+tarrelease:\n+endrec: DW202306-006\n+\n+id: DW202306-005\n+fuzzer: ossfuzz id: 59717\n+datereported: 2023-06-01\n+reportedby: David Korczynski\n+vulnerability:  Integer Overflow\n+product: libdwarf\n+description: Integer Overflow in\n+  _dwarf_exec_frame_instr() called by\n+  dwarf_expand_frame_instructions.\n+  We now check for overflows in add and\n+  multiply here.\n+  Similar to ossfuzz 59517\n+datefixed: 2023-06-08\n+references: \n+gitfixid: f664f93d456284130afbd3c2e35b39e5f2740366\n+tarrelease:\n+endrec: DW202306-005\n+\n+\n+id: DW202306-004\n+fuzzer: ossfuzz id: 59595\n+datereported: 2023-06-09\n+reportedby: shinibufa (github)\n+vulnerability:  Signed Integer overflow\n+product: libdwarf\n+description: Signed Integer Overflow.\n+  In _dwarf_exec_frame_instr(),\n+  called by dwarf_expand_frame_instructions(),\n+  there was a DW_CFA_LLVM_def_aspace_cfa_sf\n+  and we failed to check for overflow. \n+  The test case had a overflow.\n+  Now we do that check.\n+datefixed: 2023-06-10\n+references: regressiontests/ossfuzz59595/fuzz_set_frame_all-5319697747542016\n+gitfixid:  e8c726e2be644df2706342b7a80633d07ecd7fb4 \n+tarrelease: \n+endrec: DW202306-004\n+\n \n id: DW202306-003\n fuzzer: shinibufa\n@@ -12,22 +82,27 @@ reportedby: shinibufa (github)\n vulnerability: use after free\n product: libdwarf\n description: Heap use-after-free dwarf_query.c \n-datefixed: \n+datefixed: 2023-05-19 \n references: regressiontests/shinibufa/fuzzed_input_file \n gitfixid: 4017ab8b92195641e6876b388cebe2d3307634f5 \n-tarrelease:\n+tarrelease: libdwarf-0.7.0.tar.xz\n endrec: DW202306-003\n \n id: DW202306-002\n fuzzer: ossfuzz id: 59519\n datereported: 2023-06-01\n reportedby: David Korczynski\n-vulnerability: \n+vulnerability:  Integer Overflow \n product: libdwarf\n-description: \n-datefixed: \n-references: \n-gitfixid: \n+description: Integer Overflow in\n+  _dwarf_exec_frame_instr() called by\n+  dwarf_expand_frame_instructions.\n+  We now check for overflows in add and\n+  multiply here.\n+  Similar to ossfuzz 59517\n+datefixed: 2023-06-08\n+references: regressiontests/ossfuzz59519/fuzz_set_frame_all-4670829255065600\n+gitfixid: f664f93d456284130afbd3c2e35b39e5f2740366\n tarrelease:\n endrec: DW202306-002\n \n@@ -47,7 +122,7 @@ description: Nine different places in dwarf_frame.c\n   This sanity checking of factored frame offset\n   values never existed before in the library.\n datefixed: 2023-06-08\n-references: regressiontests/ossfuzz59517/fuzz_set_frame_all\n+references: regressiontests/ossfuzz59517/fuzz_set_frame_all-5741671019839488\n gitfixid: f664f93d456284130afbd3c2e35b39e5f2740366\n tarrelease:\n endrec: DW202306-001\ndiff --git a/src/lib/libdwarf/dwarf_locationop_read.c b/src/lib/libdwarf/dwarf_locationop_read.c\nindex b96c2204..97ebdb74 100644\n--- a/src/lib/libdwarf/dwarf_locationop_read.c\n+++ b/src/lib/libdwarf/dwarf_locationop_read.c\n@@ -696,6 +696,13 @@ _dwarf_read_loc_expr_op(Dwarf_Debug dbg,\n             dbg,error,section_end);\n         offset = offset + leb128_length;\n \n+        if (loc_ptr >= section_end) {\n+            _dwarf_error_string(dbg,error,\n+                DW_DLE_LOCEXPR_OFF_SECTION_END,\n+                \"DW_DLE_LOCEXPR_OFF_SECTION_END: Error reading \"\n+                \"DW_OP_const_type/DW_OP_GNU_const_type content\");\n+            return DW_DLV_ERROR;\n+        }\n         /*  Next byte is size of following data block.  */\n         operand2 = *loc_ptr;\n         loc_ptr = loc_ptr + 1;\n@@ -743,6 +750,13 @@ _dwarf_read_loc_expr_op(Dwarf_Debug dbg,\n         READ_UNALIGNED_CK(dbg, operand1, Dwarf_Unsigned, loc_ptr, 4,\n             error,section_end);;\n         loc_ptr = loc_ptr + 4;\n+        if (loc_ptr > section_end) {\n+            _dwarf_error_string(dbg,error,\n+                DW_DLE_LOCEXPR_OFF_SECTION_END,\n+                \"DW_DLE_LOCEXPR_OFF_SECTION_END: Error reading \"\n+                \"DW_OP_GNU_parameter_ref.\");\n+            return DW_DLV_ERROR;\n+        }\n         offset = offset + 4;\n         break;\n     case DW_OP_addrx :           /* DWARF5 */\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42525082-vul",
+      "digest": "sha256:c500cf5ad0efa50709eab19c878c1d71bd11bb02c4a3a5a83375b2f255438782"
+    },
+    "patched": {
+      "ref": "n132/arvo:42525082-fix",
+      "digest": "sha256:682190f0112f37192e6c0144be70de7769bb73df201c63283bfebdc006e257fd"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/libdwarf/src/lib/libdwarf/dwarf_locationop_read.c:700",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/libdwarf/src/lib/libdwarf/dwarf_locationop_read.c:700"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

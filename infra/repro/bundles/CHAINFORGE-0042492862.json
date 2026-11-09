@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042492862",
+  "chain": "CWE-416->CWE-125",
+  "project": "wolfmqtt",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42492862",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "00a5a5d881d6dc1e4b4d2032e873b6fc3fc1d7b3",
+      "fix_commits": [
+        "00a5a5d881d6dc1e4b4d2032e873b6fc3fc1d7b3"
+      ],
+      "repo": "https://github.com/wolfSSL/wolfMQTT"
+    },
+    "patch": "From 00a5a5d881d6dc1e4b4d2032e873b6fc3fc1d7b3 Mon Sep 17 00:00:00 2001\nFrom: Eric Blankenhorn <eric@wolfssl.com>\nDate: Thu, 23 Sep 2021 08:10:34 -0500\nSubject: [PATCH] Fix handling properties\n\n---\n src/mqtt_client.c | 75 +++++++++++++++++++++++++++--------------------\n 1 file changed, 44 insertions(+), 31 deletions(-)\n\ndiff --git a/src/mqtt_client.c b/src/mqtt_client.c\nindex d392cc5..8667911 100644\n--- a/src/mqtt_client.c\n+++ b/src/mqtt_client.c\n@@ -277,6 +277,32 @@ static int MqttClient_RespList_Find(MqttClient *client,\n }\n #endif /* WOLFMQTT_MULTITHREAD */\n \n+#ifdef WOLFMQTT_V5\n+static int Handle_Props(MqttProp* props)\n+{\n+    int rc = MQTT_CODE_SUCCESS;\n+\n+    /* If no properties, just return */\n+    if (props != NULL) {\n+    #ifdef WOLFMQTT_PROPERTY_CB\n+        /* Check for properties set by the server */\n+        if (packet_obj && client->property_cb) {\n+            /* capture error if returned */\n+            int rc_err = client->property_cb(client, props,\n+                    client->property_ctx);\n+            if (rc_err < 0) {\n+                rc = rc_err;\n+            }\n+        }\n+    #endif\n+        /* Free the properties */\n+        MqttProps_Free(props);\n+    }\n+    return rc;\n+}\n+#endif\n+\n+\n /* Returns length decoded or error (as negative) */\n /*! \\brief      Take a received MQTT packet and try and decode it\n  *  \\param      client       MQTT client context\n@@ -299,9 +325,6 @@ static int MqttClient_DecodePacket(MqttClient* client, byte* rx_buf,\n     MqttPacketType packet_type;\n     MqttQoS packet_qos;\n     word16 packet_id = 0;\n-#ifdef WOLFMQTT_V5\n-    MqttProp* props = NULL;\n-#endif\n \n     /* must have rx buffer with at least 2 byes for header */\n     if (rx_buf == NULL || rx_len < MQTT_PACKET_HEADER_MIN_SIZE) {\n@@ -337,7 +360,7 @@ static int MqttClient_DecodePacket(MqttClient* client, byte* rx_buf,\n             rc = MqttDecode_ConnectAck(rx_buf, rx_len, p_connect_ack);\n         #ifdef WOLFMQTT_V5\n             if (rc >= 0) {\n-                props = p_connect_ack->props;\n+                rc = Handle_Props(p_connect_ack->props);\n             }\n         #endif\n             break;\n@@ -358,7 +381,7 @@ static int MqttClient_DecodePacket(MqttClient* client, byte* rx_buf,\n             if (rc >= 0) {\n                 packet_id = p_publish->packet_id;\n             #ifdef WOLFMQTT_V5\n-                props = p_publish->props;\n+                rc = Handle_Props(p_publish->props);\n             #endif\n             }\n             break;\n@@ -383,7 +406,7 @@ static int MqttClient_DecodePacket(MqttClient* client, byte* rx_buf,\n             if (rc >= 0) {\n                 packet_id = p_publish_resp->packet_id;\n             #ifdef WOLFMQTT_V5\n-                props = p_publish_resp->props;\n+                rc = Handle_Props(p_publish_resp->props);\n             #endif\n             }\n             break;\n@@ -404,7 +427,7 @@ static int MqttClient_DecodePacket(MqttClient* client, byte* rx_buf,\n             if (rc >= 0) {\n                 packet_id = p_subscribe_ack->packet_id;\n             #ifdef WOLFMQTT_V5\n-                props = p_subscribe_ack->props;\n+                rc = Handle_Props(p_subscribe_ack->props);\n             #endif\n             }\n             break;\n@@ -426,7 +449,7 @@ static int MqttClient_DecodePacket(MqttClient* client, byte* rx_buf,\n             if (rc >= 0) {\n                 packet_id = p_unsubscribe_ack->packet_id;\n             #ifdef WOLFMQTT_V5\n-                props = p_unsubscribe_ack->props;\n+                rc = Handle_Props(p_unsubscribe_ack->props);\n             #endif\n             }\n             break;\n@@ -455,7 +478,7 @@ static int MqttClient_DecodePacket(MqttClient* client, byte* rx_buf,\n             }\n             rc = MqttDecode_Auth(rx_buf, rx_len, p_auth);\n             if (rc >= 0) {\n-                props = p_auth->props;\n+                rc = Handle_Props(p_auth->props);\n             }\n         #else\n             rc = MQTT_CODE_ERROR_PACKET_TYPE;\n@@ -474,7 +497,7 @@ static int MqttClient_DecodePacket(MqttClient* client, byte* rx_buf,\n             }\n             rc = MqttDecode_Disconnect(rx_buf, rx_len, p_disc);\n             if (rc >= 0) {\n-                props = p_disc->props;\n+                rc = Handle_Props(p_disc->props);\n             }\n         #else\n             rc = MQTT_CODE_ERROR_PACKET_TYPE;\n@@ -498,24 +521,6 @@ static int MqttClient_DecodePacket(MqttClient* client, byte* rx_buf,\n         *ppacket_id = packet_id;\n     }\n \n-#ifdef WOLFMQTT_V5\n-    if (props) {\n-    #ifdef WOLFMQTT_PROPERTY_CB\n-        /* Check for properties set by the server */\n-        if (packet_obj && client->property_cb) {\n-            /* capture error if returned */\n-            int rc_err = client->property_cb(client, props,\n-                    client->property_ctx);\n-            if (rc_err < 0) {\n-                rc = rc_err;\n-            }\n-        }\n-    #endif\n-        /* Free the properties */\n-        MqttProps_Free(props);\n-    }\n-#endif\n-\n     (void)client;\n \n #ifdef WOLFMQTT_DEBUG_CLIENT\n@@ -2136,11 +2141,19 @@ int MqttClient_WaitMessage_ex(MqttClient *client, MqttObject* msg,\n     return MqttClient_WaitType(client, msg, MQTT_PACKET_TYPE_ANY, 0,\n         timeout_ms);\n }\n+\n int MqttClient_WaitMessage(MqttClient *client, int timeout_ms)\n {\n-    if (client == NULL)\n-        return MQTT_CODE_ERROR_BAD_ARG;\n-    return MqttClient_WaitMessage_ex(client, &client->msg, timeout_ms);\n+    int rc = MQTT_CODE_ERROR_BAD_ARG;\n+    if (client != NULL) {\n+        rc = MqttClient_WaitMessage_ex(client, &client->msg, timeout_ms);\n+        if (rc != MQTT_CODE_CONTINUE) {\n+            /* Clear the union for the next call to MqttClient_WaitMessage */\n+            XMEMSET(&client->msg, 0, sizeof(MqttObject));\n+        }\n+    }\n+\n+    return rc;\n }\n \n int MqttClient_NetConnect(MqttClient *client, const char* host,\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42492862-vul",
+      "digest": "sha256:91122e02cbd7e57fdedd423a7dcf5cb7d9f4b73759fbae6aaa6923280b7705f7"
+    },
+    "patched": {
+      "ref": "n132/arvo:42492862-fix",
+      "digest": "sha256:e2658a76a2dcbcce60a873e0dcf77699f82e29b655e2b7cd1e4d75f56f7a7078"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/wolfmqtt/src/mqtt_packet.c:227",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/wolfmqtt/src/mqtt_packet.c:227"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

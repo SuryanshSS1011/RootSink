@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042533950",
+  "chain": "CWE-416->CWE-125",
+  "project": "libxml2",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42533950",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "d8741b8196a84ac0a85d55c246752acf544e4664",
+      "fix_commits": [
+        "d8741b8196a84ac0a85d55c246752acf544e4664"
+      ],
+      "repo": "https://gitlab.gnome.org/GNOME/libxml2.git"
+    },
+    "patch": "From d8741b8196a84ac0a85d55c246752acf544e4664 Mon Sep 17 00:00:00 2001\nFrom: Nick Wellnhofer <wellnhofer@aevum.de>\nDate: Fri, 22 Mar 2024 14:46:36 +0100\nSubject: [PATCH] fuzz: Fix namespaces after xmlDOMWrapRemoveNode\n\n---\n fuzz/api.c | 10 +++++++++-\n 1 file changed, 9 insertions(+), 1 deletion(-)\n\ndiff --git a/fuzz/api.c b/fuzz/api.c\nindex 9de577d..345f6b5 100644\n--- a/fuzz/api.c\n+++ b/fuzz/api.c\n@@ -806,6 +806,11 @@ checkCopy(xmlNodePtr copy) {\n     return copy;\n }\n \n+/*\n+ * Fix namespaces, for example after unlinking a node. This makes\n+ * sure that the node only references namespaces declared in ancestor\n+ * nodes.\n+ */\n static int\n fixNs(xmlNodePtr node) {\n     if (node == NULL)\n@@ -3373,8 +3378,11 @@ LLVMFuzzerTestOneInput(const char *data, size_t size) {\n                      doc != NULL &&\n                      node->doc == doc &&\n                      res < 0);\n-                if (node && node->parent != oldParent)\n+                if (node != NULL && node->parent != oldParent) {\n+                    if (fixNs(node) < 0)\n+                        oomReport = 1;\n                     dropNode(oldParent);\n+                }\n                 endOp();\n                 break;\n             }\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42533950-vul",
+      "digest": "sha256:5b43e237a9e7c3f7fc4775b48251247964469fcaa28616186ac3d21b3732c24d"
+    },
+    "patched": {
+      "ref": "n132/arvo:42533950-fix",
+      "digest": "sha256:d06a6c2fd1d46e2c1adb4f42be402b42dda9eb77d877474d8287feeb96ca058a"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/libxml2/tree.c:3938",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/libxml2/tree.c:3938"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

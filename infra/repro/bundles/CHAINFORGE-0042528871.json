@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042528871",
+  "chain": "CWE-416->CWE-125",
+  "project": "ghostpdl",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42528871",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "6a3097e2262b61a953651b6280247705945f4c82",
+      "fix_commits": [
+        "6a3097e2262b61a953651b6280247705945f4c82"
+      ],
+      "repo": "https://cgit.ghostscript.com/ghostpdl.git"
+    },
+    "patch": "From 6a3097e2262b61a953651b6280247705945f4c82 Mon Sep 17 00:00:00 2001\nFrom: Chris Liddell <chris.liddell@artifex.com>\nDate: Mon, 9 Oct 2023 14:25:28 +0100\nSubject: [PATCH] oss-fuzz 63013: pdfwrite clean up on type 3 image error\n\nThis highlighted two problems cleaning up after an error initialising to handle\na type 3 image.\n\nFirst, only one of two interim devices was being freed, and as the remaining\ndevice was a forwarding device that forwarded to the freed device, when the\ngarbage collector freed that remaining device, accessing the target device\ncaused use-after-free problems.\n\nSecondly, the streams for the compression filter(s) were not being freed, and\nleft in an unknown state (by the error).\n\nThis fixes both those problems.\n---\n base/stream.c             | 5 ++++-\n devices/vector/gdevpdfi.c | 7 ++++++-\n 2 files changed, 10 insertions(+), 2 deletions(-)\n\ndiff --git a/base/stream.c b/base/stream.c\nindex 51350c6..793d4c5 100644\n--- a/base/stream.c\n+++ b/base/stream.c\n@@ -1284,8 +1284,11 @@ s_add_filter(stream **ps, const stream_template *templat,\n     ess->templat = templat;\n     ess->memory = mem;\n     es->memory = mem;\n-    if (s_init_filter(es, ess, buf, bsize, *ps) < 0)\n+    if (s_init_filter(es, ess, buf, bsize, *ps) < 0) {\n+        gs_free_object(mem, buf, \"s_add_filter(buf)\");\n+        gs_free_object(mem, es, \"s_add_filter(stream)\");\n         return 0;\n+    }\n     *ps = es;\n     return es;\n }\ndiff --git a/devices/vector/gdevpdfi.c b/devices/vector/gdevpdfi.c\nindex f71d4c4..f4b03a6 100644\n--- a/devices/vector/gdevpdfi.c\n+++ b/devices/vector/gdevpdfi.c\n@@ -2184,8 +2184,13 @@ pdf_image3_make_mcde(gx_device *dev, const gs_gstate *pgs,\n         code = pdf_begin_typed_image\n             ((gx_device_pdf *)dev, pgs, pmat, pic, prect, pdcolor, pcpath, mem,\n             pinfo, PDF_IMAGE_TYPE3_DATA);\n-        if (code < 0)\n+        if (code < 0) {\n+            gx_device_set_target((gx_device_forward *)(*pmcdev), NULL);\n+            gs_closedevice((*pmcdev));\n+            gs_free_object(mem, (*pmcdev), \"pdf_image3_make_mcde(*pmcdev)\");\n+            *pmcdev = NULL;\n             return code;\n+        }\n     }\n     /* Due to equal image merging, we delay the adding of the \"Mask\" entry into\n        a type 3 image dictionary until the mask is completed.\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42528871-vul",
+      "digest": "sha256:1fb32bb654f0db9f216dee779820e3f186c0134dafde2e50936f6de43fe2ee19"
+    },
+    "patched": {
+      "ref": "n132/arvo:42528871-fix",
+      "digest": "sha256:8fdeedff5f1e1b64e17a2ebcb86d7cdf36eb7b9f32030199a2317a8527337c81"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/ghostpdl/./base/gdevnfwd.c:33",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/ghostpdl/./base/gdevnfwd.c:33"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

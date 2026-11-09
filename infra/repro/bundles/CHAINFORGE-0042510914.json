@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042510914",
+  "chain": "CWE-416->CWE-125",
+  "project": "libredwg",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42510914",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "9e629ba3649464a928b0af75ddd246b3defee128",
+      "fix_commits": [
+        "9e629ba3649464a928b0af75ddd246b3defee128"
+      ],
+      "repo": "https://github.com/LibreDWG/libredwg"
+    },
+    "patch": "From 9e629ba3649464a928b0af75ddd246b3defee128 Mon Sep 17 00:00:00 2001\nFrom: Aleks L <93376818+sashashura@users.noreply.github.com>\nDate: Thu, 28 Jul 2022 11:32:26 +0100\nSubject: [PATCH] Fixes Heap-use-after-free in dwg_free_TABLEGEOMETRY_private\n\nhttps://bugs.chromium.org/p/oss-fuzz/issues/detail?id=46847\n\nThe title is somewhat misleading, because it is a read out of bounds, but the memory out of the bounds is previously allocated and then freed, so it says use after free.\nIn `add_TABLEGEOMETRY_Cell` function when `o->num_cells` equals to zero, the call to calloc doesn't return NULL because of https://linux.die.net/man/3/calloc#:~:text=If%20nmemb%20or%20size%20is%200%2C%20then%20calloc()%20returns%20either%20NULL%2C%20or%20a%20unique%20pointer%20value%20that%20can%20later%20be%20successfully%20passed%20to%20free().\nSo it passes the check\n```cpp\n  if (!o->cells)\n    {\n      o->num_cells = 0;\n      return NULL;\n    }\n```\nNext it goes to `switch (pair->code)` which is 10. So it fails the `CHECK` because `i == -1` and return NULL, however the `o->cells` has the the address from zeor size calloc call.\n```cpp\n#define CHK_cells                                                             \\\n  if (i < 0 || i >= (int)num_cells || !o->cells)                              \\\n    return NULL;                                                              \\\n```\nLater in `dwg_free_TABLEGEOMETRY_private` an offset of `tablegeometry` is added to the address in `o->cells` so it reasult in heap read overflow.\n---\n src/in_dxf.c | 5 +++++\n 1 file changed, 5 insertions(+)\n\ndiff --git a/src/in_dxf.c b/src/in_dxf.c\nindex 0d2e627..89c57db 100644\n--- a/src/in_dxf.c\n+++ b/src/in_dxf.c\n@@ -5092,6 +5092,11 @@ add_TABLEGEOMETRY_Cell (Dwg_Object *restrict obj, Bit_Chain *restrict dat,\n   BITCODE_H hdl;\n   BITCODE_BL num_cells = o->num_cells;\n   int i = -1, j = -1;\n+\t\n+  if (num_cells < 1)\n+    {\n+      return NULL;\n+    }\n \n   o->cells = (Dwg_TABLEGEOMETRY_Cell *)xcalloc (\n       num_cells, sizeof (Dwg_TABLEGEOMETRY_Cell));\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42510914-vul",
+      "digest": "sha256:180b7690e15c6c83a4c8c827e814f8a312c4e730ed443c4221158c4d24054120"
+    },
+    "patched": {
+      "ref": "n132/arvo:42510914-fix",
+      "digest": "sha256:fed4ca466f732bc0221995c5d80fb8756a105d846af20c0fb8325975d6728967"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/libredwg/src/./dwg.spec:6317",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/libredwg/src/./dwg.spec:6317"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

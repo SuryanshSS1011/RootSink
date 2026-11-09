@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0368076877",
+  "chain": "CWE-416->CWE-125",
+  "project": "gpac",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "368076877",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "fc8eb6b044d59b69ed40dbf6743f0e5dfa76ca1c",
+      "fix_commits": [
+        "fc8eb6b044d59b69ed40dbf6743f0e5dfa76ca1c"
+      ],
+      "repo": "https://github.com/gpac/gpac"
+    },
+    "patch": "From fc8eb6b044d59b69ed40dbf6743f0e5dfa76ca1c Mon Sep 17 00:00:00 2001\nFrom: Aurelien David <aurelien.david@telecom-paristech.fr>\nDate: Wed, 25 Sep 2024 12:56:21 +0200\nSubject: [PATCH] prevent double free in gsf\n\nossfuzz issue 368076877\n---\n src/filters/dmx_gsf.c | 1 +\n 1 file changed, 1 insertion(+)\n\ndiff --git a/src/filters/dmx_gsf.c b/src/filters/dmx_gsf.c\nindex 850d16c..3593ec4 100644\n--- a/src/filters/dmx_gsf.c\n+++ b/src/filters/dmx_gsf.c\n@@ -1412,6 +1412,7 @@ static void gsfdmx_finalize(GF_Filter *filter)\n \n \twhile (gf_list_count(ctx->pck_res)) {\n \t\tGSF_Packet *gsp = gf_list_pop_back(ctx->pck_res);\n+\t\tgf_list_del_item(ctx->pck_res, gsp);\n \t\tif (gsp->frags) gf_free(gsp->frags);\n \t\tgf_free(gsp);\n \t}\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:368076877-vul",
+      "digest": "sha256:70451e0102b4dbfc9cf97eb48ed233a8fcd007de18a2079ff52dedcd475ab13c"
+    },
+    "patched": {
+      "ref": "n132/arvo:368076877-fix",
+      "digest": "sha256:8ebe514a2d41caa9dee0ca250ab6de716afb80974ebaac4f8c7bb452f7090002"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/gpac/src/filters/dmx_gsf.c:1322",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/gpac/src/filters/dmx_gsf.c:1322"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042524744",
+  "chain": "CWE-456->CWE-457",
+  "project": "rdkit",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42524744",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "7053e97a1511f3a716d4cf8320ea9ef6518dc745",
+      "fix_commits": [
+        "7053e97a1511f3a716d4cf8320ea9ef6518dc745"
+      ],
+      "repo": "https://github.com/rdkit/rdkit"
+    },
+    "patch": "From 7053e97a1511f3a716d4cf8320ea9ef6518dc745 Mon Sep 17 00:00:00 2001\nFrom: thomp-j <58603847+thomp-j@users.noreply.github.com>\nDate: Sun, 6 Aug 2023 00:33:08 -0400\nSubject: [PATCH] Fix vulnerabilities found by fuzzer. (#6579)\n\n* Fix vulnerabilities found by fuzzer.\n\n* Fix Typo in RWMol.cpp\n\n* Update RWMol.cpp\n\nThis is an attempt to double check where the test failure is coming from.\n\n* Update RWMol.cpp\n\nRe-adding changes to test tests.\n---\n Code/GraphMol/FileParsers/MolFileParser.cpp | 12 ++++++++++++\n Code/GraphMol/RWMol.cpp                     |  6 ++++--\n 2 files changed, 16 insertions(+), 2 deletions(-)\n\ndiff --git a/Code/GraphMol/FileParsers/MolFileParser.cpp b/Code/GraphMol/FileParsers/MolFileParser.cpp\nindex c28567d..b383df6 100644\n--- a/Code/GraphMol/FileParsers/MolFileParser.cpp\n+++ b/Code/GraphMol/FileParsers/MolFileParser.cpp\n@@ -302,6 +302,12 @@ void ParseOldAtomList(RWMol *mol, const std::string_view &text,\n   int nQueries;\n   try {\n     nQueries = FileParserUtils::toInt(text.substr(9, 1));\n+  } catch (const std::out_of_range &) {\n+    delete q;\n+    std::ostringstream errout;\n+    errout << \"Cannot convert position 9 of '\" << text << \"' to int on line \"\n+           << line;\n+    throw FileParseException(errout.str());\n   } catch (boost::bad_lexical_cast &) {\n     delete q;\n     std::ostringstream errout;\n@@ -316,6 +322,12 @@ void ParseOldAtomList(RWMol *mol, const std::string_view &text,\n     int atNum;\n     try {\n       atNum = FileParserUtils::toInt(text.substr(pos, 3));\n+    } catch (const std::out_of_range &) {\n+      delete q;\n+      std::ostringstream errout;\n+      errout << \"Cannot convert position \" << pos << \" of '\" << text\n+             << \"' to int on line \" << line;\n+      throw FileParseException(errout.str());\n     } catch (boost::bad_lexical_cast &) {\n       delete q;\n       std::ostringstream errout;\ndiff --git a/Code/GraphMol/RWMol.cpp b/Code/GraphMol/RWMol.cpp\nindex 858bf5b..e92e6cc 100644\n--- a/Code/GraphMol/RWMol.cpp\n+++ b/Code/GraphMol/RWMol.cpp\n@@ -158,10 +158,12 @@ void RWMol::replaceAtom(unsigned int idx, Atom *atom_pin, bool,\n   for (auto &group : d_stereo_groups) {\n     auto atoms = group.getAtoms();\n     auto aiter = std::find(atoms.begin(), atoms.end(), orig_p);\n-    if (aiter != atoms.end()) {\n+    while (aiter != atoms.end()) {\n       *aiter = atom_p;\n-      group = StereoGroup(group.getGroupType(), std::move(atoms));\n+      ++aiter;\n+      aiter = std::find(aiter, atoms.end(), orig_p);\n     }\n+    group = StereoGroup(group.getGroupType(), std::move(atoms));\n   }\n };\n \n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42524744-vul",
+      "digest": "sha256:df099cac97cf1362d326378ef5602be6851a74769c4ac695b7b7f072db40debc"
+    },
+    "patched": {
+      "ref": "n132/arvo:42524744-fix",
+      "digest": "sha256:472eee84823a24e5cb6440d8666b965333413b195d08f5509f9ca3a7010ae6f5"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/rdkit/Code/GraphMol/new_canon.cpp:560",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/rdkit/Code/GraphMol/new_canon.cpp:560"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

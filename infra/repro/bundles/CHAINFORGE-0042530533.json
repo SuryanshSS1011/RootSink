@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042530533",
+  "chain": "CWE-1284->CWE-125",
+  "project": "wireshark",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42530533",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "e67283ddca70a7652b7dd41ef8883ee3278501d0",
+      "fix_commits": [
+        "e67283ddca70a7652b7dd41ef8883ee3278501d0"
+      ],
+      "repo": "https://github.com/wireshark/wireshark"
+    },
+    "patch": "diff --git a/epan/dissectors/packet-ismp.c b/epan/dissectors/packet-ismp.c\nindex e8c8dba6d8e..4b91b26ef8d 100644\n--- a/epan/dissectors/packet-ismp.c\n+++ b/epan/dissectors/packet-ismp.c\n@@ -236,11 +236,11 @@ dissect_ismp_edp(tvbuff_t *tvb, packet_info *pinfo, int offset, proto_tree *ismp\n \tguint16 num_neighbors = 0;\n \tguint16 num_tuples = 0;\n \tguint16 tuple_type = 0;\n-\tguint16 tuple_length = 0;\n+\tguint32 tuple_length = 0;\n \tgchar* ipx_addr_str;\n \n \t/* Set up structures needed to add the protocol subtree and manage it */\n-\tproto_item *edp_ti, *ti;\n+\tproto_item *edp_ti;\n \tproto_tree *edp_tree;\n \n \tproto_item *edp_neighbors_ti;\n@@ -429,23 +429,27 @@ dissect_ismp_edp(tvbuff_t *tvb, packet_info *pinfo, int offset, proto_tree *ismp\n \t\t\twhile ( (tuples_count < num_tuples) && (tvb_reported_length_remaining(tvb, offset) >= 4) )\n \t\t\t{\n \n-\t\t\t\ttuple_length = tvb_get_ntohs(tvb, offset+2);\n-\t\t\t\tedp_tuples_leaf_tree = proto_tree_add_subtree_format(edp_tuples_tree, tvb, offset, tuple_length,\n+\t\t\t\tedp_tuples_leaf_tree = proto_tree_add_subtree_format(edp_tuples_tree, tvb, offset, 4,\n \t\t\t\t\tett_ismp_edp_tuples_leaf, NULL, \"Tuple%d\", tuples_count+1);\n \n \t\t\t\ttuple_type = tvb_get_ntohs(tvb, offset);\n \t\t\t\tproto_tree_add_item(edp_tuples_leaf_tree, hf_ismp_tuple_type, tvb, offset, 2, ENC_BIG_ENDIAN);\n \t\t\t\toffset += 2;\n-\t\t\t\tproto_tree_add_item(edp_tuples_leaf_tree, hf_ismp_tuple_length, tvb, offset, 2, ENC_BIG_ENDIAN);\n+\t\t\t\tproto_tree_add_item_ret_uint(edp_tuples_leaf_tree, hf_ismp_tuple_length, tvb, offset, 2, ENC_BIG_ENDIAN, &tuple_length);\n+\t\t\t\tif (tuple_length < 4) {\n+\t\t\t\t\tproto_tree_add_expert(edp_tree, pinfo, &ei_ismp_malformed, tvb, offset, 2);\n+\t\t\t\t\treturn;\n+\t\t\t\t}\n \t\t\t\toffset += 2;\n+\t\t\t\tproto_item_set_len(edp_tuples_leaf_tree, tuple_length);\n+\t\t\t\ttuple_length -= 4;\n \n-\t\t\t\tif (tvb_reported_length_remaining(tvb, offset) >= tuple_length)\n+\t\t\t\tif ((guint)tvb_reported_length_remaining(tvb, offset) >= tuple_length)\n \t\t\t\t{\n \t\t\t\t\tswitch (tuple_type)\n \t\t\t\t\t{\n \t\t\t\t\t\tcase EDP_TUPLE_HOLD:\n-\t\t\t\t\t\t\tti = proto_tree_add_item(edp_tuples_leaf_tree, hf_ismp_hold_time, tvb, offset, hf_ismp_hold_time, ENC_BIG_ENDIAN);\n-                            proto_item_set_len(ti, tuple_length);\n+\t\t\t\t\t\t\tproto_tree_add_item(edp_tuples_leaf_tree, hf_ismp_hold_time, tvb, offset, tuple_length, ENC_BIG_ENDIAN);\n \t\t\t\t\t\t\tbreak;\n \t\t\t\t\t\tcase EDP_TUPLE_INT_NAME:\n \t\t\t\t\t\t\tproto_tree_add_item(edp_tuples_leaf_tree, hf_ismp_interface_name, tvb, offset, tuple_length, ENC_NA|ENC_ASCII);\n@@ -456,8 +460,11 @@ dissect_ismp_edp(tvbuff_t *tvb, packet_info *pinfo, int offset, proto_tree *ismp\n \t\t\t\t\t\t\tproto_tree_add_item(edp_tuples_leaf_tree, hf_ismp_system_description, tvb, offset, tuple_length, ENC_NA|ENC_ASCII);\n \t\t\t\t\t\t\tbreak;\n \t\t\t\t\t\tcase EDP_TUPLE_IPX_ADDR:\n-\t\t\t\t\t\t\tipx_addr_str = ipx_addr_to_str(tvb_get_ntohl(tvb, offset),\n-\t\t\t\t\t\t\t\ttvb_get_string_enc(wmem_packet_scope(), tvb, offset+4, tuple_length-4, ENC_ASCII));\n+\t\t\t\t\t\t\tif (tuple_length != 4+6) {\n+\t\t\t\t\t\t\t\tproto_tree_add_expert(edp_tree, pinfo, &ei_ismp_malformed, tvb, offset, tuple_length);\n+\t\t\t\t\t\t\t\treturn;\n+\t\t\t\t\t\t\t}\n+\t\t\t\t\t\t\tipx_addr_str = ipx_addr_to_str(tvb_get_ntohl(tvb, offset), tvb_get_ptr(tvb, offset+4, tuple_length-4));\n \t\t\t\t\t\t\tproto_tree_add_string(edp_tuples_leaf_tree, hf_ismp_interface_ipx_address ,tvb, offset, tuple_length, ipx_addr_str);\n \t\t\t\t\t\t\tbreak;\n \t\t\t\t\t\tcase EDP_TUPLE_UNKNOWN:\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42530533-vul",
+      "digest": "sha256:ece251c142aaeba2cdf450729fbf0ce15a848214c4f05c28ad05f7da34fe7fcb"
+    },
+    "patched": {
+      "ref": "n132/arvo:42530533-fix",
+      "digest": "sha256:81d03f3acd3fea4b96299e0995d5717f5561ec640627c075c5c2cfe2e9830680"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/wireshark/epan/wmem/wmem_map.c:389",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/wireshark/epan/wmem/wmem_map.c:389"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,87 @@
+==3335972==WARNING: ASan doesn't fully support makecontext/swapcontext functions and may produce false positives in some cases!
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 4107715071
+INFO: Loaded 1 modules   (83424 inline 8-bit counters): 83424 [0x55898ec1fc80, 0x55898ec34260), 
+INFO: Loaded 1 PC tables (83424 PCs): 83424 [0x55898ec34260,0x55898ed7a060), 
+/out/qemu-fuzz-i386-target-generic-fuzz-e1000: Running 1 inputs 1 time(s) each.
+Running: /tmp/poc
+Matching objects by name e1000
+This process will try to fuzz the following MemoryRegions:
+  * bus master container[0] (size 0xffffffffffffffff)
+  * e1000-io[0] (size 0x40)
+  * bus master[0] (size 0xffffffffffffffff)
+  * e1000-mmio[0] (size 0x20000)
+=================================================================
+==3335972==ERROR: AddressSanitizer: stack-buffer-overflow on address 0x15485c855d38 at pc 0x55898ca9a62e bp 0x7ffe067c8b70 sp 0x7ffe067c8b68
+READ of size 8 at 0x15485c855d38 thread T0
+SCARINESS: 48 (8-byte-read-stack-buffer-overflow-far-from-bounds)
+    #0 0x55898ca9a62d in e1000_receive_iov /src/qemu/build-oss-fuzz/../hw/net/e1000.c:930:25
+    #1 0x55898cf0e0da in qemu_deliver_packet_iov /src/qemu/build-oss-fuzz/../net/net.c:820:15
+    #2 0x55898cf0f456 in qemu_net_queue_deliver /src/qemu/build-oss-fuzz/../net/queue.c:164:11
+    #3 0x55898cf0f456 in qemu_net_queue_receive /src/qemu/build-oss-fuzz/../net/queue.c:193:12
+    #4 0x55898cf08c99 in qemu_receive_packet /src/qemu/build-oss-fuzz/../net/net.c:751:12
+    #5 0x55898ca98e97 in e1000_send_packet /src/qemu/build-oss-fuzz/../hw/net/e1000.c:570:9
+    #6 0x55898ca9850b in xmit_seg /src/qemu/build-oss-fuzz/../hw/net/e1000.c
+    #7 0x55898ca96ef5 in process_tx_desc /src/qemu/build-oss-fuzz/../hw/net/e1000.c:725:9
+    #8 0x55898ca96ef5 in start_xmit /src/qemu/build-oss-fuzz/../hw/net/e1000.c:785:9
+    #9 0x55898ca96ef5 in set_tctl /src/qemu/build-oss-fuzz/../hw/net/e1000.c:1111:5
+    #10 0x55898ca949b7 in e1000_mmio_write /src/qemu/build-oss-fuzz/../hw/net/e1000.c:1285:13
+    #11 0x55898d2ac9db in memory_region_write_accessor /src/qemu/build-oss-fuzz/../softmmu/memory.c:493:5
+    #12 0x55898d2ac56f in access_with_adjusted_size /src/qemu/build-oss-fuzz/../softmmu/memory.c:569:18
+    #13 0x55898d2ac180 in memory_region_dispatch_write /src/qemu/build-oss-fuzz/../softmmu/memory.c
+    #14 0x55898d2d6a35 in flatview_write_continue /src/qemu/build-oss-fuzz/../softmmu/physmem.c:2653:23
+    #15 0x55898d2ce52d in flatview_write /src/qemu/build-oss-fuzz/../softmmu/physmem.c:2695:12
+    #16 0x55898d2ce164 in address_space_write /src/qemu/build-oss-fuzz/../softmmu/physmem.c:2791:18
+    #17 0x55898d3c1156 in __wrap_qtest_writel /src/qemu/build-oss-fuzz/../tests/qtest/fuzz/qtest_wrappers.c:177:9
+    #18 0x55898d3c7057 in op_write /src/qemu/build-oss-fuzz/../tests/qtest/fuzz/generic_fuzz.c:485:13
+    #19 0x55898d3c57eb in generic_fuzz /src/qemu/build-oss-fuzz/../tests/qtest/fuzz/generic_fuzz.c:666:13
+    #20 0x55898d3be6cc in LLVMFuzzerTestOneInput /src/qemu/build-oss-fuzz/../tests/qtest/fuzz/fuzz.c:158:5
+    #21 0x55898c62aa83 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:611:15
+    #22 0x55898c6161e2 in fuzzer::RunOneTest(fuzzer::Fuzzer*, char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:324:6
+    #23 0x55898c61ba8c in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:860:9
+    #24 0x55898c644fc2 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #25 0x15485d25e082 in __libc_start_main (/out/lib/libc.so.6+0x24082) (BuildId: 1878e6b475720c7c51969e69ab2d276fae6d1dee)
+    #26 0x55898c60c3ad in _start (/out/qemu-fuzz-i386-target-generic-fuzz-e1000+0xd4c3ad)
+
+DEDUP_TOKEN: e1000_receive_iov--qemu_deliver_packet_iov--qemu_net_queue_deliver
+Address 0x15485c855d38 is located in stack of thread T0 at offset 56 in frame
+    #0 0x55898cf0f2af in qemu_net_queue_receive /src/qemu/build-oss-fuzz/../net/queue.c:188
+
+DEDUP_TOKEN: qemu_net_queue_receive
+  This frame has 1 object(s):
+    [32, 48) 'iov.i' (line 158) <== Memory access at offset 56 overflows this variable
+HINT: this may be a false positive if your program uses some custom stack unwind mechanism, swapcontext or vfork
+      (longjmp and C++ exceptions *are* supported)
+SUMMARY: AddressSanitizer: stack-buffer-overflow /src/qemu/build-oss-fuzz/../hw/net/e1000.c:930:25 in e1000_receive_iov
+Shadow bytes around the buggy address:
+  0x02a98b902b50: f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5
+  0x02a98b902b60: f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5
+  0x02a98b902b70: f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5
+  0x02a98b902b80: f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5
+  0x02a98b902b90: f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5
+=>0x02a98b902ba0: f1 f1 f1 f1 00 00 f3[f3]f5 f5 f5 f5 f5 f5 f5 f5
+  0x02a98b902bb0: f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5
+  0x02a98b902bc0: f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5
+  0x02a98b902bd0: f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5
+  0x02a98b902be0: f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5
+  0x02a98b902bf0: f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+==3335972==ABORTING

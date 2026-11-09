@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042496818",
+  "chain": "CWE-416->CWE-125",
+  "project": "dovecot",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42496818",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "9f5e723974420af0014a397bb390b57f3b9a9431",
+      "fix_commits": [
+        "9f5e723974420af0014a397bb390b57f3b9a9431"
+      ],
+      "repo": "https://github.com/dovecot/core"
+    },
+    "patch": "From 9f5e723974420af0014a397bb390b57f3b9a9431 Mon Sep 17 00:00:00 2001\nFrom: Stephan Bosch <stephan.bosch@open-xchange.com>\nDate: Thu, 6 May 2021 11:58:21 +0200\nSubject: [PATCH] lib-smtp: smtp-server-cmd-data - Fix global state cleanup\n upon DATA command destroy.\n\nShould cleanup global state only when it belongs to the DATA/BDAT command\ncurrently being destroyed.\n\nFixes NULL-dereference in i_stream_read() found by OSS-Fuzz.\n---\n src/lib-smtp/smtp-server-cmd-data.c    |   9 +-\n src/lib-smtp/test-smtp-server-errors.c | 128 +++++++++++++++++++++++++\n 2 files changed, 135 insertions(+), 2 deletions(-)\n\ndiff --git a/src/lib-smtp/smtp-server-cmd-data.c b/src/lib-smtp/smtp-server-cmd-data.c\nindex 44e2927..0196522 100644\n--- a/src/lib-smtp/smtp-server-cmd-data.c\n+++ b/src/lib-smtp/smtp-server-cmd-data.c\n@@ -12,6 +12,7 @@\n /* DATA/BDAT/B... commands */\n \n struct cmd_data_context {\n+\tstruct istream *main_input;\n \tstruct istream *chunk_input;\n \tuoff_t chunk_size;\n \n@@ -135,8 +136,9 @@ cmd_data_destroy(struct smtp_server_cmd_ctx *cmd,\n \n \ti_assert(data_cmd != NULL);\n \n-\tif (data_cmd->chunk_last ||\n-\t\t!smtp_server_command_replied_success(command)) {\n+\tif (data_cmd->main_input == conn->state.data_input &&\n+\t    (data_cmd->chunk_last ||\n+\t     !smtp_server_command_replied_success(command))) {\n \t\t/* clean up */\n \t\ti_stream_destroy(&conn->state.data_input);\n \t\ti_stream_destroy(&conn->state.data_chain_input);\n@@ -392,6 +394,7 @@ cmd_data_next(struct smtp_server_cmd_ctx *cmd,\n \t\tsmtp_server_command_ref(cmd_temp);\n \t\ti_assert(callbacks != NULL &&\n \t\t\t callbacks->conn_cmd_data_begin != NULL);\n+\t\ti_assert(conn->state.data_input != NULL);\n \t\tif (callbacks->conn_cmd_data_begin(conn->context,\n \t\t\tcmd, conn->state.trans, conn->state.data_input) < 0) {\n \t\t\ti_assert(smtp_server_command_is_replied(cmd_temp));\n@@ -427,9 +430,11 @@ cmd_data_start_input(struct smtp_server_cmd_ctx *cmd,\n \ti_assert(data_cmd != NULL);\n \n \tif (input != NULL) {\n+\t\ti_assert(conn->state.data_input == NULL);\n \t\tconn->state.data_input = input;\n \t\ti_stream_ref(input);\n \t}\n+\tdata_cmd->main_input = conn->state.data_input;\n \n \tif (data_cmd->client_input)\n \t\tsmtp_server_command_input_lock(cmd);\ndiff --git a/src/lib-smtp/test-smtp-server-errors.c b/src/lib-smtp/test-smtp-server-errors.c\nindex 50f3e62..25d6a04 100644\n--- a/src/lib-smtp/test-smtp-server-errors.c\n+++ b/src/lib-smtp/test-smtp-server-errors.c\n@@ -2584,6 +2584,133 @@ static void test_bad_pipelined_data(void)\n \ttest_end();\n }\n \n+/*\n+ * Bad pipelined DATA #2\n+ */\n+\n+/* client */\n+\n+static void test_bad_pipelined_data2_connected(struct client_connection *conn)\n+{\n+\to_stream_nsend_str(conn->conn.output,\n+\t\t\t   \"MAIL FROM:<frop@example.com>\\r\\n\"\n+\t\t\t   \"DATA\\r\\n\"\n+\t\t\t   \"DATA\\r\\n\"\n+\t\t\t   \"RCPT TO:<frop@example.com>\\r\\n\"\n+\t\t\t   \"BDAT 0\\r\\n\");\n+}\n+\n+static void test_client_bad_pipelined_data2(unsigned int index)\n+{\n+\ttest_client_connected = test_bad_pipelined_data2_connected;\n+\ttest_client_run(index);\n+}\n+\n+/* server */\n+\n+struct _bad_pipelined_data2 {\n+\tstruct istream *payload_input;\n+\tstruct io *io;\n+};\n+\n+static void\n+test_server_bad_pipelined_data2_trans_free(\n+\tvoid *conn_ctx ATTR_UNUSED, struct smtp_server_transaction *trans)\n+{\n+\tstruct _bad_pipelined_data2 *ctx = trans->context;\n+\n+\ti_free(ctx);\n+\tio_loop_stop(ioloop);\n+}\n+\n+static int\n+test_server_bad_pipelined_data2_rcpt(\n+\tvoid *conn_ctx ATTR_UNUSED, struct smtp_server_cmd_ctx *cmd ATTR_UNUSED,\n+\tstruct smtp_server_recipient *rcpt)\n+{\n+\tif (debug) {\n+\t\ti_debug(\"RCPT TO:%s\",\n+\t\t\tsmtp_address_encode(rcpt->path));\n+\t}\n+\treturn 1;\n+}\n+\n+static int\n+test_server_bad_pipelined_data2_data_begin(\n+\tvoid *conn_ctx ATTR_UNUSED, struct smtp_server_cmd_ctx *cmd ATTR_UNUSED,\n+\tstruct smtp_server_transaction *trans, struct istream *data_input)\n+{\n+\tstruct _bad_pipelined_data2 *ctx;\n+\n+\tif (debug)\n+\t\ti_debug(\"DATA\");\n+\n+\tctx = i_new(struct _bad_pipelined_data2, 1);\n+\ttrans->context = ctx;\n+\n+\tctx->payload_input = data_input;\n+\treturn 0;\n+}\n+\n+static int\n+test_server_bad_pipelined_data2_data_continue(\n+\tvoid *conn_ctx ATTR_UNUSED, struct smtp_server_cmd_ctx *cmd,\n+\tstruct smtp_server_transaction *trans ATTR_UNUSED)\n+{\n+\tstruct _bad_pipelined_data2 *ctx = trans->context;\n+\tsize_t size;\n+\tssize_t ret;\n+\n+\twhile ((ret = i_stream_read(ctx->payload_input)) > 0 || ret == -2) {\n+\t\tsize = i_stream_get_data_size(ctx->payload_input);\n+\t\ti_stream_skip(ctx->payload_input, size);\n+\t}\n+\n+\tif (ret == 0)\n+\t\treturn 0;\n+\tif (ret < 0 && ctx->payload_input->stream_errno != 0) {\n+\t\t/* Client probably disconnected */\n+\t\treturn -1;\n+\t}\n+\n+\tsmtp_server_reply_all(cmd, 250, \"2.0.0\", \"Accepted\");\n+\treturn 1;\n+}\n+\n+static void\n+test_server_bad_pipelined_data2(const struct smtp_server_settings *server_set)\n+{\n+\tserver_callbacks.conn_trans_free =\n+\t\ttest_server_bad_pipelined_data2_trans_free;\n+\tserver_callbacks.conn_cmd_rcpt =\n+\t\ttest_server_bad_pipelined_data2_rcpt;\n+\tserver_callbacks.conn_cmd_data_begin =\n+\t\ttest_server_bad_pipelined_data2_data_begin;\n+\tserver_callbacks.conn_cmd_data_continue =\n+\t\ttest_server_bad_pipelined_data2_data_continue;\n+\ttest_server_run(server_set);\n+}\n+\n+/* test */\n+\n+static void test_bad_pipelined_data2(void)\n+{\n+\tstruct smtp_server_settings smtp_server_set;\n+\n+\ttest_server_defaults(&smtp_server_set);\n+\tsmtp_server_set.capabilities =\n+\t\tSMTP_CAPABILITY_BINARYMIME | SMTP_CAPABILITY_CHUNKING;\n+\tsmtp_server_set.max_client_idle_time_msecs = 1000;\n+\tsmtp_server_set.max_recipients = 10;\n+\tsmtp_server_set.max_pipelined_commands = 16;\n+\n+\ttest_begin(\"Bad pipelined DATA #2\");\n+\ttest_run_client_server(&smtp_server_set,\n+\t\t\t       test_server_bad_pipelined_data2,\n+\t\t\t       test_client_bad_pipelined_data2, 1);\n+\ttest_end();\n+}\n+\n /*\n  * DATA with BINARYMIME\n  */\n@@ -2929,6 +3056,7 @@ static void (*const test_functions[])(void) = {\n \ttest_data_no_mail,\n \ttest_data_no_rcpt,\n \ttest_bad_pipelined_data,\n+\ttest_bad_pipelined_data2,\n \ttest_data_binarymime,\n \ttest_mail_broken_path,\n \tNULL\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42496818-vul",
+      "digest": "sha256:3af38a2cc87d2338e01130ac0f0544159bf6b1b7d0f8d86c19fa30133536c1de"
+    },
+    "patched": {
+      "ref": "n132/arvo:42496818-fix",
+      "digest": "sha256:9d7977c8eb92f1a055be1497bce2d816c4b9c0c7039f63bd08d8cf3d60425508"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/dovecot/src/lib/istream.c:250",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/dovecot/src/lib/istream.c:250"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042473891",
+  "chain": "CWE-416->CWE-125",
+  "project": "gdal",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42473891",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "1175a0de53d9a22112b2cf119f653861a660f236",
+      "fix_commits": [
+        "1175a0de53d9a22112b2cf119f653861a660f236"
+      ],
+      "repo": "https://github.com/OSGeo/gdal"
+    },
+    "patch": "From 1175a0de53d9a22112b2cf119f653861a660f236 Mon Sep 17 00:00:00 2001\nFrom: Even Rouault <even.rouault@spatialys.com>\nDate: Sun, 10 Mar 2019 15:09:44 +0100\nSubject: [PATCH] DXF: fix double-free issue in case of writing error. Fixes\n https://bugs.chromium.org/p/oss-fuzz/issues/detail?id=13516. Credit to OSS\n Fuzz\n\n---\n gdal/ogr/ogrsf_frmts/dxf/ogrdxfwriterds.cpp | 7 ++++---\n 1 file changed, 4 insertions(+), 3 deletions(-)\n\ndiff --git a/gdal/ogr/ogrsf_frmts/dxf/ogrdxfwriterds.cpp b/gdal/ogr/ogrsf_frmts/dxf/ogrdxfwriterds.cpp\nindex 20a5189..396947d 100644\n--- a/gdal/ogr/ogrsf_frmts/dxf/ogrdxfwriterds.cpp\n+++ b/gdal/ogr/ogrsf_frmts/dxf/ogrdxfwriterds.cpp\n@@ -583,18 +583,19 @@ bool OGRDXFWriterDS::TransferUpdateTrailer( VSILFILE *fpOut )\n /* -------------------------------------------------------------------- */\n /*      Copy the remainder of the file.                                 */\n /* -------------------------------------------------------------------- */\n+    bool ret = true;\n     while( (nCode = oReader.ReadValue( szLineBuf, sizeof(szLineBuf) )) != -1 )\n     {\n         if( !WriteValue( fpOut, nCode, szLineBuf ) )\n         {\n-            VSIFCloseL( fp );\n-            return false;\n+            ret = false;\n+            break;\n         }\n     }\n \n     VSIFCloseL( l_fp );\n \n-    return true;\n+    return ret;\n }\n \n /************************************************************************/\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42473891-vul",
+      "digest": "sha256:cc1a12cbecad1c7b0f264f42826415e7ad1d7a7d92e4c9c5a6be1ad88c2cde9e"
+    },
+    "patched": {
+      "ref": "n132/arvo:42473891-fix",
+      "digest": "sha256:7f5b125423447d473c6f95ebaa44ae0185afc0aa5314ce25b240777e0814f682"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/gdal/gdal/port/cpl_vsil.cpp:934",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/gdal/gdal/port/cpl_vsil.cpp:934"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-968195153",
+  "chain": "CWE-456->CWE-457",
+  "project": "librawspeed",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42510751",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/darktable-org/rawspeed/commit/a1a415052fc3632b50b576891cab04b66451255b",
+      "fix_commits": [
+        "a1a415052fc3632b50b576891cab04b66451255b"
+      ],
+      "repo": "https://github.com/darktable-org/rawspeed"
+    },
+    "patch": "diff --git a/src/librawspeed/decompressors/LJpegDecompressor.cpp b/src/librawspeed/decompressors/LJpegDecompressor.cpp\nindex 56257530c..91845e958 100644\n--- a/src/librawspeed/decompressors/LJpegDecompressor.cpp\n+++ b/src/librawspeed/decompressors/LJpegDecompressor.cpp\n@@ -81,6 +81,12 @@ void LJpegDecompressor::decodeScan()\n   if ((mRaw->getCpp() * (mRaw->dim.x - offX)) < frame.cps)\n     ThrowRDE(\"Got less pixels than the components per sample\");\n \n+  const auto frameWidth = frame.cps * frame.w;\n+  if (frameWidth < w || frame.h < h) {\n+    ThrowRDE(\"LJpeg frame (%u, %u) is smaller than expected (%u, %u)\",\n+             frameWidth, frame.h, w, h);\n+  }\n+\n   switch (frame.cps) {\n   case 2:\n     decodeN<2>();\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42510751-vul",
+      "digest": "sha256:5d8489b4cc0e6e339103da1efc2dc0ebe74857d6efdb89ae1ff93fbc8e0d8674"
+    },
+    "patched": {
+      "ref": "n132/arvo:42510751-fix",
+      "digest": "sha256:c3de6dcb13520bb6c9f5884afc27755a51fd12f9daf667fbf1aabcbd12cf1f91"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/librawspeed/src/librawspeed/common/RawImage.cpp:168",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/librawspeed/src/librawspeed/common/RawImage.cpp:168"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

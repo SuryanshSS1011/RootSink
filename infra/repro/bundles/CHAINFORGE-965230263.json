@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-965230263",
+  "chain": "CWE-456->CWE-457",
+  "project": "c-blosc",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42501969",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/Blosc/c-blosc/commit/8f702156e8c9ecc8bbcbabfc0d8ee38bc294dddd",
+      "fix_commits": [
+        "8f702156e8c9ecc8bbcbabfc0d8ee38bc294dddd"
+      ],
+      "repo": "https://github.com/Blosc/c-blosc"
+    },
+    "patch": "diff --git a/blosc/blosc.h b/blosc/blosc.h\nindex c1ff3944..77a2411f 100644\n--- a/blosc/blosc.h\n+++ b/blosc/blosc.h\n@@ -25,7 +25,7 @@ extern \"C\" {\n #define BLOSC_VERSION_REVISION \"$Rev$\"   /* revision version */\n #define BLOSC_VERSION_DATE     \"$Date:: 2020-12-22 #$\"    /* date version */\n \n-#define BLOSCLZ_VERSION_STRING \"2.5.0\"   /* the internal compressor version */\n+#define BLOSCLZ_VERSION_STRING \"2.5.1\"   /* the internal compressor version */\n \n /* The *_FORMAT symbols should be just 1-byte long */\n #define BLOSC_VERSION_FORMAT    2   /* Blosc format version, starting at 1 */\ndiff --git a/blosc/blosclz.c b/blosc/blosclz.c\nindex 4e1f648f..a0552c2c 100644\n--- a/blosc/blosclz.c\n+++ b/blosc/blosclz.c\n@@ -462,6 +462,7 @@ int blosclz_compress(const int clevel, const void* input, int length,\n   const uint8_t* ip_bound = ibase + length - 1;\n   const uint8_t* ip_limit = ibase + length - 12;\n   uint8_t* op = (uint8_t*)output;\n+  const uint8_t* op_limit = op + maxout;\n \n   /* input and output buffer cannot be less than 16 and 66 bytes or we can get into trouble */\n   if (length < 16 || maxout < 66) {\n@@ -481,7 +482,6 @@ int blosclz_compress(const int clevel, const void* input, int length,\n   *op++ = *ip++;\n \n   /* main loop */\n-  const uint8_t* op_limit = op + maxout;\n   while (BLOSCLZ_LIKELY(ip < ip_limit)) {\n     const uint8_t* ref;\n     unsigned distance;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42501969-vul",
+      "digest": "sha256:e2a322a7a0b8b551f7331fda517a122438e70814fe304cf9d2358a9037aef6f8"
+    },
+    "patched": {
+      "ref": "n132/arvo:42501969-fix",
+      "digest": "sha256:9cc8cfd6716bd091c21245b2faaf80a9e2d7c3c8f05dd5a4fd73824e2ad7422d"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/c-blosc/blosc/blosc.c:1458",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/c-blosc/blosc/blosc.c:1458"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

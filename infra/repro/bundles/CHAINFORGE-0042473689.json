@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042473689",
+  "chain": "CWE-1284->CWE-787",
+  "project": "openthread",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42473689",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "a3548df579617e737b075be4a88591e68195e115",
+      "fix_commits": [
+        "a3548df579617e737b075be4a88591e68195e115"
+      ],
+      "repo": "https://github.com/openthread/openthread"
+    },
+    "patch": "diff --git a/src/core/common/encoding.hpp b/src/core/common/encoding.hpp\nindex bf35678a02e..786c8aa4f42 100644\n--- a/src/core/common/encoding.hpp\n+++ b/src/core/common/encoding.hpp\n@@ -76,7 +76,7 @@ inline uint32_t Reverse32(uint32_t v)\n     return v;\n }\n \n-#define BitVectorBytes(x) (((x) + (CHAR_BIT - 1)) / CHAR_BIT)\n+#define BitVectorBytes(x) static_cast<uint8_t>(((x) + (CHAR_BIT - 1)) / CHAR_BIT)\n \n namespace BigEndian {\n \ndiff --git a/src/core/thread/network_data_tlvs.hpp b/src/core/thread/network_data_tlvs.hpp\nindex 26de34ad2b7..4de23f10fe8 100644\n--- a/src/core/thread/network_data_tlvs.hpp\n+++ b/src/core/thread/network_data_tlvs.hpp\n@@ -345,7 +345,8 @@ class PrefixTlv : public NetworkDataTlv\n     bool IsValid(void) const\n     {\n         return ((GetLength() >= sizeof(*this) - sizeof(NetworkDataTlv)) &&\n-                (GetLength() >= BitVectorBytes(mPrefixLength) + sizeof(*this) - sizeof(NetworkDataTlv)));\n+                (GetLength() >= BitVectorBytes(mPrefixLength) + sizeof(*this) - sizeof(NetworkDataTlv)) &&\n+                (BitVectorBytes(mPrefixLength) <= sizeof(Ip6::Address)));\n     }\n \n     /**\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42473689-vul",
+      "digest": "sha256:405ea49901fa05d639ad3e73ab21e4d1c79ea262445da9f3faed9c47463d7354"
+    },
+    "patched": {
+      "ref": "n132/arvo:42473689-fix",
+      "digest": "sha256:ad88e4dc805716fd73887029fcb9a20db29097562faec603f8424f718553fb19"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/openthread/src/core/thread/network_data.cpp:138",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/openthread/src/core/thread/network_data.cpp:138"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

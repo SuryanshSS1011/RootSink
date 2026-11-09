@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042474701",
+  "chain": "CWE-416->CWE-125",
+  "project": "karchive",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42474701",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "b401e24093d8b3405a8a349d926131fb56cad631",
+      "fix_commits": [
+        "b401e24093d8b3405a8a349d926131fb56cad631"
+      ],
+      "repo": "https://invent.kde.org/frameworks/karchive.git"
+    },
+    "patch": "diff --git a/autotests/karchivetest.cpp b/autotests/karchivetest.cpp\nindex 085aaa962eca5b20567ca6c8189c2df152a77baf..bdaa2697ac4a05bea0218a96c720de9d13ebe7af 100644\n--- a/autotests/karchivetest.cpp\n+++ b/autotests/karchivetest.cpp\n@@ -757,6 +757,24 @@ void KArchiveTest::testTarDirectoryForgotten()\n     QVERIFY(tar.close());\n }\n \n+void KArchiveTest::testTarEmptyFileMissingDir()\n+{\n+    KTar tar(QFINDTESTDATA(QLatin1String(\"tar_emptyfile_missingdir.tar.gz\")));\n+    QVERIFY(tar.open(QIODevice::ReadOnly));\n+\n+    const KArchiveDirectory *dir = tar.directory();\n+    QVERIFY(dir != nullptr);\n+\n+    const QStringList listing = recursiveListEntries(dir, QLatin1String(\"\"), 0);\n+\n+    QCOMPARE(listing[0], QString(\"mode=40777 path=dir type=dir\"));\n+    QCOMPARE(listing[1], QString(\"mode=40777 path=dir/foo type=dir\"));\n+    QCOMPARE(listing[2], QString(\"mode=644 path=dir/foo/file type=file size=0\"));\n+    QCOMPARE(listing.count(), 3);\n+\n+    QVERIFY(tar.close());\n+}\n+\n void KArchiveTest::testTarRootDir() // bug 309463\n {\n     KTar tar(QFINDTESTDATA(QLatin1String(\"tar_rootdir.tar.gz\")));\ndiff --git a/autotests/karchivetest.h b/autotests/karchivetest.h\nindex 8dc0f9819e6121e7cd52de6c0c6908a03a64bac1..079cfca7890cfb191a065ef95f8aacf705f8fe29 100644\n--- a/autotests/karchivetest.h\n+++ b/autotests/karchivetest.h\n@@ -74,6 +74,7 @@ private Q_SLOTS:\n     void testTarGlobalHeader();\n     void testTarPrefix();\n     void testTarDirectoryForgotten();\n+    void testTarEmptyFileMissingDir();\n     void testTarRootDir();\n     void testTarDirectoryTwice();\n     void testTarIgnoreRelativePathOutsideArchive();\ndiff --git a/autotests/tar_emptyfile_missingdir.tar.gz b/autotests/tar_emptyfile_missingdir.tar.gz\nnew file mode 100644\nindex 0000000000000000000000000000000000000000..12aac6e4eba2c273365b4747f860db5ea59e26d3\nBinary files /dev/null and b/autotests/tar_emptyfile_missingdir.tar.gz differ\ndiff --git a/src/karchive.cpp b/src/karchive.cpp\nindex e83eaf526823118c2a7b6050b053820a2d713e62..5bf0af3f96fde9d3f2ef954959bdb922daf8c7c2 100644\n--- a/src/karchive.cpp\n+++ b/src/karchive.cpp\n@@ -50,6 +50,71 @@\n #include <windows.h> // DWORD, GetUserNameW\n #endif // Q_OS_WIN\n \n+////////////////////////////////////////////////////////////////////////\n+/////////////////// KArchiveDirectoryPrivate ///////////////////////////\n+////////////////////////////////////////////////////////////////////////\n+\n+class KArchiveDirectoryPrivate\n+{\n+public:\n+    KArchiveDirectoryPrivate(KArchiveDirectory *parent) : q(parent)\n+    {\n+    }\n+\n+    ~KArchiveDirectoryPrivate()\n+    {\n+        qDeleteAll(entries);\n+    }\n+\n+    KArchiveDirectoryPrivate(const KArchiveDirectoryPrivate &) = delete;\n+    KArchiveDirectoryPrivate &operator=(const KArchiveDirectoryPrivate &) = delete;\n+\n+    static KArchiveDirectoryPrivate *get(KArchiveDirectory *directory)\n+    {\n+        return directory->d;\n+    }\n+\n+    // Returns in containingDirectory the directory that actually contains the returned entry\n+    const KArchiveEntry *entry(const QString &_name, KArchiveDirectory **containingDirectory) const\n+    {\n+        *containingDirectory = q;\n+\n+        QString name = QDir::cleanPath(_name);\n+        int pos = name.indexOf(QLatin1Char('/'));\n+        if (pos == 0) { // ouch absolute path (see also KArchive::findOrCreate)\n+            if (name.length() > 1) {\n+                name = name.mid(1);   // remove leading slash\n+                pos = name.indexOf(QLatin1Char('/'));   // look again\n+            } else { // \"/\"\n+                return q;\n+            }\n+        }\n+        // trailing slash ? -> remove\n+        if (pos != -1 && pos == name.length() - 1) {\n+            name = name.left(pos);\n+            pos = name.indexOf(QLatin1Char('/'));   // look again\n+        }\n+        if (pos != -1) {\n+            const QString left = name.left(pos);\n+            const QString right = name.mid(pos + 1);\n+\n+            //qCDebug(KArchiveLog) << \"left=\" << left << \"right=\" << right;\n+\n+            KArchiveEntry *e = entries.value(left);\n+            if (!e || !e->isDirectory()) {\n+                return nullptr;\n+            }\n+            *containingDirectory = static_cast<KArchiveDirectory *>(e);\n+            return (*containingDirectory)->d->entry(right, containingDirectory);\n+        }\n+\n+        return entries.value(name);\n+    }\n+\n+    KArchiveDirectory *q;\n+    QHash<QString, KArchiveEntry *> entries;\n+};\n+\n ////////////////////////////////////////////////////////////////////////\n /////////////////////////// KArchive ///////////////////////////////////\n ////////////////////////////////////////////////////////////////////////\n@@ -471,23 +536,24 @@ KArchiveDirectory *KArchivePrivate::findOrCreate(const QString &path, int recurs\n     // See also KArchiveDirectory::entry().\n \n     // Already created ? => found\n-    const KArchiveEntry *ent = q->rootDir()->entry(path);\n-    if (ent) {\n-        if (ent->isDirectory())\n+    KArchiveDirectory *existingEntryParentDirectory;\n+    const KArchiveEntry *existingEntry = KArchiveDirectoryPrivate::get(q->rootDir())->entry(path, &existingEntryParentDirectory);\n+    if (existingEntry) {\n+        if (existingEntry->isDirectory())\n             //qCDebug(KArchiveLog) << \"found it\";\n         {\n-            const KArchiveDirectory *dir = static_cast<const KArchiveDirectory *>(ent);\n+            const KArchiveDirectory *dir = static_cast<const KArchiveDirectory *>(existingEntry);\n             return const_cast<KArchiveDirectory *>(dir);\n         } else {\n-            const KArchiveFile *file = static_cast<const KArchiveFile *>(ent);\n+            const KArchiveFile *file = static_cast<const KArchiveFile *>(existingEntry);\n             if (file->size() > 0) {\n                 qCWarning(KArchiveLog) << path << \"is normal file, but there are file paths in the archive assuming it is a directory, bailing out\";\n                 return nullptr;\n             }\n \n             qCDebug(KArchiveLog) << path << \" is an empty file, assuming it is actually a directory and replacing\";\n-            KArchiveEntry *myEntry = const_cast<KArchiveEntry*>(ent);\n-            q->rootDir()->removeEntry(myEntry);\n+            KArchiveEntry *myEntry = const_cast<KArchiveEntry*>(existingEntry);\n+            existingEntryParentDirectory->removeEntry(myEntry);\n             delete myEntry;\n         }\n     }\n@@ -780,30 +846,12 @@ bool KArchiveFile::copyTo(const QString &dest) const\n //////////////////////// KArchiveDirectory /////////////////////////////////\n ////////////////////////////////////////////////////////////////////////\n \n-class KArchiveDirectoryPrivate\n-{\n-public:\n-    KArchiveDirectoryPrivate()\n-    {\n-    }\n-\n-    ~KArchiveDirectoryPrivate()\n-    {\n-        qDeleteAll(entries);\n-    }\n-\n-    KArchiveDirectoryPrivate(const KArchiveDirectoryPrivate &) = delete;\n-    KArchiveDirectoryPrivate &operator=(const KArchiveDirectoryPrivate &) = delete;\n-\n-    QHash<QString, KArchiveEntry *> entries;\n-};\n-\n KArchiveDirectory::KArchiveDirectory(KArchive *t, const QString &name, int access,\n                                      const QDateTime &date,\n                                      const QString &user, const QString &group,\n                                      const QString &symlink)\n     : KArchiveEntry(t, name, access, date, user, group, symlink)\n-    , d(new KArchiveDirectoryPrivate)\n+    , d(new KArchiveDirectoryPrivate(this))\n {\n }\n \n@@ -819,35 +867,8 @@ QStringList KArchiveDirectory::entries() const\n \n const KArchiveEntry *KArchiveDirectory::entry(const QString &_name) const\n {\n-    QString name = QDir::cleanPath(_name);\n-    int pos = name.indexOf(QLatin1Char('/'));\n-    if (pos == 0) { // ouch absolute path (see also KArchive::findOrCreate)\n-        if (name.length() > 1) {\n-            name = name.mid(1);   // remove leading slash\n-            pos = name.indexOf(QLatin1Char('/'));   // look again\n-        } else { // \"/\"\n-            return this;\n-        }\n-    }\n-    // trailing slash ? -> remove\n-    if (pos != -1 && pos == name.length() - 1) {\n-        name = name.left(pos);\n-        pos = name.indexOf(QLatin1Char('/'));   // look again\n-    }\n-    if (pos != -1) {\n-        const QString left = name.left(pos);\n-        const QString right = name.mid(pos + 1);\n-\n-        //qCDebug(KArchiveLog) << \"left=\" << left << \"right=\" << right;\n-\n-        const KArchiveEntry *e = d->entries.value(left);\n-        if (!e || !e->isDirectory()) {\n-            return nullptr;\n-        }\n-        return static_cast<const KArchiveDirectory *>(e)->entry(right);\n-    }\n-\n-    return d->entries.value(name);\n+    KArchiveDirectory *dummy;\n+    return d->entry(_name, &dummy);\n }\n \n const KArchiveFile *KArchiveDirectory::file(const QString &name) const\ndiff --git a/src/karchivedirectory.h b/src/karchivedirectory.h\nindex 25c7dbdb1be7f2760f841f378e8badf3f88cddbc..96d471f1179dd7c4708393cb32da8c762709db1b 100644\n--- a/src/karchivedirectory.h\n+++ b/src/karchivedirectory.h\n@@ -127,6 +127,7 @@ public:\n protected:\n     void virtual_hook(int id, void *data) override;\n private:\n+    friend class KArchiveDirectoryPrivate;\n     KArchiveDirectoryPrivate *const d;\n };\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42474701-vul",
+      "digest": "sha256:903741819a6bf2c5219f950614424767480c3428b0154cb7fd73ca8cee84b263"
+    },
+    "patched": {
+      "ref": "n132/arvo:42474701-fix",
+      "digest": "sha256:f6b3a10e4ef190b74fe6f61927f3138852e6e0f30efb2e4844ccc8e8c390b80b"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/qtbase/include/QtCore/../../src/corelib/tools/qalgorithms.h:320",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/qtbase/include/QtCore/../../src/corelib/tools/qalgorithms.h:320"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-966491291",
+  "chain": "CWE-456->CWE-457",
+  "project": "quickjs",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "410939009",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/bellard/quickjs/commit/638ec8ca5e1d4aed002a9fb3ef3358e2a6bc42ab",
+      "fix_commits": [
+        "638ec8ca5e1d4aed002a9fb3ef3358e2a6bc42ab"
+      ],
+      "repo": "https://github.com/bellard/quickjs"
+    },
+    "patch": "diff --git a/quickjs.c b/quickjs.c\nindex 42c8d4ea8..34346f49e 100644\n--- a/quickjs.c\n+++ b/quickjs.c\n@@ -10563,6 +10563,15 @@ static inline js_limb_t js_limb_clz(js_limb_t a)\n }\n #endif\n \n+/* handle a = 0 too */\n+static inline js_limb_t js_limb_safe_clz(js_limb_t a)\n+{\n+    if (a == 0)\n+        return JS_LIMB_BITS;\n+    else\n+        return js_limb_clz(a);\n+}\n+\n static js_limb_t mp_add(js_limb_t *res, const js_limb_t *op1, const js_limb_t *op2,\n                      js_limb_t n, js_limb_t carry)\n {\n@@ -11911,7 +11920,7 @@ static JSValue js_bigint_to_string1(JSContext *ctx, JSValueConst val, int radix)\n             r = tmp;\n         }\n         log2_radix = 31 - clz32(radix); /* floor(log2(radix)) */\n-        n_bits = r->len * JS_LIMB_BITS - js_limb_clz(r->tab[r->len - 1]);\n+        n_bits = r->len * JS_LIMB_BITS - js_limb_safe_clz(r->tab[r->len - 1]);\n         /* n_digits is exact only if radix is a power of\n            two. Otherwise it is >= the exact number of digits */\n         n_digits = (n_bits + log2_radix - 1) / log2_radix;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:410939009-vul",
+      "digest": "sha256:edab744413df15411d2c07c47a2dd2b59d8ece6fabd60b7cbb14bca1927ee6a3"
+    },
+    "patched": {
+      "ref": "n132/arvo:410939009-fix",
+      "digest": "sha256:3cf224aa5f6d1a6260bc1354f191040241c62c7abf8588920c261364258d98e4"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/quickjs/quickjs.c:1297",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/quickjs/quickjs.c:1297"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

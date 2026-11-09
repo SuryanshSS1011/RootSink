@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042541159",
+  "chain": "CWE-1284->CWE-787",
+  "project": "gdal",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42541159",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "0a2ab4c78d753e6f0cc61b0a454194fd21614473",
+      "fix_commits": [
+        "0a2ab4c78d753e6f0cc61b0a454194fd21614473"
+      ],
+      "repo": "https://github.com/OSGeo/gdal"
+    },
+    "patch": "diff --git a/gdal/frmts/nitf/nitfimage.c b/gdal/frmts/nitf/nitfimage.c\nindex 8a600021dc7c..b6ae5a26eb9c 100644\n--- a/gdal/frmts/nitf/nitfimage.c\n+++ b/gdal/frmts/nitf/nitfimage.c\n@@ -1394,6 +1394,12 @@ int NITFReadImageBlock( NITFImage *psImage, int nBlockX, int nBlockY,\n                       \"File lacks VQ LUTs, unable to decode imagery.\" );\n             return BLKREAD_FAIL;\n         }\n+        if( psImage->nBlockWidth != 256 || psImage->nBlockHeight != 256 )\n+        {\n+            CPLError( CE_Failure, CPLE_NotSupported,\n+                      \"Invalid block dimension for VQ compressed data.\" );\n+            return BLKREAD_FAIL;\n+        }\n \n         /* Read the codewords */\n         if( VSIFSeekL(psImage->psFile->fp, psImage->panBlockStart[iFullBlock],\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42541159-vul",
+      "digest": "sha256:8c6e1e6b16d5f293a028265f3d35444632adabe5c3bcdd4bb6395e32a8ac83c0"
+    },
+    "patched": {
+      "ref": "n132/arvo:42541159-fix",
+      "digest": "sha256:cdb5a7c0552bb4565eebdf5591588f1d9226c43114beb9be5697790baa69989f"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/gdal/gdal/frmts/nitf/nitfimage.c:1195",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/gdal/gdal/frmts/nitf/nitfimage.c:1195"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

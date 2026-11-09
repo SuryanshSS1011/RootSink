@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042526616",
+  "chain": "CWE-20->CWE-787",
+  "project": "libraw",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42526616",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "17294b5fd82bff80463c21386d3847142a37549d",
+      "fix_commits": [
+        "17294b5fd82bff80463c21386d3847142a37549d"
+      ],
+      "repo": "https://github.com/libraw/libraw"
+    },
+    "patch": "diff --git a/src/decoders/decoders_libraw.cpp b/src/decoders/decoders_libraw.cpp\nindex 332e2af21..bc62a6c2d 100644\n--- a/src/decoders/decoders_libraw.cpp\n+++ b/src/decoders/decoders_libraw.cpp\n@@ -22,6 +22,9 @@\n void LibRaw::sony_arq_load_raw()\n {\n   int row, col;\n+  if (imgdata.idata.filters || imgdata.idata.colors < 3)\n+\t  throw LIBRAW_EXCEPTION_IO_CORRUPT;\n+\n   read_shorts(imgdata.rawdata.raw_image,\n               imgdata.sizes.raw_width * imgdata.sizes.raw_height * 4);\n   libraw_internal_data.internal_data.input->seek(\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42526616-vul",
+      "digest": "sha256:e67bd84993923926e571fabb89b266ed3c90393a88335af77b1f17725df2b152"
+    },
+    "patched": {
+      "ref": "n132/arvo:42526616-fix",
+      "digest": "sha256:984c115cda608efdcc9352741918e1c380620f47538a955a4691fed6caa2c1a7"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/libraw/src/libraw_datastream.cpp:367",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/libraw/src/libraw_datastream.cpp:367"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042485932",
+  "chain": "CWE-1285->CWE-125",
+  "project": "muparser",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42485932",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "505b6937338e94f3f882867e97ca027ff733887e",
+      "fix_commits": [
+        "505b6937338e94f3f882867e97ca027ff733887e"
+      ],
+      "repo": "https://github.com/beltoforion/muparser"
+    },
+    "patch": "diff --git a/src/muParserBase.cpp b/src/muParserBase.cpp\nindex 5d1c415..a54ba19 100644\n--- a/src/muParserBase.cpp\n+++ b/src/muParserBase.cpp\n@@ -384,13 +384,11 @@ namespace mu\n \t\t}\n \t}\n \n-\t//---------------------------------------------------------------------------\n-\t/** \\brief Check if a name contains invalid characters.\n \n+\t/** \\brief Check if a name contains invalid characters.\n \t\t\\throw ParserException if the name contains invalid characters.\n \t*/\n-\tvoid ParserBase::CheckName(const string_type& a_sName,\n-\t\tconst string_type& a_szCharSet) const\n+\tvoid ParserBase::CheckName(const string_type& a_sName, const string_type& a_szCharSet) const\n \t{\n \t\tif (!a_sName.length() ||\n \t\t\t(a_sName.find_first_not_of(a_szCharSet) != string_type::npos) ||\n@@ -400,7 +398,6 @@ namespace mu\n \t\t}\n \t}\n \n-\t//---------------------------------------------------------------------------\n \t/** \\brief Set the formula.\n \t\t\\param a_strFormula Formula as string_type\n \t\t\\throw ParserException in case of syntax errors.\n@@ -410,11 +407,6 @@ namespace mu\n \t*/\n \tvoid ParserBase::SetExpr(const string_type& a_sExpr)\n \t{\n-\t\tif (std::all_of(a_sExpr.begin(), a_sExpr.end(), [](char_type c) { return !std::isgraph(c); }))\n-\t\t{\n-\t\t\tError(ecINVALID_CHARACTERS_FOUND);\n-\t\t}\n-\n \t\t// Check locale compatibility\n \t\tif (m_pTokenReader->GetArgSep() == std::use_facet<numpunct<char_type> >(s_locale).decimal_point())\n \t\t\tError(ecLOCALE);\ndiff --git a/src/muParserTokenReader.cpp b/src/muParserTokenReader.cpp\nindex dd15c4a..9bb4295 100644\n--- a/src/muParserTokenReader.cpp\n+++ b/src/muParserTokenReader.cpp\n@@ -264,12 +264,19 @@ namespace mu\n \t{\n \t\tMUP_ASSERT(m_pParser != nullptr);\n \n-\t\tconst char_type* szFormula = m_strFormula.c_str();\n+\t\tconst char_type* szExpr = m_strFormula.c_str();\n \t\ttoken_type tok;\n \n \t\t// Ignore all non printable characters when reading the expression\n-\t\twhile (szFormula[m_iPos] > 0 && szFormula[m_iPos] <= 0x20)\n+\t\twhile (szExpr[m_iPos] > 0 && szExpr[m_iPos] <= 0x20)\n+\t\t{\n+\t\t\t// 14-31 are control characters. I don\ufffdt want to have to deal with such strings at all!\n+\t\t\t// (see https://en.cppreference.com/w/cpp/string/byte/isprint)\n+\t\t\tif (szExpr[m_iPos] >= 14 && szExpr[m_iPos] <= 31)\n+\t\t\t\tError(ecINVALID_CHARACTERS_FOUND, m_iPos);\n+\n \t\t\t++m_iPos;\n+\t\t}\n \n \t\t// Check for end of formula\n \t\tif (IsEOF(tok))\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42485932-vul",
+      "digest": "sha256:33e27a3afca7916222d70b3bb270492507c1e825d9d9580d14e3ef325c85d89f"
+    },
+    "patched": {
+      "ref": "n132/arvo:42485932-fix",
+      "digest": "sha256:36f31d0a365d9c26af0abfd04ab516f131fe7d7bf71beac385432613b436b2ca"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/muparser/src/muParserBase.cpp:1250",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/muparser/src/muParserBase.cpp:1250"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042482847",
+  "chain": "CWE-20->CWE-125",
+  "project": "libucl",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42482847",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "ac8d76023386fb1f1b31b47cd294e28831929c96",
+      "fix_commits": [
+        "ac8d76023386fb1f1b31b47cd294e28831929c96"
+      ],
+      "repo": "https://github.com/vstakhov/libucl"
+    },
+    "patch": "diff --git a/src/ucl_parser.c b/src/ucl_parser.c\nindex 093f993..c2a51ad 100644\n--- a/src/ucl_parser.c\n+++ b/src/ucl_parser.c\n@@ -1053,13 +1053,13 @@ ucl_lex_json_string (struct ucl_parser *parser,\n \t\t}\n \t\telse if (c == '\\\\') {\n \t\t\tucl_chunk_skipc (chunk, p);\n-\t\t\tc = *p;\n \t\t\tif (p >= chunk->end) {\n \t\t\t\tucl_set_err (parser, UCL_ESYNTAX, \"unfinished escape character\",\n \t\t\t\t\t\t&parser->err);\n \t\t\t\treturn false;\n \t\t\t}\n-\t\t\telse if (ucl_test_character (c, UCL_CHARACTER_ESCAPE)) {\n+\t\t\tc = *p;\n+\t\t\tif (ucl_test_character (c, UCL_CHARACTER_ESCAPE)) {\n \t\t\t\tif (c == 'u') {\n \t\t\t\t\tucl_chunk_skipc (chunk, p);\n \t\t\t\t\tfor (i = 0; i < 4 && p < chunk->end; i ++) {\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42482847-vul",
+      "digest": "sha256:76a841ce67b750f5abf59477c391f1701384a5f1f84053f4ac5afb112a199483"
+    },
+    "patched": {
+      "ref": "n132/arvo:42482847-fix",
+      "digest": "sha256:02a979ebbb0d5dab1455d079a993baebee8119ea210ea75622afd31e60e63d3d"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/libucl/src/ucl_parser.c:1036",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/libucl/src/ucl_parser.c:1036"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

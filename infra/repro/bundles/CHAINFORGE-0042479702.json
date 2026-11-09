@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042479702",
+  "chain": "CWE-416->CWE-787",
+  "project": "openh264",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42479702",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "8b942ee2d0b429b7ac083c4c16febbf3aa80cbf0",
+      "fix_commits": [
+        "8b942ee2d0b429b7ac083c4c16febbf3aa80cbf0"
+      ],
+      "repo": "https://github.com/cisco/openh264"
+    },
+    "patch": "From 8b942ee2d0b429b7ac083c4c16febbf3aa80cbf0 Mon Sep 17 00:00:00 2001\nFrom: gxw <guxiwei-hf@loongson.cn>\nDate: Tue, 22 Oct 2019 19:20:19 +0800\nSubject: [PATCH] Adjust the mmi/msa detection mode for mips platform.\n\nUsing mips-simd-check.sh to test the current compiler support mmi/msa\nor not before make. If supported, enable mmi/msa.\nAccording to the model name in /proc/cpuinfo to test the current\ncpu support mmi/msa or not for runtime detection.\nNow We can use the following make instructions on mips platform:\n1. make (automatic detection mmi/msa)\n2. make ENABLE_MMI=No (disable mmi)\n3. make ENABLE_MSA=No (disable msa)\n4. make ENABLE_MMI=No ENABLE_MSA=No (disable mmi and msa)\n\nChange-Id: Ibd348ebc11912d7fca1b548c76838675d69b7c40\nSigned-off-by: gxw <guxiwei-hf@loongson.cn>\n\nChange-Id: I721119c55bdd4d472675e07add17bf8d0ecdbc63\n---\n build/arch.mk               | 20 +++++++++++++----\n build/mips-simd-check.sh    | 32 ++++++++++++++++++++++++++\n build/mktargets.py          | 43 +++++++++++++++++++++++++----------\n codec/common/inc/cpu_core.h |  1 +\n codec/common/src/cpu.cpp    | 45 +++++++++++++++++++++++++++++++------\n codec/common/targets.mk     | 18 +++++++++++----\n codec/decoder/targets.mk    | 18 +++++++++++----\n codec/encoder/targets.mk    | 18 +++++++++++----\n codec/processing/targets.mk | 18 +++++++++++----\n 9 files changed, 174 insertions(+), 39 deletions(-)\n create mode 100755 build/mips-simd-check.sh\n\ndiff --git a/build/arch.mk b/build/arch.mk\nindex 8ac3e70..1bf318a 100644\n--- a/build/arch.mk\n+++ b/build/arch.mk\n@@ -30,14 +30,26 @@ CFLAGS += -DHAVE_NEON_AARCH64\n endif\n endif\n \n-#for loongson\n+#for mips\n ifneq ($(filter mips mips64, $(ARCH)),)\n ifeq ($(USE_ASM), Yes)\n+ENABLE_MMI=Yes\n+ENABLE_MSA=Yes\n ASM_ARCH = mips\n ASMFLAGS += -I$(SRC_PATH)codec/common/mips/\n-LOONGSON3A = $(shell g++ -dM -E - < /dev/null | grep '_MIPS_TUNE ' | cut -f 3 -d \" \")\n-ifeq ($(LOONGSON3A), \"loongson3a\")\n-CFLAGS += -DHAVE_MMI\n+#mmi\n+ifeq ($(ENABLE_MMI), Yes)\n+ENABLE_MMI = $(shell $(SRC_PATH)build/mips-simd-check.sh $(CC) mmi)\n+ifeq ($(ENABLE_MMI), Yes)\n+CFLAGS += -DHAVE_MMI -Wa,-mloongson-mmi,-mloongson-ext\n+endif\n+endif\n+#msa\n+ifeq ($(ENABLE_MSA), Yes)\n+ENABLE_MSA = $(shell $(SRC_PATH)build/mips-simd-check.sh $(CC) msa)\n+ifeq ($(ENABLE_MSA), Yes)\n+CFLAGS += -DHAVE_MSA -mmsa\n+endif\n endif\n endif\n endif\ndiff --git a/build/mips-simd-check.sh b/build/mips-simd-check.sh\nnew file mode 100755\nindex 0000000..5efffbe\n--- /dev/null\n+++ b/build/mips-simd-check.sh\n@@ -0,0 +1,32 @@\n+#!/bin/bash\n+#**********************************************************************************\n+#    This script is using in build/arch.mk for mips to detect the simd instructions:\n+#    mmi, msa (maybe more in the future).\n+#\n+#   --usage:\n+#             ./mips-simd-check.sh $(CC) mmi\n+#         or  ./mips-simd-check.sh $(CC) msa\n+#\n+# date:  10/17/2019 Created\n+#**********************************************************************************\n+\n+TMPC=$(mktemp tmp.XXXXXX.c)\n+TMPO=$(mktemp tmp.XXXXXX.o)\n+if [ $2 == \"mmi\" ]\n+then\n+   echo \"void main(void){ __asm__ volatile(\\\"punpcklhw \\$f0, \\$f0, \\$f0\\\"); }\" > $TMPC\n+   $1 -Wa,-mloongson-mmi $TMPC -o $TMPO &> /dev/null\n+   if test -s $TMPO\n+   then\n+      echo \"Yes\"\n+   fi\n+elif [ $2 == \"msa\" ]\n+then\n+   echo \"void main(void){ __asm__ volatile(\\\"addvi.b \\$w0, \\$w1, 1\\\"); }\" > $TMPC\n+   $1 -mmsa $TMPC -o $TMPO &> /dev/null\n+   if test -s $TMPO\n+   then\n+      echo \"Yes\"\n+   fi\n+fi\n+rm -f $TMPC $TMPO\ndiff --git a/build/mktargets.py b/build/mktargets.py\nindex 593280c..518909d 100755\n--- a/build/mktargets.py\n+++ b/build/mktargets.py\n@@ -119,9 +119,9 @@ for file in sfiles:\n         armfiles.append(file)\n mipsfiles = []\n for file in cfiles:\n-  c = file.split('/')\n-  if 'mips' in c:\n-    mipsfiles.append(file)\n+    c = file.split('/')\n+    if 'mips' in c:\n+        mipsfiles.append(file)\n cfiles = [x for x in cfiles if x not in mipsfiles]\n \n \n@@ -181,15 +181,34 @@ if len(arm64files) > 0:\n     f.write(\"OBJS += $(%s_OBJSARM64)\\n\\n\"%(PREFIX))\n \n if len(mipsfiles) > 0:\n-  f.write(\"%s_ASM_MIPS_SRCS=\\\\\\n\"%(PREFIX))\n-  for c in mipsfiles:\n-    f.write(\"\\t$(%s_SRCDIR)/%s\\\\\\n\"%(PREFIX, c))\n-  f.write(\"\\n\")\n-  f.write(\"%s_OBJSMIPS += $(%s_ASM_MIPS_SRCS:.c=.$(OBJ))\\n\"%(PREFIX, PREFIX))\n-  f.write(\"ifeq ($(ASM_ARCH), mips)\\n\")\n-  f.write(\"%s_OBJS += $(%s_OBJSMIPS)\\n\"%(PREFIX,PREFIX))\n-  f.write(\"endif\\n\")\n-  f.write(\"OBJS += $(%s_OBJSMIPS)\\n\\n\"%(PREFIX))\n+    mmifiles = []\n+    for file in mipsfiles:\n+        if '_mmi' in file:\n+            mmifiles.append(file)\n+    f.write(\"%s_ASM_MIPS_MMI_SRCS=\\\\\\n\"%(PREFIX))\n+    for c in mmifiles:\n+        f.write(\"\\t$(%s_SRCDIR)/%s\\\\\\n\"%(PREFIX, c))\n+    f.write(\"\\n\")\n+    f.write(\"%s_OBJSMIPS_MMI += $(%s_ASM_MIPS_MMI_SRCS:.c=.$(OBJ))\\n\\n\"%(PREFIX, PREFIX))\n+    msafiles = []\n+    for file in mipsfiles:\n+        if '_msa' in file:\n+            msafiles.append(file)\n+    f.write(\"%s_ASM_MIPS_MSA_SRCS=\\\\\\n\"%(PREFIX))\n+    for c in msafiles:\n+        f.write(\"\\t$(%s_SRCDIR)/%s\\\\\\n\"%(PREFIX, c))\n+    f.write(\"\\n\")\n+    f.write(\"%s_OBJSMIPS_MSA += $(%s_ASM_MIPS_MSA_SRCS:.c=.$(OBJ))\\n\"%(PREFIX, PREFIX))\n+    f.write(\"ifeq ($(ASM_ARCH), mips)\\n\")\n+    f.write(\"ifeq ($(ENABLE_MMI), Yes)\\n\")\n+    f.write(\"%s_OBJS += $(%s_OBJSMIPS_MMI)\\n\"%(PREFIX,PREFIX))\n+    f.write(\"endif\\n\")\n+    f.write(\"ifeq ($(ENABLE_MSA), Yes)\\n\")\n+    f.write(\"%s_OBJS += $(%s_OBJSMIPS_MSA)\\n\"%(PREFIX,PREFIX))\n+    f.write(\"endif\\n\")\n+    f.write(\"endif\\n\")\n+    f.write(\"OBJS += $(%s_OBJSMIPS_MMI)\\n\"%(PREFIX))\n+    f.write(\"OBJS += $(%s_OBJSMIPS_MSA)\\n\\n\"%(PREFIX))\n \n f.write(\"OBJS += $(%s_OBJS)\\n\\n\"%(PREFIX))\n write_cpp_rule_pattern(f)\ndiff --git a/codec/common/inc/cpu_core.h b/codec/common/inc/cpu_core.h\nindex e5906c6..f25787b 100644\n--- a/codec/common/inc/cpu_core.h\n+++ b/codec/common/inc/cpu_core.h\n@@ -86,6 +86,7 @@\n \n /* For loongson */\n #define WELS_CPU_MMI        0x00000001  /* mmi */\n+#define WELS_CPU_MSA        0x00000002  /* msa */\n \n /*\n  *  Interfaces for CPU core feature detection as below\ndiff --git a/codec/common/src/cpu.cpp b/codec/common/src/cpu.cpp\nindex a39fd06..15ed947 100644\n--- a/codec/common/src/cpu.cpp\n+++ b/codec/common/src/cpu.cpp\n@@ -309,12 +309,45 @@ uint32_t WelsCPUFeatureDetect (int32_t* pNumberOfLogicProcessors) {\n \n #elif defined(mips)\n /* for loongson */\n+static uint32_t get_cpu_flags_from_cpuinfo(void)\n+{\n+    uint32_t flags = 0;\n+\n+# ifdef __linux__\n+    FILE* fp = fopen(\"/proc/cpuinfo\", \"r\");\n+    if (!fp)\n+        return flags;\n+\n+    char buf[200];\n+    memset(buf, 0, sizeof(buf));\n+    while (fgets(buf, sizeof(buf), fp)) {\n+        if (!strncmp(buf, \"model name\", strlen(\"model name\"))) {\n+            if (strstr(buf, \"Loongson-3A\") || strstr(buf, \"Loongson-3B\") ||\n+                strstr(buf, \"Loongson-2K\")) {\n+                flags |= WELS_CPU_MMI;\n+            }\n+            break;\n+        }\n+    }\n+    while (fgets(buf, sizeof(buf), fp)) {\n+        if(!strncmp(buf, \"ASEs implemented\", strlen(\"ASEs implemented\"))) {\n+            if (strstr(buf, \"loongson-mmi\") || strstr(buf, \"loongson-ext\")) {\n+                flags |= WELS_CPU_MMI;\n+            }\n+            if (strstr(buf, \"msa\")) {\n+                flags |= WELS_CPU_MSA;\n+            }\n+            break;\n+        }\n+    }\n+    fclose(fp);\n+# endif\n+\n+    return flags;\n+}\n+\n uint32_t WelsCPUFeatureDetect (int32_t* pNumberOfLogicProcessors) {\n-#if defined(HAVE_MMI)\n-  return WELS_CPU_MMI;\n-#else\n-  return 0;\n-#endif\n+    return get_cpu_flags_from_cpuinfo();\n }\n \n #else /* Neither X86_ASM, HAVE_NEON, HAVE_NEON_AARCH64 nor mips */\n@@ -324,5 +357,3 @@ uint32_t WelsCPUFeatureDetect (int32_t* pNumberOfLogicProcessors) {\n }\n \n #endif\n-\n-\ndiff --git a/codec/common/targets.mk b/codec/common/targets.mk\nindex 96843cd..f2cd192 100644\n--- a/codec/common/targets.mk\n+++ b/codec/common/targets.mk\n@@ -66,18 +66,28 @@ COMMON_OBJS += $(COMMON_OBJSARM64)\n endif\n OBJS += $(COMMON_OBJSARM64)\n \n-COMMON_ASM_MIPS_SRCS=\\\n+COMMON_ASM_MIPS_MMI_SRCS=\\\n \t$(COMMON_SRCDIR)/mips/copy_mb_mmi.c\\\n \t$(COMMON_SRCDIR)/mips/deblock_mmi.c\\\n \t$(COMMON_SRCDIR)/mips/expand_picture_mmi.c\\\n \t$(COMMON_SRCDIR)/mips/intra_pred_com_mmi.c\\\n \t$(COMMON_SRCDIR)/mips/satd_sad_mmi.c\\\n \n-COMMON_OBJSMIPS += $(COMMON_ASM_MIPS_SRCS:.c=.$(OBJ))\n+COMMON_OBJSMIPS_MMI += $(COMMON_ASM_MIPS_MMI_SRCS:.c=.$(OBJ))\n+\n+COMMON_ASM_MIPS_MSA_SRCS=\\\n+\n+COMMON_OBJSMIPS_MSA += $(COMMON_ASM_MIPS_MSA_SRCS:.c=.$(OBJ))\n ifeq ($(ASM_ARCH), mips)\n-COMMON_OBJS += $(COMMON_OBJSMIPS)\n+ifeq ($(ENABLE_MMI), Yes)\n+COMMON_OBJS += $(COMMON_OBJSMIPS_MMI)\n+endif\n+ifeq ($(ENABLE_MSA), Yes)\n+COMMON_OBJS += $(COMMON_OBJSMIPS_MSA)\n+endif\n endif\n-OBJS += $(COMMON_OBJSMIPS)\n+OBJS += $(COMMON_OBJSMIPS_MMI)\n+OBJS += $(COMMON_OBJSMIPS_MSA)\n \n OBJS += $(COMMON_OBJS)\n \ndiff --git a/codec/decoder/targets.mk b/codec/decoder/targets.mk\nindex c016184..88dc5af 100644\n--- a/codec/decoder/targets.mk\n+++ b/codec/decoder/targets.mk\n@@ -57,14 +57,24 @@ DECODER_OBJS += $(DECODER_OBJSARM64)\n endif\n OBJS += $(DECODER_OBJSARM64)\n \n-DECODER_ASM_MIPS_SRCS=\\\n+DECODER_ASM_MIPS_MMI_SRCS=\\\n \t$(DECODER_SRCDIR)/core/mips/dct_mmi.c\\\n \n-DECODER_OBJSMIPS += $(DECODER_ASM_MIPS_SRCS:.c=.$(OBJ))\n+DECODER_OBJSMIPS_MMI += $(DECODER_ASM_MIPS_MMI_SRCS:.c=.$(OBJ))\n+\n+DECODER_ASM_MIPS_MSA_SRCS=\\\n+\n+DECODER_OBJSMIPS_MSA += $(DECODER_ASM_MIPS_MSA_SRCS:.c=.$(OBJ))\n ifeq ($(ASM_ARCH), mips)\n-DECODER_OBJS += $(DECODER_OBJSMIPS)\n+ifeq ($(ENABLE_MMI), Yes)\n+DECODER_OBJS += $(DECODER_OBJSMIPS_MMI)\n+endif\n+ifeq ($(ENABLE_MSA), Yes)\n+DECODER_OBJS += $(DECODER_OBJSMIPS_MSA)\n+endif\n endif\n-OBJS += $(DECODER_OBJSMIPS)\n+OBJS += $(DECODER_OBJSMIPS_MMI)\n+OBJS += $(DECODER_OBJSMIPS_MSA)\n \n OBJS += $(DECODER_OBJS)\n \ndiff --git a/codec/encoder/targets.mk b/codec/encoder/targets.mk\nindex 1f05328..4fb2e69 100644\n--- a/codec/encoder/targets.mk\n+++ b/codec/encoder/targets.mk\n@@ -82,16 +82,26 @@ ENCODER_OBJS += $(ENCODER_OBJSARM64)\n endif\n OBJS += $(ENCODER_OBJSARM64)\n \n-ENCODER_ASM_MIPS_SRCS=\\\n+ENCODER_ASM_MIPS_MMI_SRCS=\\\n \t$(ENCODER_SRCDIR)/core/mips/dct_mmi.c\\\n \t$(ENCODER_SRCDIR)/core/mips/quant_mmi.c\\\n \t$(ENCODER_SRCDIR)/core/mips/score_mmi.c\\\n \n-ENCODER_OBJSMIPS += $(ENCODER_ASM_MIPS_SRCS:.c=.$(OBJ))\n+ENCODER_OBJSMIPS_MMI += $(ENCODER_ASM_MIPS_MMI_SRCS:.c=.$(OBJ))\n+\n+ENCODER_ASM_MIPS_MSA_SRCS=\\\n+\n+ENCODER_OBJSMIPS_MSA += $(ENCODER_ASM_MIPS_MSA_SRCS:.c=.$(OBJ))\n ifeq ($(ASM_ARCH), mips)\n-ENCODER_OBJS += $(ENCODER_OBJSMIPS)\n+ifeq ($(ENABLE_MMI), Yes)\n+ENCODER_OBJS += $(ENCODER_OBJSMIPS_MMI)\n+endif\n+ifeq ($(ENABLE_MSA), Yes)\n+ENCODER_OBJS += $(ENCODER_OBJSMIPS_MSA)\n+endif\n endif\n-OBJS += $(ENCODER_OBJSMIPS)\n+OBJS += $(ENCODER_OBJSMIPS_MMI)\n+OBJS += $(ENCODER_OBJSMIPS_MSA)\n \n OBJS += $(ENCODER_OBJS)\n \ndiff --git a/codec/processing/targets.mk b/codec/processing/targets.mk\nindex 300de2d..0f88733 100644\n--- a/codec/processing/targets.mk\n+++ b/codec/processing/targets.mk\n@@ -58,14 +58,24 @@ PROCESSING_OBJS += $(PROCESSING_OBJSARM64)\n endif\n OBJS += $(PROCESSING_OBJSARM64)\n \n-PROCESSING_ASM_MIPS_SRCS=\\\n+PROCESSING_ASM_MIPS_MMI_SRCS=\\\n \t$(PROCESSING_SRCDIR)/src/mips/vaa_mmi.c\\\n \n-PROCESSING_OBJSMIPS += $(PROCESSING_ASM_MIPS_SRCS:.c=.$(OBJ))\n+PROCESSING_OBJSMIPS_MMI += $(PROCESSING_ASM_MIPS_MMI_SRCS:.c=.$(OBJ))\n+\n+PROCESSING_ASM_MIPS_MSA_SRCS=\\\n+\n+PROCESSING_OBJSMIPS_MSA += $(PROCESSING_ASM_MIPS_MSA_SRCS:.c=.$(OBJ))\n ifeq ($(ASM_ARCH), mips)\n-PROCESSING_OBJS += $(PROCESSING_OBJSMIPS)\n+ifeq ($(ENABLE_MMI), Yes)\n+PROCESSING_OBJS += $(PROCESSING_OBJSMIPS_MMI)\n+endif\n+ifeq ($(ENABLE_MSA), Yes)\n+PROCESSING_OBJS += $(PROCESSING_OBJSMIPS_MSA)\n+endif\n endif\n-OBJS += $(PROCESSING_OBJSMIPS)\n+OBJS += $(PROCESSING_OBJSMIPS_MMI)\n+OBJS += $(PROCESSING_OBJSMIPS_MSA)\n \n OBJS += $(PROCESSING_OBJS)\n \n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42479702-vul",
+      "digest": "sha256:eceed48fdf62a47dc8e4767350b49727ead06318257f5d36a0cc0bef8253b5ec"
+    },
+    "patched": {
+      "ref": "n132/arvo:42479702-fix",
+      "digest": "sha256:8fde9c6db78f650b00a1599a5bd1d1f25ca571f6b1a93e6800f49ce0a6153eed"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "WRITE",
+        "crash_site": "/src/openh264/codec/decoder/plus/src/welsDecoderExt.cpp:505",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "WRITE",
+        "site": "/src/openh264/codec/decoder/plus/src/welsDecoderExt.cpp:505"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

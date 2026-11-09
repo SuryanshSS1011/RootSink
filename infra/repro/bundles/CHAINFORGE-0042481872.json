@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042481872",
+  "chain": "CWE-20->CWE-125",
+  "project": "gdal",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42481872",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "b4da9cf1557c5034ddbebfb6cfc235b9a1c4dd5e",
+      "fix_commits": [
+        "b4da9cf1557c5034ddbebfb6cfc235b9a1c4dd5e"
+      ],
+      "repo": "https://github.com/OSGeo/gdal"
+    },
+    "patch": "diff --git a/gdal/frmts/grib/degrib18/g2clib-1.0.4/g2_getfld.c b/gdal/frmts/grib/degrib18/g2clib-1.0.4/g2_getfld.c\nindex ef6385c3d319..fd6aa51d200c 100644\n--- a/gdal/frmts/grib/degrib18/g2clib-1.0.4/g2_getfld.c\n+++ b/gdal/frmts/grib/degrib18/g2clib-1.0.4/g2_getfld.c\n@@ -494,7 +494,15 @@ g2int g2_getfld(unsigned char *cgrib,g2int cgrib_length, g2int ifldnum,g2int unp\n                }\n             }\n             else {\n-               lgfld->expanded=1;\n+               if( lgfld->ngrdpts != lgfld->ndpts )\n+               {\n+                   /* Added by E. Rouault to fix https://bugs.chromium.org/p/oss-fuzz/issues/detail?id=2070 */\n+                   lgfld->expanded=0;\n+               }\n+               else \n+               {\n+                    lgfld->expanded=1;\n+               }\n             }\n           }\n           else {\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42481872-vul",
+      "digest": "sha256:10530d3b6fa5adc32535617e05846d0d3415be45561b65198f9f69624a14d529"
+    },
+    "patched": {
+      "ref": "n132/arvo:42481872-fix",
+      "digest": "sha256:591ba9dc5fefd902f44ea3a7ee180b2f70d24ecd9d38fcebe8a53da19c24e556"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/gdal/gdal/frmts/grib/degrib18/degrib/grib2api.c:493",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/gdal/gdal/frmts/grib/degrib18/degrib/grib2api.c:493"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

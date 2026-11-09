@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-967332145",
+  "chain": "CWE-456->CWE-457",
+  "project": "librawspeed",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42537377",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/darktable-org/rawspeed/commit/fcd827cff1e0026e5bf8d7a34ee15f115ec8b01e",
+      "fix_commits": [
+        "fcd827cff1e0026e5bf8d7a34ee15f115ec8b01e"
+      ],
+      "repo": "https://github.com/darktable-org/rawspeed"
+    },
+    "patch": "diff --git a/fuzz/librawspeed/decompressors/Cr2Decompressor.cpp b/fuzz/librawspeed/decompressors/Cr2Decompressor.cpp\nindex 90ddc041e..f07a791b4 100644\n--- a/fuzz/librawspeed/decompressors/Cr2Decompressor.cpp\n+++ b/fuzz/librawspeed/decompressors/Cr2Decompressor.cpp\n@@ -44,17 +44,16 @@ extern \"C\" int LLVMFuzzerTestOneInput(const uint8_t* Data, size_t Size) {\n \n     rawspeed::RawImage mRaw(CreateRawImage(&bs));\n \n-    using slice_type = int;\n-    std::vector<slice_type> slicesWidths;\n-    const unsigned sliceCount = bs.getU32();\n-    bs.check(sliceCount, sizeof(slice_type));\n-    slicesWidths.reserve(sliceCount);\n-    std::generate_n(std::back_inserter(slicesWidths), sliceCount,\n-                    [&bs]() -> slice_type { return bs.get<slice_type>(); });\n+    using slice_type = rawspeed::ushort16;\n+    const auto numSlices = bs.get<slice_type>();\n+    const auto sliceWidth = bs.get<slice_type>();\n+    const auto lastSliceWidth = bs.get<slice_type>();\n+\n+    const rawspeed::Cr2Slicing slicing(numSlices, sliceWidth, lastSliceWidth);\n \n     rawspeed::Cr2Decompressor c(bs, mRaw);\n     mRaw->createData();\n-    c.decode(std::move(slicesWidths));\n+    c.decode(slicing);\n \n     mRaw->checkMemIsInitialized();\n   } catch (rawspeed::RawspeedException&) {\ndiff --git a/src/librawspeed/decoders/Cr2Decoder.cpp b/src/librawspeed/decoders/Cr2Decoder.cpp\nindex 5dfa6102f..ff5812c93 100644\n--- a/src/librawspeed/decoders/Cr2Decoder.cpp\n+++ b/src/librawspeed/decoders/Cr2Decoder.cpp\n@@ -40,11 +40,9 @@\n #include <cassert>                       // for assert\n #include <memory>                        // for unique_ptr, allocator\n #include <string>                        // for string, operator==\n-#include <vector>                        // for vector\n // IWYU pragma: no_include <ext/alloc_traits.h>\n \n using std::string;\n-using std::vector;\n \n namespace rawspeed {\n \n@@ -91,7 +89,10 @@ RawImage Cr2Decoder::decodeOldFormat() {\n \n   Cr2Decompressor l(bs, mRaw);\n   mRaw->createData();\n-  l.decode({width});\n+\n+  Cr2Slicing slicing(/*numSlices=*/1, /*sliceWidth=don't care*/ 0,\n+                     /*lastSliceWidth=*/width);\n+  l.decode(slicing);\n \n   // deal with D2000 GrayResponseCurve\n   TiffEntry* curve = mRootIFD->getEntryRecursive(static_cast<TiffTag>(0x123));\n@@ -129,7 +130,7 @@ RawImage Cr2Decoder::decodeNewFormat() {\n   mRaw->setCpp(componentsPerPixel);\n   mRaw->isCFA = (mRaw->getCpp() == 1);\n \n-  vector<int> s_width;\n+  Cr2Slicing slicing;\n   // there are four cases:\n   // * there is a tag with three components,\n   //   $ last two components are non-zero: all fine then.\n@@ -148,10 +149,9 @@ RawImage Cr2Decoder::decodeNewFormat() {\n \n     if (cr2SliceEntry->getU16(1) != 0 && cr2SliceEntry->getU16(2) != 0) {\n       // first component can be either zero or non-zero, don't care\n-      s_width.reserve(1 + cr2SliceEntry->getU16(0));\n-      for (int i = 0; i < cr2SliceEntry->getU16(0); i++)\n-        s_width.emplace_back(cr2SliceEntry->getU16(1));\n-      s_width.emplace_back(cr2SliceEntry->getU16(2));\n+      slicing = Cr2Slicing(/*numSlices=*/1 + cr2SliceEntry->getU16(0),\n+                           /*sliceWidth=*/cr2SliceEntry->getU16(1),\n+                           /*lastSliceWidth=*/cr2SliceEntry->getU16(2));\n     } else if (cr2SliceEntry->getU16(0) == 0 && cr2SliceEntry->getU16(1) == 0 &&\n                cr2SliceEntry->getU16(2) != 0) {\n       // PowerShot G16, PowerShot S120, let Cr2Decompressor guess.\n@@ -169,7 +169,7 @@ RawImage Cr2Decoder::decodeNewFormat() {\n \n   Cr2Decompressor d(bs, mRaw);\n   mRaw->createData();\n-  d.decode(s_width);\n+  d.decode(slicing);\n \n   if (mRaw->metadata.subsampling.x > 1 || mRaw->metadata.subsampling.y > 1)\n     sRawInterpolate();\ndiff --git a/src/librawspeed/decompressors/Cr2Decompressor.cpp b/src/librawspeed/decompressors/Cr2Decompressor.cpp\nindex 02a53eced..56dda017a 100644\n--- a/src/librawspeed/decompressors/Cr2Decompressor.cpp\n+++ b/src/librawspeed/decompressors/Cr2Decompressor.cpp\n@@ -55,12 +55,13 @@ void Cr2Decompressor::decodeScan()\n   if (predictorMode != 1)\n     ThrowRDE(\"Unsupported predictor mode.\");\n \n-  if (slicesWidths.empty()) {\n+  if (slicing.empty()) {\n     const int slicesWidth = frame.w * frame.cps;\n     if (slicesWidth > mRaw->dim.x)\n       ThrowRDE(\"Don't know slicing pattern, and failed to guess it.\");\n \n-    slicesWidths.push_back(slicesWidth);\n+    slicing = Cr2Slicing(/*numSlices=*/1, /*sliceWidth=don't care*/ 0,\n+                         /*lastSliceWidth=*/slicesWidth);\n   }\n \n   bool isSubSampled = false;\n@@ -115,12 +116,12 @@ void Cr2Decompressor::decodeScan()\n   }\n }\n \n-void Cr2Decompressor::decode(std::vector<int> slicesWidths_)\n-{\n-  slicesWidths = move(slicesWidths_);\n-  for (auto slicesWidth : slicesWidths) {\n-    if (slicesWidth <= 0)\n-      ThrowRDE(\"Bad slice width: %i\", slicesWidth);\n+void Cr2Decompressor::decode(const Cr2Slicing& slicing_) {\n+  slicing = slicing_;\n+  for (auto sliceId = 0; sliceId < slicing.numSlices; sliceId++) {\n+    const auto sliceWidth = slicing.widthOfSlice(sliceId);\n+    if (sliceWidth <= 0)\n+      ThrowRDE(\"Bad slice width: %i\", sliceWidth);\n   }\n \n   AbstractLJpegDecompressor::decode();\n@@ -163,32 +164,27 @@ void Cr2Decompressor::decodeN_X_Y()\n   if (X_S_F == 2 && Y_S_F == 1)\n   {\n     // fix the inconsistent slice width in sRaw mode, ask Canon.\n-    for (auto& sliceWidth : slicesWidths)\n-      sliceWidth = sliceWidth * 3 / 2;\n+    for (auto* width : {&slicing.sliceWidth, &slicing.lastSliceWidth})\n+      *width = (*width) * 3 / 2;\n   }\n \n-  for (const auto& slicesWidth : slicesWidths) {\n-    if (slicesWidth > mRaw->dim.x)\n+  for (const auto& width : {slicing.sliceWidth, slicing.lastSliceWidth}) {\n+    if (width > mRaw->dim.x)\n       ThrowRDE(\"Slice is longer than image's height, which is unsupported.\");\n-    if (slicesWidth % xStepSize != 0) {\n+    if (width % xStepSize != 0) {\n       ThrowRDE(\"Slice width (%u) should be multiple of pixel group size (%u)\",\n-               slicesWidth, xStepSize);\n+               width, xStepSize);\n     }\n   }\n \n-  if (frame.h * std::accumulate(slicesWidths.begin(), slicesWidths.end(), 0) <\n-      mRaw->getCpp() * mRaw->dim.area())\n+  if (frame.h * slicing.totalWidth() < mRaw->getCpp() * mRaw->dim.area())\n     ThrowRDE(\"Incorrrect slice height / slice widths! Less than image size.\");\n \n-  // Do we have completely unneeded slices at the end? Drop them.\n-  while (frame.h *\n-             std::accumulate(slicesWidths.begin(), slicesWidths.end() - 1, 0) >=\n-         mRaw->getCpp() * mRaw->dim.area())\n-    slicesWidths.pop_back();\n-\n   unsigned processedPixels = 0;\n   unsigned processedLineSlices = 0;\n-  for (unsigned sliceWidth : slicesWidths) {\n+  for (auto sliceId = 0; sliceId < slicing.numSlices; sliceId++) {\n+    const unsigned sliceWidth = slicing.widthOfSlice(sliceId);\n+\n     assert(frame.h % yStepSize == 0);\n     for (unsigned y = 0; y < frame.h; y += yStepSize) {\n       // Fix for Canon 80D mraw format.\n@@ -198,8 +194,8 @@ void Cr2Decompressor::decodeN_X_Y()\n       // Those would overflow, hence the break.\n       // see FIX_CANON_FRAME_VS_IMAGE_SIZE_MISMATCH\n       unsigned destY = processedLineSlices % mRaw->dim.y;\n-      unsigned destX =\n-          processedLineSlices / mRaw->dim.y * slicesWidths[0] / mRaw->getCpp();\n+      unsigned destX = processedLineSlices / mRaw->dim.y * slicing.sliceWidth /\n+                       mRaw->getCpp();\n       if (destX >= static_cast<unsigned>(mRaw->dim.x))\n         break;\n       auto dest =\ndiff --git a/src/librawspeed/decompressors/Cr2Decompressor.h b/src/librawspeed/decompressors/Cr2Decompressor.h\nindex 07718ecf4..4607f3ed8 100644\n--- a/src/librawspeed/decompressors/Cr2Decompressor.h\n+++ b/src/librawspeed/decompressors/Cr2Decompressor.h\n@@ -2,6 +2,7 @@\n     RawSpeed - RAW file decoder.\n \n     Copyright (C) 2017 Axel Waggershauser\n+    Copyright (C) 2018 Roman Lebedev\n \n     This library is free software; you can redistribute it and/or\n     modify it under the terms of the GNU Lesser General Public\n@@ -20,28 +21,67 @@\n \n #pragma once\n \n+#include \"common/Common.h\"                           // ushort16\n+#include \"decoders/RawDecoderException.h\"            // for ThrowRDE\n #include \"decompressors/AbstractLJpegDecompressor.h\" // for AbstractLJpegDe...\n #include \"io/Buffer.h\"                               // for Buffer, Buffer:...\n #include \"io/ByteStream.h\"                           // for ByteStream\n-#include <vector>                                    // for vector\n+#include <cassert>                                   // for assert\n \n namespace rawspeed {\n \n class RawImage;\n-\n+class Cr2Decompressor;\n // Decompresses Lossless JPEGs, with 2-4 components and optional X/Y subsampling\n \n+class Cr2Slicing {\n+  int numSlices = 0;\n+  int sliceWidth = 0;\n+  int lastSliceWidth = 0;\n+\n+  friend class Cr2Decompressor;\n+\n+public:\n+  Cr2Slicing() = default;\n+\n+  Cr2Slicing(ushort16 numSlices_, ushort16 sliceWidth_,\n+             ushort16 lastSliceWidth_)\n+      : numSlices(numSlices_), sliceWidth(sliceWidth_),\n+        lastSliceWidth(lastSliceWidth_) {\n+    if (numSlices < 1)\n+      ThrowRDE(\"Bad slice count: %u\", numSlices);\n+  }\n+\n+  bool empty() const {\n+    return 0 == numSlices && 0 == sliceWidth && 0 == lastSliceWidth;\n+  }\n+\n+  unsigned widthOfSlice(int sliceId) const {\n+    assert(sliceId >= 0);\n+    assert(sliceId < numSlices);\n+    if ((sliceId + 1) == numSlices)\n+      return lastSliceWidth;\n+    return sliceWidth;\n+  }\n+\n+  unsigned totalWidth() const {\n+    int width = 0;\n+    for (auto sliceId = 0; sliceId < numSlices; sliceId++)\n+      width += widthOfSlice(sliceId);\n+    return width;\n+  }\n+};\n+\n class Cr2Decompressor final : public AbstractLJpegDecompressor\n {\n-  // CR2 slices\n-  std::vector<int> slicesWidths;\n+  Cr2Slicing slicing;\n \n   void decodeScan() override;\n   template<int N_COMP, int X_S_F, int Y_S_F> void decodeN_X_Y();\n \n public:\n   Cr2Decompressor(const ByteStream& bs, const RawImage& img);\n-  void decode(std::vector<int> slicesWidths);\n+  void decode(const Cr2Slicing& slicing);\n };\n \n } // namespace rawspeed\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42537377-vul",
+      "digest": "sha256:fa614a74b3b0b8766be7ca14cc3324c5c7e71d7ae8da7eafa2e5e02fa5bdd22b"
+    },
+    "patched": {
+      "ref": "n132/arvo:42537377-fix",
+      "digest": "sha256:0b3c2ee464f95e83300e59b6a5c6ec03225b42c3502df381795c2e6392e1c857"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/librawspeed/src/librawspeed/common/RawImage.cpp:174",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/librawspeed/src/librawspeed/common/RawImage.cpp:174"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042520450",
+  "chain": "CWE-1284->CWE-125",
+  "project": "zeek",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42520450",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "2866bbea4d0f4ccf79f2088728d55c769efe46cc",
+      "fix_commits": [
+        "2866bbea4d0f4ccf79f2088728d55c769efe46cc"
+      ],
+      "repo": "https://github.com/zeek/zeek"
+    },
+    "patch": "diff --git a/src/packet_analysis/protocol/teredo/Teredo.cc b/src/packet_analysis/protocol/teredo/Teredo.cc\nindex e48aa3a82bc..be5eb09d79e 100644\n--- a/src/packet_analysis/protocol/teredo/Teredo.cc\n+++ b/src/packet_analysis/protocol/teredo/Teredo.cc\n@@ -272,8 +272,8 @@ bool TeredoAnalyzer::DetectProtocol(size_t len, const uint8_t* data, Packet* pac\n \n \t// Do some fast checks that must be true before moving to more complicated ones.\n \t// Mostly this avoids doing the regex below if we can help it.\n-\tif ( (len < 40) ||\n-\t     (((data[0] >> 4) != 6) && ((data[0] != 0x00) || (data[1] != 0x00 && data[1] != 0x01))) )\n+\tif ( (len < 40) || ((len > 8) && ((data[0] >> 4) != 6) &&\n+\t                    ((data[0] != 0x00) || (data[1] != 0x00 && data[1] != 0x01))) )\n \t\treturn false;\n \n \tif ( pattern_re->Match(data, len) )\n@@ -291,6 +291,9 @@ bool TeredoAnalyzer::DetectProtocol(size_t len, const uint8_t* data, Packet* pac\n \t\tuint8_t client_id_length = data[2];\n \t\tuint8_t auth_length = data[3];\n \n+\t\tif ( len < (13 + client_id_length + auth_length) )\n+\t\t\treturn false;\n+\n \t\t// There's 9 bytes at the end of the header for a nonce value and a\n \t\t// confirmation byte. That plus the 4 bytes we've looked at already\n \t\t// makes 13 bytes.\n@@ -307,6 +310,9 @@ bool TeredoAnalyzer::DetectProtocol(size_t len, const uint8_t* data, Packet* pac\n \n \tif ( val == 0 )\n \t\t{\n+\t\tif ( len < 8 )\n+\t\t\treturn false;\n+\n \t\t// If the second byte is zero (or we're coming out of an authentication\n \t\t// header), we're in an origin identification header. Skip over it, and\n \t\t// verify there's enough data after it to find an IPv6 header.\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42520450-vul",
+      "digest": "sha256:9a16619cfa3e4b309e74108842e1d0dde1d6137131e17cf890793a1b9728820a"
+    },
+    "patched": {
+      "ref": "n132/arvo:42520450-fix",
+      "digest": "sha256:6beb9769e5e4453d65af874fedd7eb6a7ba9f7d487fdee2648cd2e65ae543f75"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/zeek/src/packet_analysis/protocol/teredo/Teredo.cc:305",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/zeek/src/packet_analysis/protocol/teredo/Teredo.cc:305"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

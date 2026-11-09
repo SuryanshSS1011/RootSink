@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042536402",
+  "chain": "CWE-416->CWE-125",
+  "project": "ghostpdl",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42536402",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "0ea1093b875e11d085015a6021d2fabd07c691b7",
+      "fix_commits": [
+        "0ea1093b875e11d085015a6021d2fabd07c691b7"
+      ],
+      "repo": "https://cgit.ghostscript.com/ghostpdl.git"
+    },
+    "patch": "From 0ea1093b875e11d085015a6021d2fabd07c691b7 Mon Sep 17 00:00:00 2001\nFrom: Robin Watts <Robin.Watts@artifex.com>\nDate: Thu, 20 Jun 2024 12:49:01 +0100\nSubject: [PATCH] OSS-fuzz issue #69757 followup: Remove over-zealous frees.\n\nDon't free buffer when we retain it!\n---\n base/gsicc_create.c | 3 ---\n 1 file changed, 3 deletions(-)\n\ndiff --git a/base/gsicc_create.c b/base/gsicc_create.c\nindex 6522b39..d9146b8 100644\n--- a/base/gsicc_create.c\n+++ b/base/gsicc_create.c\n@@ -2772,7 +2772,6 @@ gsicc_create_v2input(const gs_gstate *pgs, icHeader *header, cmm_profile_t *src_\n     gsicc_release_link(link);\n     clean_lut(&clut, pgs->memory);\n     gs_free_object(memory, tag_list, \"gsicc_create_v2input\");\n-    gs_free_object(memory, buffer, \"gsicc_create_v2input\");\n     /* Save the v2 data */\n     src_profile->v2_data = buffer;\n     src_profile->v2_size = profile_size;\n@@ -3015,7 +3014,6 @@ gsicc_create_v2displaygray(const gs_gstate *pgs, icHeader *header, cmm_profile_t\n     gsicc_release_link(link);\n     gs_free_object(memory, tag_list, \"gsicc_createv2display_gray\");\n     gs_free_object(memory, trc, \"gsicc_createv2display_gray\");\n-    gs_free_object(memory, buffer, \"gsicc_createv2display_gray\");\n     /* Save the v2 data */\n     src_profile->v2_data = buffer;\n     src_profile->v2_size = profile_size;\n@@ -3111,7 +3109,6 @@ gsicc_create_v2displayrgb(const gs_gstate *pgs, icHeader *header, cmm_profile_t\n     gsicc_release_link(link);\n     gs_free_object(memory, tag_list, \"gsicc_create_v2displayrgb\");\n     gs_free_object(memory, trc, \"gsicc_create_v2displayrgb\");\n-    gs_free_object(memory, buffer, \"gsicc_create_v2displayrgb\");\n     /* Save the v2 data */\n     src_profile->v2_data = buffer;\n     src_profile->v2_size = profile_size;\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42536402-vul",
+      "digest": "sha256:e6999bef9e5588d69255d0eb569251048a16aef559e98e5b091a6668a4dd47d7"
+    },
+    "patched": {
+      "ref": "n132/arvo:42536402-fix",
+      "digest": "sha256:ccaa95d2d7e8b5aa0260eb9ec79269afc4ced776ac462fff61c93acbd9cf8b34"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/ghostpdl/./base/stream.c:607",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/ghostpdl/./base/stream.c:607"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

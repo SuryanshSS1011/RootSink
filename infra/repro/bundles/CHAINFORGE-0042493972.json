@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042493972",
+  "chain": "CWE-20->CWE-125",
+  "project": "libredwg",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42493972",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "259072193fa0562587b3d971adb949aea3887091",
+      "fix_commits": [
+        "259072193fa0562587b3d971adb949aea3887091"
+      ],
+      "repo": "https://github.com/LibreDWG/libredwg"
+    },
+    "patch": "diff --git a/src/bits.c b/src/bits.c\nindex 5be82caf67..6308a033af 100644\n--- a/src/bits.c\n+++ b/src/bits.c\n@@ -55,13 +55,14 @@ void\n bit_advance_position (Bit_Chain *dat, long advance)\n {\n   const unsigned long pos  = bit_position (dat);\n-  const unsigned long endpos = dat->size * 8;\n+  const unsigned long endpos = dat->size * 8 - 1;\n   long bits = (long)dat->bit + advance;\n   if (pos + advance > endpos)\n     {\n       loglevel = dat->opts & DWG_OPTS_LOGLEVEL;\n       LOG_ERROR (\"%s buffer overflow at pos %lu.%u, size %lu, advance by %ld\",\n                  __FUNCTION__, dat->byte, dat->bit, dat->size, advance);\n+      return;\n     }\n   else if ((long)pos + advance < 0)\n     {\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42493972-vul",
+      "digest": "sha256:6b7f2e8de512670c2a51c58d6b77c3240ffefa6fa6c03a8f376add6aed5bd5a8"
+    },
+    "patched": {
+      "ref": "n132/arvo:42493972-fix",
+      "digest": "sha256:a3313553dbc61e923ccbc43a8c741ac8970d0adeadf5a38d09b91e02b302bf88"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/libredwg/src/decode.c:5120",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/libredwg/src/decode.c:5120"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

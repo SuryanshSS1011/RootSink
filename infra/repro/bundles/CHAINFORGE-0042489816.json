@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042489816",
+  "chain": "CWE-416->CWE-787",
+  "project": "openvswitch",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42489816",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "77cccc74deede443e8b9102299efc869a52b65b2",
+      "fix_commits": [
+        "77cccc74deede443e8b9102299efc869a52b65b2"
+      ],
+      "repo": "https://github.com/openvswitch/ovs"
+    },
+    "patch": "diff --git a/lib/ofp-actions.c b/lib/ofp-actions.c\nindex e2e829772a5..0342a228b70 100644\n--- a/lib/ofp-actions.c\n+++ b/lib/ofp-actions.c\n@@ -4431,6 +4431,7 @@ decode_NXAST_RAW_ENCAP(const struct nx_action_encap *nae,\n {\n     struct ofpact_encap *encap;\n     const struct ofp_ed_prop_header *ofp_prop;\n+    const size_t encap_ofs = out->size;\n     size_t props_len;\n     uint16_t n_props = 0;\n     int err;\n@@ -4458,6 +4459,7 @@ decode_NXAST_RAW_ENCAP(const struct nx_action_encap *nae,\n         }\n         n_props++;\n     }\n+    encap = ofpbuf_at_assert(out, encap_ofs, sizeof *encap);\n     encap->n_props = n_props;\n     out->header = &encap->ofpact;\n     ofpact_finish_ENCAP(out, &encap);\ndiff --git a/tests/automake.mk b/tests/automake.mk\nindex 677b99a6b48..fc80e027dfc 100644\n--- a/tests/automake.mk\n+++ b/tests/automake.mk\n@@ -134,7 +134,8 @@ FUZZ_REGRESSION_TESTS = \\\n \ttests/fuzz-regression/ofp_print_fuzzer-5722747668791296 \\\n \ttests/fuzz-regression/ofp_print_fuzzer-6285128790704128 \\\n \ttests/fuzz-regression/ofp_print_fuzzer-6470117922701312 \\\n-\ttests/fuzz-regression/ofp_print_fuzzer-6502620041576448\n+\ttests/fuzz-regression/ofp_print_fuzzer-6502620041576448 \\\n+\ttests/fuzz-regression/ofp_print_fuzzer-6540965472632832\n $(srcdir)/tests/fuzz-regression-list.at: tests/automake.mk\n \t$(AM_V_GEN)for name in $(FUZZ_REGRESSION_TESTS); do \\\n             basename=`echo $$name | sed 's,^.*/,,'`; \\\ndiff --git a/tests/fuzz-regression-list.at b/tests/fuzz-regression-list.at\nindex e3173fb88f0..2347c690eff 100644\n--- a/tests/fuzz-regression-list.at\n+++ b/tests/fuzz-regression-list.at\n@@ -21,3 +21,4 @@ TEST_FUZZ_REGRESSION([ofp_print_fuzzer-5722747668791296])\n TEST_FUZZ_REGRESSION([ofp_print_fuzzer-6285128790704128])\n TEST_FUZZ_REGRESSION([ofp_print_fuzzer-6470117922701312])\n TEST_FUZZ_REGRESSION([ofp_print_fuzzer-6502620041576448])\n+TEST_FUZZ_REGRESSION([ofp_print_fuzzer-6540965472632832])\ndiff --git a/tests/fuzz-regression/ofp_print_fuzzer-6540965472632832 b/tests/fuzz-regression/ofp_print_fuzzer-6540965472632832\nnew file mode 100644\nindex 00000000000..e69de29bb2d\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42489816-vul",
+      "digest": "sha256:131fb44571d83e4cbd2b628cc1d41e6d97a040dd6fa7b110001ee193ce756219"
+    },
+    "patched": {
+      "ref": "n132/arvo:42489816-fix",
+      "digest": "sha256:111f1d86c67f687775a856455b2c9f7c21522e4a5d7d6d358b1b6f3bde01d151"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "WRITE",
+        "crash_site": "/src/openvswitch/lib/ofp-actions.c:4352",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "WRITE",
+        "site": "/src/openvswitch/lib/ofp-actions.c:4352"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

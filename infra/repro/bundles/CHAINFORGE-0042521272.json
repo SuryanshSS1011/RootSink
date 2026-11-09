@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042521272",
+  "chain": "CWE-416->CWE-125",
+  "project": "libical",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42521272",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "45188d4a05086ea7b1103617370b5c6af1844aa1",
+      "fix_commits": [
+        "45188d4a05086ea7b1103617370b5c6af1844aa1"
+      ],
+      "repo": "https://github.com/libical/libical"
+    },
+    "patch": "From 45188d4a05086ea7b1103617370b5c6af1844aa1 Mon Sep 17 00:00:00 2001\nFrom: Allen Winter <winter@kde.org>\nDate: Wed, 5 Jun 2024 12:52:59 -0400\nSubject: [PATCH] Fix more fuzzer issues\n\nicalmemory.c - icalmemory_tmp_copy(): don't allocate memory\nfor an empty string (i.e a string that starts with '\\0')\n\nicalparser.c - icalparser_add_line(): END is encountered\nbefore the BEGIN becomes an error, not just a warning\n\nicaltypes.c -  icalreqstattype_from_string(): don't allow\ngarbage (non-printable chars) in the reqstattype.\nfor unknown reasons the icalmemory tmp memory ring doesn't\nwork properly on garbage; additionally the snprintf in\nicalreqstattype_as_string_r() uses the \"%s\" format which\nis not intended for unprintable chars.\n\npvl.c - in pvl_insert_ordered(): don't assert when\nno valid return conditions are encountered.\n---\n .github/workflows/build.yml |   4 +-\n src/libical/icalmemory.c    |   2 +-\n src/libical/icalparser.c    |   4 +-\n src/libical/icaltypes.c     |  14 +++-\n src/libical/pvl.c           |   6 +-\n src/test/CMakeLists.txt     |   1 +\n test-data/fuzz69527         | 131 ++++++++++++++++++++++++++++++++++++\n 7 files changed, 151 insertions(+), 11 deletions(-)\n create mode 100644 test-data/fuzz69527\n\ndiff --git a/.github/workflows/build.yml b/.github/workflows/build.yml\nindex a515814..ffc3f39 100644\n--- a/.github/workflows/build.yml\n+++ b/.github/workflows/build.yml\n@@ -43,7 +43,7 @@ jobs:\n       - name: Configure project\n         run: |\n           mkdir build\n-          cmake -B build --warn-uninitialized -Werror=dev -G Ninja -DLIBICAL_DEVMODE_MEMORY_CONSISTENCY=False -DCMAKE_BUILD_TYPE=${{ matrix.configuration }} -DLIBICAL_BUILD_TESTING=True -DENABLE_GTK_DOC=True -DICAL_GLIB=True -DGOBJECT_INTROSPECTION=True -DICAL_GLIB_VAPI=True\n+          cmake -B build --warn-uninitialized -Werror=dev -G Ninja -DLIBICAL_DEVMODE_MEMORY_CONSISTENCY=False -DCMAKE_BUILD_TYPE=${{ matrix.configuration }} -DLIBICAL_BUILD_TESTING=True -DENABLE_GTK_DOC=True -DICAL_GLIB=True -DGOBJECT_INTROSPECTION=True -DICAL_GLIB_VAPI=True -DLIBICAL_BUILD_TESTING_BIGFUZZ=True\n       - name: Build project\n         run: cmake --build build\n       - name: Test project\n@@ -67,7 +67,7 @@ jobs:\n           export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig\n           export XML_CATALOG_FILES=/usr/local/etc/xml/catalog\n           mkdir build\n-          cmake -B build --warn-uninitialized -Werror=dev -G Ninja -DLIBICAL_DEVMODE_MEMORY_CONSISTENCY=True -DCMAKE_BUILD_TYPE=${{ matrix.configuration }} -DLIBICAL_BUILD_TESTING=True -DENABLE_GTK_DOC=True -DICAL_GLIB=True -DGOBJECT_INTROSPECTION=False -DICAL_GLIB_VAPI=False\n+          cmake -B build --warn-uninitialized -Werror=dev -G Ninja -DLIBICAL_DEVMODE_MEMORY_CONSISTENCY=True -DCMAKE_BUILD_TYPE=${{ matrix.configuration }} -DLIBICAL_BUILD_TESTING=True -DENABLE_GTK_DOC=True -DICAL_GLIB=True -DGOBJECT_INTROSPECTION=False -DICAL_GLIB_VAPI=False -DLIBICAL_BUILD_TESTING_BIGFUZZ=True\n       - name: Build project\n         run: cmake --build build\n       - name: Test project\ndiff --git a/src/libical/icalmemory.c b/src/libical/icalmemory.c\nindex c008103..1b76da8 100644\n--- a/src/libical/icalmemory.c\n+++ b/src/libical/icalmemory.c\n@@ -233,7 +233,7 @@ char *icalmemory_tmp_copy(const char *str)\n {\n     char *b;\n \n-    if (!str)\n+    if (!str || str[0] == '\\0')\n         return NULL;\n \n     b = icalmemory_tmp_buffer(strlen(str) + 1);\ndiff --git a/src/libical/icalparser.c b/src/libical/icalparser.c\nindex c7d73e6..49e2fdb 100644\n--- a/src/libical/icalparser.c\n+++ b/src/libical/icalparser.c\n@@ -823,8 +823,8 @@ icalcomponent *icalparser_add_line(icalparser *parser, char *line)\n \n         if (parser->level < 0) {\n             // Encountered an END before any BEGIN, this must be invalid data\n-            icalerror_warn(\"Encountered END before BEGIN\");\n-\n+            icalerror_set_error_state(ICAL_MALFORMEDDATA_ERROR,\n+                                      icalerror_get_error_state(ICAL_MALFORMEDDATA_ERROR));\n             parser->state = ICALPARSER_ERROR;\n             parser->level = 0;\n             return 0;\ndiff --git a/src/libical/icaltypes.c b/src/libical/icaltypes.c\nindex 302cab5..cee0685 100644\n--- a/src/libical/icaltypes.c\n+++ b/src/libical/icaltypes.c\n@@ -21,7 +21,7 @@\n #include <pthread.h>\n static pthread_mutex_t unk_token_mutex = PTHREAD_MUTEX_INITIALIZER;\n #endif\n-\n+#include <ctype.h>\n static ICAL_GLOBAL_VAR ical_unknown_token_handling unknownTokenHandling = ICAL_TREAT_AS_ERROR;\n \n int icaltriggertype_is_null_trigger(struct icaltriggertype tr)\n@@ -92,7 +92,7 @@ error:\n \n struct icalreqstattype icalreqstattype_from_string(const char *str)\n {\n-    const char *p1, *p2;\n+    const char *s, *p1, *p2;\n     struct icalreqstattype stat;\n     short major = 0, minor = 0;\n \n@@ -102,6 +102,16 @@ struct icalreqstattype icalreqstattype_from_string(const char *str)\n     stat.debug = 0;\n     stat.desc = 0;\n \n+    // Don't allow (fuzzer) garbage chars anywhere in the reqstat string\n+    s = str;\n+    while (*s && isprint((unsigned char)*s)) {\n+        ++s;\n+    }\n+    if (*s != '\\0') {\n+        // garbage encountered. return the empty stat\n+        return stat;\n+    }\n+\n     /* Get the status numbers */\n \n     sscanf(str, \"%hd.%hd\", &major, &minor);\ndiff --git a/src/libical/pvl.c b/src/libical/pvl.c\nindex 125baff..4c53f5d 100644\n--- a/src/libical/pvl.c\n+++ b/src/libical/pvl.c\n@@ -266,10 +266,8 @@ void pvl_insert_ordered(pvl_list L, pvl_comparef f, void *d)\n         }\n     }\n \n-    /* badness, choke */\n-#if !defined(lint)\n-    icalassert(0);\n-#endif\n+    /* badness, just return */\n+    return;\n }\n \n /**\ndiff --git a/src/test/CMakeLists.txt b/src/test/CMakeLists.txt\nindex 28486d3..71c81a3 100644\n--- a/src/test/CMakeLists.txt\n+++ b/src/test/CMakeLists.txt\n@@ -251,6 +251,7 @@ if(LIBICAL_BUILD_TESTING_BIGFUZZ)\n     56539\n     69341\n     69344\n+    69527\n     usban\n   )\n     add_test(NAME fuzz1test${fuzztest} COMMAND icalcomponent_fuzz1 \"${PROJECT_SOURCE_DIR}/test-data/fuzz${fuzztest}\")\ndiff --git a/test-data/fuzz69527 b/test-data/fuzz69527\nnew file mode 100644\nindex 0000000..e2686cb\n--- /dev/null\n+++ b/test-data/fuzz69527\n@@ -0,0 +1,131 @@\n+BEgIN;\n+X;TZID=:0:;\n+X;TZID=\ufffd\ufffd\ufffd=:2:;\n+X;TZID=:9:;\n+X;TZID=:1:;\n+X;TZID=:8:;\n+X;TZID=:5:;\n+X;TZID=:9:;\n+X;TZID=:2:;\n+X;TZID=:3:;\n+X;TZID=:9:;\n+X;TZID=:0:;\n+X;TZID=:5:;\n+X;TZID=:0:;\n+X;TZID=:9:;\n+X;TZID=:2:;\n+X;TZID=:9:;\n+X;TZID=:D=:1:;\n+X;TZID=:8:;\n+X;TZID=:5:;\n+X;TZID=:9:;\n+X;TZID=:2:;\n+X;TZID=:3:;\n+X;TZID=:1:;\n+X;TZID=:0:;\n+X;TZID=:5:;\n+X;TZID=:0:;\n+X;TZID=:9:;\n+X;TZID=:2:;\n+X;TZID=:9:\ufffd\ufffdX;TZID=:9:;\n+X;TZID=:0:;\n+X;TZID=:2:;\n+X;TZID=:0:;\n+X;TZID=:9:;\n+X;TZID=:2:;\n+X;TZID=:3:;\n+X;TZID=:9:;\n+X;TZID=:\ufffd:;\n+X;TZID=:4:;\n+X;TZID=:=:2:;\n+X;TZID=:2:;\n+X;TZID=:9:;\n+X;TZID=:0:;\n+X;TZID=:0:;\n+X;TZID=:0:;\n+X;TZID=:9:;\n+X;TZID=:2:;\n+X;TZID=:9:;\n+X;TZID=:0:;\n+X;TZID=:9:;\n+X;TZID=:2:;\n+X;\n+X;TZID=:1:;\n+X;TZID=:8:;\n+X;TZID=:5:;\n+X;TZID=:9:;\n+X;TZID=:2:;\n+X;TZID=:3:;\n+X;TZID=:9:;\n+X;TZID=:0:;\n+X;TZID=:5:;\n+\ufffdX;TZID=:o0:;\n+X;TZID=:9:;\n+X;TZID=:2:;\n+X;TZID=:9:;\n+X;TZID=:0:;\n+X;TZID=:9:;\n+X;TZID=:2:;Z\n+X;TZID=:2:;\n+X;TZID=:3:;\n+X;TZID=:9:;\n+X;TZID=:8:;\n+X;TZID=:5:;\n+X;TZID=:1:;\n+X;TZID=:2:;\n+X;TZID=:3:;\n+X;TZID=:9:;\n+X;TZID=:0:;\n+X;TZID=:5:;\n+X;TZID=:0:;\n+X;TZID=:9:;\n+X;TZID=:2:;\n+X;TZID=:9:;\n+X;TZID=:0:;\n+X;TZID=:9:;\n+X;TZID=:2:;T\n+X;TZID=:1:;\n+X;TZID=:3:;\n+X;TZID=:1:;\n+X;TZID=:0:;\n+X;TZID=:5:;\n+X;TZID=:0:;\n+X;TZID=:9:;\n+X;TZID=:2:;\n+X;TZID=:9:;\n+X;TZID=:0:;\n+X;TZID=:9:;\n+X;TZID=:2:;\n+X;\n+X;TZID=:1:;\n+X;TZID=:8:;\n+X;TZID=:5:;\n+X;TZID=:9:;\n+X;TZID=:0:;\n+X;TZID=:3:;\n+X;TZID=:9:;\n+X;TZID=:0:;\n+X;TZID=:5:;\n+X;TZID=:0:;\n+X;TZID=]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]:9:;\n+X;TZID=:2:;\n+X;TZID=:9:;\n+X;TZID=:0:;\n+X;TZID=:9:;\n+X;TZID=:2:;\n+X;TZID=:2:;\n+X;TZID=:9:;\n+X;TZID=:2:;\n+X;TZID=:3:;\n+X;TZID=:9:;\n+X;TZID=:\ufffd:;\n+X;TZID=:1:;\n+X;TZID=:0:;\n+X;TZID=:9:;\n+X;TZID=:2:;\n+X;TZID=:9:;\n+X;TZID=:0:;\n+X;TZID=:0:;\n+XTID\n+X;TZID=:9:;\n+X;TZID=:;:;\n\\ No newline at end of file\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42521272-vul",
+      "digest": "sha256:bce4240d477385316c1c1f3935013bd682a1d1cf58809ac0d5d95c0ae560b587"
+    },
+    "patched": {
+      "ref": "n132/arvo:42521272-fix",
+      "digest": "sha256:6e4c11b6f81f345e580bd1238a7a2b3b70980c6a800ea153b4e4c2fd0d806aba"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/libical/src/libical/icaltypes.c:162",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/libical/src/libical/icaltypes.c:162"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

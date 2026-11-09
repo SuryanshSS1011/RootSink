@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-953122307",
+  "chain": "CWE-129->CWE-125",
+  "project": "serenity",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42518834",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/SerenityOS/serenity/commit/068f6771ad3d309bc64a8bde0124da078186e695",
+      "fix_commits": [
+        "068f6771ad3d309bc64a8bde0124da078186e695"
+      ],
+      "repo": "https://github.com/SerenityOS/serenity"
+    },
+    "patch": "diff --git a/Userland/Libraries/LibVideo/VP9/Parser.cpp b/Userland/Libraries/LibVideo/VP9/Parser.cpp\nindex ab3910c5d7173f..90292861ac35d6 100644\n--- a/Userland/Libraries/LibVideo/VP9/Parser.cpp\n+++ b/Userland/Libraries/LibVideo/VP9/Parser.cpp\n@@ -1409,6 +1409,9 @@ DecoderErrorOr<bool> Parser::residual(BlockContext& block_context, bool has_bloc\n         auto plane_subsampling_x = (plane > 0) ? block_context.frame_context.color_config.subsampling_x : false;\n         auto plane_subsampling_y = (plane > 0) ? block_context.frame_context.color_config.subsampling_y : false;\n         auto plane_size = get_subsampled_block_size(block_context.size, plane_subsampling_x, plane_subsampling_y);\n+        if (plane_size == Block_Invalid) {\n+            return DecoderError::corrupted(\"Invalid block size\"sv);\n+        }\n         auto transform_size = get_uv_transform_size(block_context.transform_size, plane_size);\n         auto transform_size_in_sub_blocks = transform_size_to_sub_blocks(transform_size);\n         auto block_size_in_sub_blocks = block_size_to_sub_blocks(plane_size);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42518834-vul",
+      "digest": "sha256:7857115b852fb35a3b0c4eddea06c5afe1a52476689f9daa7426bd81c91789fc"
+    },
+    "patched": {
+      "ref": "n132/arvo:42518834-fix",
+      "digest": "sha256:a13acc41e52571d0b6053031ec6ee0208ea28f5581f05777ed341f2e4fe4d79d"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "crash_site": "/src/serenity/Userland/Libraries/LibVideo/VP9/Parser.cpp:1417",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 129,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "site": "/src/serenity/Userland/Libraries/LibVideo/VP9/Parser.cpp:1417"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

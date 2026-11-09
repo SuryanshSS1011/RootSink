@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042490793",
+  "chain": "CWE-1284->CWE-787",
+  "project": "wireshark",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42490793",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "a2bc5b53570b1bc95e57870651932cb2096d7b6f",
+      "fix_commits": [
+        "a2bc5b53570b1bc95e57870651932cb2096d7b6f"
+      ],
+      "repo": "https://github.com/wireshark/wireshark"
+    },
+    "patch": "diff --git a/epan/dissectors/packet-idn.c b/epan/dissectors/packet-idn.c\nindex 25bd922e5f2..0458f8d5954 100644\n--- a/epan/dissectors/packet-idn.c\n+++ b/epan/dissectors/packet-idn.c\n@@ -739,7 +739,7 @@ static int dissect_idn_dmx_dictionary(tvbuff_t *tvb, int offset, proto_tree *idn\n \n \t\tif(i == config->word_count && !words_found) {\n \t\t\tcurr_size = dictionary_size;\n-\t\t\twhile(curr_size%4 != 0) {\n+\t\t\twhile(curr_size%4 != 0 && i > 0) {\n \t\t\t\ti -= 1;\n \t\t\t\tcurr_size += 1;\n \t\t\t}\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42490793-vul",
+      "digest": "sha256:f2659c8f2fe4b8baf641b1a54713dcb2c7e10b6740d54b24a5448a1dce2de9e2"
+    },
+    "patched": {
+      "ref": "n132/arvo:42490793-fix",
+      "digest": "sha256:a10b5c15963db86b2908d114c96045ae12ec43a0bb4dc4ca0eb526669a465623"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/wireshark/epan/dissectors/packet-idn.c:689",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/wireshark/epan/dissectors/packet-idn.c:689"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

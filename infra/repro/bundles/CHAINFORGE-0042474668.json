@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042474668",
+  "chain": "CWE-456->CWE-457",
+  "project": "graphicsmagick",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42474668",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "ce367bc7f85e0b1fd312c8cbd024cb502b12985b",
+      "fix_commits": [
+        "ce367bc7f85e0b1fd312c8cbd024cb502b12985b"
+      ],
+      "repo": "https://foss.heptapod.net/graphicsmagick/graphicsmagick"
+    },
+    "patch": "diff --git a/ChangeLog b/ChangeLog\nindex 81676e32b77fb0cf4e6b518d1e6e3322f1868294_Q2hhbmdlTG9n..ce367bc7f85e0b1fd312c8cbd024cb502b12985b_Q2hhbmdlTG9n 100644\n--- a/ChangeLog\n+++ b/ChangeLog\n@@ -1,5 +1,10 @@\n 2019-04-13  Bob Friesenhahn  <bfriesen@simple.dallas.tx.us>\n \n+\t* coders/pdb.c (WritePDBImage): Assure that input scanline is\n+\tcleared in order to cover up some decoder bug.  May fix 14215\n+\t\"graphicsmagick/coder_PDB_fuzzer: Use-of-uninitialized-value in\n+\tWritePDBImage\", which I have not been able to reproduce.\n+\n \t* magick/render.c (DrawPrimitive): Check primitive point x/y\n \tvalues for NaN.\n \t(DrawImage): Fix oss-fuzz issue 14173\ndiff --git a/coders/pdb.c b/coders/pdb.c\nindex 81676e32b77fb0cf4e6b518d1e6e3322f1868294_Y29kZXJzL3BkYi5j..ce367bc7f85e0b1fd312c8cbd024cb502b12985b_Y29kZXJzL3BkYi5j 100644\n--- a/coders/pdb.c\n+++ b/coders/pdb.c\n@@ -965,6 +965,7 @@\n   {\n     if (!AcquireImagePixels(image,0,y,image->columns,1,&image->exception))\n       break;\n+    (void) memset(scanline,0,image->columns*packet_size); /* FIXME: remove */\n     (void) ExportImagePixelArea(image,GrayQuantum,bits_per_pixel,scanline,0,0);\n     for (x=0; x < pdb_image.width; x++)\n     {\ndiff --git a/www/Changelog.html b/www/Changelog.html\nindex 81676e32b77fb0cf4e6b518d1e6e3322f1868294_d3d3L0NoYW5nZWxvZy5odG1s..ce367bc7f85e0b1fd312c8cbd024cb502b12985b_d3d3L0NoYW5nZWxvZy5odG1s 100644\n--- a/www/Changelog.html\n+++ b/www/Changelog.html\n@@ -38,8 +38,14 @@\n <p>2019-04-13  Bob Friesenhahn  &lt;<a class=\"reference external\" href=\"mailto:bfriesen&#37;&#52;&#48;simple&#46;dallas&#46;tx&#46;us\">bfriesen<span>&#64;</span>simple<span>&#46;</span>dallas<span>&#46;</span>tx<span>&#46;</span>us</a>&gt;</p>\n <blockquote>\n <ul class=\"simple\">\n+<li>coders/pdb.c (WritePDBImage): Assure that input scanline is\n+cleared in order to cover up some decoder bug.  May fix 14215\n+&quot;graphicsmagick/coder_PDB_fuzzer: Use-of-uninitialized-value in\n+WritePDBImage&quot;, which I have not been able to reproduce.</li>\n <li>magick/render.c (DrawPrimitive): Check primitive point x/y\n-values for NaN.</li>\n+values for NaN.\n+(DrawImage): Fix oss-fuzz issue 14173\n+&quot;graphicsmagick/coder_MVG_fuzzer: Integer-overflow in DrawImage&quot;.</li>\n <li>magick/pixel_cache.c (SetNexus): Fix oss-fuzz issue 14208\n &quot;graphicsmagick/coder_MVG_fuzzer: Integer-overflow in SetNexus&quot;.</li>\n </ul>\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42474668-vul",
+      "digest": "sha256:d565043577c94762ae619147a4723d413029376a33e541a5346a22bf9a42d948"
+    },
+    "patched": {
+      "ref": "n132/arvo:42474668-fix",
+      "digest": "sha256:a40b9549526243bb546172653e9c3e46728068fbc101ee3e8ca3efb797dc02e2"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/graphicsmagick/coders/pdb.c:977",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/graphicsmagick/coders/pdb.c:977"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

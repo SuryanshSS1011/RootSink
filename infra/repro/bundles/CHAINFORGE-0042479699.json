@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042479699",
+  "chain": "CWE-456->CWE-457",
+  "project": "openh264",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42479699",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "8dca82ab0d4548ab4d064229e293f2edb8f257ba",
+      "fix_commits": [
+        "8dca82ab0d4548ab4d064229e293f2edb8f257ba"
+      ],
+      "repo": "https://github.com/cisco/openh264"
+    },
+    "patch": "From 8dca82ab0d4548ab4d064229e293f2edb8f257ba Mon Sep 17 00:00:00 2001\nFrom: xiaotiansf <xiaotianshimail@gmail.com>\nDate: Tue, 5 Nov 2019 09:02:25 -0800\nSubject: [PATCH] fix fuzz issues 18744, 18746 and 18747 by clearing info of\n buffered video frames when decreasing DPB buffers.\n\n---\n codec/decoder/core/src/decoder.cpp | 2 ++\n 1 file changed, 2 insertions(+)\n\ndiff --git a/codec/decoder/core/src/decoder.cpp b/codec/decoder/core/src/decoder.cpp\nindex 0ef0cbf..9d70d10 100644\n--- a/codec/decoder/core/src/decoder.cpp\n+++ b/codec/decoder/core/src/decoder.cpp\n@@ -192,6 +192,8 @@ static int32_t DecreasePicBuff (PWelsDecoderContext pCtx, PPicBuff* ppPicBuf, co\n     return ERR_INFO_OUT_OF_MEMORY;\n   }\n \n+  ResetReorderingPictureBuffers (pCtx->pPictReoderingStatus, pCtx->pPictInfoList, false);\n+\n   int32_t iPrevPicIdx = -1;\n   for (iPrevPicIdx = 0; iPrevPicIdx < kiOldSize; ++iPrevPicIdx) {\n     if (pCtx->pLastDecPicInfo->pPreviousDecodedPictureInDpb == pPicOldBuf->ppPic[iPrevPicIdx]) {\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42479699-vul",
+      "digest": "sha256:cf54925fb8cff0dd9efa8c6bf85f5b94d8ad616e5db4c6db0d639d73b0030e0e"
+    },
+    "patched": {
+      "ref": "n132/arvo:42479699-fix",
+      "digest": "sha256:e0a26a2c36ae5413cc67a3855fe456583efc41662e5dac7db0cc3cd57d5c3bdf"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/openh264/codec/decoder/plus/src/welsDecoderExt.cpp:1078",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/openh264/codec/decoder/plus/src/welsDecoderExt.cpp:1078"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

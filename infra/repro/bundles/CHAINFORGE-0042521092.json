@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042521092",
+  "chain": "CWE-416->CWE-125",
+  "project": "mosquitto",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42521092",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "44415cb97421257e82a40b491598438d0bedef26",
+      "fix_commits": [
+        "44415cb97421257e82a40b491598438d0bedef26"
+      ],
+      "repo": "https://github.com/eclipse/mosquitto"
+    },
+    "patch": "From 44415cb97421257e82a40b491598438d0bedef26 Mon Sep 17 00:00:00 2001\nFrom: \"Roger A. Light\" <roger@atchoo.org>\nDate: Sat, 11 Mar 2023 00:10:38 +0000\nSubject: [PATCH] Fix passwd fuzz build\n\n---\n apps/mosquitto_passwd/Makefile | 14 +++++++-------\n 1 file changed, 7 insertions(+), 7 deletions(-)\n\ndiff --git a/apps/mosquitto_passwd/Makefile b/apps/mosquitto_passwd/Makefile\nindex 635eb11..a9ab9aa 100644\n--- a/apps/mosquitto_passwd/Makefile\n+++ b/apps/mosquitto_passwd/Makefile\n@@ -28,25 +28,25 @@ mosquitto_passwd.a : ${OBJS}\n \t${CROSS_COMPILE}$(AR) cr $@ $^\n \n mosquitto_passwd.o : mosquitto_passwd.c\n-\t${CROSS_COMPILE}${CC} $(APP_CPPFLAGS) $(APP_CFLAGS) -c $< -o $@\n+\t${CROSS_COMPILE}${CC} ${CPPFLAGS} $(APP_CPPFLAGS) $(APP_CFLAGS) -c $< -o $@\n \n get_password.o : get_password.c\n-\t${CROSS_COMPILE}${CC} $(APP_CPPFLAGS) $(APP_CFLAGS) -c $< -o $@\n+\t${CROSS_COMPILE}${CC} ${CPPFLAGS} $(APP_CPPFLAGS) $(APP_CFLAGS) -c $< -o $@\n \n base64_mosq.o : ${R}/common/base64_mosq.c ${R}/common/base64_mosq.h\n-\t${CROSS_COMPILE}${CC} $(APP_CPPFLAGS) $(APP_CFLAGS) -c $< -o $@\n+\t${CROSS_COMPILE}${CC} ${CPPFLAGS} $(APP_CPPFLAGS) $(APP_CFLAGS) -c $< -o $@\n \n memory_mosq.o : ${R}/lib/memory_mosq.c\n-\t${CROSS_COMPILE}${CC} $(APP_CPPFLAGS) $(APP_CFLAGS) -c $< -o $@\n+\t${CROSS_COMPILE}${CC} ${CPPFLAGS} $(APP_CPPFLAGS) $(APP_CFLAGS) -c $< -o $@\n \n memory_public.o : ${R}/src/memory_public.c\n-\t${CROSS_COMPILE}${CC} $(APP_CPPFLAGS) $(APP_CFLAGS) -c $< -o $@\n+\t${CROSS_COMPILE}${CC} ${CPPFLAGS} $(APP_CPPFLAGS) $(APP_CFLAGS) -c $< -o $@\n \n misc_mosq.o : ${R}/common/misc_mosq.c ${R}/common/misc_mosq.h\n-\t${CROSS_COMPILE}${CC} $(APP_CPPFLAGS) $(APP_CFLAGS) -c $< -o $@\n+\t${CROSS_COMPILE}${CC} ${CPPFLAGS} $(APP_CPPFLAGS) $(APP_CFLAGS) -c $< -o $@\n \n password_mosq.o : ${R}/common/password_mosq.c ${R}/common/password_mosq.h\n-\t${CROSS_COMPILE}${CC} $(APP_CPPFLAGS) $(APP_CFLAGS) -c $< -o $@\n+\t${CROSS_COMPILE}${CC} ${CPPFLAGS} $(APP_CPPFLAGS) $(APP_CFLAGS) -c $< -o $@\n \n install : all\n ifeq ($(WITH_TLS),yes)\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42521092-vul",
+      "digest": "sha256:b97fd9a1843c34dc529480420048416decedb7ce7c8475074b03b887e0bdbd2e"
+    },
+    "patched": {
+      "ref": "n132/arvo:42521092-fix",
+      "digest": "sha256:c0052b5720a32e35f0557f5f075f7683590f789239126737a7174a9e3bc1e43e"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/mosquitto/src/conf.c:401",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/mosquitto/src/conf.c:401"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042475116",
+  "chain": "CWE-1284->CWE-125",
+  "project": "open62541",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42475116",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "e1cdb1dd75ea92adcc949c5d3dc4fc4ebdf74b92",
+      "fix_commits": [
+        "e1cdb1dd75ea92adcc949c5d3dc4fc4ebdf74b92"
+      ],
+      "repo": "https://github.com/open62541/open62541"
+    },
+    "patch": "diff --git a/src/ua_types_encoding_json.c b/src/ua_types_encoding_json.c\nindex 2d4e49d10d0..44f705ebc98 100644\n--- a/src/ua_types_encoding_json.c\n+++ b/src/ua_types_encoding_json.c\n@@ -2253,13 +2253,9 @@ searchObjectForKeyRec(const char *searchKey, CtxJson *ctx,\n     \n     if(parseCtx->tokenArray[parseCtx->index].type == JSMN_OBJECT) {\n         size_t objectCount = (size_t)(parseCtx->tokenArray[parseCtx->index].size);\n-        \n         parseCtx->index++; /*Object to first Key*/\n-        CHECK_TOKEN_BOUNDS;\n         \n-        size_t i;\n-        for(i = 0; i < objectCount; i++) {\n-            \n+        for(size_t i = 0; i < objectCount; i++) {\n             CHECK_TOKEN_BOUNDS;\n             if(depth == 0) { /* we search only on first layer */\n                 if(jsoneq((char*)ctx->pos, &parseCtx->tokenArray[parseCtx->index], searchKey) == 0) {\n@@ -2287,12 +2283,10 @@ searchObjectForKeyRec(const char *searchKey, CtxJson *ctx,\n         }\n     } else if(parseCtx->tokenArray[parseCtx->index].type == JSMN_ARRAY) {\n         size_t arraySize = (size_t)(parseCtx->tokenArray[parseCtx->index].size);\n-        \n         parseCtx->index++; /*Object to first element*/\n-        CHECK_TOKEN_BOUNDS;\n         \n-        size_t i;\n-        for(i = 0; i < arraySize; i++) {\n+        for(size_t i = 0; i < arraySize; i++) {\n+            CHECK_TOKEN_BOUNDS;\n             if(parseCtx->tokenArray[parseCtx->index].type == JSMN_OBJECT) {\n                ret = searchObjectForKeyRec(searchKey, ctx, parseCtx, resultIndex,\n                                            (UA_UInt16)(depth + 1));\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42475116-vul",
+      "digest": "sha256:61aad1c05724b3feb56b6c5ae2c4c535fe0ee8ea30f6fb7ee382dd45e643d7b1"
+    },
+    "patched": {
+      "ref": "n132/arvo:42475116-fix",
+      "digest": "sha256:840c4ddc8edf5bbc7ca343a2e9e874e66fe6f5e1016e512a573fed679255ea07"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/open62541/src/ua_types_encoding_json.c:2296",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/open62541/src/ua_types_encoding_json.c:2296"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,82 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-30042490715",
+  "chain": "CWE-1284->CWE-190->CWE-787",
+  "project": "rdkit",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42490715",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "e2b0a850d7f7087efc15181b8ab11a6b8a566228",
+      "fix_commits": [
+        "e2b0a850d7f7087efc15181b8ab11a6b8a566228"
+      ],
+      "repo": "https://github.com/rdkit/rdkit"
+    },
+    "patch": "diff --git a/Code/GraphMol/Chirality.cpp b/Code/GraphMol/Chirality.cpp\nindex bdbcfc7cf36..c1abab5a03e 100644\n--- a/Code/GraphMol/Chirality.cpp\n+++ b/Code/GraphMol/Chirality.cpp\n@@ -1038,10 +1038,12 @@ void iterateCIPRanks(const ROMol &mol, const DOUBLE_VECT &invars,\n     numRanks = *std::max_element(ranks.begin(), ranks.end()) + 1;\n \n     // now truncate each vector and stick the rank at the end\n-    for (unsigned int i = 0; i < numAtoms; ++i) {\n-      cipEntries[i][numIts + 1] = ranks[i];\n-      cipEntries[i].erase(cipEntries[i].begin() + numIts + 2,\n-                          cipEntries[i].end());\n+    if (static_cast<unsigned int>(lastNumRanks) != numRanks) {\n+      for (unsigned int i = 0; i < numAtoms; ++i) {\n+        cipEntries[i][numIts + 1] = ranks[i];\n+        cipEntries[i].erase(cipEntries[i].begin() + numIts + 2,\n+                            cipEntries[i].end());\n+      }\n     }\n \n     ++numIts;\ndiff --git a/Code/GraphMol/FileParsers/MolSGroupParsing.cpp b/Code/GraphMol/FileParsers/MolSGroupParsing.cpp\nindex e5c7ae4892b..50cf60a7785 100644\n--- a/Code/GraphMol/FileParsers/MolSGroupParsing.cpp\n+++ b/Code/GraphMol/FileParsers/MolSGroupParsing.cpp\n@@ -942,7 +942,7 @@ std::vector<T> ParseV3000Array(std::stringstream &stream, int maxV,\n         << \"WARNING: first character of V3000 array is not '('\" << std::endl;\n   }\n \n-  unsigned int count;\n+  unsigned int count = 0;\n   stream >> count;\n   std::vector<T> values;\n   if (maxV >= 0 && count > static_cast<unsigned int>(maxV)) {\n@@ -1009,8 +1009,8 @@ void ParseV3000SAPLabel(RWMol *mol, SubstanceGroup &sgroup,\n                         std::stringstream &stream, bool strictParsing) {\n   stream.get();  // discard parentheses\n \n-  unsigned int count;\n-  unsigned int aIdxMark;\n+  unsigned int count = 0;\n+  unsigned int aIdxMark = 0;\n   std::string lvIdxStr;  // In V3000 this may be a string\n   std::string sapIdStr;\n   stream >> count >> aIdxMark >> lvIdxStr >> sapIdStr;\ndiff --git a/Code/GraphMol/RWMol.cpp b/Code/GraphMol/RWMol.cpp\nindex 171658474a4..a1e4838feb0 100644\n--- a/Code/GraphMol/RWMol.cpp\n+++ b/Code/GraphMol/RWMol.cpp\n@@ -151,6 +151,16 @@ void RWMol::replaceAtom(unsigned int idx, Atom *atom_pin, bool,\n       }\n     }\n   }\n+\n+  // handle stereo group\n+  for (auto &group : d_stereo_groups) {\n+    auto atoms = group.getAtoms();\n+    auto aiter = std::find(atoms.begin(), atoms.end(), orig_p);\n+    if (aiter != atoms.end()) {\n+      *aiter = atom_p;\n+      group = StereoGroup(group.getGroupType(), std::move(atoms));\n+    }\n+  }\n };\n \n void RWMol::replaceBond(unsigned int idx, Bond *bond_pin, bool preserveProps,\ndiff --git a/Code/GraphMol/catch_chirality.cpp b/Code/GraphMol/catch_chirality.cpp\nindex 9cc403f58f8..0891c019777 100644\n--- a/Code/GraphMol/catch_chirality.cpp\n+++ b/Code/GraphMol/catch_chirality.cpp\n@@ -1738,3 +1738,19 @@ TEST_CASE(\"StereoGroup Testing\") {\n     CHECK(mol->getStereoGroups().size() == 1);\n   }\n }\n+\n+TEST_CASE(\"replaceAtom and StereoGroups\") {\n+  SECTION(\"basics\") {\n+    auto mol = \"C[C@](O)(Cl)[C@H](F)Cl |o1:1,4|\"_smiles;\n+    REQUIRE(mol);\n+    CHECK(mol->getStereoGroups().size() == 1);\n+    CHECK(mol->getStereoGroups()[0].getAtoms().size() == 2);\n+    CHECK(mol->getStereoGroups()[0].getAtoms()[0] == mol->getAtomWithIdx(1));\n+\n+    Atom acp(*mol->getAtomWithIdx(1));\n+    mol->replaceAtom(1, &acp);\n+    CHECK(mol->getStereoGroups().size() == 1);\n+    CHECK(mol->getStereoGroups()[0].getAtoms().size() == 2);\n+    CHECK(mol->getStereoGroups()[0].getAtoms()[0] == mol->getAtomWithIdx(1));\n+  }\n+}\ndiff --git a/Code/RDGeneral/StreamOps.h b/Code/RDGeneral/StreamOps.h\nindex 57ce42c78c8..8b08f0f591d 100644\n--- a/Code/RDGeneral/StreamOps.h\n+++ b/Code/RDGeneral/StreamOps.h\n@@ -307,7 +307,7 @@ template <class T>\n void streamReadVec(std::istream &ss, T &val) {\n   boost::uint64_t size;\n   streamRead(ss, size);\n-  val.resize(size);\n+  val.resize(boost::numeric_cast<size_t>(size));\n \n   for (size_t i = 0; i < size; ++i) streamRead(ss, val[i]);\n }\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42490715-vul",
+      "digest": "sha256:c98ae3716d0a8e989464687d416dc49f23d4145cb1da4bd31a3808bd94436ac3"
+    },
+    "patched": {
+      "ref": "n132/arvo:42490715-fix",
+      "digest": "sha256:b8e2ae68e9bea2439f7b00a0f643294ee00d034afb813c4a1bad5160bc787b58"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/rdkit/Code/GraphMol/Chirality.cpp:1022",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 190,
+      "role": "intermediate",
+      "witness": {
+        "method": "ubsan-rebuild",
+        "recipe": "SANITIZER=undefined compile && $ENTRYPOINT",
+        "ubsan_options": "print_stacktrace=1:halt_on_error=0:silence_unsigned_overflow=0:symbolize=1"
+      },
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/rdkit/Code/GraphMol/Chirality.cpp:1022"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

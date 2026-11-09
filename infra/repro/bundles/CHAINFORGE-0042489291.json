@@ -1,0 +1,77 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042489291",
+  "chain": "CWE-190->CWE-787",
+  "project": "ffmpeg",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42489291",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "14bbb6bb30a6053e82f865c2d69d1a4dd2297fc1",
+      "fix_commits": [
+        "14bbb6bb30a6053e82f865c2d69d1a4dd2297fc1"
+      ],
+      "repo": "https://git.ffmpeg.org/ffmpeg.git"
+    },
+    "patch": "From 14bbb6bb30a6053e82f865c2d69d1a4dd2297fc1 Mon Sep 17 00:00:00 2001\nFrom: Michael Niedermayer <michael@niedermayer.cc>\nDate: Tue, 3 Nov 2020 23:41:36 +0100\nSubject: [PATCH] avformat/fitsdec: Better size checks\n\nFixes: out of array access\nFixes: 26819/clusterfuzz-testcase-minimized-ffmpeg_dem_FITS_fuzzer-5634559355650048\nFixes: 26820/clusterfuzz-testcase-minimized-ffmpeg_dem_FITS_fuzzer-5760774955597824\nFixes: 27379/clusterfuzz-testcase-minimized-ffmpeg_dem_FITS_fuzzer-5129775942991872.fuzz\n\nFound-by: continuous fuzzing process https://github.com/google/oss-fuzz/tree/master/projects/ffmpeg\nSigned-off-by: Michael Niedermayer <michael@niedermayer.cc>\n---\n libavformat/fitsdec.c | 10 ++++++++--\n 1 file changed, 8 insertions(+), 2 deletions(-)\n\ndiff --git a/libavformat/fitsdec.c b/libavformat/fitsdec.c\nindex e52ddc7..df757e8 100644\n--- a/libavformat/fitsdec.c\n+++ b/libavformat/fitsdec.c\n@@ -24,6 +24,7 @@\n  * FITS demuxer.\n  */\n \n+#include \"libavutil/avassert.h\"\n #include \"libavutil/intreadwrite.h\"\n #include \"internal.h\"\n #include \"libavutil/opt.h\"\n@@ -125,14 +126,14 @@ static int64_t is_image(AVFormatContext *s, FITSContext *fits, FITSHeader *heade\n     size += header->pcount;\n \n     t = (abs(header->bitpix) >> 3) * ((int64_t) header->gcount);\n-    if(size && t > UINT64_MAX / size)\n+    if(size && t > INT64_MAX / size)\n         return AVERROR_INVALIDDATA;\n     size *= t;\n \n     if (!size) {\n         image = 0;\n     } else {\n-        if(FITS_BLOCK_SIZE - 1 > UINT64_MAX - size)\n+        if(FITS_BLOCK_SIZE - 1 > INT64_MAX - size)\n             return AVERROR_INVALIDDATA;\n         size = ((size + FITS_BLOCK_SIZE - 1) / FITS_BLOCK_SIZE) * FITS_BLOCK_SIZE;\n     }\n@@ -173,6 +174,11 @@ static int fits_read_packet(AVFormatContext *s, AVPacket *pkt)\n         goto fail;\n     }\n \n+    av_assert0(avbuf.len <= INT64_MAX && size <= INT64_MAX);\n+    if (avbuf.len + size > INT_MAX - 80)  {\n+        ret = AVERROR_INVALIDDATA;\n+        goto fail;\n+    }\n     // Header is sent with the first line removed...\n     ret = av_new_packet(pkt, avbuf.len - 80 + size);\n     if (ret < 0)\n-- \n2.55.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42489291-vul",
+      "digest": "sha256:a87526cc673e73c1d23e56456528e6a43d97fba09941473c041805c11b68365d"
+    },
+    "patched": {
+      "ref": "n132/arvo:42489291-fix",
+      "digest": "sha256:04d01d787c31b4443d591b9ba7e21aaeaa8d5bdaec00daf23ae50068d41e6612"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/ffmpeg/libavformat/fitsdec.c:189",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 190,
+      "role": "source",
+      "witness": {
+        "method": "ubsan-rebuild",
+        "recipe": "SANITIZER=undefined compile && $ENTRYPOINT",
+        "ubsan_options": "print_stacktrace=1:halt_on_error=0:silence_unsigned_overflow=0:symbolize=1"
+      },
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/ffmpeg/libavformat/fitsdec.c:189"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

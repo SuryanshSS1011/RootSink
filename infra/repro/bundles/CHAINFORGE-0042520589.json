@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042520589",
+  "chain": "CWE-416->CWE-125",
+  "project": "boringssl",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42520589",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "507ac830036d7531489490831814cf03e0d7c4d6",
+      "fix_commits": [
+        "507ac830036d7531489490831814cf03e0d7c4d6"
+      ],
+      "repo": "https://boringssl.googlesource.com/boringssl"
+    },
+    "patch": "diff --git a/crypto/x509/x509_test.cc b/crypto/x509/x509_test.cc\nindex fea26e7..aebc76a 100644\n--- a/crypto/x509/x509_test.cc\n+++ b/crypto/x509/x509_test.cc\n@@ -6205,3 +6205,14 @@\n     }\n   }\n }\n+\n+TEST(X509, AddUnserializableExtension) {\n+  bssl::UniquePtr<EVP_PKEY> key = PrivateKeyFromPEM(kP256Key);\n+  ASSERT_TRUE(key);\n+  bssl::UniquePtr<X509> x509 =\n+      MakeTestCert(\"Issuer\", \"Subject\", key.get(), /*is_ca=*/true);\n+  ASSERT_TRUE(x509);\n+  bssl::UniquePtr<X509_EXTENSION> ext(X509_EXTENSION_new());\n+  ASSERT_TRUE(X509_EXTENSION_set_object(ext.get(), OBJ_nid2obj(NID_undef)));\n+  EXPECT_FALSE(X509_add_ext(x509.get(), ext.get(), /*loc=*/-1));\n+}\ndiff --git a/crypto/x509/x509_v3.c b/crypto/x509/x509_v3.c\nindex 9153dce..dd84352 100644\n--- a/crypto/x509/x509_v3.c\n+++ b/crypto/x509/x509_v3.c\n@@ -148,6 +148,7 @@\n   X509_EXTENSION *new_ex = NULL;\n   int n;\n   STACK_OF(X509_EXTENSION) *sk = NULL;\n+  int free_sk = 0;\n \n   if (x == NULL) {\n     OPENSSL_PUT_ERROR(X509, ERR_R_PASSED_NULL_PARAMETER);\n@@ -158,6 +159,7 @@\n     if ((sk = sk_X509_EXTENSION_new_null()) == NULL) {\n       goto err;\n     }\n+    free_sk = 1;\n   } else {\n     sk = *x;\n   }\n@@ -183,7 +185,9 @@\n   OPENSSL_PUT_ERROR(X509, ERR_R_MALLOC_FAILURE);\n err2:\n   X509_EXTENSION_free(new_ex);\n-  sk_X509_EXTENSION_free(sk);\n+  if (free_sk) {\n+    sk_X509_EXTENSION_free(sk);\n+  }\n   return NULL;\n }\n \ndiff --git a/crypto/x509v3/v3_conf.c b/crypto/x509v3/v3_conf.c\nindex 480bb3b..a4f172d 100644\n--- a/crypto/x509v3/v3_conf.c\n+++ b/crypto/x509v3/v3_conf.c\n@@ -357,13 +357,12 @@\n   for (size_t i = 0; i < sk_CONF_VALUE_num(nval); i++) {\n     const CONF_VALUE *val = sk_CONF_VALUE_value(nval, i);\n     X509_EXTENSION *ext = X509V3_EXT_nconf(conf, ctx, val->name, val->value);\n-    if (ext == NULL) {\n+    int ok = ext != NULL &&  //\n+             (sk == NULL || X509v3_add_ext(sk, ext, -1) != NULL);\n+    X509_EXTENSION_free(ext);\n+    if (!ok) {\n       return 0;\n     }\n-    if (sk) {\n-      X509v3_add_ext(sk, ext, -1);\n-    }\n-    X509_EXTENSION_free(ext);\n   }\n   return 1;\n }\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42520589-vul",
+      "digest": "sha256:57e3a22587dced58b6c7c1343ca10918a46ccf27a84f55af6ce36416987f38ed"
+    },
+    "patched": {
+      "ref": "n132/arvo:42520589-fix",
+      "digest": "sha256:efb6697e54e6273b77cd4a9f820f8d4ddd2529ee9d65d59f28f87a1b01aa20c2"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/boringssl/crypto/stack/stack.c:100",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/boringssl/crypto/stack/stack.c:100"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

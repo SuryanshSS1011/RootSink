@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042479645",
+  "chain": "CWE-416->CWE-787",
+  "project": "imagemagick",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42479645",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "22fb7aed8f38f3bdbad8944a27f67476cc1c8a5d",
+      "fix_commits": [
+        "22fb7aed8f38f3bdbad8944a27f67476cc1c8a5d"
+      ],
+      "repo": "https://github.com/imagemagick/imagemagick"
+    },
+    "patch": "diff --git a/MagickCore/draw.c b/MagickCore/draw.c\nindex 629b0dfb774..835932f2be9 100644\n--- a/MagickCore/draw.c\n+++ b/MagickCore/draw.c\n@@ -7074,6 +7074,7 @@ static MagickBooleanType TraceSquareLinecap(PrimitiveInfo *primitive_info,\n static PrimitiveInfo *TraceStrokePolygon(const Image *image,\n   const DrawInfo *draw_info,const PrimitiveInfo *primitive_info)\n {\n+#define MaxStrokePad  (6*BezierQuantum+360)\n #define CheckPathExtent(pad) \\\n   if ((ssize_t) (q+(pad)) >= (ssize_t) max_strokes) \\\n     { \\\n@@ -7085,10 +7086,10 @@ static PrimitiveInfo *TraceStrokePolygon(const Image *image,\n       else \\\n         { \\\n           max_strokes+=(pad); \\\n-          path_p=(PointInfo *) ResizeQuantumMemory(path_p,max_strokes, \\\n-            sizeof(*path_p)); \\\n-          path_q=(PointInfo *) ResizeQuantumMemory(path_q,max_strokes, \\\n-            sizeof(*path_q)); \\\n+          path_p=(PointInfo *) ResizeQuantumMemory(path_p,max_strokes+ \\\n+            MaxStrokePad,sizeof(*path_p)); \\\n+          path_q=(PointInfo *) ResizeQuantumMemory(path_q,max_strokes+ \\\n+            MaxStrokePad,sizeof(*path_q)); \\\n         } \\\n       if ((path_p == (PointInfo *) NULL) || (path_q == (PointInfo *) NULL)) \\\n         { \\\n@@ -7155,7 +7156,7 @@ static PrimitiveInfo *TraceStrokePolygon(const Image *image,\n     Allocate paths.\n   */\n   number_vertices=primitive_info->coordinates;\n-  max_strokes=2*number_vertices+6*BezierQuantum+360;\n+  max_strokes=2*number_vertices;\n   polygon_primitive=(PrimitiveInfo *) AcquireQuantumMemory((size_t)\n     number_vertices+2UL,sizeof(*polygon_primitive));\n   if (polygon_primitive == (PrimitiveInfo *) NULL)\n@@ -7199,7 +7200,7 @@ static PrimitiveInfo *TraceStrokePolygon(const Image *image,\n         }\n       n=(ssize_t) number_vertices-1L;\n     }\n-  path_p=(PointInfo *) AcquireQuantumMemory((size_t) max_strokes,\n+  path_p=(PointInfo *) AcquireQuantumMemory((size_t) max_strokes+MaxStrokePad,\n     sizeof(*path_p));\n   if (path_p == (PointInfo *) NULL)\n     {\n@@ -7207,7 +7208,7 @@ static PrimitiveInfo *TraceStrokePolygon(const Image *image,\n         polygon_primitive);\n       return((PrimitiveInfo *) NULL);\n     }\n-  path_q=(PointInfo *) AcquireQuantumMemory((size_t) max_strokes,\n+  path_q=(PointInfo *) AcquireQuantumMemory((size_t) max_strokes+MaxStrokePad,\n     sizeof(*path_q));\n   if (path_q == (PointInfo *) NULL)\n     {\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42479645-vul",
+      "digest": "sha256:b25a303cc2153b57d1c5067518f8258ea5f2166342e1799a928cfc1fb190cd0f"
+    },
+    "patched": {
+      "ref": "n132/arvo:42479645-fix",
+      "digest": "sha256:d12230835d331f3fbff30ed3cfa9b5bd6e4c7b49c3ab3fa600da1d7130a30e85"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/imagemagick/MagickCore/draw.c:7481",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/imagemagick/MagickCore/draw.c:7481"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

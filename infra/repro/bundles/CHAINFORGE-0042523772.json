@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042523772",
+  "chain": "CWE-416->CWE-125",
+  "project": "ghostpdl",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42523772",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "1e2dc072cd7c71620e5e2810566f3996945b02e5",
+      "fix_commits": [
+        "1e2dc072cd7c71620e5e2810566f3996945b02e5"
+      ],
+      "repo": "https://cgit.ghostscript.com/ghostpdl.git"
+    },
+    "patch": "From 1e2dc072cd7c71620e5e2810566f3996945b02e5 Mon Sep 17 00:00:00 2001\nFrom: Ken Sharp <ken.sharp@artifex.com>\nDate: Wed, 3 May 2023 15:05:18 +0100\nSubject: [PATCH] Graphics library - cleanup properly on failure to push pdf14\n device\n\nOSS-fuzz bug #58423\n\nThe problem is reported as a use-after-free, what I see is a colour\nspace persisting until long after the PDF interpreter has been freed,\nand being cleaned up by the end of job restore.\n\nBecause the colour space was created by the PDF interpreter it has a\ncustom callback to free associated objects. But by the time we call that\ncallback the PDF interpreter has vanished.\n\nThis happens because in gx_pattern_load() we try to push the pdf14\ncompositor (the pattern has transparency) which fails. Instead of\ncleaning up we were immediately returning, which was leaving the colour\nspace counted up, which is why it was not counted down and freed before\nthe interpreter exits.\n\nFix that here by using a 'goto' the cleanup code instead of returning\nthe error code immediately.\n\nAlso, noted in passing, we don't need to set the callback in\npdfi_create_DeviceRGB(), because that is done in pdfi_gs_setrgbcolor.\nNot only that, but there are circumstances under which we do not want\nto set the callback (if the space came from PostScript not created by\nthe PDF interpreter) and that is catered for in pdfi_gs_setrgbcolor()\nwhereas it wasn't in pdfi_create_DeviceRGB. So remove the callback\nassignment.\n---\n base/gxpcmap.c   | 2 +-\n pdf/pdf_colour.c | 1 -\n 2 files changed, 1 insertion(+), 2 deletions(-)\n\ndiff --git a/base/gxpcmap.c b/base/gxpcmap.c\nindex efb51ed..0dbe5fd 100644\n--- a/base/gxpcmap.c\n+++ b/base/gxpcmap.c\n@@ -1530,7 +1530,7 @@ gx_pattern_load(gx_device_color * pdc, const gs_gstate * pgs,\n     if (pinst->templat.uses_transparency) {\n         if_debug1m('v', mem, \"gx_pattern_load: pushing the pdf14 compositor device into this graphics state pat_id = %ld\\n\", pinst->id);\n         if ((code = gs_push_pdf14trans_device(saved, true, false, 0, 0)) < 0)   /* spot_color_count taken from pdf14 target values */\n-            return code;\n+            goto fail;\n         saved->device->is_open = true;\n     } else {\n         /* For colored patterns we clear the pattern device's\ndiff --git a/pdf/pdf_colour.c b/pdf/pdf_colour.c\nindex cdbc737..dbd14d1 100644\n--- a/pdf/pdf_colour.c\n+++ b/pdf/pdf_colour.c\n@@ -2611,7 +2611,6 @@ static int pdfi_create_DeviceRGB(pdf_context *ctx, gs_color_space **ppcs)\n         }\n     } else {\n         code = pdfi_gs_setrgbcolor(ctx, 0, 0, 0);\n-        pdfi_set_colour_callback(ctx->pgs->color[0].color_space, ctx, pdfi_cspace_free_callback);\n     }\n     return code;\n }\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42523772-vul",
+      "digest": "sha256:218e902ca2e078183f0ab37c45bd0a5038ea9c97dcd3ea01729d31576b1d1019"
+    },
+    "patched": {
+      "ref": "n132/arvo:42523772-fix",
+      "digest": "sha256:c6830da6c3e3528d0f1bbfe05633cc444f61e4bdc960a6c5f8e2461392a17ddd"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/ghostpdl/./pdf/pdf_colour.c:329",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/ghostpdl/./pdf/pdf_colour.c:329"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

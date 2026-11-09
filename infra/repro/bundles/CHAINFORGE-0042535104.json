@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042535104",
+  "chain": "CWE-1284->CWE-125",
+  "project": "icu",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42535104",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "faac745421f0ef85baf6001216b80aaaddb0e821",
+      "fix_commits": [
+        "faac745421f0ef85baf6001216b80aaaddb0e821"
+      ],
+      "repo": "https://github.com/unicode-org/icu"
+    },
+    "patch": "diff --git a/icu4c/source/common/ubidiwrt.cpp b/icu4c/source/common/ubidiwrt.cpp\nindex 969807c24376..209b140722cb 100644\n--- a/icu4c/source/common/ubidiwrt.cpp\n+++ b/icu4c/source/common/ubidiwrt.cpp\n@@ -501,7 +501,10 @@ ubidi_writeReordered(UBiDi *pBiDi,\n                     destSize-=runLength;\n \n                     if((pBiDi->isInverse) &&\n-                       (/*run<runCount-1 &&*/ dirProps[logicalStart+runLength-1]!=L)) {\n+                           (/*run<runCount-1 &&*/\n+                            runLength > 0 && // doWriteForward may return 0 if src\n+                                             // only include bidi control chars\n+                            dirProps[logicalStart+runLength-1]!=L)) {\n                         markFlag |= LRM_AFTER;\n                     }\n                     if (markFlag & LRM_AFTER) {\n@@ -632,7 +635,10 @@ ubidi_writeReordered(UBiDi *pBiDi,\n                     }\n                     destSize-=runLength;\n \n-                    if(/*run>0 &&*/ !(MASK_R_AL&DIRPROP_FLAG(dirProps[logicalStart+runLength-1]))) {\n+                    if(/*run>0 &&*/\n+                            runLength > 0 && // doWriteForward may return 0 if src\n+                                             // only include bidi control chars\n+                            !(MASK_R_AL&DIRPROP_FLAG(dirProps[logicalStart+runLength-1]))) {\n                         if(destSize>0) {\n                             *dest++=RLM_CHAR;\n                         }\ndiff --git a/icu4c/source/test/cintltst/cbiditst.c b/icu4c/source/test/cintltst/cbiditst.c\nindex 37d69df48fdb..8b0a01057045 100644\n--- a/icu4c/source/test/cintltst/cbiditst.c\n+++ b/icu4c/source/test/cintltst/cbiditst.c\n@@ -92,6 +92,7 @@ static void doTailTest(void);\n \n static void testBracketOverflow(void);\n static void TestExplicitLevel0(void);\n+static void testUBidiWriteReorderedBufferOverflow(void);\n \n /* new BIDI API */\n static void testReorderingMode(void);\n@@ -141,6 +142,7 @@ addComplexTest(TestNode** root) {\n     addTest(root, testContext, \"complex/bidi/testContext\");\n     addTest(root, testBracketOverflow, \"complex/bidi/TestBracketOverflow\");\n     addTest(root, TestExplicitLevel0, \"complex/bidi/TestExplicitLevel0\");\n+    addTest(root, testUBidiWriteReorderedBufferOverflow, \"complex/bidi/writeReorderedBufferOverflow\");\n \n     addTest(root, doArabicShapingTest, \"complex/arabic-shaping/ArabicShapingTest\");\n     addTest(root, doLamAlefSpecialVLTRArabicShapingTest, \"complex/arabic-shaping/lamalef\");\n@@ -4939,6 +4941,23 @@ testBracketOverflow(void) {\n     ubidi_close(bidi);\n }\n \n+/* ICU-22768 */\n+static void\n+testUBidiWriteReorderedBufferOverflow (void) {\n+    UErrorCode status = U_ZERO_ERROR;\n+    UBiDi* bidi;\n+    bidi = ubidi_open();\n+    ubidi_setInverse(bidi, true);\n+    static const UChar text[1] = { 0x2067 };\n+    ubidi_setPara(bidi, text, 1, UBIDI_DEFAULT_RTL, NULL, &status);\n+    UChar dest[MAXLEN];\n+    uint16_t opt = UBIDI_REMOVE_BIDI_CONTROLS |\n+        UBIDI_INSERT_LRM_FOR_NUMERIC |\n+        UBIDI_OUTPUT_REVERSE;\n+    ubidi_writeReordered(bidi, dest, MAXLEN, opt, &status);\n+    ubidi_close(bidi);\n+}\n+\n static void TestExplicitLevel0(void) {\n     // The following used to fail with an error, see ICU ticket #12922.\n     static const UChar text[2] = { 0x202d, 0x05d0 };\ndiff --git a/icu4c/source/test/fuzzer/ubidi_fuzzer.cpp b/icu4c/source/test/fuzzer/ubidi_fuzzer.cpp\nindex 077a14f83fdc..23cf35d746ae 100644\n--- a/icu4c/source/test/fuzzer/ubidi_fuzzer.cpp\n+++ b/icu4c/source/test/fuzzer/ubidi_fuzzer.cpp\n@@ -125,7 +125,7 @@ extern \"C\" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {\n   checkVisual = (*(fuzzData.data()) & 0x01) == 0;\n   fuzzData.remove_prefix(sizeof(checkVisual));\n \n-  std::memcpy(&isInverse, fuzzData.data(), sizeof(isInverse));\n+  isInverse = (*(fuzzData.data()) & 0x01) != 0;\n   fuzzData.remove_prefix(sizeof(isInverse));\n \n   std::memcpy(&options2, fuzzData.data(), sizeof(options2));\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42535104-vul",
+      "digest": "sha256:18da2993a33fb62be973654d464a69119f59ce093821e6dd3464f5c738736ca6"
+    },
+    "patched": {
+      "ref": "n132/arvo:42535104-fix",
+      "digest": "sha256:42a4731f5ca458c34067e4dab8376ef983b62a5f39a36927cf96554ddae4b04c"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/icu/icu4c/source/common/ubidiwrt.cpp:635",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/icu/icu4c/source/common/ubidiwrt.cpp:635"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

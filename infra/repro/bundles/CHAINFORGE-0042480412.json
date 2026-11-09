@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042480412",
+  "chain": "CWE-1284->CWE-787",
+  "project": "openthread",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42480412",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "b8c3161281f8e15873f8decabd8eac461717aefe",
+      "fix_commits": [
+        "b8c3161281f8e15873f8decabd8eac461717aefe"
+      ],
+      "repo": "https://github.com/openthread/openthread"
+    },
+    "patch": "diff --git a/src/core/meshcop/commissioner.cpp b/src/core/meshcop/commissioner.cpp\nindex 8659dfe7c64..9f09b280d89 100644\n--- a/src/core/meshcop/commissioner.cpp\n+++ b/src/core/meshcop/commissioner.cpp\n@@ -1109,7 +1109,8 @@ otError Commissioner::GeneratePskc(const char *              aPassPhrase,\n     uint16_t    saltLen = 0;\n \n     VerifyOrExit((strlen(aPassPhrase) >= OT_COMMISSIONING_PASSPHRASE_MIN_SIZE) &&\n-                     (strlen(aPassPhrase) <= OT_COMMISSIONING_PASSPHRASE_MAX_SIZE),\n+                     (strlen(aPassPhrase) <= OT_COMMISSIONING_PASSPHRASE_MAX_SIZE) &&\n+                     (strlen(aNetworkName) <= OT_NETWORK_NAME_MAX_SIZE),\n                  error = OT_ERROR_INVALID_ARGS);\n \n     memset(salt, 0, sizeof(salt));\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42480412-vul",
+      "digest": "sha256:896f9d5841e150a44217d4cd938f12690861a12a26a46ea110217674000cb5db"
+    },
+    "patched": {
+      "ref": "n132/arvo:42480412-fix",
+      "digest": "sha256:a20407e8afeb001abfedf0a61c8478c61f04bedd3672820115483abc109e5156"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/openthread/src/core/meshcop/commissioner.cpp:1121",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/openthread/src/core/meshcop/commissioner.cpp:1121"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

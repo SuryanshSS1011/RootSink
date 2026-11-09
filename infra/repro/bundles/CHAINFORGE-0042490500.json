@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042490500",
+  "chain": "CWE-416->CWE-125",
+  "project": "selinux",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42490500",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "f0d98f83d28a0cdf437b4cafe229e27cb91eb493",
+      "fix_commits": [
+        "f0d98f83d28a0cdf437b4cafe229e27cb91eb493"
+      ],
+      "repo": "https://github.com/SELinuxProject/selinux"
+    },
+    "patch": "From f0d98f83d28a0cdf437b4cafe229e27cb91eb493 Mon Sep 17 00:00:00 2001\nFrom: James Carter <jwcart2@gmail.com>\nDate: Wed, 6 Jan 2021 13:43:26 -0500\nSubject: [PATCH] libsepol/cil: Fix heap-use-after-free in\n __class_reset_perm_values()\n\nNicolas Iooss reports:\n  A few weeks ago, OSS-Fuzz got configured in order to fuzz the CIL\n  policy compiler (cf.\n  https://github.com/SELinuxProject/selinux/issues/215 and\n  https://github.com/google/oss-fuzz/pull/4790). It reported a bunch of\n  simple issues, for which I will submit patches. There are also more\n  subtle bugs, like the one triggered by this CIL policy:\n\n  (class CLASS (PERM))\n  (classorder (CLASS))\n  (sid SID)\n  (sidorder (SID))\n  (sensitivity SENS)\n  (sensitivityorder (SENS))\n  (type TYPE)\n  (allow TYPE self (CLASS (PERM)))\n\n  (block b\n      (optional o\n          (sensitivitycategory SENS (C)) ; Non-existing category\n  triggers disabling the optional\n          (common COMMON (PERM1))\n          (classcommon CLASS COMMON)\n          (allow TYPE self (CLASS (PERM1)))\n      )\n  )\n\n  On my computer, secilc manages to build this policy fine, but when\n  clang's Address Sanitizer is enabled, running secilc leads to the\n  following report:\n\n  $ make -C libsepol/src CC=clang CFLAGS='-g -fsanitize=address' libsepol.a\n  $ clang -g -fsanitize=address secilc/secilc.c libsepol/src/libsepol.a\n  -o my_secilc\n  $ ./my_secilc -vv testcase.cil\n  Parsing testcase.cil\n  Building AST from Parse Tree\n  Destroying Parse Tree\n  Resolving AST\n  Failed to resolve sensitivitycategory statement at testcase.cil:12\n  Disabling optional 'o' at testcase.cil:11\n  Resetting declarations\n  =================================================================\n  ==181743==ERROR: AddressSanitizer: heap-use-after-free on address\n  0x6070000000c0 at pc 0x55ff7e445d24 bp 0x7ffe7eecfba0 sp\n  0x7ffe7eecfb98\n  READ of size 4 at 0x6070000000c0 thread T0\n      #0 0x55ff7e445d23 in __class_reset_perm_values\n  /git/selinux-userspace/libsepol/src/../cil/src/cil_reset_ast.c:17:17\n\nThe problem is that the optional branch is destroyed when it is disabled,\nso the common has already been destroyed when the reset code tries to\naccess the number of common permissions, so that it can change the\nvalue of the class permissions back to their original values.\n\nThe solution is to count the number of class permissions and then\ncalculate the number of common permissions.\n\nReported-by: Nicolas Iooss <nicolas.iooss@m4x.org>\nSigned-off-by: James Carter <jwcart2@gmail.com>\n---\n libsepol/cil/src/cil_reset_ast.c | 7 ++++---\n 1 file changed, 4 insertions(+), 3 deletions(-)\n\ndiff --git a/libsepol/cil/src/cil_reset_ast.c b/libsepol/cil/src/cil_reset_ast.c\nindex 43e6b88..52e5f64 100644\n--- a/libsepol/cil/src/cil_reset_ast.c\n+++ b/libsepol/cil/src/cil_reset_ast.c\n@@ -22,11 +22,12 @@ static int __class_reset_perm_values(__attribute__((unused)) hashtab_key_t k, ha\n static void cil_reset_class(struct cil_class *class)\n {\n \tif (class->common != NULL) {\n-\t\tstruct cil_class *common = class->common;\n-\t\tcil_symtab_map(&class->perms, __class_reset_perm_values, &common->num_perms);\n+\t\t/* Must assume that the common has been destroyed */\n+\t\tint num_common_perms = class->num_perms - class->perms.nprim;\n+\t\tcil_symtab_map(&class->perms, __class_reset_perm_values, &num_common_perms);\n \t\t/* during a re-resolve, we need to reset the common, so a classcommon\n \t\t * statement isn't seen as a duplicate */\n-\t\tclass->num_perms -= common->num_perms;\n+\t\tclass->num_perms = class->perms.nprim;\n \t\tclass->common = NULL; /* Must make this NULL or there will be an error when re-resolving */\n \t}\n \tclass->ordered = CIL_FALSE;\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42490500-vul",
+      "digest": "sha256:8a7eddd0bd41cc0aa3ea3a160400a18e3b860c02d7d6bb6089697402467d20a1"
+    },
+    "patched": {
+      "ref": "n132/arvo:42490500-fix",
+      "digest": "sha256:eb2513fa0b2c2aa67e0d5fcb068c75fe104a8782b17c27083add889c86a49813"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/selinux/libsepol/src/../cil/src/cil_reset_ast.c:17",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/selinux/libsepol/src/../cil/src/cil_reset_ast.c:17"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

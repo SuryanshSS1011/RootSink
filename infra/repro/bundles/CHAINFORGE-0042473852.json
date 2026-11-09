@@ -1,0 +1,76 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042473852",
+  "chain": "CWE-416->CWE-125",
+  "project": "perfetto",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42473852",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "c0eace27e740347e63d7730ee9b4eba492e7ea1e\n24a1c649af4b022e5053c7d81eafc93f2c092258\n2bf763c6544570b2850f30325fd832f739b2ae08\n9c6538dd501ff77a6d2de37dc301e7ea92916765\n04c79fa7b86422528f4a3c7500df7d8af0283197",
+      "fix_commits": [
+        "c0eace27e740347e63d7730ee9b4eba492e7ea1e",
+        "24a1c649af4b022e5053c7d81eafc93f2c092258",
+        "2bf763c6544570b2850f30325fd832f739b2ae08",
+        "9c6538dd501ff77a6d2de37dc301e7ea92916765",
+        "04c79fa7b86422528f4a3c7500df7d8af0283197"
+      ],
+      "repo": "https://android.googlesource.com/platform/external/perfetto"
+    },
+    "patch": "diff --git a/src/trace_processor/proto_trace_parser.cc b/src/trace_processor/proto_trace_parser.cc\nindex 6a876bc..108c34c 100644\n--- a/src/trace_processor/proto_trace_parser.cc\n+++ b/src/trace_processor/proto_trace_parser.cc\n@@ -57,6 +57,9 @@\n   const char* s = str.data();\n   size_t len = str.size();\n \n+  if (len < 2)\n+    return false;\n+\n   // If str matches '[BEC]\\|[0-9]+[\\|\\n]' set tgid_length to the length of\n   // the number. Otherwise return false.\n   if (s[1] != '|' && s[1] != '\\n')\ndiff --git a/src/trace_processor/proto_trace_parser_unittest.cc b/src/trace_processor/proto_trace_parser_unittest.cc\nindex b304c64..a71fd58 100644\n--- a/src/trace_processor/proto_trace_parser_unittest.cc\n+++ b/src/trace_processor/proto_trace_parser_unittest.cc\n@@ -496,6 +496,9 @@\n \n TEST(SystraceParserTest, SystraceEvent) {\n   SystraceTracePoint result{};\n+\n+  ASSERT_FALSE(ParseSystraceTracePoint(base::StringView(\"\"), &result));\n+\n   ASSERT_TRUE(ParseSystraceTracePoint(base::StringView(\"B|1|foo\"), &result));\n   EXPECT_EQ(result, (SystraceTracePoint{'B', 1, base::StringView(\"foo\"), 0}));\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42473852-vul",
+      "digest": "sha256:d67f82eeac2c5164dd96137f6469b9c022559f299ac82d47917b109d12766325"
+    },
+    "patched": {
+      "ref": "n132/arvo:42473852-fix",
+      "digest": "sha256:ce22bb74796f8a3c0751b9052c6613a88e0a27eb3abd0be616436a17825c87e5"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "global-buffer-overflow",
+        "direction": "READ",
+        "crash_site": null,
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "global-buffer-overflow",
+        "direction": "READ",
+        "site": null
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

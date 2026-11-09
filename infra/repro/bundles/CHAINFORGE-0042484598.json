@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042484598",
+  "chain": "CWE-20->CWE-125",
+  "project": "stb",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42484598",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "5ba0baaa269b3fd681828e0e3b3ac0f1472eaf40",
+      "fix_commits": [
+        "5ba0baaa269b3fd681828e0e3b3ac0f1472eaf40"
+      ],
+      "repo": "https://github.com/nothings/stb"
+    },
+    "patch": "diff --git a/stb_image.h b/stb_image.h\nindex 08020ac826..d60371b95f 100644\n--- a/stb_image.h\n+++ b/stb_image.h\n@@ -3267,6 +3267,13 @@ static int stbi__process_frame_header(stbi__jpeg *z, int scan)\n       if (z->img_comp[i].v > v_max) v_max = z->img_comp[i].v;\n    }\n \n+   // check that plane subsampling factors are integer ratios; our resamplers can't deal with fractional ratios\n+   // and I've never seen a non-corrupted JPEG file actually use them\n+   for (i=0; i < s->img_n; ++i) {\n+      if (h_max % z->img_comp[i].h != 0) return stbi__err(\"bad H\",\"Corrupt JPEG\");\n+      if (v_max % z->img_comp[i].v != 0) return stbi__err(\"bad V\",\"Corrupt JPEG\");\n+   }\n+\n    // compute interleaved mcu info\n    z->img_h_max = h_max;\n    z->img_v_max = v_max;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42484598-vul",
+      "digest": "sha256:fbb132c3d6b606eaaf92fed0626b11d433f7dcad0ea81f607aa074f633f4b9d7"
+    },
+    "patched": {
+      "ref": "n132/arvo:42484598-fix",
+      "digest": "sha256:a646c6bf5a2332090f7c061df8e64e38fe7872110fd3c26f6e2ad2c8fee78f08"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/stb/tests/../stb_image.h:3799",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/stb/tests/../stb_image.h:3799"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

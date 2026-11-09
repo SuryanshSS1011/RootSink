@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-963283065",
+  "chain": "CWE-456->CWE-457",
+  "project": "capstonenext",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42524041",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/aquynh/capstone/commit/d3fc2da5a8bc64c9c6b718f350b58b2b3974760a",
+      "fix_commits": [
+        "d3fc2da5a8bc64c9c6b718f350b58b2b3974760a"
+      ],
+      "repo": "https://github.com/aquynh/capstone"
+    },
+    "patch": "diff --git a/arch/PowerPC/PPCInstPrinter.c b/arch/PowerPC/PPCInstPrinter.c\nindex dd84a75797..775a3e3ed9 100644\n--- a/arch/PowerPC/PPCInstPrinter.c\n+++ b/arch/PowerPC/PPCInstPrinter.c\n@@ -410,6 +410,7 @@ void PPC_printInst(MCInst *MI, SStream *O, void *Info)\n {\n \tchar *mnem;\n \tunsigned int opcode = MCInst_getOpcode(MI);\n+\tmemset(O->buffer, 0, sizeof(O->buffer));\n \n \t// printf(\"opcode = %u\\n\", opcode);\n \n@@ -635,6 +636,16 @@ void PPC_printInst(MCInst *MI, SStream *O, void *Info)\n \t\tcs_mem_free(mnem);\n \t} else\n \t\tprintInstruction(MI, O);\n+\n+\tconst char *mnem_end = strchr(O->buffer, ' ');\n+\tunsigned mnem_len = 0;\n+\tif (mnem_end)\n+\t\tmnem_len = mnem_end - O->buffer;\n+\tif (!mnem_end || mnem_len >= sizeof(MI->flat_insn->mnemonic))\n+\t\tmnem_len = sizeof(MI->flat_insn->mnemonic) - 1;\n+\n+\tmemset(MI->flat_insn->mnemonic, 0, sizeof(MI->flat_insn->mnemonic));\n+\tstrncpy(MI->flat_insn->mnemonic, O->buffer, mnem_len);\n }\n \n // FIXME\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42524041-vul",
+      "digest": "sha256:136f0cc4341313899db28c4a4fe189985a712cab2fd2cd92c919047e6e96b485"
+    },
+    "patched": {
+      "ref": "n132/arvo:42524041-fix",
+      "digest": "sha256:b276afc81d434851034417dbf1285f047418b0cc0f93ce959d604f5a9c86db34"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/capstonenext/arch/PowerPC/PPCInstPrinter.c:83",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/capstonenext/arch/PowerPC/PPCInstPrinter.c:83"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

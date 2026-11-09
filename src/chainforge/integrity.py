@@ -1,0 +1,196 @@
+"""The GOLD contract as code: PR-3's rules I2-I5, shared by the release transform and conformance.
+
+One implementation, imported by both, so the rule that assigns a tier and the rule that checks it
+cannot drift apart - the failure that let 12 harness proofs through two different path regexes.
+"""
+
+from __future__ import annotations
+
+import re
+from pathlib import Path
+
+from chainforge.evidence import guard_evidence_defect, harness_site
+
+_CLASS = re.compile(
+    r"(?:AddressSanitizer|MemorySanitizer|UndefinedBehaviorSanitizer|BUG: KASAN): ([\w-]+)"
+)
+_NULL_PAGE = re.compile(r"SEGV on unknown address (?:0x)?0{6,}[0-9a-f]{0,4}\b|zero page", re.I)
+# ASan prints "READ of size N"; a SEGV report instead says "caused by a READ memory access".
+_ACCESS = re.compile(r"\b(READ|WRITE) of size|caused by an? (READ|WRITE) memory access", re.I)
+_WITNESSED = {"execution", "causally-proven"}
+# A patched run is clean only if the input demonstrably ran to completion. Silence is not enough:
+# 67 archived patched logs were 32-bit ASan aborting at startup ("Shadow memory range
+# interleaves"), which prints no crash line and had been scored clean. One marker per engine.
+_EXECUTED = re.compile(
+    r"Executed /tmp/poc"  # libFuzzer
+    r"|Execution successful"  # AFL driver
+    r"|Accepting input from '/tmp/poc'[\s\S]*Usage for fuzzing"  # honggfuzz replay, completed
+    r"|\[init\] environment up"  # kernel rootfs; the harness enforces the run window
+)
+# \b keeps the kernel's boot banner "KernelAddressSanitizer initialized" from reading as a crash.
+_CRASHED = re.compile(
+    r"\b(?:AddressSanitizer|UndefinedBehaviorSanitizer|MemorySanitizer|LeakSanitizer)|BUG: KASAN"
+    r"|libFuzzer: deadly signal|DEADLYSIGNAL|runtime error:"
+)
+
+
+def ran_clean(log_text: str, declared_marker: str | None = None) -> bool:
+    """True if this patched-side log shows the input executed and nothing fired.
+
+    A run through a non-fuzzer driver (a hand-built reproducer) prints its own completion line;
+    the report declares it as `executed_marker`, so the evidence stays checkable per record.
+    """
+    ran = bool(_EXECUTED.search(log_text)) or bool(declared_marker and declared_marker in log_text)
+    return ran and not _CRASHED.search(log_text)
+
+
+def crash_facts(log_text: str) -> dict:
+    """Crash class, whether it is a NULL dereference, and the access direction, from one log."""
+    m = _CLASS.search(log_text)
+    a = _ACCESS.search(log_text)
+    return {
+        "class": m.group(1) if m else None,
+        "null_deref": bool(_NULL_PAGE.search(log_text)),
+        "access": (a.group(1) or a.group(2)).upper() if a else None,
+    }
+
+
+def kasan_same_bug(lines: list[str], signature: str) -> list[int]:
+    """PR-6: the console lines that open a KASAN report of syzbot's bug, given its signature
+    "class:function". Same class, and syzbot's function is the report's own function or one of
+    the first 12 frames of that report's call trace."""
+    typ, fn = signature.split(":", 1) if ":" in signature else ("", "")
+    out = []
+    for i, ln in enumerate(lines):
+        m = re.search(r"KASAN: ([\w-]+) (?:\w+ )?in (\w+)", ln)
+        if not (m and fn and (typ.endswith(m.group(1)) or m.group(1).endswith(typ))):
+            continue
+        if m.group(2) == fn:
+            out.append(i)
+            continue
+        block = []
+        for nxt in lines[i + 1 : i + 200]:
+            if "BUG: KASAN:" in nxt or re.search(r"={20,}", nxt):
+                break
+            block.append(nxt)
+        frames = re.findall(r"\s(\w+)(?:\.[\w.]+)?\+0x[0-9a-f]+/0x", "\n".join(block))
+        if fn in frames[:12]:
+            out.append(i)
+    return out
+
+
+def source_contradiction(rec: dict, facts: dict | None) -> str | None:
+    """I2: why the record's source CWE is contradicted by its own sink report, or None."""
+    if not facts or not facts.get("class"):
+        return None
+    if rec["chain"][0].get("evidence_kind") == "causally-proven":
+        return None  # PR-3 I2 governs statically assigned sources; ablation re-earns them (PR-4)
+    src = rec["chain"][0]["cwe_id"]
+    if src == 416 and "use-after-free" not in facts["class"]:
+        return f"CWE-416 source but the sanitizer reports {facts['class']}"
+    if src == 476 and not facts["null_deref"]:
+        return f"CWE-476 source but the sanitizer reports {facts['class']}, not a NULL dereference"
+    return None
+
+
+def sink_contradiction(rec: dict, facts: dict | None) -> str | None:
+    """Sink against the report: CWE-787 is a WRITE, CWE-125 a READ, and (PR-8) a use-after-free
+    report is a CWE-125/787 sink only behind a CWE-416 link, the PR-2 convention."""
+    if not facts:
+        return None
+    chain = rec["chain"]
+    sink = chain[-1]["cwe_id"]
+    cls = facts.get("class") or ""
+    if sink in (125, 787) and "use-after" in cls and (len(chain) < 2 or chain[-2]["cwe_id"] != 416):
+        return f"CWE-{sink} sink but the report is {cls} with no CWE-416 link before it"
+    if not facts.get("access"):
+        return None
+    want = {787: "WRITE", 125: "READ"}.get(sink)
+    if want and facts["access"] != want:
+        return f"CWE-{sink} sink but the access is a {facts['access']}"
+    return None
+
+
+def _sink_runs(rec: dict) -> list[dict]:
+    """Reports that replay the sink crash (not a rebuild witnessing an intermediate)."""
+    return [s for s in rec.get("sanitizer_reports") or [] if s.get("witnesses") != "intermediate"]
+
+
+def vul_log(rec: dict, root: Path) -> Path | None:
+    for s in _sink_runs(rec):
+        if s.get("revision") == "vulnerable" and s.get("log_ref"):
+            p = root / s["log_ref"]
+            if p.is_file():
+                return p
+    return None
+
+
+def _two_sided_self_run(rec: dict, root: Path) -> str | None:
+    """I5: None if both runs are ours, archived, crash-then-clean; else the reason."""
+    # Upstream's report may stay alongside ours as provenance; only our own runs count here.
+    reps = _sink_runs(rec)
+    vul_all = [s for s in reps if s.get("revision") == "vulnerable"]
+    vul = [s for s in vul_all if s.get("observed_by") != "upstream"]
+    fix = [s for s in reps if s.get("revision") == "patched" and s.get("observed_by") != "upstream"]
+    if not any(s.get("triggered") for s in vul_all):
+        return "no triggered vulnerable-side report"
+    if not any(s.get("triggered") for s in vul):
+        return "upstream"
+    if rec.get("differential_complete") is not True or not fix:
+        return "no patched-side run"
+    # PR-3 I5: the fixed revision must run clean TWICE. One clean run was accepted until
+    # 2026-10-20 (disclosed in PREREGISTRATION.md); a single run can be a lucky miss.
+    if len(fix) < 2:
+        return "one patched run (I5 requires two)"
+    if any(s.get("triggered") for s in fix):
+        return "patched side crashes"
+    for s in vul + fix:
+        if not (s.get("log_ref") and (root / s["log_ref"]).is_file()):
+            return f"log not archived: {s.get('log_ref')}"
+    for s in fix:
+        if not ran_clean(
+            (root / s["log_ref"]).read_text(errors="replace"), s.get("executed_marker")
+        ):
+            return f"patched run did not demonstrably execute: {s['log_ref']}"
+    return None
+
+
+def gold_violations(rec: dict, root: Path, facts: dict | None = None) -> dict[str, str]:
+    """Every PR-3 rule (I2-I5) this record breaks, as {rule: reason}. Empty means GOLD holds."""
+    out: dict[str, str] = {}
+    if facts is None:
+        p = vul_log(rec, root)
+        facts = crash_facts(p.read_text(errors="replace")) if p else None
+    if why := source_contradiction(rec, facts):
+        out["I2"] = why
+    if why := sink_contradiction(rec, facts):
+        out["I2-sink"] = why
+    for link in (rec.get("chain") or [])[:1] + (rec.get("chain") or [])[-1:]:
+        loc = (link.get("evidence") or {}).get("location") or {}
+        if link.get("evidence_kind") in _WITNESSED and harness_site(loc.get("file") or ""):
+            out["I2-site"] = f"{link.get('role')} site in harness or test code: {loc.get('file')}"
+            break
+    cr = rec.get("commit_range") or {}
+    sha = re.search(r"[0-9a-f]{40}", cr.get("fixed") or "")
+    if why := guard_evidence_defect(rec.get("patch_diff"), sha.group(0) if sha else ""):
+        out["I3"] = why
+    elif not (cr.get("fix_commits") or sha):
+        # Criterion (d): the fix is recorded under a commit id (normalize_fix_commits.py).
+        out["I3"] = "no recorded fix commit"
+    chain = rec.get("chain") or []
+    if len(chain) >= 3 and any(c.get("evidence_kind") not in _WITNESSED for c in chain[1:-1]):
+        out["I4"] = "intermediate link not execution-witnessed"
+    if why := _two_sided_self_run(rec, root):
+        out["I5"] = why
+    elif chain and chain[-1].get("evidence_kind") not in _WITNESSED:
+        out["I5"] = "sink link not attributed to a sanitizer report"
+    return out
+
+
+def tier_for(rec: dict, violations: dict[str, str]) -> str:
+    """GOLD only with no violation; gold-upstream when the sole gap is that upstream ran it."""
+    if not violations:
+        return "gold"
+    if set(violations) == {"I5"} and violations["I5"] == "upstream":
+        return "gold-upstream"
+    return "silver"

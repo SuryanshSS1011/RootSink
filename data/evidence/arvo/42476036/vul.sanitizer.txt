@@ -1,0 +1,81 @@
+======================= INFO =========================
+This binary is built for AFL-fuzz.
+To run the target function on individual input(s) execute this:
+  /out/ncp-uart-received-fuzzer < INPUT_FILE
+or
+  /out/ncp-uart-received-fuzzer INPUT_FILE1 [INPUT_FILE2 ... ]
+To fuzz with afl-fuzz execute this:
+  afl-fuzz [afl-flags] /out/ncp-uart-received-fuzzer [-N]
+afl-fuzz will run N iterations before re-spawning the process (default: 1000)
+======================================================
+Reading 102 bytes from /tmp/poc
+=================================================================
+==752076==ERROR: AddressSanitizer: stack-buffer-overflow on address 0x14a63b03ff32 at pc 0x000000494f5a bp 0x7ffd8038ed80 sp 0x7ffd8038e548
+READ of size 118 at 0x14a63b03ff32 thread T0
+SCARINESS: 41 (multi-byte-read-stack-buffer-overflow)
+    #0 0x494f59 in __asan_memcpy /src/llvm/projects/compiler-rt/lib/asan/asan_interceptors_memintrinsics.cc:22:3
+    #1 0x508529 in ot::Message::Write(unsigned short, unsigned short, void const*) /src/openthread/src/core/common/message.cpp:595:9
+    #2 0x50837a in ot::Message::Append(void const*, unsigned short) /src/openthread/src/core/common/message.cpp:390:20
+    #3 0x54bd60 in ot::AddressResolver::SendAddressQueryResponse(ot::ThreadTargetTlv const&, ot::ThreadMeshLocalEidTlv const&, ot::ThreadLastTransactionTimeTlv const*, ot::Ip6::Address const&) /src/openthread/src/core/thread/address_resolver.cpp:647:5
+    #4 0x54b90e in ot::AddressResolver::HandleAddressQuery(ot::Coap::Message&, ot::Ip6::MessageInfo const&) /src/openthread/src/core/thread/address_resolver.cpp:605:9
+    #5 0x5a27e1 in ot::Coap::CoapBase::ProcessReceivedRequest(ot::Coap::Message&, ot::Ip6::MessageInfo const&) /src/openthread/src/core/coap/coap.cpp:635:23
+    #6 0x50618f in otUdpForwardReceive /src/openthread/src/core/api/udp_api.cpp:125:30
+    #7 0x4ea005 in otError ot::Ncp::NcpBase::HandlePropertySet<(spinel_prop_key_t)5412>() /src/openthread/src/ncp/ncp_base_mtd.cpp:3460:5
+    #8 0x4ccea4 in ot::Ncp::NcpBase::HandleCommandPropertySet(unsigned char, spinel_prop_key_t) /src/openthread/src/ncp/ncp_base.cpp:952:31
+    #9 0x4cc553 in ot::Ncp::NcpBase::CommandHandler_PROP_VALUE_update(unsigned char, unsigned int) /src/openthread/src/ncp/ncp_base.cpp:1194:17
+    #10 0x4cab68 in ot::Ncp::NcpBase::HandleCommand(unsigned char) /src/openthread/src/ncp/ncp_base.cpp:857:17
+    #11 0x4ca685 in ot::Ncp::NcpBase::HandleReceive(unsigned char const*, unsigned short) /src/openthread/src/ncp/ncp_base.cpp:341:13
+    #12 0x4c8566 in ot::Ncp::NcpUart::HandleFrame(otError) /src/openthread/src/ncp/ncp_uart.cpp:267:18
+    #13 0x4c98ac in ot::Hdlc::Decoder::Decode(unsigned char const*, unsigned short) /src/openthread/src/ncp/hdlc.cpp:256:21
+    #14 0x4c71f0 in LLVMFuzzerTestOneInput /src/openthread/tests/fuzz/ncp_uart_received.cpp:70:5
+    #15 0x61f74a in ExecuteFilesOnyByOne /src/libfuzzer/afl/afl_driver.cpp:216:5
+    #16 0x61f74a in main /src/libfuzzer/afl/afl_driver.cpp:253
+    #17 0x14a639fef82f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+    #18 0x41db88 in _start (/out/ncp-uart-received-fuzzer+0x41db88)
+
+DEDUP_TOKEN: __asan_memcpy--ot::Message::Write(unsigned short, unsigned short, void const*)--ot::Message::Append(void const*, unsigned short)
+Address 0x14a63b03ff32 is located in stack of thread T0 at offset 50 in frame
+    #0 0x54b6af in ot::AddressResolver::HandleAddressQuery(ot::Coap::Message&, ot::Ip6::MessageInfo const&) /src/openthread/src/core/thread/address_resolver.cpp:585
+
+DEDUP_TOKEN: ot::AddressResolver::HandleAddressQuery(ot::Coap::Message&, ot::Ip6::MessageInfo const&)
+  This frame has 4 object(s):
+    [32, 50) 'targetTlv' (line 586)
+    [96, 106) 'mlIidTlv' (line 587) <== Memory access at offset 50 partially underflows this variable
+    [128, 134) 'lastTransactionTimeTlv' (line 588) <== Memory access at offset 50 partially underflows this variable
+    [160, 184) 'iter' (line 609) <== Memory access at offset 50 partially underflows this variable
+HINT: this may be a false positive if your program uses some custom stack unwind mechanism, swapcontext or vfork
+      (longjmp and C++ exceptions *are* supported)
+SUMMARY: AddressSanitizer: stack-buffer-overflow /src/llvm/projects/compiler-rt/lib/asan/asan_interceptors_memintrinsics.cc:22:3 in __asan_memcpy
+Shadow bytes around the buggy address:
+  0x0295475fff90: f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5
+  0x0295475fffa0: f1 f1 f1 f1 00 f2 f2 f2 02 f2 00 f2 f2 f2 02 f2
+  0x0295475fffb0: 02 f2 00 f3 f3 f3 f3 f3 00 00 00 00 00 00 00 00
+  0x0295475fffc0: f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5
+  0x0295475fffd0: f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5
+=>0x0295475fffe0: f1 f1 f1 f1 00 00[02]f2 f2 f2 f2 f2 00 02 f2 f2
+  0x0295475ffff0: 06 f2 f2 f2 f8 f8 f8 f3 f3 f3 f3 f3 00 00 00 00
+  0x029547600000: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x029547600010: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x029547600020: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x029547600030: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+  Shadow gap:              cc
+==752076==ABORTING

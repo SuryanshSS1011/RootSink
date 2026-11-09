@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-953720859",
+  "chain": "CWE-843->CWE-119",
+  "project": "gdal",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42479017",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/OSGeo/gdal/commit/c9a011a7b3d7d25dec77e13df5cfb65ec4f83895",
+      "fix_commits": [
+        "c9a011a7b3d7d25dec77e13df5cfb65ec4f83895"
+      ],
+      "repo": "https://github.com/OSGeo/gdal"
+    },
+    "patch": "diff --git a/gdal/ogr/ogrsf_frmts/ili/ili2reader.cpp b/gdal/ogr/ogrsf_frmts/ili/ili2reader.cpp\nindex 9695f83ed46d..ebe7422da313 100644\n--- a/gdal/ogr/ogrsf_frmts/ili/ili2reader.cpp\n+++ b/gdal/ogr/ogrsf_frmts/ili/ili2reader.cpp\n@@ -301,7 +301,7 @@ static OGRCompoundCurve *getBoundary(DOMElement *elem) {\n static OGRCurvePolygon *getPolygon(DOMElement *elem) {\n   OGRCurvePolygon *pg = new OGRCurvePolygon();\n \n-  DOMElement *boundaryElem = (DOMElement *)elem->getFirstChild(); // outer boundary\n+  DOMElement *boundaryElem = dynamic_cast<DOMElement *>(elem->getFirstChild()); // outer boundary\n   while (boundaryElem != NULL) {\n     char* pszTagName = XMLString::transcode(boundaryElem->getTagName());\n     if (cmpStr(ILI2_BOUNDARY, pszTagName) == 0)\n@@ -313,7 +313,7 @@ static OGRCurvePolygon *getPolygon(DOMElement *elem) {\n         }\n     }\n     XMLString::release(&pszTagName);\n-    boundaryElem = (DOMElement *)boundaryElem->getNextSibling(); // inner boundaries\n+    boundaryElem = dynamic_cast<DOMElement *>(boundaryElem->getNextSibling()); // inner boundaries\n   }\n \n   return pg;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42479017-vul",
+      "digest": "sha256:154e910d39d90f04aa06e7b85d92b952c06f17650c2b2f4ebd4ae8f10c6104b0"
+    },
+    "patched": {
+      "ref": "n132/arvo:42479017-fix",
+      "digest": "sha256:1ab545aaf35f53c6d310c1e1b5e9fade573c0cb035b6df2d8b8cbed2980183a4"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "crash_site": "/src/gdal/gdal/ogr/ogrsf_frmts/ili/ili2reader.cpp:368",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 843,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 119,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "site": "/src/gdal/gdal/ogr/ogrsf_frmts/ili/ili2reader.cpp:368"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

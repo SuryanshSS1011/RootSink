@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042490273",
+  "chain": "CWE-416->CWE-787",
+  "project": "qpdf",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42490273",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "dc92574c10f3e2516ec6445b88c5d584f40df4e5",
+      "fix_commits": [
+        "dc92574c10f3e2516ec6445b88c5d584f40df4e5"
+      ],
+      "repo": "https://github.com/qpdf/qpdf"
+    },
+    "patch": "diff --git a/ChangeLog b/ChangeLog\nindex 2db53cb80..1e31efb48 100644\n--- a/ChangeLog\n+++ b/ChangeLog\n@@ -1,3 +1,9 @@\n+2021-01-04  Jay Berkenbilt  <ejb@ql.org>\n+\n+\t* Move getNext()->write() calls in some pipelines to ensure that\n+\tstate gates properly reset even if the next pipeline's write\n+\tthrows an exception (fuzz issue 28262).\n+\n 2021-01-03  Jay Berkenbilt  <ejb@ql.org>\n \n \t* Don't include -o nospace with zsh completion setup so file\ndiff --git a/fuzz/qpdf_extra/28262.fuzz b/fuzz/qpdf_extra/28262.fuzz\nnew file mode 100644\nindex 000000000..4e872ba41\nBinary files /dev/null and b/fuzz/qpdf_extra/28262.fuzz differ\ndiff --git a/libqpdf/Pl_AES_PDF.cc b/libqpdf/Pl_AES_PDF.cc\nindex 18cf3a4d2..2865f8049 100644\n--- a/libqpdf/Pl_AES_PDF.cc\n+++ b/libqpdf/Pl_AES_PDF.cc\n@@ -238,6 +238,6 @@ Pl_AES_PDF::flush(bool strip_padding)\n \t    }\n \t}\n     }\n-    getNext()->write(this->outbuf, bytes);\n     this->offset = 0;\n+    getNext()->write(this->outbuf, bytes);\n }\ndiff --git a/libqpdf/Pl_ASCII85Decoder.cc b/libqpdf/Pl_ASCII85Decoder.cc\nindex b8df3e879..9d9f6704d 100644\n--- a/libqpdf/Pl_ASCII85Decoder.cc\n+++ b/libqpdf/Pl_ASCII85Decoder.cc\n@@ -119,10 +119,13 @@ Pl_ASCII85Decoder::flush()\n \n     QTC::TC(\"libtests\", \"Pl_ASCII85Decoder partial flush\",\n \t    (this->pos == 5) ? 0 : 1);\n-    getNext()->write(outbuf, this->pos - 1);\n-\n+    // Reset before calling getNext()->write in case that throws an\n+    // exception.\n+    auto t = this->pos - 1;\n     this->pos = 0;\n     memset(this->inbuf, 117, 5);\n+\n+    getNext()->write(outbuf, t);\n }\n \n void\ndiff --git a/libqpdf/Pl_ASCIIHexDecoder.cc b/libqpdf/Pl_ASCIIHexDecoder.cc\nindex f20a97697..7845268ec 100644\n--- a/libqpdf/Pl_ASCIIHexDecoder.cc\n+++ b/libqpdf/Pl_ASCIIHexDecoder.cc\n@@ -97,12 +97,14 @@ Pl_ASCIIHexDecoder::flush()\n \n     QTC::TC(\"libtests\", \"Pl_ASCIIHexDecoder partial flush\",\n \t    (this->pos == 2) ? 0 : 1);\n-    getNext()->write(&ch, 1);\n-\n+    // Reset before calling getNext()->write in case that throws an\n+    // exception.\n     this->pos = 0;\n     this->inbuf[0] = '0';\n     this->inbuf[1] = '0';\n     this->inbuf[2] = '\\0';\n+\n+    getNext()->write(&ch, 1);\n }\n \n void\ndiff --git a/libqpdf/Pl_Count.cc b/libqpdf/Pl_Count.cc\nindex 8077092a2..c35619b8f 100644\n--- a/libqpdf/Pl_Count.cc\n+++ b/libqpdf/Pl_Count.cc\n@@ -27,8 +27,8 @@ Pl_Count::write(unsigned char* buf, size_t len)\n     if (len)\n     {\n \tthis->m->count += QIntC::to_offset(len);\n-\tgetNext()->write(buf, len);\n \tthis->m->last_char = buf[len - 1];\n+\tgetNext()->write(buf, len);\n     }\n }\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42490273-vul",
+      "digest": "sha256:7e5628cb7138da23226f310b60830c40edaa1c599b9a418d2a678de2fc176f55"
+    },
+    "patched": {
+      "ref": "n132/arvo:42490273-fix",
+      "digest": "sha256:73d142e6887dddf9e6c37f6ff7a66a5cb26d72ae6b98c445d1c5441ce9e649f2"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/qpdf/libqpdf/Pl_ASCII85Decoder.cc:85",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/qpdf/libqpdf/Pl_ASCII85Decoder.cc:85"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

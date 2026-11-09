@@ -1,0 +1,73 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042531977",
+  "chain": "CWE-20->CWE-125",
+  "project": "botan",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42531977",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "10713717707abdcf0452d2711b77dab5f5cdc1cb\n74ca458b14d265b68ad25cf918aa216b3fa51103",
+      "fix_commits": [
+        "10713717707abdcf0452d2711b77dab5f5cdc1cb",
+        "74ca458b14d265b68ad25cf918aa216b3fa51103"
+      ],
+      "repo": "https://github.com/randombit/botan"
+    },
+    "patch": "diff --git a/src/lib/pubkey/ec_group/curve_gfp.cpp b/src/lib/pubkey/ec_group/curve_gfp.cpp\nindex a55741fb052..1bca04d0782 100644\n--- a/src/lib/pubkey/ec_group/curve_gfp.cpp\n+++ b/src/lib/pubkey/ec_group/curve_gfp.cpp\n@@ -82,7 +82,7 @@ void CurveGFp_Montgomery::curve_mul(BigInt& z, const BigInt& x, const BigInt& y,\n       return;\n       }\n \n-   const size_t output_size = 2*m_p_words + 1;\n+   const size_t output_size = 2*m_p_words + 2;\n    ws.resize(2*(m_p_words+2));\n \n    if(z.size() < output_size)\n@@ -106,7 +106,7 @@ void CurveGFp_Montgomery::curve_sqr(BigInt& z, const BigInt& x,\n    const size_t x_sw = x.sig_words();\n    BOTAN_ASSERT(x_sw <= m_p_words, \"Input in range\");\n \n-   const size_t output_size = 2*m_p_words + 1;\n+   const size_t output_size = 2*m_p_words + 2;\n \n    ws.resize(2*(m_p_words+2));\n \n@@ -165,7 +165,7 @@ void CurveGFp_NIST::curve_mul(BigInt& z, const BigInt& x, const BigInt& y,\n       }\n \n    const size_t p_words = get_p_words();\n-   const size_t output_size = 2*p_words + 1;\n+   const size_t output_size = 2*p_words + 2;\n \n    ws.resize(2*(p_words+2));\n \n@@ -188,7 +188,7 @@ void CurveGFp_NIST::curve_sqr(BigInt& z, const BigInt& x,\n       }\n \n    const size_t p_words = get_p_words();\n-   const size_t output_size = 2*p_words + 1;\n+   const size_t output_size = 2*p_words + 2;\n \n    ws.resize(2*(p_words+2));\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42531977-vul",
+      "digest": "sha256:26e1c3bfad595618f824f9bdaef63a45aa93dca7053dd185a223b01c72faf6d7"
+    },
+    "patched": {
+      "ref": "n132/arvo:42531977-fix",
+      "digest": "sha256:13b825173bde4ceb2299cf0a01dba9e80b7b8d63982cc0fb7afc498766882d6e"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/botan/src/lib/math/mp/mp_monty.cpp:62",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/botan/src/lib/math/mp/mp_monty.cpp:62"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

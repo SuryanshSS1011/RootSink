@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042470692",
+  "chain": "CWE-1285->CWE-125",
+  "project": "botan",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42470692",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "b859e175a0f2357dcfe2211ca487a7bde0e971b1",
+      "fix_commits": [
+        "b859e175a0f2357dcfe2211ca487a7bde0e971b1"
+      ],
+      "repo": "https://github.com/randombit/botan"
+    },
+    "patch": "diff --git a/src/fuzzer/mode_padding.cpp b/src/fuzzer/mode_padding.cpp\nindex 05cb1a8f6a8..985ea25e37b 100644\n--- a/src/fuzzer/mode_padding.cpp\n+++ b/src/fuzzer/mode_padding.cpp\n@@ -62,6 +62,8 @@ size_t ref_oneandzero_unpad(const uint8_t in[], size_t len)\n       {\n       if(in[idx] == 0)\n          {\n+         if(idx == 0)\n+            return len;\n          idx -= 1;\n          continue;\n          }\ndiff --git a/src/tests/data/pad.vec b/src/tests/data/pad.vec\nindex 54efa4f1dd7..712d38709fd 100644\n--- a/src/tests/data/pad.vec\n+++ b/src/tests/data/pad.vec\n@@ -102,6 +102,9 @@ Blocksize = 8\n In  = FF70000000000081\n Blocksize = 8\n \n+In  = 0000000000000000\n+Blocksize = 8\n+\n [X9.23]\n In  = FFFFFF\n Out = FFFFFF0000000000000000000000000D\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42470692-vul",
+      "digest": "sha256:ebbb5629c7aef28d52e57364c1bf7d30cf2233939d52eeb8152dbcf8668bcc36"
+    },
+    "patched": {
+      "ref": "n132/arvo:42470692-fix",
+      "digest": "sha256:751cc43c2242caef0d761fdbac8f3a30b40c0f3b5cad8df7a342cb179fd9cda6"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/botan/./src/fuzzer/mode_padding.cpp:63",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/botan/./src/fuzzer/mode_padding.cpp:63"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

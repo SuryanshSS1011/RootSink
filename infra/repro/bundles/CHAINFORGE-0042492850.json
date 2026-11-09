@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042492850",
+  "chain": "CWE-416->CWE-787",
+  "project": "libusb",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42492850",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "1a906274a66dd58bf81836db1306902d4a7dc185",
+      "fix_commits": [
+        "1a906274a66dd58bf81836db1306902d4a7dc185"
+      ],
+      "repo": "https://github.com/libusb/libusb"
+    },
+    "patch": "diff --git a/libusb/os/darwin_usb.c b/libusb/os/darwin_usb.c\nindex b6cc3592f..2f4447185 100644\n--- a/libusb/os/darwin_usb.c\n+++ b/libusb/os/darwin_usb.c\n@@ -2455,7 +2455,7 @@ static int darwin_detach_kernel_driver (struct libusb_device_handle *dev_handle,\n     } else {\n       usbi_info (ctx, \"no capture entitlements. may not be able to detach the kernel driver for this device\");\n       if (0 != geteuid()) {\n-        usbi_warn (ctx, \"USB device capture requires either an entitlement (com.apple.vm.device-access) or root privelege\");\n+        usbi_warn (ctx, \"USB device capture requires either an entitlement (com.apple.vm.device-access) or root privilege\");\n         return LIBUSB_ERROR_ACCESS;\n       }\n     }\ndiff --git a/libusb/version_nano.h b/libusb/version_nano.h\nindex f5aaa7326..1a8e712bf 100644\n--- a/libusb/version_nano.h\n+++ b/libusb/version_nano.h\n@@ -1 +1 @@\n-#define LIBUSB_NANO 11649\n+#define LIBUSB_NANO 11650\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42492850-vul",
+      "digest": "sha256:f9b13676adaa5c0ccd1d01e90956d5ad30e191740ca8f4944f5c184782f226e3"
+    },
+    "patched": {
+      "ref": "n132/arvo:42492850-fix",
+      "digest": "sha256:a54da5a07d2d84a1a699322d9fe04a487d5890f8804b8db737093cc49cec38b4"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/libusb/./libusb/libusb.h:1525",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/libusb/./libusb/libusb.h:1525"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

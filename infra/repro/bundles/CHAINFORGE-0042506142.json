@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042506142",
+  "chain": "CWE-20->CWE-787",
+  "project": "imagemagick",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42506142",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "a564acf287b19b000ab276bf05d6b05d4ea9ecfe",
+      "fix_commits": [
+        "a564acf287b19b000ab276bf05d6b05d4ea9ecfe"
+      ],
+      "repo": "https://github.com/imagemagick/imagemagick"
+    },
+    "patch": "diff --git a/MagickCore/fx.c b/MagickCore/fx.c\nindex 2c70b121002..88445329910 100644\n--- a/MagickCore/fx.c\n+++ b/MagickCore/fx.c\n@@ -2769,6 +2769,9 @@ static ChannelStatistics *CollectOneImgStats (FxInfo * pfx, Image * img)\n   ChannelStatistics * cs = GetImageStatistics (img, pfx->exception);\n   /* Use RelinquishMagickMemory() somewhere. */\n \n+  if (cs == (ChannelStatistics *) NULL)\n+    return((ChannelStatistics *) NULL);\n+\n   for (ch=0; ch <= (int) MaxPixelChannels; ch++) {\n     cs[ch].mean *= QuantumScale;\n     cs[ch].median *= QuantumScale;\ndiff --git a/MagickCore/profile.c b/MagickCore/profile.c\nindex 95eb25ceb39..ef1b0d66183 100644\n--- a/MagickCore/profile.c\n+++ b/MagickCore/profile.c\n@@ -1093,7 +1093,6 @@ MagickExport MagickBooleanType ProfileImage(Image *image,const char *name,\n                     \"ColorspaceColorProfileMismatch\",name);\n               }\n             highres=MagickTrue;\n-#if !defined(MAGICKCORE_HDRI_SUPPORT) || (MAGICKCORE_QUANTUM_DEPTH > 16)\n             {\n               const char\n                 *artifact;\n@@ -1102,7 +1101,6 @@ MagickExport MagickBooleanType ProfileImage(Image *image,const char *name,\n               if (IsStringFalse(artifact) != MagickFalse)\n                 highres=MagickFalse;\n             }\n-#endif\n             SetLCMSInfoScale(&source_info,1.0);\n             SetLCMSInfoTranslate(&source_info,0.0);\n             source_info.colorspace=sRGBColorspace;\ndiff --git a/MagickCore/property.c b/MagickCore/property.c\nindex 026c3f60711..ff18f5da15c 100644\n--- a/MagickCore/property.c\n+++ b/MagickCore/property.c\n@@ -2269,9 +2269,6 @@ MagickExport const char *GetImageProperty(const Image *image,\n       p=(const char *) NULL;\n       if (image->properties != (void *) NULL)\n         {\n-          if (property == (const char *) NULL)\n-            return((const char *) GetRootValueFromSplayTree((SplayTreeInfo *)\n-              image->properties));\n           p=(const char *) GetValueFromSplayTree((SplayTreeInfo *)\n             image->properties,property);\n           if (p != (const char *) NULL)\ndiff --git a/MagickCore/statistic.c b/MagickCore/statistic.c\nindex 0700c2f4aa3..bd574973209 100644\n--- a/MagickCore/statistic.c\n+++ b/MagickCore/statistic.c\n@@ -1444,20 +1444,20 @@ MagickExport ChannelMoments *GetImageMoments(const Image *image,\n \n   double\n     channels,\n-    M00[MaxPixelChannels+1],\n-    M01[MaxPixelChannels+1],\n-    M02[MaxPixelChannels+1],\n-    M03[MaxPixelChannels+1],\n-    M10[MaxPixelChannels+1],\n-    M11[MaxPixelChannels+1],\n-    M12[MaxPixelChannels+1],\n-    M20[MaxPixelChannels+1],\n-    M21[MaxPixelChannels+1],\n-    M22[MaxPixelChannels+1],\n-    M30[MaxPixelChannels+1];\n+    M00[2*MaxPixelChannels+1],\n+    M01[2*MaxPixelChannels+1],\n+    M02[2*MaxPixelChannels+1],\n+    M03[2*MaxPixelChannels+1],\n+    M10[2*MaxPixelChannels+1],\n+    M11[2*MaxPixelChannels+1],\n+    M12[2*MaxPixelChannels+1],\n+    M20[2*MaxPixelChannels+1],\n+    M21[2*MaxPixelChannels+1],\n+    M22[2*MaxPixelChannels+1],\n+    M30[2*MaxPixelChannels+1];\n \n   PointInfo\n-    centroid[MaxPixelChannels+1];\n+    centroid[2*MaxPixelChannels+1];\n \n   ssize_t\n     c,\ndiff --git a/MagickCore/vision.c b/MagickCore/vision.c\nindex 054385e72e1..e45aa8a0c05 100644\n--- a/MagickCore/vision.c\n+++ b/MagickCore/vision.c\n@@ -190,8 +190,6 @@ static void PerimeterThreshold(const Image *component_image,\n       ssize_t\n         x;\n \n-      if (status == MagickFalse)\n-        continue;\n       p=GetCacheViewVirtualPixels(component_view,bounding_box.x-1,\n         bounding_box.y+y,bounding_box.width+2,2,exception);\n       if (p == (const Quantum *) NULL)\n@@ -730,8 +728,6 @@ static void AngleThreshold(const Image *component_image,\n     bounding_box=object[i].bounding_box;\n     for (y=0; y < (ssize_t) bounding_box.height; y++)\n     {\n-      if (status == MagickFalse)\n-        continue;\n       p=GetCacheViewVirtualPixels(component_view,bounding_box.x,\n         bounding_box.y+y,bounding_box.width,1,exception);\n       if (p == (const Quantum *) NULL)\ndiff --git a/coders/dpx.c b/coders/dpx.c\nindex 0d11297d691..d4f6346105b 100644\n--- a/coders/dpx.c\n+++ b/coders/dpx.c\n@@ -1995,13 +1995,15 @@ static MagickBooleanType WriteDPXImage(const ImageInfo *image_info,Image *image,\n   SetQuantumQuantum(quantum_info,32);\n   SetQuantumPack(quantum_info,dpx.image.image_element[0].packing == 0 ?\n     MagickTrue : MagickFalse);\n-  quantum_type=RGBQuantum;\n-  if (image->alpha_trait != UndefinedPixelTrait)\n+  if (image->alpha_trait == UndefinedPixelTrait)\n+    quantum_type=RGBQuantum;\n+  else\n     quantum_type=RGBAQuantum;\n   if (IsYCbCrCompatibleColorspace(image->colorspace) != MagickFalse)\n     {\n-      quantum_type=CbYCrQuantum;\n-      if (image->alpha_trait != UndefinedPixelTrait)\n+      if (image->alpha_trait == UndefinedPixelTrait)\n+        quantum_type=CbYCrQuantum;\n+      else\n         quantum_type=CbYCrAQuantum;\n       if ((horizontal_factor == 2) || (vertical_factor == 2))\n         quantum_type=CbYCrYQuantum;\ndiff --git a/coders/gif.c b/coders/gif.c\nindex f7951e2541e..fe0497f976b 100644\n--- a/coders/gif.c\n+++ b/coders/gif.c\n@@ -881,7 +881,7 @@ static ssize_t ReadBlobBlock(Image *image,unsigned char *data)\n     count;\n \n   unsigned char\n-    block_count;\n+    block_count = 0;\n \n   assert(image != (Image *) NULL);\n   assert(image->signature == MagickCoreSignature);\ndiff --git a/coders/label.c b/coders/label.c\nindex f3bf8e3bf26..1d9f4dd9e0a 100644\n--- a/coders/label.c\n+++ b/coders/label.c\n@@ -188,10 +188,9 @@ static Image *ReadLABELImage(const ImageInfo *image_info,\n         option=GetImageOption(image_info,\"label:max-pointsize\");\n         if (option != (const char*) NULL)\n           {\n-            high=StringToDouble(option,(char**) NULL);\n+            high=StringToDouble(option,(char**) NULL)+1.0;\n             if (high < 1.0)\n               high=1.0;\n-            high+=1.0;\n           }\n         else\n           {\ndiff --git a/coders/tiff.c b/coders/tiff.c\nindex 8d28b3b5411..025009b955d 100644\n--- a/coders/tiff.c\n+++ b/coders/tiff.c\n@@ -1585,7 +1585,9 @@ static Image *ReadTIFFImage(const ImageInfo *image_info,\n #endif\n       default: image->compression=RLECompression; break;\n     }\n-    quantum_info=(QuantumInfo *) NULL;\n+    quantum_info=AcquireQuantumInfo(image_info,image);\n+    if (quantum_info == (QuantumInfo *) NULL)\n+      ThrowTIFFException(ResourceLimitError,\"MemoryAllocationFailed\");\n     if ((photometric == PHOTOMETRIC_PALETTE) &&\n         (pow(2.0,1.0*bits_per_sample) <= MaxColormapSize))\n       {\n@@ -1666,9 +1668,6 @@ static Image *ReadTIFFImage(const ImageInfo *image_info,\n     /*\n       Allocate memory for the image and pixel buffer.\n     */\n-    quantum_info=AcquireQuantumInfo(image_info,image);\n-    if (quantum_info == (QuantumInfo *) NULL)\n-      ThrowTIFFException(ResourceLimitError,\"MemoryAllocationFailed\");\n     if (sample_format == SAMPLEFORMAT_UINT)\n       status=SetQuantumFormat(image,quantum_info,UnsignedQuantumFormat);\n     if (sample_format == SAMPLEFORMAT_INT)\n@@ -2592,7 +2591,7 @@ static MagickBooleanType WriteGROUP4Image(const ImageInfo *image_info,\n     }\n   (void) FormatLocaleString(huffman_image->filename,MagickPathExtent,\"tiff:%s\",\n     filename);\n-  if (IsImageMonochrome(image) == MagickFalse)\n+  if (IsImageMonochrome(huffman_image) == MagickFalse)\n     (void) SetImageType(huffman_image,BilevelType,exception);\n   write_info=CloneImageInfo((ImageInfo *) NULL);\n   SetImageInfoFile(write_info,file);\n@@ -2905,8 +2904,8 @@ static MagickBooleanType GetTIFFInfo(const ImageInfo *image_info,\n       extent=TIFFScanlineSize(tiff);\n       rows_per_strip=TIFFStripSizeDefault/(extent == 0 ? 1 : (uint32) extent);\n       rows_per_strip=16*(((rows_per_strip < 16 ? 16 : rows_per_strip)+1)/16);\n-      TIFFGetField(tiff,TIFFTAG_IMAGELENGTH,&rows);\n-      if (rows_per_strip > rows)\n+      if ((TIFFGetField(tiff,TIFFTAG_IMAGELENGTH,&rows) == 1) &&\n+          (rows_per_strip > rows))\n         rows_per_strip=rows;\n       option=GetImageOption(image_info,\"tiff:rows-per-strip\");\n       if (option != (const char *) NULL)\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42506142-vul",
+      "digest": "sha256:f268ff7e50c48aa5336140cb188c408b34748f23443bde64a4726c9a1a782bca"
+    },
+    "patched": {
+      "ref": "n132/arvo:42506142-fix",
+      "digest": "sha256:26b5f60de01db9a0a92babde3e7a8220737fe867e6527a984343713c7c5fe69a"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/libtiff/libtiff/tif_dir.c:1154",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/libtiff/libtiff/tif_dir.c:1154"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

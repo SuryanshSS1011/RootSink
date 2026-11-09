@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-961517346",
+  "chain": "CWE-456->CWE-457",
+  "project": "kimageformats",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42474947",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://invent.kde.org/frameworks/kimageformats/-/commit/96b1d7e7bcd9b25db9fb1eb3edc736a10e9bb90d",
+      "fix_commits": [
+        "96b1d7e7bcd9b25db9fb1eb3edc736a10e9bb90d"
+      ],
+      "repo": "https://invent.kde.org/frameworks/kimageformats"
+    },
+    "patch": "diff --git a/src/imageformats/tga.cpp b/src/imageformats/tga.cpp\nindex 837708e9c4a5271bb798e5cdc2c1d29a64722338..f41d5baaf37d2d2e9cfbcdaaafbf8a176b7c0998 100644\n--- a/src/imageformats/tga.cpp\n+++ b/src/imageformats/tga.cpp\n@@ -257,7 +257,14 @@ static bool LoadTGA(QDataStream &s, const TgaHeader &tga, QImage &img)\n             } else {\n                 // Raw pixels.\n                 count *= pixel_size;\n-                s.readRawData(dst, count);\n+                const int dataRead = s.readRawData(dst, count);\n+                if (dataRead < 0) {\n+                    free(image);\n+                    return false;\n+                }\n+                if ((uint)dataRead < count) {\n+                    memset(&dst[dataRead], 0, count - dataRead);\n+                }\n                 dst += count;\n             }\n         }\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42474947-vul",
+      "digest": "sha256:d368bb448aa258c2dbd5c3626cce0da5929f14677389e82fddf4b68a3776b97a"
+    },
+    "patched": {
+      "ref": "n132/arvo:42474947-fix",
+      "digest": "sha256:07e8b440d17e9400be8abbfe61529a2c89176423b5cb23466f1c7235b02fb062"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/kimageformats/src/imageformats/tga.cpp:301",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/kimageformats/src/imageformats/tga.cpp:301"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,79 @@
+======================= INFO =========================
+This binary is built for AFL-fuzz.
+To run the target function on individual input(s) execute this:
+  /out/encoder_dxt5_fuzzer < INPUT_FILE
+or
+  /out/encoder_dxt5_fuzzer INPUT_FILE1 [INPUT_FILE2 ... ]
+To fuzz with afl-fuzz execute this:
+  afl-fuzz [afl-flags] /out/encoder_dxt5_fuzzer [-N]
+afl-fuzz will run N iterations before re-spawning the process (default: 1000)
+======================================================
+Reading 192 bytes from /tmp/poc
+=================================================================
+==39406==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x619000000900 at pc 0x000000887be9 bp 0x7fff90172e20 sp 0x7fff90172e18
+WRITE of size 4 at 0x619000000900 thread T0
+SCARINESS: 36 (4-byte-write-heap-buffer-overflow)
+    #0 0x887be8 in SetPixelRed /src/imagemagick/./MagickCore/pixel-accessor.h:844:52
+    #1 0x889879 in ReadDXT3Pixels /src/imagemagick/coders/dds.c:2119:15
+    #2 0x886b04 in ReadDXT3 /src/imagemagick/coders/dds.c:2147:7
+    #3 0x885791 in ReadDDSImage /src/imagemagick/coders/dds.c:1830:12
+    #4 0x62c617 in ReadImage /src/imagemagick/MagickCore/constitute.c:497:13
+    #5 0x5cde4f in BlobToImage /src/imagemagick/MagickCore/blob.c:466:13
+    #6 0x526e04 in Magick::Image::read(Magick::Blob const&) /src/imagemagick/Magick++/lib/Image.cpp:4008:12
+    #7 0x51d46a in LLVMFuzzerTestOneInput /src/imagemagick/Magick++/fuzz/encoder_fuzzer.cc:20:11
+    #8 0x51dc4f in ExecuteFilesOnyByOne(int, char**) /src/libfuzzer/afl/afl_driver.cpp:279:5
+    #9 0x51e1ef in main /src/libfuzzer/afl/afl_driver.cpp:316:12
+    #10 0x7fe96b9b082f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+    #11 0x41d698 in _start (/out/encoder_dxt5_fuzzer+0x41d698)
+
+DEDUP_TOKEN: SetPixelRed--ReadDXT3Pixels--ReadDXT3
+0x619000000900 is located 0 bytes to the right of 896-byte region [0x619000000580,0x619000000900)
+allocated by thread T0 here:
+    #0 0x4e20a0 in __interceptor_posix_memalign /src/llvm/projects/compiler-rt/lib/asan/asan_malloc_linux.cc:157
+    #1 0x71bcb6 in AcquireAlignedMemory /src/imagemagick/MagickCore/memory.c:266:7
+    #2 0x5eb148 in OpenPixelCache /src/imagemagick/MagickCore/cache.c:3544:46
+    #3 0x5ee22d in GetImagePixelCache /src/imagemagick/MagickCore/cache.c:1665:18
+    #4 0x5ec59a in SyncImagePixelCache /src/imagemagick/MagickCore/cache.c:5292:28
+    #5 0x885775 in ReadDDSImage /src/imagemagick/coders/dds.c:1827:12
+    #6 0x62c617 in ReadImage /src/imagemagick/MagickCore/constitute.c:497:13
+    #7 0x5cde4f in BlobToImage /src/imagemagick/MagickCore/blob.c:466:13
+    #8 0x526e04 in Magick::Image::read(Magick::Blob const&) /src/imagemagick/Magick++/lib/Image.cpp:4008:12
+    #9 0x51d46a in LLVMFuzzerTestOneInput /src/imagemagick/Magick++/fuzz/encoder_fuzzer.cc:20:11
+    #10 0x51dc4f in ExecuteFilesOnyByOne(int, char**) /src/libfuzzer/afl/afl_driver.cpp:279:5
+    #11 0x51e1ef in main /src/libfuzzer/afl/afl_driver.cpp:316:12
+    #12 0x7fe96b9b082f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+
+DEDUP_TOKEN: __interceptor_posix_memalign--AcquireAlignedMemory--OpenPixelCache
+SUMMARY: AddressSanitizer: heap-buffer-overflow /src/imagemagick/./MagickCore/pixel-accessor.h:844:52 in SetPixelRed
+Shadow bytes around the buggy address:
+  0x0c327fff80d0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c327fff80e0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c327fff80f0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c327fff8100: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c327fff8110: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x0c327fff8120:[fa]fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c327fff8130: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c327fff8140: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c327fff8150: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c327fff8160: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c327fff8170: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+==39406==ABORTING

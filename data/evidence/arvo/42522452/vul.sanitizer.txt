@@ -1,0 +1,79 @@
+Accepting input from '/tmp/poc'
+Usage for fuzzing: honggfuzz -P [flags] -- /out/xslt
+=================================================================
+==7==ERROR: AddressSanitizer: heap-use-after-free on address 0x60c000001900 at pc 0x000000570a62 bp 0x7ffc8dab0870 sp 0x7ffc8dab0868
+READ of size 8 at 0x60c000001900 thread T0
+SCARINESS: 51 (8-byte-read-heap-use-after-free)
+    #0 0x570a61 in xsltFreeAVTList /src/libxslt/libxslt/attrvt.c:135:21
+    #1 0x50fda4 in xsltFreeStylesheet /src/libxslt/libxslt/xslt.c:1048:9
+    #2 0x4deb26 in xsltFuzzXslt /src/libxslt/tests/fuzz/fuzz.c:340:5
+    #3 0x4dd0b1 in LLVMFuzzerTestOneInput /src/libxslt/tests/fuzz/xslt.c:18:23
+    #4 0x4e02db in main (/out/xslt+0x4e02db)
+    #5 0x7ff3a15d4082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 1878e6b475720c7c51969e69ab2d276fae6d1dee)
+    #6 0x41e7fd in _start (/out/xslt+0x41e7fd)
+
+DEDUP_TOKEN: xsltFreeAVTList--xsltFreeStylesheet--xsltFuzzXslt
+0x60c000001900 is located 0 bytes inside of 120-byte region [0x60c000001900,0x60c000001978)
+freed by thread T0 here:
+    #0 0x49f992 in free /src/llvm-project/compiler-rt/lib/asan/asan_malloc_linux.cpp:52:3
+    #1 0x570edf in xsltFreeAttrVT /src/libxslt/libxslt/attrvt.c:121:5
+    #2 0x572196 in xsltSetAttrVTsegment /src/libxslt/libxslt/attrvt.c:159:13
+    #3 0x5717c8 in xsltCompileAttr /src/libxslt/libxslt/attrvt.c:299:14
+    #4 0x511e8a in xsltParseTemplateContent /src/libxslt/libxslt/xslt.c:5028:7
+    #5 0x51b9e6 in xsltParseStylesheetTemplate /src/libxslt/libxslt/xslt.c:5469:5
+    #6 0x514982 in xsltParseStylesheetTop /src/libxslt/libxslt/xslt.c:6207:6
+    #7 0x514982 in xsltParseStylesheetProcess /src/libxslt/libxslt/xslt.c:6463:2
+    #8 0x5177a0 in xsltParseStylesheetUser /src/libxslt/libxslt/xslt.c:6671:9
+    #9 0x4decb4 in xsltFuzzXslt /src/libxslt/tests/fuzz/fuzz.c:312:9
+    #10 0x4dd0b1 in LLVMFuzzerTestOneInput /src/libxslt/tests/fuzz/xslt.c:18:23
+    #11 0x4e02db in main (/out/xslt+0x4e02db)
+
+DEDUP_TOKEN: free--xsltFreeAttrVT--xsltSetAttrVTsegment
+previously allocated by thread T0 here:
+    #0 0x49fc36 in __interceptor_malloc /src/llvm-project/compiler-rt/lib/asan/asan_malloc_linux.cpp:69:3
+    #1 0x4df9ce in xmlFuzzMalloc /src/libxslt/tests/fuzz/fuzz.c:423:12
+    #2 0x571ea2 in xsltNewAttrVT /src/libxslt/libxslt/attrvt.c:72:27
+    #3 0x571176 in xsltCompileAttr /src/libxslt/libxslt/attrvt.c:216:11
+    #4 0x511e8a in xsltParseTemplateContent /src/libxslt/libxslt/xslt.c:5028:7
+    #5 0x51b9e6 in xsltParseStylesheetTemplate /src/libxslt/libxslt/xslt.c:5469:5
+    #6 0x514982 in xsltParseStylesheetTop /src/libxslt/libxslt/xslt.c:6207:6
+    #7 0x514982 in xsltParseStylesheetProcess /src/libxslt/libxslt/xslt.c:6463:2
+    #8 0x5177a0 in xsltParseStylesheetUser /src/libxslt/libxslt/xslt.c:6671:9
+    #9 0x4decb4 in xsltFuzzXslt /src/libxslt/tests/fuzz/fuzz.c:312:9
+    #10 0x4dd0b1 in LLVMFuzzerTestOneInput /src/libxslt/tests/fuzz/xslt.c:18:23
+    #11 0x4e02db in main (/out/xslt+0x4e02db)
+
+DEDUP_TOKEN: __interceptor_malloc--xmlFuzzMalloc--xsltNewAttrVT
+SUMMARY: AddressSanitizer: heap-use-after-free /src/libxslt/libxslt/attrvt.c:135:21 in xsltFreeAVTList
+Shadow bytes around the buggy address:
+  0x0c187fff82d0: fa fa fa fa fa fa fa fa 00 00 00 00 00 00 00 00
+  0x0c187fff82e0: 00 00 00 00 00 00 00 fa fa fa fa fa fa fa fa fa
+  0x0c187fff82f0: fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd fa
+  0x0c187fff8300: fa fa fa fa fa fa fa fa fd fd fd fd fd fd fd fd
+  0x0c187fff8310: fd fd fd fd fd fd fd fa fa fa fa fa fa fa fa fa
+=>0x0c187fff8320:[fd]fd fd fd fd fd fd fd fd fd fd fd fd fd fd fa
+  0x0c187fff8330: fa fa fa fa fa fa fa fa fd fd fd fd fd fd fd fd
+  0x0c187fff8340: fd fd fd fd fd fd fd fd fa fa fa fa fa fa fa fa
+  0x0c187fff8350: fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd
+  0x0c187fff8360: fa fa fa fa fa fa fa fa fd fd fd fd fd fd fd fd
+  0x0c187fff8370: fd fd fd fd fd fd fd fd fa fa fa fa fa fa fa fa
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+==7==ABORTING

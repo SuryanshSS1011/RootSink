@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042488087",
+  "chain": "CWE-1284->CWE-787",
+  "project": "wolfssl",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42488087",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "4364700c01bb55bc664106e6c8b997849ec69228",
+      "fix_commits": [
+        "4364700c01bb55bc664106e6c8b997849ec69228"
+      ],
+      "repo": "https://github.com/wolfssl/wolfssl"
+    },
+    "patch": "diff --git a/src/internal.c b/src/internal.c\nindex 8a5cc24e08c..c4464a3e25b 100644\n--- a/src/internal.c\n+++ b/src/internal.c\n@@ -21164,11 +21164,12 @@ static int GetDhPublicKey(WOLFSSL* ssl, const byte* input, word32 size,\n             ssl->buffers.serverDH_G.buffer = NULL;\n         }\n \n-        if (ssl->buffers.serverDH_Pub.buffer) {\n-            XFREE(ssl->buffers.serverDH_Pub.buffer, ssl->heap,\n-                    DYNAMIC_TYPE_PUBLIC_KEY);\n-            ssl->buffers.serverDH_Pub.buffer = NULL;\n-        }\n+    }\n+\n+    if (ssl->buffers.serverDH_Pub.buffer) {\n+        XFREE(ssl->buffers.serverDH_Pub.buffer, ssl->heap,\n+                DYNAMIC_TYPE_PUBLIC_KEY);\n+        ssl->buffers.serverDH_Pub.buffer = NULL;\n     }\n \n     /* p */\n@@ -23219,10 +23220,9 @@ int SendClientKeyExchange(WOLFSSL* ssl)\n                     args->output += OPAQUE16_LEN;\n                     XMEMCPY(args->output, ssl->arrays->client_identity, esSz);\n                     args->output += esSz;\n+                    args->length = args->encSz - esSz - OPAQUE16_LEN;\n                     args->encSz = esSz + OPAQUE16_LEN;\n \n-                    args->length = 0;\n-\n                     ret = AllocKey(ssl, DYNAMIC_TYPE_DH,\n                                             (void**)&ssl->buffers.serverDH_Key);\n                     if (ret != 0) {\n@@ -25161,6 +25161,8 @@ static int DoSessionTicket(WOLFSSL* ssl, const byte* input, word32* inOutIdx,\n                             if (ssl->buffers.serverDH_Pub.buffer == NULL) {\n                                 ERROR_OUT(MEMORY_E, exit_sske);\n                             }\n+                            ssl->buffers.serverDH_Pub.length =\n+                                ssl->buffers.serverDH_P.length + OPAQUE16_LEN;\n                         }\n \n                         if (ssl->buffers.serverDH_Priv.buffer == NULL) {\n@@ -25171,6 +25173,8 @@ static int DoSessionTicket(WOLFSSL* ssl, const byte* input, word32* inOutIdx,\n                             if (ssl->buffers.serverDH_Priv.buffer == NULL) {\n                                 ERROR_OUT(MEMORY_E, exit_sske);\n                             }\n+                            ssl->buffers.serverDH_Priv.length =\n+                                ssl->buffers.serverDH_P.length + OPAQUE16_LEN;\n                         }\n \n                         ssl->options.dhKeySz =\ndiff --git a/wolfcrypt/src/dh.c b/wolfcrypt/src/dh.c\nindex 7661ff2b9b0..efabd4edf95 100644\n--- a/wolfcrypt/src/dh.c\n+++ b/wolfcrypt/src/dh.c\n@@ -1209,7 +1209,11 @@ static int GeneratePrivateDh(DhKey* key, WC_RNG* rng, byte* priv,\n             #endif\n         }\n \n-        ret = wc_RNG_GenerateBlock(rng, priv, sz);\n+        if (sz > *privSz)\n+            ret = WC_KEY_SIZE_E;\n+\n+        if (ret == 0)\n+            ret = wc_RNG_GenerateBlock(rng, priv, sz);\n \n         if (ret == 0) {\n             priv[0] |= 0x0C;\n@@ -1241,6 +1245,7 @@ static int GeneratePublicDh(DhKey* key, byte* priv, word32 privSz,\n     mp_int y[1];\n #endif\n #endif\n+    word32 binSz;\n \n #ifdef WOLFSSL_HAVE_SP_DH\n #ifndef WOLFSSL_SP_NO_2048\n@@ -1282,11 +1287,18 @@ static int GeneratePublicDh(DhKey* key, byte* priv, word32 privSz,\n     if (ret == 0 && mp_exptmod(&key->g, x, &key->p, y) != MP_OKAY)\n         ret = MP_EXPTMOD_E;\n \n+    if (ret == 0) {\n+        binSz = mp_unsigned_bin_size(y);\n+        if (binSz > *pubSz) {\n+            ret = WC_KEY_SIZE_E;\n+        }\n+    }\n+\n     if (ret == 0 && mp_to_unsigned_bin(y, pub) != MP_OKAY)\n         ret = MP_TO_E;\n \n     if (ret == 0)\n-        *pubSz = mp_unsigned_bin_size(y);\n+        *pubSz = binSz;\n \n     mp_clear(y);\n     mp_clear(x);\ndiff --git a/wolfcrypt/test/test.c b/wolfcrypt/test/test.c\nindex fee483566a2..8d390ec5f82 100644\n--- a/wolfcrypt/test/test.c\n+++ b/wolfcrypt/test/test.c\n@@ -14642,6 +14642,11 @@ static int dh_test_ffdhe(WC_RNG *rng, const DhParams* params)\n         ERROR_OUT(-7835, done);\n #endif\n \n+    pubSz = FFDHE_KEY_SIZE;\n+    pubSz2 = FFDHE_KEY_SIZE;\n+    privSz = FFDHE_KEY_SIZE;\n+    privSz2 = FFDHE_KEY_SIZE;\n+\n     XMEMSET(key, 0, sizeof *key);\n     XMEMSET(key2, 0, sizeof *key2);\n \n@@ -14763,8 +14768,8 @@ static int dh_test(void)\n     byte *agree2 = (byte *)XMALLOC(DH_TEST_BUF_SIZE, HEAP_HINT, DYNAMIC_TYPE_TMP_BUFFER);\n \n     if ((tmp == NULL) || (priv == NULL) || (pub == NULL) ||\n-\t(priv2 == NULL) || (pub2 == NULL) || (agree == NULL) ||\n-\t(agree2 == NULL))\n+        (priv2 == NULL) || (pub2 == NULL) || (agree == NULL) ||\n+        (agree2 == NULL))\n         ERROR_OUT(-7960, done);\n #else\n     DhKey  key_buf, *key = &key_buf;\n@@ -14810,6 +14815,11 @@ static int dh_test(void)\n     (void)tmp;\n     (void)bytes;\n \n+    pubSz = DH_TEST_BUF_SIZE;\n+    pubSz2 = DH_TEST_BUF_SIZE;\n+    privSz = DH_TEST_BUF_SIZE;\n+    privSz2 = DH_TEST_BUF_SIZE;\n+\n     XMEMSET(&rng, 0, sizeof(rng));\n     /* Use API for coverage. */\n     ret = wc_InitDhKey(key);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42488087-vul",
+      "digest": "sha256:66a35690a3f0ecb70e2b955c2970e21ce86bb67eb9e1085f6a9b767216ebfec7"
+    },
+    "patched": {
+      "ref": "n132/arvo:42488087-fix",
+      "digest": "sha256:a1d775463f41f105bd449efdf686e81a24b86c0b42291a80a0e15e08e4fb6a6c"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/wolf-ssl-ssh-fuzzers/oss-fuzz/projects/wolf-ssl-ssh/fuzzers/wolfssl/wolfssl/wolfcrypt/src/tfm.c:3597",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/wolf-ssl-ssh-fuzzers/oss-fuzz/projects/wolf-ssl-ssh/fuzzers/wolfssl/wolfssl/wolfcrypt/src/tfm.c:3597"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

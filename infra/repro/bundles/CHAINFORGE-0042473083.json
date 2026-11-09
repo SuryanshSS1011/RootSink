@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042473083",
+  "chain": "CWE-456->CWE-457",
+  "project": "kimageformats",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42473083",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "aeec93483900e6e276b5dc8864f7bf13eaab9654",
+      "fix_commits": [
+        "aeec93483900e6e276b5dc8864f7bf13eaab9654"
+      ],
+      "repo": "https://invent.kde.org/frameworks/kimageformats.git"
+    },
+    "patch": "From aeec93483900e6e276b5dc8864f7bf13eaab9654 Mon Sep 17 00:00:00 2001\nFrom: Albert Astals Cid <aacid@kde.org>\nDate: Fri, 8 Feb 2019 23:26:11 +0100\nSubject: [PATCH] xcf: Fix uninitialized memory use on broken documents\n\noss-fuzz/12871\n---\n src/imageformats/xcf.cpp | 7 +++++++\n 1 file changed, 7 insertions(+)\n\ndiff --git a/src/imageformats/xcf.cpp b/src/imageformats/xcf.cpp\nindex cdbcfba..a12aab0 100644\n--- a/src/imageformats/xcf.cpp\n+++ b/src/imageformats/xcf.cpp\n@@ -1063,6 +1063,13 @@ bool XCFImageFormat::loadLevel(QDataStream &xcf_io, Layer &layer, qint32 bpp)\n     xcf_io >> width >> height >> offset;\n \n     if (offset == 0) {\n+        // offset 0 with rowsxcols != 0 is probably an error since it means we have tiles\n+        // without data but just clear the bits for now instead of returning false\n+        for (uint j = 0; j < layer.nrows; j++) {\n+            for (uint i = 0; i < layer.ncols; i++) {\n+                layer.image_tiles[j][i].fill(Qt::transparent);\n+            }\n+        }\n         return true;\n     }\n \n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42473083-vul",
+      "digest": "sha256:acc697e8c8158fbc694f2bd40d6df9d8b4b898e0b3140d8a1b5088ca03ec2c52"
+    },
+    "patched": {
+      "ref": "n132/arvo:42473083-fix",
+      "digest": "sha256:624d9035609f7ca5ec5dea896f94a36c02db0597e58b04d5274de6006212aeec"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/qtbase/src/corelib/tools/qlocale_tools.cpp:442",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/qtbase/src/corelib/tools/qlocale_tools.cpp:442"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

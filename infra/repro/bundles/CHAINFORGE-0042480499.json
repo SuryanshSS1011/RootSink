@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042480499",
+  "chain": "CWE-1284->CWE-787",
+  "project": "ffmpeg",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42480499",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "f1b97f62f86d5dca35d01d7a5ebbc5dca2a88ae6",
+      "fix_commits": [
+        "f1b97f62f86d5dca35d01d7a5ebbc5dca2a88ae6"
+      ],
+      "repo": "https://git.ffmpeg.org/ffmpeg.git"
+    },
+    "patch": "From f1b97f62f86d5dca35d01d7a5ebbc5dca2a88ae6 Mon Sep 17 00:00:00 2001\nFrom: Michael Niedermayer <michael@niedermayer.cc>\nDate: Sat, 30 Nov 2019 12:22:25 +0100\nSubject: [PATCH] avcodec/iff: Check that video_size is large enough for the\n read parameters\n\nvideo is allocated before parameters like bpp are read.\n\nFixes: out of array access\nFixes: 19084/clusterfuzz-testcase-minimized-ffmpeg_AV_CODEC_ID_IFF_ILBM_fuzzer-5718556033679360\nFixes: 19465/clusterfuzz-testcase-minimized-ffmpeg_AV_CODEC_ID_IFF_ILBM_fuzzer-5759908398235648\n\nFound-by: continuous fuzzing process https://github.com/google/oss-fuzz/tree/master/projects/ffmpeg\nSigned-off-by: Michael Niedermayer <michael@niedermayer.cc>\n---\n libavcodec/iff.c | 2 ++\n 1 file changed, 2 insertions(+)\n\ndiff --git a/libavcodec/iff.c b/libavcodec/iff.c\nindex 267b09b..f82141d 100644\n--- a/libavcodec/iff.c\n+++ b/libavcodec/iff.c\n@@ -322,6 +322,8 @@ static int extract_header(AVCodecContext *const avctx,\n             av_log(avctx, AV_LOG_ERROR, \"Invalid number of bitplanes: %u\\n\", s->bpp);\n             return AVERROR_INVALIDDATA;\n         }\n+        if (s->video_size && s->planesize * s->bpp * avctx->height > s->video_size)\n+            return AVERROR_INVALIDDATA;\n \n         av_freep(&s->ham_buf);\n         av_freep(&s->ham_palbuf);\n-- \n2.55.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42480499-vul",
+      "digest": "sha256:80889044dd4b3b3576a630d10fe17c40cc511bcd4812432cb63b3ef0abf4ca8c"
+    },
+    "patched": {
+      "ref": "n132/arvo:42480499-fix",
+      "digest": "sha256:a130d0bc1d8b2b586960043fee4d5a1e1f4c1d76798d380e059bb1f6a69e9cd2"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/ffmpeg/libavcodec/iff.c:1649",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/ffmpeg/libavcodec/iff.c:1649"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

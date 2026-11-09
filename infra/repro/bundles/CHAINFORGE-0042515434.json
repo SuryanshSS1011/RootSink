@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042515434",
+  "chain": "CWE-20->CWE-125",
+  "project": "libjxl",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42515434",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "60a019fb5bd4a119c90167662449a3224b91f629",
+      "fix_commits": [
+        "60a019fb5bd4a119c90167662449a3224b91f629"
+      ],
+      "repo": "https://github.com/libjxl/libjxl"
+    },
+    "patch": "diff --git a/lib/jxl/frame_header.cc b/lib/jxl/frame_header.cc\nindex 7316d972ed4..6fa689549fb 100644\n--- a/lib/jxl/frame_header.cc\n+++ b/lib/jxl/frame_header.cc\n@@ -81,7 +81,6 @@ Status BlendingInfo::VisitFields(Visitor* JXL_RESTRICT visitor) {\n \n std::string BlendingInfo::DebugString() const {\n   std::ostringstream os;\n-  os << \",\";\n   os << (mode == BlendMode::kReplace            ? \"Replace\"\n          : mode == BlendMode::kAdd              ? \"Add\"\n          : mode == BlendMode::kBlend            ? \"Blend\"\n@@ -484,7 +483,13 @@ std::string FrameHeader::DebugString() const {\n   if (animation_frame.duration > 0) os << \",dur=\" << animation_frame.duration;\n   if (frame_type == FrameType::kRegularFrame ||\n       frame_type == FrameType::kSkipProgressive) {\n+    os << \",\";\n     os << blending_info.DebugString();\n+    for (size_t i = 0; i < extra_channel_blending_info.size(); ++i) {\n+      os << (i == 0 ? \"[\" : \";\");\n+      os << extra_channel_blending_info[i].DebugString();\n+      if (i + 1 == extra_channel_blending_info.size()) os << \"]\";\n+    }\n   }\n   if (save_as_reference > 0) os << \",ref=\" << save_as_reference;\n   os << \",\" << (save_before_color_transform ? \"before\" : \"after\") << \"_ct\";\ndiff --git a/lib/jxl/render_pipeline/stage_blending.cc b/lib/jxl/render_pipeline/stage_blending.cc\nindex 5d36c0a7d41..c5d47f08f77 100644\n--- a/lib/jxl/render_pipeline/stage_blending.cc\n+++ b/lib/jxl/render_pipeline/stage_blending.cc\n@@ -48,14 +48,27 @@ class BlendingStage : public RenderPipelineStage {\n       zeroes_.resize(image_xsize_, 0.f);\n     }\n \n-    if (bg.xsize() != 0 && bg.ysize() != 0 &&\n-        (bg.xsize() < image_xsize_ || bg.ysize() < image_ysize_ ||\n-         bg.origin.x0 != 0 || bg.origin.y0 != 0)) {\n-      initialized_ = JXL_FAILURE(\"Trying to use a %\" PRIuS \"x%\" PRIuS\n-                                 \" crop as a background\",\n-                                 bg.xsize(), bg.ysize());\n+    auto verify_bg_size = [&](const ImageBundle& bg) -> Status {\n+      if (bg.xsize() != 0 && bg.ysize() != 0 &&\n+          (bg.xsize() < image_xsize_ || bg.ysize() < image_ysize_ ||\n+           bg.origin.x0 != 0 || bg.origin.y0 != 0)) {\n+        return JXL_FAILURE(\"Trying to use a %\" PRIuS \"x%\" PRIuS\n+                           \" crop as a background\",\n+                           bg.xsize(), bg.ysize());\n+      }\n+      return true;\n+    };\n+\n+    Status ok = verify_bg_size(bg);\n+    for (const auto& info : ec_info) {\n+      const ImageBundle& bg = *state_.reference_frames[info.source].frame;\n+      if (!!ok) ok = verify_bg_size(bg);\n+    }\n+    if (!ok) {\n+      initialized_ = ok;\n       return;\n     }\n+\n     if (state_.metadata->m.xyb_encoded) {\n       if (!dec_state->output_encoding_info.color_encoding_is_original) {\n         initialized_ = JXL_FAILURE(\"Blending in unsupported color space\");\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42515434-vul",
+      "digest": "sha256:7084c5b9d8b0c5b61632074dcea8b53fa5d330be5d5eda952e127cb28bbd48e1"
+    },
+    "patched": {
+      "ref": "n132/arvo:42515434-fix",
+      "digest": "sha256:213c5f628e88d0344a6d919c432ec4309b56291d0e667eff26b0317c55278671"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/libjxl/lib/jxl/render_pipeline/stage_blending.cc:190",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/libjxl/lib/jxl/render_pipeline/stage_blending.cc:190"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042492021",
+  "chain": "CWE-456->CWE-457",
+  "project": "matio",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42492021",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "0ce6d1e329a8949383ea5f28b32f096acc2f60d9",
+      "fix_commits": [
+        "0ce6d1e329a8949383ea5f28b32f096acc2f60d9"
+      ],
+      "repo": "https://github.com/tbeu/matio"
+    },
+    "patch": "From 0ce6d1e329a8949383ea5f28b32f096acc2f60d9 Mon Sep 17 00:00:00 2001\nFrom: tbeu <tbeu@users.noreply.github.com>\nDate: Fri, 22 Jan 2021 19:39:12 +0100\nSubject: [PATCH] Avoid uninitialized memory\n\n---\n src/mat73.c | 59 ++++++++++++++++++++++++++++-------------------------\n 1 file changed, 31 insertions(+), 28 deletions(-)\n\ndiff --git a/src/mat73.c b/src/mat73.c\nindex 03156bb..c4bd141 100644\n--- a/src/mat73.c\n+++ b/src/mat73.c\n@@ -694,7 +694,6 @@ Mat_H5ReadDatasetInfo(mat_t *mat,matvar_t *matvar,hid_t dset_id)\n     /* If the dataset is a cell array read the info of the cells */\n     if ( MAT_C_CELL == matvar->class_type ) {\n         matvar_t **cells;\n-        hobj_ref_t *ref_ids;\n \n         matvar->data_size = sizeof(matvar_t**);\n         err |= Mul(&matvar->nbytes, nelems, matvar->data_size);\n@@ -710,19 +709,21 @@ Mat_H5ReadDatasetInfo(mat_t *mat,matvar_t *matvar,hid_t dset_id)\n         cells = (matvar_t**)matvar->data;\n \n         if ( nelems ) {\n-            size_t i;\n-            ref_ids = (hobj_ref_t*)malloc(nelems*sizeof(*ref_ids));\n-            H5Dread(dset_id,H5T_STD_REF_OBJ,H5S_ALL,H5S_ALL,H5P_DEFAULT,ref_ids);\n-            for ( i = 0; i < nelems; i++ ) {\n-                hid_t ref_id;\n-                cells[i] = Mat_VarCalloc();\n-                cells[i]->internal->hdf5_ref = ref_ids[i];\n-                /* Closing of ref_id is done in Mat_H5ReadNextReferenceInfo */\n-                ref_id = H5RDEREFERENCE(dset_id,H5R_OBJECT,ref_ids+i);\n-                cells[i]->internal->id = ref_id;\n-                Mat_H5ReadNextReferenceInfo(ref_id,cells[i],mat);\n+            hobj_ref_t *ref_ids = (hobj_ref_t*)calloc(nelems, sizeof(*ref_ids));\n+            if ( ref_ids != NULL ) {\n+                size_t i;\n+                H5Dread(dset_id,H5T_STD_REF_OBJ,H5S_ALL,H5S_ALL,H5P_DEFAULT,ref_ids);\n+                for ( i = 0; i < nelems; i++ ) {\n+                    hid_t ref_id;\n+                    cells[i] = Mat_VarCalloc();\n+                    cells[i]->internal->hdf5_ref = ref_ids[i];\n+                    /* Closing of ref_id is done in Mat_H5ReadNextReferenceInfo */\n+                    ref_id = H5RDEREFERENCE(dset_id,H5R_OBJECT,ref_ids+i);\n+                    cells[i]->internal->id = ref_id;\n+                    Mat_H5ReadNextReferenceInfo(ref_id,cells[i],mat);\n+                }\n+                free(ref_ids);\n             }\n-            free(ref_ids);\n         }\n     } else if ( MAT_C_STRUCT == matvar->class_type ) {\n         /* Empty structures can be a dataset */\n@@ -922,22 +923,24 @@ Mat_H5ReadGroupInfo(mat_t *mat,matvar_t *matvar,hid_t dset_id)\n             if ( object_info.type == H5O_TYPE_DATASET ) {\n                 field_id = H5Dopen(dset_id,matvar->internal->fieldnames[k], H5P_DEFAULT);\n                 if ( !fields_are_variables ) {\n-                    hsize_t l;\n-                    hobj_ref_t *ref_ids = (hobj_ref_t*)malloc((size_t)nelems*sizeof(*ref_ids));\n-                    H5Dread(field_id,H5T_STD_REF_OBJ,H5S_ALL,H5S_ALL,\n-                            H5P_DEFAULT,ref_ids);\n-                    for ( l = 0; l < nelems; l++ ) {\n-                        hid_t ref_id;\n-                        fields[l*nfields+k] = Mat_VarCalloc();\n-                        fields[l*nfields+k]->name =\n-                            strdup(matvar->internal->fieldnames[k]);\n-                        fields[l*nfields+k]->internal->hdf5_ref=ref_ids[l];\n-                        /* Closing of ref_id is done in Mat_H5ReadNextReferenceInfo */\n-                        ref_id = H5RDEREFERENCE(field_id,H5R_OBJECT,ref_ids+l);\n-                        fields[l*nfields+k]->internal->id = ref_id;\n-                        Mat_H5ReadNextReferenceInfo(ref_id,fields[l*nfields+k],mat);\n+                    hobj_ref_t *ref_ids = (hobj_ref_t*)calloc((size_t)nelems, sizeof(*ref_ids));\n+                    if ( ref_ids != NULL ) {\n+                        hsize_t l;\n+                        H5Dread(field_id,H5T_STD_REF_OBJ,H5S_ALL,H5S_ALL,\n+                                H5P_DEFAULT,ref_ids);\n+                        for ( l = 0; l < nelems; l++ ) {\n+                            hid_t ref_id;\n+                            fields[l*nfields+k] = Mat_VarCalloc();\n+                            fields[l*nfields+k]->name =\n+                                strdup(matvar->internal->fieldnames[k]);\n+                            fields[l*nfields+k]->internal->hdf5_ref=ref_ids[l];\n+                            /* Closing of ref_id is done in Mat_H5ReadNextReferenceInfo */\n+                            ref_id = H5RDEREFERENCE(field_id,H5R_OBJECT,ref_ids+l);\n+                            fields[l*nfields+k]->internal->id = ref_id;\n+                            Mat_H5ReadNextReferenceInfo(ref_id,fields[l*nfields+k],mat);\n+                        }\n+                        free(ref_ids);\n                     }\n-                    free(ref_ids);\n                 } else {\n                     fields[k] = Mat_VarCalloc();\n                     fields[k]->name = strdup(matvar->internal->fieldnames[k]);\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42492021-vul",
+      "digest": "sha256:3d1f352ea74f08e78d2472362618f6a318c404e680d591e04470f4e017ee9487"
+    },
+    "patched": {
+      "ref": "n132/arvo:42492021-fix",
+      "digest": "sha256:18ac5713b6a3334f1b33546fbef68bc76dd2992506977be7a9e2fe072b0ceb8f"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/hdf5-1.12.0/src/H5Fint.c:2574",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/hdf5-1.12.0/src/H5Fint.c:2574"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

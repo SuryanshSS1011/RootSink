@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-960119277",
+  "chain": "CWE-456->CWE-457",
+  "project": "mupdf",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42499431",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/ArtifexSoftware/mupdf/commit/45003f3921774577968e209a5f6900022a5cc9bf",
+      "fix_commits": [
+        "45003f3921774577968e209a5f6900022a5cc9bf"
+      ],
+      "repo": "https://github.com/ArtifexSoftware/mupdf"
+    },
+    "patch": "diff --git a/source/fitz/draw-device.c b/source/fitz/draw-device.c\nindex a537b41fbf..07459a173b 100644\n--- a/source/fitz/draw-device.c\n+++ b/source/fitz/draw-device.c\n@@ -1955,7 +1955,14 @@ fz_draw_clip_image_mask(fz_context *ctx, fz_device *devp, fz_image *image, fz_ma\n \n \tsrc_area = find_src_area_required(local_ctm, image, clip);\n \tif (fz_is_empty_irect(src_area))\n+\t{\n+#ifdef DUMP_GROUP_BLENDS\n+\t\tdump_spaces(dev->top-1, \"Clip (image mask) (empty source area) begin\\n\");\n+#endif\n+\t\tstate[1].scissor = fz_empty_irect;\n+\t\tstate[1].mask = NULL;\n \t\treturn;\n+\t}\n \n \tbbox = fz_irect_from_rect(fz_transform_rect(fz_unit_rect, local_ctm));\n \tbbox = fz_intersect_irect(bbox, state->scissor);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42499431-vul",
+      "digest": "sha256:8d5d8c5b613afafb2cbb2361d332976e6b4c1d3505c768f917ada762b404900c"
+    },
+    "patched": {
+      "ref": "n132/arvo:42499431-fix",
+      "digest": "sha256:92e12a44c935e23cfe28ad8f5078077801a9660bb7f583e70dda3517eb6e2d47"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/mupdf/include/mupdf/fitz/geometry.h:265",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/mupdf/include/mupdf/fitz/geometry.h:265"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

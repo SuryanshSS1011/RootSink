@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042535103",
+  "chain": "CWE-20->CWE-125",
+  "project": "edk2",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42535103",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "3ada6c0db6a416a5bd539de6693a60cd57133e0b",
+      "fix_commits": [
+        "3ada6c0db6a416a5bd539de6693a60cd57133e0b"
+      ],
+      "repo": "https://github.com/tianocore/edk2"
+    },
+    "patch": "diff --git a/StandaloneMmPkg/Library/SmmLockBoxMmDependency/SmmLockBoxMmDependency.c b/StandaloneMmPkg/Library/SmmLockBoxMmDependency/SmmLockBoxMmDependency.c\nnew file mode 100644\nindex 000000000000..143a62c20019\n--- /dev/null\n+++ b/StandaloneMmPkg/Library/SmmLockBoxMmDependency/SmmLockBoxMmDependency.c\n@@ -0,0 +1,50 @@\n+/** @file\r\n+  LockBox Dependency DXE Library.\r\n+\r\n+  By installing the LockBox protocol with the gEfiLockBoxProtocolGuid,\r\n+  it signals that the LockBox API is fully operational and ready for use.\r\n+\r\n+  Copyright (c) 2024, Intel Corporation. All rights reserved.<BR>\r\n+\r\n+  SPDX-License-Identifier: BSD-2-Clause-Patent\r\n+\r\n+**/\r\n+\r\n+#include <Uefi.h>\r\n+#include <Library/UefiBootServicesTableLib.h>\r\n+#include <Library/DebugLib.h>\r\n+#include <Protocol/LockBox.h>\r\n+\r\n+/**\r\n+  The constructor function of SmmLockBoxMmDependency.\r\n+\r\n+  It attempts to install the gEfiLockBoxProtocolGuid protocol into the system's DXE database\r\n+  with NULL as notify.\r\n+\r\n+  @param  ImageHandle   The firmware allocated handle for the EFI image.\r\n+  @param  SystemTable   A pointer to the Management mode System Table.\r\n+\r\n+  @retval EFI_SUCCESS           The protocol was successfully installed into the DXE database.\r\n+  @retval Others                An error occurred while installing the protocol.\r\n+**/\r\n+EFI_STATUS\r\n+EFIAPI\r\n+SmmLockBoxMmDependencyConstructor (\r\n+  IN EFI_HANDLE        ImageHandle,\r\n+  IN EFI_SYSTEM_TABLE  *SystemTable\r\n+  )\r\n+{\r\n+  EFI_STATUS  Status;\r\n+\r\n+  //\r\n+  // Install NULL to DXE data base as notify\r\n+  //\r\n+  Status = gBS->InstallProtocolInterface (\r\n+                  &ImageHandle,\r\n+                  &gEfiLockBoxProtocolGuid,\r\n+                  EFI_NATIVE_INTERFACE,\r\n+                  NULL\r\n+                  );\r\n+  ASSERT_EFI_ERROR (Status);\r\n+  return Status;\r\n+}\r\ndiff --git a/StandaloneMmPkg/Library/SmmLockBoxMmDependency/SmmLockBoxMmDependency.inf b/StandaloneMmPkg/Library/SmmLockBoxMmDependency/SmmLockBoxMmDependency.inf\nnew file mode 100644\nindex 000000000000..14931a2925d5\n--- /dev/null\n+++ b/StandaloneMmPkg/Library/SmmLockBoxMmDependency/SmmLockBoxMmDependency.inf\n@@ -0,0 +1,34 @@\n+## @file\r\n+#  LockBox Dependency DXE Library.\r\n+#\r\n+#  By installing the LockBox protocol with the gEfiLockBoxProtocolGuid,\r\n+#  it signals that the LockBox API is fully operational and ready for use.\r\n+#\r\n+# Copyright (c) 2024, Intel Corporation. All rights reserved.<BR>\r\n+#\r\n+# SPDX-License-Identifier: BSD-2-Clause-Patent\r\n+#\r\n+##\r\n+\r\n+[Defines]\r\n+  INF_VERSION                    = 0x00010006\r\n+  BASE_NAME                      = SmmLockBoxMmDependency\r\n+  FILE_GUID                      = c45ce910-7f8b-4f49-88e2-2c26c5743ee2\r\n+  MODULE_TYPE                    = DXE_DRIVER\r\n+  VERSION_STRING                 = 1.0\r\n+  LIBRARY_CLASS                  = NULL\r\n+  CONSTRUCTOR                    = SmmLockBoxMmDependencyConstructor\r\n+\r\n+[Sources]\r\n+  SmmLockBoxMmDependency.c\r\n+\r\n+[Packages]\r\n+  MdePkg/MdePkg.dec\r\n+  MdeModulePkg/MdeModulePkg.dec\r\n+\r\n+[Protocols]\r\n+  gEfiLockBoxProtocolGuid\r\n+\r\n+[LibraryClasses]\r\n+  BaseLib\r\n+  UefiBootServicesTableLib\r\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42535103-vul",
+      "digest": "sha256:a0ebe05250c5736a8364a2a0cbeaeb799f161ff6bbe02e807a59266c85950a1f"
+    },
+    "patched": {
+      "ref": "n132/arvo:42535103-fix",
+      "digest": "sha256:8ce8ce93da8e612b30eebade592760f0b2ad879d57f93435445a0205d1343251"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/edk2/MdeModulePkg/Universal/Disk/UdfDxe/FileName.c:186",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/edk2/MdeModulePkg/Universal/Disk/UdfDxe/FileName.c:186"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

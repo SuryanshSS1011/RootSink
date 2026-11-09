@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042487554",
+  "chain": "CWE-1285->CWE-125",
+  "project": "hermes",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42487554",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "c593863a881796f8bf4f4faea1fa179edf5d532f",
+      "fix_commits": [
+        "c593863a881796f8bf4f4faea1fa179edf5d532f"
+      ],
+      "repo": "https://github.com/facebook/hermes"
+    },
+    "patch": "diff --git a/lib/Regex/RegexParser.cpp b/lib/Regex/RegexParser.cpp\nindex 9611b547f2a..aa534e3ad8b 100644\n--- a/lib/Regex/RegexParser.cpp\n+++ b/lib/Regex/RegexParser.cpp\n@@ -420,7 +420,10 @@ class Parser {\n         case '\\\\': {\n           consume('\\\\');\n           // This may be an ES6 21.2.2.6 Assertion (\\b or \\B) or an AtomeEscape.\n-          if (*current_ == 'b' || *current_ == 'B') {\n+          if (current_ == end_) {\n+            setError(constants::ErrorType::EscapeIncomplete);\n+            return;\n+          } else if (*current_ == 'b' || *current_ == 'B') {\n             re_->pushWordBoundary(*current_ == 'B' /* invert */);\n             consume(*current_);\n             quantifierAllowed = false;\ndiff --git a/test/hermes/regexp.js b/test/hermes/regexp.js\nindex 7ffc76b7efb..66e612a2352 100644\n--- a/test/hermes/regexp.js\n+++ b/test/hermes/regexp.js\n@@ -462,6 +462,10 @@ try { new RegExp(\"[\"); } catch (e) { print(e.message); }\n try { new RegExp(\"\\\\\"); } catch (e) { print(e.message); }\n // CHECK-NEXT: Invalid RegExp: Incomplete escape\n \n+// Check that incomplete escapes don't cause an OOB read.\n+try { new RegExp(\"                                \\\\\"); } catch (e) { print(e.message); }\n+// CHECK-NEXT: Invalid RegExp: Incomplete escape\n+\n // textual 'undefined' flag is invalid.\n try {\n   RegExp(/1/g, 'undefined');\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42487554-vul",
+      "digest": "sha256:df55e2fea5dd6d2cc97984f15f24f6c2add0a4292b6aed232b67f8476276c533"
+    },
+    "patched": {
+      "ref": "n132/arvo:42487554-fix",
+      "digest": "sha256:4ae74f67afe680cc1d9ec62cfee51105d6d56e60607c207caa07faf3eabd7c64"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/hermes/lib/Regex/RegexParser.cpp:423",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/hermes/lib/Regex/RegexParser.cpp:423"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

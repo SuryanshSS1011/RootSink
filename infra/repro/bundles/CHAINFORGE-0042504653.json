@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042504653",
+  "chain": "CWE-416->CWE-125",
+  "project": "php-src",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42504653",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "517738b19b7ab4b48e44116921003ef7f1b76e7b",
+      "fix_commits": [
+        "517738b19b7ab4b48e44116921003ef7f1b76e7b"
+      ],
+      "repo": "https://github.com/php/php-src"
+    },
+    "patch": "diff --git a/ext/opcache/jit/zend_jit_helpers.c b/ext/opcache/jit/zend_jit_helpers.c\nindex 297cf30161b4..56d341b7ac28 100644\n--- a/ext/opcache/jit/zend_jit_helpers.c\n+++ b/ext/opcache/jit/zend_jit_helpers.c\n@@ -570,6 +570,8 @@ static zval* ZEND_FASTCALL zend_jit_fetch_dim_rw_helper(zend_array *ht, zval *di\n \tzend_ulong hval;\n \tzend_string *offset_key;\n \tzval *retval;\n+\tzend_execute_data *execute_data;\n+\tconst zend_op *opline;\n \n \tif (Z_TYPE_P(dim) == IS_REFERENCE) {\n \t\tdim = Z_REFVAL_P(dim);\n@@ -583,9 +585,15 @@ static zval* ZEND_FASTCALL zend_jit_fetch_dim_rw_helper(zend_array *ht, zval *di\n \t\t\toffset_key = Z_STR_P(dim);\n \t\t\tgoto str_index;\n \t\tcase IS_UNDEF:\n-\t\t\tif (!zend_jit_undefined_op_helper_write(ht, EG(current_execute_data)->opline->op2.var)) {\n-\t\t\t\tif (EG(exception)) {\n-\t\t\t\t\tundef_result_after_exception();\n+\t\t\texecute_data = EG(current_execute_data);\n+\t\t\topline = EX(opline);\n+\t\t\tif (!zend_jit_undefined_op_helper_write(ht, opline->op2.var)) {\n+\t\t\t\tif (opline->result_type & (IS_VAR | IS_TMP_VAR)) {\n+\t\t\t\t\tif (EG(exception)) {\n+\t\t\t\t\t\tZVAL_UNDEF(EX_VAR(opline->result.var));\n+\t\t\t\t\t} else {\n+\t\t\t\t\t\tZVAL_NULL(EX_VAR(opline->result.var));\n+\t\t\t\t\t}\n \t\t\t\t}\n \t\t\t\treturn NULL;\n \t\t\t}\n@@ -636,6 +644,8 @@ static zval* ZEND_FASTCALL zend_jit_fetch_dim_w_helper(zend_array *ht, zval *dim\n \tzend_ulong hval;\n \tzend_string *offset_key;\n \tzval *retval;\n+\tzend_execute_data *execute_data;\n+\tconst zend_op *opline;\n \n \tif (Z_TYPE_P(dim) == IS_REFERENCE) {\n \t\tdim = Z_REFVAL_P(dim);\n@@ -649,9 +659,15 @@ static zval* ZEND_FASTCALL zend_jit_fetch_dim_w_helper(zend_array *ht, zval *dim\n \t\t\toffset_key = Z_STR_P(dim);\n \t\t\tgoto str_index;\n \t\tcase IS_UNDEF:\n-\t\t\tif (!zend_jit_undefined_op_helper_write(ht, EG(current_execute_data)->opline->op2.var)) {\n-\t\t\t\tif (EG(exception)) {\n-\t\t\t\t\tundef_result_after_exception();\n+\t\t\texecute_data = EG(current_execute_data);\n+\t\t\topline = EX(opline);\n+\t\t\tif (!zend_jit_undefined_op_helper_write(ht, opline->op2.var)) {\n+\t\t\t\tif (opline->result_type & (IS_VAR | IS_TMP_VAR)) {\n+\t\t\t\t\tif (EG(exception)) {\n+\t\t\t\t\t\tZVAL_UNDEF(EX_VAR(opline->result.var));\n+\t\t\t\t\t} else {\n+\t\t\t\t\t\tZVAL_NULL(EX_VAR(opline->result.var));\n+\t\t\t\t\t}\n \t\t\t\t}\n \t\t\t\treturn NULL;\n \t\t\t}\ndiff --git a/ext/opcache/tests/jit/assign_dim_005.phpt b/ext/opcache/tests/jit/assign_dim_005.phpt\nnew file mode 100644\nindex 000000000000..2056ba055433\n--- /dev/null\n+++ b/ext/opcache/tests/jit/assign_dim_005.phpt\n@@ -0,0 +1,22 @@\n+--TEST--\n+JIT ASSIGN_DIM: 005\n+--INI--\n+opcache.enable=1\n+opcache.enable_cli=1\n+opcache.file_update_protection=0\n+opcache.jit_buffer_size=1M\n+--FILE--\n+<?php\n+set_error_handler(function ($code, $msg) {\n+\techo \"Error: $msg\\n\";\n+    $GLOBALS['a'] = null;\n+});\n+\n+$a[$c] =                                                                                                                                    \n+$a[$c] = 'x' ;\n+var_dump($a);\n+?>\n+--EXPECT--\n+Error: Undefined variable $c\n+Error: Undefined variable $c\n+NULL\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42504653-vul",
+      "digest": "sha256:76049715025c338fa4af4628811098ec30be6bc8d3e3fee7d213041e305c1de1"
+    },
+    "patched": {
+      "ref": "n132/arvo:42504653-fix",
+      "digest": "sha256:a5b13260b784d8f054b0fda275fe9dc458cde0d3027aa585b7c41eb828b4a0e1"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/php-src/Zend/zend_types.h:1183",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/php-src/Zend/zend_types.h:1183"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-957419936",
+  "chain": "CWE-252->CWE-476",
+  "project": "gdal",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42540611",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/OSGeo/gdal/commit/0974bb6283fc09841888bcd8fc9f1c870be2b6ef",
+      "fix_commits": [
+        "0974bb6283fc09841888bcd8fc9f1c870be2b6ef"
+      ],
+      "repo": "https://github.com/OSGeo/gdal"
+    },
+    "patch": "diff --git a/gdal/frmts/rmf/rmfjpeg.cpp b/gdal/frmts/rmf/rmfjpeg.cpp\nindex 64a64b9785db..c4ebf5b637a7 100644\n--- a/gdal/frmts/rmf/rmfjpeg.cpp\n+++ b/gdal/frmts/rmf/rmfjpeg.cpp\n@@ -35,6 +35,7 @@\n #include <setjmp.h>\n CPL_C_START\n #include <jpeglib.h>\n+#include <jerror.h>\n CPL_C_END\n \n \n@@ -72,6 +73,21 @@ static void RMFJPEGNoop(j_decompress_ptr)\n {\n }\n \n+\n+/**\n+*\\brief: This function is supposed to do refilling of the input buffer,\n+* but as we provided everything at the beginning, if it is called, then\n+* we have an error.\n+*/\n+static boolean RMFJPEG_fill_input_buffer_dec(j_decompress_ptr cinfo)\n+{\n+    CPLError(CE_Failure, CPLE_AppDefined, \"Invalid JPEG stream\");\n+    cinfo->err->msg_code = JERR_INPUT_EMPTY;\n+    cinfo->err->error_exit((j_common_ptr)(cinfo));\n+    return FALSE;\n+}\n+\n+\n /************************************************************************/\n /*                          JPEGDecompress()                            */\n /************************************************************************/\n@@ -102,6 +118,7 @@ int RMFDataset::JPEGDecompress(const GByte* pabyIn, GUInt32 nSizeIn,\n     oSrc.bytes_in_buffer = (size_t)nSizeIn;\n     oSrc.term_source = RMFJPEGNoop;\n     oSrc.init_source = RMFJPEGNoop;\n+    oSrc.fill_input_buffer = RMFJPEG_fill_input_buffer_dec;\n \n     jpeg_create_decompress(&oJpegInfo);\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42540611-vul",
+      "digest": "sha256:06683fd0cc6cc9425f2fd5247195fb03efbb3f0d10b8496c27db22a9dab03c12"
+    },
+    "patched": {
+      "ref": "n132/arvo:42540611-fix",
+      "digest": "sha256:743461752eb19fa796b538af517aa8763837636560bc4cd4c8e6698ad622c550"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "undefined",
+        "bug_class": "SEGV",
+        "direction": "READ",
+        "crash_site": null,
+        "implies_sink_cwe": 476
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 252,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 476,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "undefined",
+        "bug_class": "SEGV",
+        "direction": "READ",
+        "site": null
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042509803",
+  "chain": "CWE-20->CWE-787",
+  "project": "ffmpeg",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42509803",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "b59ea948cdcb8422964595c32076312756550f17",
+      "fix_commits": [
+        "b59ea948cdcb8422964595c32076312756550f17"
+      ],
+      "repo": "https://git.ffmpeg.org/ffmpeg.git"
+    },
+    "patch": "From b59ea948cdcb8422964595c32076312756550f17 Mon Sep 17 00:00:00 2001\nFrom: Michael Niedermayer <michael@niedermayer.cc>\nDate: Thu, 17 Mar 2022 22:52:52 +0100\nSubject: [PATCH] avcodec/dfpwmdec: Check packet size more completely\n\nFixes: out of array access\nFixes: 45497/clusterfuzz-testcase-minimized-ffmpeg_AV_CODEC_ID_DFPWM_fuzzer-5239786212818944.fuzz\nFixes: 45510/clusterfuzz-testcase-minimized-ffmpeg_AV_CODEC_ID_DFPWM_fuzzer-4947856883056640\n\nFound-by: continuous fuzzing process https://github.com/google/oss-fuzz/tree/master/projects/ffmpeg\nReviewed-by: Paul B Mahol <onemda@gmail.com>\nSigned-off-by: Michael Niedermayer <michael@niedermayer.cc>\n---\n libavcodec/dfpwmdec.c | 5 ++++-\n 1 file changed, 4 insertions(+), 1 deletion(-)\n\ndiff --git a/libavcodec/dfpwmdec.c b/libavcodec/dfpwmdec.c\nindex 27b60a4..e11f393 100644\n--- a/libavcodec/dfpwmdec.c\n+++ b/libavcodec/dfpwmdec.c\n@@ -106,7 +106,10 @@ static int dfpwm_dec_frame(struct AVCodecContext *ctx, void *data,\n     AVFrame *frame = data;\n     int ret;\n \n-    frame->nb_samples = packet->size * 8 / ctx->ch_layout.nb_channels;\n+    if (packet->size * 8LL % ctx->ch_layout.nb_channels)\n+        return AVERROR_PATCHWELCOME;\n+\n+    frame->nb_samples = packet->size * 8LL / ctx->ch_layout.nb_channels;\n     if (frame->nb_samples <= 0) {\n         av_log(ctx, AV_LOG_ERROR, \"invalid number of samples in packet\\n\");\n         return AVERROR_INVALIDDATA;\n-- \n2.55.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42509803-vul",
+      "digest": "sha256:e9be07a5d0baf12091d47c59b9a641e9721704c9327817e247b623c3cf00d29a"
+    },
+    "patched": {
+      "ref": "n132/arvo:42509803-fix",
+      "digest": "sha256:1f6ff9c012718c181808884135a7b7061acdf63bff92a173cb1ca443a22212da"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/ffmpeg/libavcodec/dfpwmdec.c:75",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/ffmpeg/libavcodec/dfpwmdec.c:75"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042513882",
+  "chain": "CWE-1284->CWE-787",
+  "project": "wolfssl",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42513882",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "c2476e38581804958f31bae786b6039ee5d5a3d0",
+      "fix_commits": [
+        "c2476e38581804958f31bae786b6039ee5d5a3d0"
+      ],
+      "repo": "https://github.com/wolfssl/wolfssl"
+    },
+    "patch": "diff --git a/wolfcrypt/src/sp_int.c b/wolfcrypt/src/sp_int.c\nindex db84a3e727b..763ec1f8fc3 100644\n--- a/wolfcrypt/src/sp_int.c\n+++ b/wolfcrypt/src/sp_int.c\n@@ -7125,7 +7125,7 @@ int sp_div(sp_int* a, sp_int* d, sp_int* r, sp_int* rem)\n #if (defined(WOLFSSL_SMALL_STACK) || defined(SP_ALLOC)) && \\\n     !defined(WOLFSSL_SP_NO_MALLOC)\n         int cnt = 4;\n-        if ((rem != NULL) && (rem != d)) {\n+        if ((rem != NULL) && (rem != d) && (rem->size > a->used)) {\n             cnt--;\n         }\n         if ((r != NULL) && (r != d)) {\n@@ -7144,8 +7144,9 @@ int sp_div(sp_int* a, sp_int* d, sp_int* r, sp_int* rem)\n #if (defined(WOLFSSL_SMALL_STACK) || defined(SP_ALLOC)) && \\\n     !defined(WOLFSSL_SP_NO_MALLOC)\n         i = 2;\n-        sa    = ((rem != NULL) && (rem != d)) ? rem : td[i++];\n-        tr    = ((r != NULL) && (r != d))     ? r   : td[i];\n+        sa    = ((rem != NULL) && (rem != d) && (rem->size > a->used)) ? rem :\n+            td[i++];\n+        tr    = ((r != NULL) && (r != d)) ? r : td[i];\n #else\n         sa    = td[2];\n         tr    = td[3];\n@@ -7155,10 +7156,10 @@ int sp_div(sp_int* a, sp_int* d, sp_int* r, sp_int* rem)\n         sp_init_size(trial, a->used + 1);\n #if (defined(WOLFSSL_SMALL_STACK) || defined(SP_ALLOC)) && \\\n     !defined(WOLFSSL_SP_NO_MALLOC)\n-        if ((rem == NULL) || (rem == d)) {\n+        if (sa != rem) {\n             sp_init_size(sa, a->used + 1);\n         }\n-        if ((r == NULL) || (r == d)) {\n+        if (tr != r) {\n             sp_init_size(tr, a->used - d->used + 2);\n         }\n #else\n@@ -11309,31 +11310,47 @@ int sp_exptmod_ex(sp_int* b, sp_int* e, int digits, sp_int* m, sp_int* r)\n     }\n #endif\n \n-    if (err != MP_OKAY) {\n-    }\n-    /* Handle special cases. */\n-    else if (sp_iszero(m)) {\n+    /* Check for invalid modulus. */\n+    if ((err == MP_OKAY) && sp_iszero(m)) {\n         err = MP_VAL;\n     }\n #ifdef WOLFSSL_SP_INT_NEGATIVE\n-    else if ((e->sign == MP_NEG) || (m->sign == MP_NEG)) {\n+    /* Check for unsupported negative values of exponent and modulus. */\n+    if ((err == MP_OKAY) && ((e->sign == MP_NEG) || (m->sign == MP_NEG))) {\n         err = MP_VAL;\n     }\n #endif\n-    else if (sp_isone(m)) {\n+\n+    /* Check for degenerate cases. */\n+    if ((err == MP_OKAY) && sp_isone(m)) {\n         sp_set(r, 0);\n         done = 1;\n     }\n-    else if (sp_iszero(e)) {\n+    if ((!done) && (err == MP_OKAY) && sp_iszero(e)) {\n         sp_set(r, 1);\n         done = 1;\n     }\n-    else if (sp_iszero(b)) {\n+\n+    /* Check whether base needs to be reduced. */\n+    if ((!done) && (err == MP_OKAY) && (_sp_cmp_abs(b, m) != MP_LT)) {\n+        if ((r == e) || (r == m)) {\n+            err = MP_VAL;\n+        }\n+        if (err == MP_OKAY) {\n+            err = sp_mod(b, m, r);\n+        }\n+        if (err == MP_OKAY) {\n+            b = r;\n+        }\n+    }\n+    /* Check for degenerate case of base. */\n+    if ((!done) && (err == MP_OKAY) && sp_iszero(b)) {\n         sp_set(r, 0);\n         done = 1;\n     }\n+\n     /* Ensure SP integers have space for intermediate values. */\n-    else if (m->used * 2 >= r->size) {\n+    if ((!done) && (err == MP_OKAY) && (m->used * 2 >= r->size)) {\n         err = MP_VAL;\n     }\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42513882-vul",
+      "digest": "sha256:6c4452247be2bf9ddb752f8829663cf2c14e0e71f964bf3de2d44dcf0e1d8312"
+    },
+    "patched": {
+      "ref": "n132/arvo:42513882-fix",
+      "digest": "sha256:7ec9fc72a2e5a12a1603454fe8e8a8b82674c429163b9ed1d1b80516b13fe4a3"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/wolfssl-disable-fastmath/wolfcrypt/src/sp_int.c:4604",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/wolfssl-disable-fastmath/wolfcrypt/src/sp_int.c:4604"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

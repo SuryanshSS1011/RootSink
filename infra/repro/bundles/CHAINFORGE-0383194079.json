@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0383194079",
+  "chain": "CWE-1285->CWE-125",
+  "project": "upx",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "383194079",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "a49d023bd04c585ac4c342c90d214c9aef2c8b08",
+      "fix_commits": [
+        "a49d023bd04c585ac4c342c90d214c9aef2c8b08"
+      ],
+      "repo": "https://github.com/upx/upx"
+    },
+    "patch": "diff --git a/src/p_mach.cpp b/src/p_mach.cpp\nindex a97d2aff3b..1ebbb5929d 100644\n--- a/src/p_mach.cpp\n+++ b/src/p_mach.cpp\n@@ -1678,6 +1678,12 @@ tribool PackMachBase<T>::canUnpack()\n     Mach_command const *ptr = (Mach_command const *)rawmseg;\n     for (unsigned j= 0; j < ncmds;\n             ptr = (Mach_command const *)(ptr->cmdsize + (char const *)ptr), ++j) {\n+        if (headway < (int)sizeof(Mach_command)) {\n+            char buf[200]; snprintf(buf, sizeof(buf),\n+                \"bad Mach_command[%u]{@0x%zx,+0x%x}\",\n+                    j, (sizeof(mhdri) + ((char const *)ptr - (char const *)rawmseg)), headway);\n+            throwCantPack(buf);\n+        }\n         unsigned const cmd = ptr->cmd;\n         unsigned const cmdsize = ptr->cmdsize;\n         if (is_bad_linker_command(cmd, cmdsize, headway, lc_seg, sizeof(Addr))) {\n@@ -1769,7 +1775,8 @@ tribool PackMachBase<T>::canUnpack()\n         fi->seek(offLINK - bufsize, SEEK_SET);\n     }\n     MemBuffer buf(bufsize);\n-    MemBuffer buf3(bufsize);\n+    MemBuffer buf3(upx::max(bufsize, 0x1008u));\n+    buf3.clear();\n \n     fi->readx(buf, bufsize);\n     // Do not overwrite buf[]; For scratch space, then use buf3 instead.\n@@ -1882,9 +1889,13 @@ tribool PackMachBase<T>::canUnpack()\n             unsigned const *p;\n             for (p = (unsigned const *)&buf3[0x1000]; p > lo; ) if (*--p) {\n                 overlay_offset  = *(TE32 const *)p;\n+                if ((unsigned)file_size < (overlay_offset + sizeof(PackHeader) + sizeof(overlay_offset)))\n+                    throwCantUnpack(\"file corrupted\");\n                 if ((off_t)overlay_offset < offLINK) {\n                     overlay_offset = ((char const *)p - (char const *)lo) +\n                         (offLINK - 0x1000) - overlay_offset + sizeof(l_info);\n+                    if ((unsigned)file_size < (overlay_offset + sizeof(PackHeader) + sizeof(overlay_offset)))\n+                        throwCantUnpack(\"file corrupted\");\n                     fi->seek(overlay_offset, SEEK_SET);\n                     fi->readx(buf3, bufsize);\n                     if (b_ptr->sz_unc < 0x4000\n@@ -1985,6 +1996,12 @@ tribool PackMachBase<T>::canPack()\n     unsigned char const *ptr = (unsigned char const *)rawmseg;\n     for (unsigned j= 0; j < ncmds; ++j) {\n         Mach_segment_command const *segptr = (Mach_segment_command const *)ptr;\n+        if (headway < sizeof(Mach_command)) {\n+            char buf[200]; snprintf(buf, sizeof(buf),\n+                \"bad Mach_command[%u]{@0x%zx,+0x%x}\",\n+                    j, (sizeof(mhdri) + ((char const *)segptr - (char const *)rawmseg)), headway);\n+            throwCantPack(buf);\n+        }\n         unsigned const cmd     = segptr->cmd &~ LC_REQ_DYLD;\n         unsigned const cmdsize = segptr->cmdsize;\n         if (is_bad_linker_command(cmd, cmdsize, headway, lc_seg, sizeof(Addr))) {\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:383194079-vul",
+      "digest": "sha256:32def59c39e3928239d1fb74106d41bef81f48778cfb3b264ee4017c084e48c5"
+    },
+    "patched": {
+      "ref": "n132/arvo:383194079-fix",
+      "digest": "sha256:101462554f9e65b64e7ee807aa69b014b3741cdba7e61d2a1dd6f1933d22e0c5"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/upx/src/bele.h:117",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/upx/src/bele.h:117"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

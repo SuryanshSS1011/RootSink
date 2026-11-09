@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042523502",
+  "chain": "CWE-456->CWE-457",
+  "project": "imagemagick",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42523502",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "60cb93d03a9fec83087f803fab877293f1ca12fd",
+      "fix_commits": [
+        "60cb93d03a9fec83087f803fab877293f1ca12fd"
+      ],
+      "repo": "https://github.com/imagemagick/imagemagick"
+    },
+    "patch": "From 60cb93d03a9fec83087f803fab877293f1ca12fd Mon Sep 17 00:00:00 2001\nFrom: Cristy <urban-warrior@imagemagick.org>\nDate: Sat, 3 Mar 2018 09:51:00 -0500\nSubject: [PATCH] https://bugs.chromium.org/p/oss-fuzz/issues/detail?id=6687\n\n---\n coders/viff.c | 2 ++\n 1 file changed, 2 insertions(+)\n\ndiff --git a/coders/viff.c b/coders/viff.c\nindex 93854fa..1666df0 100644\n--- a/coders/viff.c\n+++ b/coders/viff.c\n@@ -519,6 +519,8 @@ static Image *ReadVIFFImage(const ImageInfo *image_info,\n       number_pixels,max_packets),bytes_per_pixel*sizeof(*pixels));\n     if (pixels == (unsigned char *) NULL)\n       ThrowReaderException(ResourceLimitError,\"MemoryAllocationFailed\");\n+    (void) ResetMagickMemory(pixels,0,MagickMax(number_pixels,max_packets)*\n+      bytes_per_pixel*sizeof(*pixels));\n     count=ReadBlob(image,bytes_per_pixel*max_packets,pixels);\n     lsb_first=1;\n     if (*(char *) &lsb_first &&\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42523502-vul",
+      "digest": "sha256:05147e4f53b572dbb82eb2addc60a4537321755072a79c516d8d0f75a7201300"
+    },
+    "patched": {
+      "ref": "n132/arvo:42523502-fix",
+      "digest": "sha256:1157eab7370e962466583135f880250785cc75a2bd12971dc3fdb8fc72043fe4"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/imagemagick/MagickCore/image.c:3700",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/imagemagick/MagickCore/image.c:3700"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042476618",
+  "chain": "CWE-1284->CWE-125",
+  "project": "openthread",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42476618",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "a211901f62b96fb6fb0ee792dab4007c64b44e18",
+      "fix_commits": [
+        "a211901f62b96fb6fb0ee792dab4007c64b44e18"
+      ],
+      "repo": "https://github.com/openthread/openthread"
+    },
+    "patch": "diff --git a/src/core/thread/network_data_leader_ftd.cpp b/src/core/thread/network_data_leader_ftd.cpp\nindex 8dcba436666..e4685bbacfe 100644\n--- a/src/core/thread/network_data_leader_ftd.cpp\n+++ b/src/core/thread/network_data_leader_ftd.cpp\n@@ -631,7 +631,8 @@ bool Leader::IsStableUpdated(uint8_t *aTlvs, uint8_t aTlvsLength, uint8_t *aTlvs\n                 {\n                     BorderRouterTlv *borderRouterBase = FindBorderRouter(*prefixBase, true);\n \n-                    if (!borderRouterBase || memcmp(borderRouter, borderRouterBase, borderRouter->GetLength()) != 0)\n+                    if (!borderRouterBase || (borderRouter->GetLength() != borderRouterBase->GetLength()) ||\n+                        (memcmp(borderRouter, borderRouterBase, borderRouter->GetLength()) != 0))\n                     {\n                         ExitNow(rval = true);\n                     }\n@@ -641,7 +642,8 @@ bool Leader::IsStableUpdated(uint8_t *aTlvs, uint8_t aTlvsLength, uint8_t *aTlvs\n                 {\n                     HasRouteTlv *hasRouteBase = FindHasRoute(*prefixBase, true);\n \n-                    if (!hasRouteBase || (memcmp(hasRoute, hasRouteBase, hasRoute->GetLength()) != 0))\n+                    if (!hasRouteBase || (hasRoute->GetLength() != hasRouteBase->GetLength()) ||\n+                        (memcmp(hasRoute, hasRouteBase, hasRoute->GetLength()) != 0))\n                     {\n                         ExitNow(rval = true);\n                     }\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42476618-vul",
+      "digest": "sha256:fda0a104ca23de6398e51174fb9686979cd4edb2c65ebdf30277addf4dfa9298"
+    },
+    "patched": {
+      "ref": "n132/arvo:42476618-fix",
+      "digest": "sha256:87580e1904e77f2522d9ab2403afb7b59bfffbac6b517756a356c7aca6472b60"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/openthread/src/core/thread/network_data_leader_ftd.cpp:638",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/openthread/src/core/thread/network_data_leader_ftd.cpp:638"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

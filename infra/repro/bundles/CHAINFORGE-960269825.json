@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-960269825",
+  "chain": "CWE-456->CWE-457",
+  "project": "open62541",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42475118",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/open62541/open62541/commit/cc7d2558ff2f63859ee1301b5d07b8b110f6cd6e",
+      "fix_commits": [
+        "cc7d2558ff2f63859ee1301b5d07b8b110f6cd6e"
+      ],
+      "repo": "https://github.com/open62541/open62541"
+    },
+    "patch": "diff --git a/src/ua_types_encoding_json.c b/src/ua_types_encoding_json.c\nindex fa1141d8cab..23ad4843042 100644\n--- a/src/ua_types_encoding_json.c\n+++ b/src/ua_types_encoding_json.c\n@@ -2259,6 +2259,9 @@ searchObjectForKeyRec(const char *searchKey, CtxJson *ctx,\n                 if(jsoneq((char*)ctx->pos, &parseCtx->tokenArray[parseCtx->index], searchKey) == 0) {\n                     /*found*/\n                     parseCtx->index++; /*We give back a pointer to the value of the searched key!*/\n+                    if (parseCtx->index >= parseCtx->tokenCount)\n+                        /* We got invalid json. See https://bugs.chromium.org/p/oss-fuzz/issues/detail?id=14620 */\n+                        return UA_STATUSCODE_BADOUTOFRANGE;\n                     *resultIndex = parseCtx->index;\n                     return UA_STATUSCODE_GOOD;\n                 }\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42475118-vul",
+      "digest": "sha256:8a56147ec2edfa2569ccdd7c182edc053c11a10ab1e2a3ca9c06cec131ed8c51"
+    },
+    "patched": {
+      "ref": "n132/arvo:42475118-fix",
+      "digest": "sha256:a7fc3a258b4c17cdd9fcc82864d5041b660f3819fe4f7cf30e17fbfaba38fbc6"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/open62541/src/ua_types_encoding_json.c:2635",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/open62541/src/ua_types_encoding_json.c:2635"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

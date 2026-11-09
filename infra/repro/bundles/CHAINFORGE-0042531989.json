@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042531989",
+  "chain": "CWE-1285->CWE-125",
+  "project": "htslib",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42531989",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "b08332d60a458f64ad4186dbe137ef528881c683",
+      "fix_commits": [
+        "b08332d60a458f64ad4186dbe137ef528881c683"
+      ],
+      "repo": "https://github.com/samtools/htslib"
+    },
+    "patch": "diff --git a/sam.c b/sam.c\nindex 1f2ecb7ba..82b3b9340 100644\n--- a/sam.c\n+++ b/sam.c\n@@ -4693,7 +4693,7 @@ uint8_t *bam_aux_first(const bam1_t *b)\n {\n     uint8_t *s = bam_get_aux(b);\n     uint8_t *end = b->data + b->l_data;\n-    if (s >= end) { errno = ENOENT; return NULL; }\n+    if (end - s <= 2) { errno = ENOENT; return NULL; }\n     return s+2;\n }\n \n@@ -4702,7 +4702,7 @@ uint8_t *bam_aux_next(const bam1_t *b, const uint8_t *s)\n     uint8_t *end = b->data + b->l_data;\n     uint8_t *next = s? skip_aux((uint8_t *) s, end) : end;\n     if (next == NULL) goto bad_aux;\n-    if (next >= end) { errno = ENOENT; return NULL; }\n+    if (end - next <= 2) { errno = ENOENT; return NULL; }\n     return next+2;\n \n  bad_aux:\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42531989-vul",
+      "digest": "sha256:fdff97f37c6b21caa130764158d073acf1f9f5b0d8e0ae843a09bd2416cf2958"
+    },
+    "patched": {
+      "ref": "n132/arvo:42531989-fix",
+      "digest": "sha256:45dd2a1a451fc0bc47c46b2f7e69d9725f1b7cee64563cf5376cf90c4d156480"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/htslib/sam.c:4718",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/htslib/sam.c:4718"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

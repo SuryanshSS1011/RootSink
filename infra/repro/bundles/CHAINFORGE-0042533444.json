@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042533444",
+  "chain": "CWE-1285->CWE-125",
+  "project": "resiprocate",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42533444",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "8c21398283a81503ac20f11027c6960a27fde207",
+      "fix_commits": [
+        "8c21398283a81503ac20f11027c6960a27fde207"
+      ],
+      "repo": "https://github.com/resiprocate/resiprocate"
+    },
+    "patch": "diff --git a/rutil/ParseBuffer.cxx b/rutil/ParseBuffer.cxx\nindex b0e711fae5..db9c0d2dc6 100644\n--- a/rutil/ParseBuffer.cxx\n+++ b/rutil/ParseBuffer.cxx\n@@ -857,7 +857,7 @@ ParseBuffer::qVal()\n          return 0;\n       }\n       \n-      if (*mPosition == '.')\n+      if (!eof() && *mPosition == '.')\n       {\n          skipChar();\n          \ndiff --git a/rutil/test/testParseBuffer.cxx b/rutil/test/testParseBuffer.cxx\nindex e8b8a7d05f..3647604f4f 100644\n--- a/rutil/test/testParseBuffer.cxx\n+++ b/rutil/test/testParseBuffer.cxx\n@@ -387,6 +387,32 @@ main(int argc, char** argv)\n       assert(*pb.position() == 'Z');\n    }\n    \n+   {\n+      char buf[] = \"1.000\";\n+      ParseBuffer pb(buf, strlen(buf));\n+      assert(pb.qVal() == 1000);\n+   }\n+\n+   {\n+      const char buf[] = {'1'};\n+      const Data data(Data::Share, buf, sizeof(buf));\n+      ParseBuffer pb(data);\n+      assert(pb.qVal() == 1000);\n+   }\n+\n+   {\n+      const char buf[] = {'1', '.'};\n+      const Data data(Data::Share, buf, sizeof(buf));\n+      ParseBuffer pb(data);\n+      assert(pb.qVal() == 1000);\n+   }\n+\n+   {\n+      char buf[] = \"0.800\";\n+      ParseBuffer pb(buf, strlen(buf));\n+      assert(pb.qVal() == 800);\n+   }\n+\n    {\n       char buf[] = \"17 \";\n       ParseBuffer pb(buf, strlen(buf));   \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42533444-vul",
+      "digest": "sha256:c54414149f73ca28ae4c13c5d50b7d2970d355a1f2d2ec5eddfedf59c6ace820"
+    },
+    "patched": {
+      "ref": "n132/arvo:42533444-fix",
+      "digest": "sha256:6dc76b6f75c3970f556b57a0b326cfdb14f4b907b014f92b59d15a6dfb87484f"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/resiprocate/rutil/ParseBuffer.cxx:860",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/resiprocate/rutil/ParseBuffer.cxx:860"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

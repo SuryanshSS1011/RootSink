@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0398053010",
+  "chain": "CWE-20->CWE-787",
+  "project": "net-snmp",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "398053010",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "0b49a5de9ad4c3875e42ea223ff61de7d3e26963",
+      "fix_commits": [
+        "0b49a5de9ad4c3875e42ea223ff61de7d3e26963"
+      ],
+      "repo": "https://github.com/net-snmp/net-snmp"
+    },
+    "patch": "diff --git a/snmplib/snmpv3.c b/snmplib/snmpv3.c\nindex c1e8b3f183..cefd3d0cec 100644\n--- a/snmplib/snmpv3.c\n+++ b/snmplib/snmpv3.c\n@@ -883,12 +883,23 @@ version_conf(const char *word, char *cptr)\n void\n oldengineID_conf(const char *word, char *cptr)\n {\n+    unsigned char *EngineID = NULL;\n+    size_t         EngineIDLength = 0;\n+\n     if (oldEngineID) {\n         free(oldEngineID);\n         oldEngineID = NULL;\n         oldEngineIDLength = 0;\n     }\n-    read_config_read_octet_string(cptr, &oldEngineID, &oldEngineIDLength);\n+\n+    read_config_read_octet_string(cptr, &EngineID, &EngineIDLength);\n+    if (EngineIDLength < 4) {\n+        config_perror(\"Invalid oldEngineID\");\n+        free(EngineID);\n+        return;\n+    }\n+    oldEngineID = EngineID;\n+    oldEngineIDLength = EngineIDLength;\n }\n \n /*\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:398053010-vul",
+      "digest": "sha256:d247870a330aa6999700f1e4a6d4910b4bde3adf8d34d12527708c94a78aebcb"
+    },
+    "patched": {
+      "ref": "n132/arvo:398053010-fix",
+      "digest": "sha256:efd39ea1737200b502625b85fa423e508431ed7e8b1ef66427d6c5a7a9108531"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/net-snmp/snmplib/snmpv3.c:1123",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/net-snmp/snmplib/snmpv3.c:1123"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

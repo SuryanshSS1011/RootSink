@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042533237",
+  "chain": "CWE-456->CWE-457",
+  "project": "pcre2",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42533237",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "3eedbacfeeecd2a06a282c7f9b630883840cbbc4",
+      "fix_commits": [
+        "3eedbacfeeecd2a06a282c7f9b630883840cbbc4"
+      ],
+      "repo": "https://github.com/PCRE2Project/pcre2"
+    },
+    "patch": "From 3eedbacfeeecd2a06a282c7f9b630883840cbbc4 Mon Sep 17 00:00:00 2001\nFrom: Zoltan Herczeg <hzmester@freemail.hu>\nDate: Sun, 28 Apr 2024 03:55:00 +0000\nSubject: [PATCH] JIT compiler update\n\n---\n src/sljit/sljitNativeX86_common.c | 5 +----\n 1 file changed, 1 insertion(+), 4 deletions(-)\n\ndiff --git a/src/sljit/sljitNativeX86_common.c b/src/sljit/sljitNativeX86_common.c\nindex de519e6..290e983 100644\n--- a/src/sljit/sljitNativeX86_common.c\n+++ b/src/sljit/sljitNativeX86_common.c\n@@ -531,16 +531,14 @@ static sljit_u32 execute_get_xcr0_low(void)\n static void get_cpu_features(void)\n {\n \tsljit_u32 feature_list = CPU_FEATURE_DETECTED;\n-\tsljit_u32 info[4];\n+\tsljit_u32 info[4] = {0};\n \tsljit_u32 max_id;\n \n-\tinfo[0] = 0;\n \texecute_cpu_id(info);\n \tmax_id = info[0];\n \n \tif (max_id >= 7) {\n \t\tinfo[0] = 7;\n-\t\tinfo[2] = 0;\n \t\texecute_cpu_id(info);\n \n \t\tif (info[1] & 0x8)\n@@ -568,7 +566,6 @@ static void get_cpu_features(void)\n \t}\n \n \tinfo[0] = 0x80000001;\n-\tinfo[2] = 0; /* Silences an incorrect compiler warning. */\n \texecute_cpu_id(info);\n \n \tif (info[2] & 0x20)\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42533237-vul",
+      "digest": "sha256:725ec211d24f9abc098fbe4574b80fea62b9a84758431a99f19e7eddbeacb4d9"
+    },
+    "patched": {
+      "ref": "n132/arvo:42533237-fix",
+      "digest": "sha256:94aa1e6de192fc05fef4b1e5f54eea5541a94f175e6d4dbeab248f7bda6d769b"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/pcre2/src/pcre2_jit_compile.c:6252",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/pcre2/src/pcre2_jit_compile.c:6252"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

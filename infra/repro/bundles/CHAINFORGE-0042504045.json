@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042504045",
+  "chain": "CWE-416->CWE-787",
+  "project": "dav1d",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42504045",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://code.videolan.org/videolan/dav1d.gitc7a5b900017d379d62a242d8ef884eeb48862a27",
+      "fix_commits": [
+        "c7a5b900017d379d62a242d8ef884eeb48862a27"
+      ],
+      "repo": "https://code.videolan.org/videolan/dav1d.git"
+    },
+    "patch": "From c7a5b900017d379d62a242d8ef884eeb48862a27 Mon Sep 17 00:00:00 2001\nFrom: \"Ronald S. Bultje\" <rsbultje@gmail.com>\nDate: Thu, 11 Nov 2021 07:29:05 -0500\nSubject: [PATCH] Fix wrong assignment if stride or sbh change, but stride *\n sbh don't\n\nCredit to oss-fuzz.\n---\n src/decode.c   | 4 +++-\n src/internal.h | 1 +\n 2 files changed, 4 insertions(+), 1 deletion(-)\n\ndiff --git a/src/decode.c b/src/decode.c\nindex 0f1c946..0081fe7 100644\n--- a/src/decode.c\n+++ b/src/decode.c\n@@ -3060,7 +3060,8 @@ int dav1d_decode_frame_init(Dav1dFrameContext *const f) {\n     const int need_cdef_lpf_copy = c->n_tc > 1 && has_resize;\n     if (y_stride * f->sbh * 4 != f->lf.cdef_buf_plane_sz[0] ||\n         uv_stride * f->sbh * 8 != f->lf.cdef_buf_plane_sz[1] ||\n-        need_cdef_lpf_copy != f->lf.need_cdef_lpf_copy)\n+        need_cdef_lpf_copy != f->lf.need_cdef_lpf_copy ||\n+        f->sbh != f->lf.cdef_buf_sbh)\n     {\n         dav1d_free_aligned(f->lf.cdef_line_buf);\n         size_t alloc_sz = 64;\n@@ -3112,6 +3113,7 @@ int dav1d_decode_frame_init(Dav1dFrameContext *const f) {\n         f->lf.cdef_buf_plane_sz[0] = (int) y_stride * f->sbh * 4;\n         f->lf.cdef_buf_plane_sz[1] = (int) uv_stride * f->sbh * 8;\n         f->lf.need_cdef_lpf_copy = need_cdef_lpf_copy;\n+        f->lf.cdef_buf_sbh = f->sbh;\n     }\n \n     const int sb128 = f->seq_hdr->sb128;\ndiff --git a/src/internal.h b/src/internal.h\nindex f3cba13..c1190e4 100644\n--- a/src/internal.h\n+++ b/src/internal.h\n@@ -275,6 +275,7 @@ struct Dav1dFrameContext {\n         Av1Restoration *lr_mask;\n         int mask_sz /* w*h */, lr_mask_sz;\n         int cdef_buf_plane_sz[2]; /* stride*sbh*4 */\n+        int cdef_buf_sbh;\n         int lr_buf_plane_sz[2]; /* (stride*sbh*4) << sb128 if n_tc > 1, else stride*4 */\n         int re_sz /* h */;\n         ALIGN(Av1FilterLUT lim_lut, 16);\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42504045-vul",
+      "digest": "sha256:0c353b97623c528983a06d53e6a7c4efef1d2b1955b8880cf081dc4d6ccc0f4f"
+    },
+    "patched": {
+      "ref": "n132/arvo:42504045-fix",
+      "digest": "sha256:6571bc659f8aac6602897fd20cdcfe9c5f667492acdf4d32a48bc626b54c3276"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": null,
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": null
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

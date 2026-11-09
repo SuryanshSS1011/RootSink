@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-952866011",
+  "chain": "CWE-843->CWE-119",
+  "project": "gdal",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42540357",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/OSGeo/gdal/commit/ab32c18ec50921e2ab5cfccc24049f60cbcc0a77",
+      "fix_commits": [
+        "ab32c18ec50921e2ab5cfccc24049f60cbcc0a77"
+      ],
+      "repo": "https://github.com/OSGeo/gdal"
+    },
+    "patch": "diff --git a/autotest/gdrivers/data/test_ers_recursive.tar b/autotest/gdrivers/data/test_ers_recursive.tar\nnew file mode 100644\nindex 000000000000..8c2be6dad07c\nBinary files /dev/null and b/autotest/gdrivers/data/test_ers_recursive.tar differ\ndiff --git a/autotest/gdrivers/ers.py b/autotest/gdrivers/ers.py\nindex 411fec334278..69d86d52b97c 100755\n--- a/autotest/gdrivers/ers.py\n+++ b/autotest/gdrivers/ers.py\n@@ -369,6 +369,15 @@ def ers_10():\n \n     return 'success'\n \n+###############################################################################\n+# Test fix for https://bugs.chromium.org/p/oss-fuzz/issues/detail?id=8744\n+\n+\n+def ers_recursive_opening():\n+    ds = gdal.Open('/vsitar/data/test_ers_recursive.tar/test.ers')\n+    ds.GetFileList()\n+    return 'success'\n+\n ###############################################################################\n # Cleanup\n \n@@ -389,6 +398,7 @@ def ers_cleanup():\n     ers_8,\n     ers_9,\n     ers_10,\n+    ers_recursive_opening,\n     ers_cleanup\n ]\n \ndiff --git a/gdal/frmts/ers/ersdataset.cpp b/gdal/frmts/ers/ersdataset.cpp\nindex 95a9e062c856..442f7007e7f3 100644\n--- a/gdal/frmts/ers/ersdataset.cpp\n+++ b/gdal/frmts/ers/ersdataset.cpp\n@@ -605,6 +605,9 @@ static double ERSDMS2Dec( const char *pszDMS )\n char **ERSDataset::GetFileList()\n \n {\n+    static thread_local int nRecLevel = 0;\n+    if( nRecLevel > 0 )\n+        return nullptr;\n \n     // Main data file, etc.\n     char **papszFileList = GDALPamDataset::GetFileList();\n@@ -616,7 +619,9 @@ char **ERSDataset::GetFileList()\n     // If we have a dependent file, merge its list of files in.\n     if( poDepFile )\n     {\n+        nRecLevel ++;\n         char **papszDepFiles = poDepFile->GetFileList();\n+        nRecLevel --;\n         papszFileList =\n             CSLInsertStrings( papszFileList, -1, papszDepFiles );\n         CSLDestroy( papszDepFiles );\n@@ -949,17 +954,23 @@ GDALDataset *ERSDataset::Open( GDALOpenInfo * poOpenInfo )\n /* -------------------------------------------------------------------- */\n     if( EQUAL(poHeader->Find(\"DataSetType\",\"\"),\"Translated\") )\n     {\n-        poDS->poDepFile = (GDALDataset *)\n-            GDALOpenShared( osDataFilePath, poOpenInfo->eAccess );\n-\n-        if( poDS->poDepFile != nullptr\n-            && poDS->poDepFile->GetRasterCount() >= nBands )\n+        static thread_local int nRecLevel = 0;\n+        if( nRecLevel == 0 )\n         {\n-            for( int iBand = 0; iBand < nBands; iBand++ )\n+            nRecLevel ++;\n+            poDS->poDepFile = (GDALDataset *)\n+                GDALOpen( osDataFilePath, poOpenInfo->eAccess );\n+            nRecLevel --;\n+\n+            if( poDS->poDepFile != nullptr\n+                && poDS->poDepFile->GetRasterCount() >= nBands )\n             {\n-                // Assume pixel interleaved.\n-                poDS->SetBand( iBand+1,\n-                               poDS->poDepFile->GetRasterBand( iBand+1 ) );\n+                for( int iBand = 0; iBand < nBands; iBand++ )\n+                {\n+                    // Assume pixel interleaved.\n+                    poDS->SetBand( iBand+1,\n+                                poDS->poDepFile->GetRasterBand( iBand+1 ) );\n+                }\n             }\n         }\n     }\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42540357-vul",
+      "digest": "sha256:f9d0e5eace46a5af540eec2f1ee70b461b77b8329e1a4cd232b7cb4f2c1f61c3"
+    },
+    "patched": {
+      "ref": "n132/arvo:42540357-fix",
+      "digest": "sha256:130249dfb3e7bb7f1b32cba94de4bfc0b31094e819c815cc4292fc9eda3034df"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "crash_site": "/src/gdal/gdal/frmts/ers/ersdataset.cpp:756",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 843,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 119,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "site": "/src/gdal/gdal/frmts/ers/ersdataset.cpp:756"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

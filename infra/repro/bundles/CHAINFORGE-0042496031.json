@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042496031",
+  "chain": "CWE-416->CWE-125",
+  "project": "irssi",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42496031",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "3dbfac5699c6887b7149a0b1c805c4730f63d0f4",
+      "fix_commits": [
+        "3dbfac5699c6887b7149a0b1c805c4730f63d0f4"
+      ],
+      "repo": "https://github.com/irssi/irssi"
+    },
+    "patch": "From 3dbfac5699c6887b7149a0b1c805c4730f63d0f4 Mon Sep 17 00:00:00 2001\nFrom: Ailin Nemui <ailin@d5401s.localdomain>\nDate: Tue, 20 Apr 2021 09:11:06 +0200\nSubject: [PATCH] fuzz test\n\n---\n .github/workflows/cifuzz.yml | 1 +\n src/fe-fuzz/server.c         | 4 +++-\n 2 files changed, 4 insertions(+), 1 deletion(-)\n\ndiff --git a/.github/workflows/cifuzz.yml b/.github/workflows/cifuzz.yml\nindex 9f956d5..a32e335 100644\n--- a/.github/workflows/cifuzz.yml\n+++ b/.github/workflows/cifuzz.yml\n@@ -8,6 +8,7 @@ on:\n     - 'src/irc/**/*.c'\n     - 'src/fe-common/irc/**/*.c'\n     - 'src/lib-config/**/*.c'\n+    - 'src/fe-fuzz/**/*.c'\n     - 'tests/**/*.c'\n     - '.github/workflows/cifuzz.yml'\n jobs:\ndiff --git a/src/fe-fuzz/server.c b/src/fe-fuzz/server.c\nindex a2ffb9e..83ce7bf 100644\n--- a/src/fe-fuzz/server.c\n+++ b/src/fe-fuzz/server.c\n@@ -186,9 +186,11 @@ int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {\n \t\tserver_ref(server);\n \t\tsignal_emit(\"server incoming\", 2, server, prefixedLine);\n \t\tdisconnected = server->disconnected;\n+\t\t/*\n \t\tif (disconnected) {\n-\t\t\tserver_connect_unref(server->connrec);\n+\t\t        server_connect_unref(server->connrec);\n \t\t}\n+\t\t*/\n \t\tserver_unref(server);\n \t\tif (disconnected) {\n \t\t\t/* reconnect */\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42496031-vul",
+      "digest": "sha256:abf3f83442e91f2d2cfc217c8661f89aaa458e788a6ae3ebedaece5e872ee13d"
+    },
+    "patched": {
+      "ref": "n132/arvo:42496031-fix",
+      "digest": "sha256:d354eaa2dedcb0f85781ca188040901cf72e8934b78df700b9a3480d5e1c6cdb"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": null,
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": null
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

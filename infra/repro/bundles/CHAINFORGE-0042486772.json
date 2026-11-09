@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042486772",
+  "chain": "CWE-456->CWE-457",
+  "project": "libxml2",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42486772",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "3fcf319378f9396a9ca840cd63b96a441818e1f1",
+      "fix_commits": [
+        "3fcf319378f9396a9ca840cd63b96a441818e1f1"
+      ],
+      "repo": "https://gitlab.gnome.org/GNOME/libxml2.git"
+    },
+    "patch": "From 3fcf319378f9396a9ca840cd63b96a441818e1f1 Mon Sep 17 00:00:00 2001\nFrom: Nick Wellnhofer <wellnhofer@aevum.de>\nDate: Sat, 22 Aug 2020 00:43:18 +0200\nSubject: [PATCH] Fix regression introduced with commit d88df4b\n\nRevert the commit and use a different approach.\n\nFound by OSS-Fuzz.\n---\n xinclude.c | 10 +++++++---\n 1 file changed, 7 insertions(+), 3 deletions(-)\n\ndiff --git a/xinclude.c b/xinclude.c\nindex c92b32b..f48e0af 100644\n--- a/xinclude.c\n+++ b/xinclude.c\n@@ -59,8 +59,8 @@ struct _xmlXIncludeRef {\n     xmlNodePtr            inc; /* the included copy */\n     int                   xml; /* xml or txt */\n     int                 count; /* how many refs use that specific doc */\n-    int\t\t         skip; /* skip in case of errors */\n     int\t             fallback; /* fallback was loaded */\n+    int\t\t      emptyFb; /* flag to show fallback empty */\n };\n \n struct _xmlXIncludeCtxt {\n@@ -1988,8 +1988,11 @@ xmlXIncludeLoadFallback(xmlXIncludeCtxtPtr ctxt, xmlNodePtr fallback, int nr) {\n \n \tctxt->incTab[nr]->inc = xmlDocCopyNodeList(ctxt->doc,\n \t                                           fallback->children);\n+        if (ctxt->incTab[nr]->inc == NULL)\n+            ctxt->incTab[nr]->emptyFb = 1;\n     } else {\n         ctxt->incTab[nr]->inc = NULL;\n+\tctxt->incTab[nr]->emptyFb = 1;\t/* flag empty callback */\n     }\n     ctxt->incTab[nr]->fallback = 1;\n     return(ret);\n@@ -2153,7 +2156,6 @@ xmlXIncludeLoadNode(xmlXIncludeCtxtPtr ctxt, int nr) {\n \t}\n     }\n     if (ret < 0) {\n-        ctxt->incTab[nr]->skip = 1;\n \txmlXIncludeErr(ctxt, ctxt->incTab[nr]->ref,\n \t               XML_XINCLUDE_NO_FALLBACK,\n \t\t       \"could not load %s, and no fallback was found\\n\",\n@@ -2197,6 +2199,7 @@ xmlXIncludeIncludeNode(xmlXIncludeCtxtPtr ctxt, int nr) {\n \n     list = ctxt->incTab[nr]->inc;\n     ctxt->incTab[nr]->inc = NULL;\n+    ctxt->incTab[nr]->emptyFb = 0;\n \n     /*\n      * Check against the risk of generating a multi-rooted document\n@@ -2459,7 +2462,8 @@ xmlXIncludeDoProcess(xmlXIncludeCtxtPtr ctxt, xmlDocPtr doc, xmlNodePtr tree,\n      *\n      */\n     for (i = ctxt->incBase;i < ctxt->incNr; i++) {\n-\tif (ctxt->incTab[i]->skip == 0)\n+\tif ((ctxt->incTab[i]->inc != NULL) ||\n+\t    (ctxt->incTab[i]->emptyFb != 0))\t/* (empty fallback) */\n \t    xmlXIncludeIncludeNode(ctxt, i);\n     }\n \n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42486772-vul",
+      "digest": "sha256:b696ded1cb51d17f35560cdf40d3cd569b4d1a39ef6c2883b26695e74a19f1f3"
+    },
+    "patched": {
+      "ref": "n132/arvo:42486772-fix",
+      "digest": "sha256:7c4be20a7531b8942a52753dcab6ed95c11b7d312aaedca2f54b3d938c76968d"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/libxml2/xinclude.c:2216",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/libxml2/xinclude.c:2216"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

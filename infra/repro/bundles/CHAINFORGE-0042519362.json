@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042519362",
+  "chain": "CWE-1284->CWE-125",
+  "project": "pjsip",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42519362",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "bc4812d31a67d5e2f973fbfaf950d6118226cf36",
+      "fix_commits": [
+        "bc4812d31a67d5e2f973fbfaf950d6118226cf36"
+      ],
+      "repo": "https://github.com/pjsip/pjproject"
+    },
+    "patch": "diff --git a/pjnath/src/pjnath/stun_msg.c b/pjnath/src/pjnath/stun_msg.c\nindex c6b0bdd284..b55d29849a 100644\n--- a/pjnath/src/pjnath/stun_msg.c\n+++ b/pjnath/src/pjnath/stun_msg.c\n@@ -1438,12 +1438,12 @@ static pj_status_t decode_uint_attr(pj_pool_t *pool,\n     attr = PJ_POOL_ZALLOC_T(pool, pj_stun_uint_attr);\n     GETATTRHDR(buf, &attr->hdr);\n \n-    attr->value = GETVAL32H(buf, 4);\n-\n     /* Check that the attribute length is valid */\n     if (attr->hdr.length != 4)\n         return PJNATH_ESTUNINATTRLEN;\n \n+    attr->value = GETVAL32H(buf, 4);\n+\n     /* Done */\n     *p_attr = attr;\n \n@@ -1757,14 +1757,15 @@ static pj_status_t decode_errcode_attr(pj_pool_t *pool,\n     attr = PJ_POOL_ZALLOC_T(pool, pj_stun_errcode_attr);\n     GETATTRHDR(buf, &attr->hdr);\n \n+    /* Check that the attribute length is valid */\n+    if (attr->hdr.length < 4)\n+        return PJNATH_ESTUNINATTRLEN;\n+\n     attr->err_code = buf[6] * 100 + buf[7];\n \n     /* Get pointer to the string in the message */\n     value.ptr = ((char*)buf + ATTR_HDR_LEN + 4);\n     value.slen = attr->hdr.length - 4;\n-    /* Make sure the length is never negative */\n-    if (value.slen < 0)\n-        value.slen = 0;\n \n     /* Copy the string to the attribute */\n     pj_strdup(pool, &attr->reason, &value);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42519362-vul",
+      "digest": "sha256:d4b235ccee89ed0cd5c189d1c84353b8010e40a05969671af7499d6c60329ee1"
+    },
+    "patched": {
+      "ref": "n132/arvo:42519362-fix",
+      "digest": "sha256:71d1d095d30ff5ceb57fb1aee173643a443d66e091cf5e9507943a4482328a72"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/pjsip/pjnath/build/../src/pjnath/stun_msg.c:1760",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/pjsip/pjnath/build/../src/pjnath/stun_msg.c:1760"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

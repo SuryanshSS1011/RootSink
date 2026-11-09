@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042482534",
+  "chain": "CWE-456->CWE-457",
+  "project": "ndpi",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42482534",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "2aec630202bf976e8ee978922441a414d4176cb8",
+      "fix_commits": [
+        "2aec630202bf976e8ee978922441a414d4176cb8"
+      ],
+      "repo": "https://github.com/ntop/nDPI"
+    },
+    "patch": "From 2aec630202bf976e8ee978922441a414d4176cb8 Mon Sep 17 00:00:00 2001\nFrom: Philippe Antoine <contact@catenacyber.fr>\nDate: Thu, 19 Mar 2020 17:16:41 +0100\nSubject: [PATCH] Fix use of uninitialized value in TLS\n\n---\n src/lib/protocols/tls.c | 4 +++-\n 1 file changed, 3 insertions(+), 1 deletion(-)\n\ndiff --git a/src/lib/protocols/tls.c b/src/lib/protocols/tls.c\nindex 8c35105..9cf11b2 100644\n--- a/src/lib/protocols/tls.c\n+++ b/src/lib/protocols/tls.c\n@@ -735,7 +735,9 @@ int processClientServerHello(struct ndpi_detection_module_struct *ndpi_struct,\n     u_int16_t base_offset    = packet->tcp ? 38 : 46;\n     u_int16_t version_offset = packet->tcp ? 4 : 12;\n     u_int16_t offset = 38, extension_len, j;\n-    u_int8_t  session_id_len =  packet->tcp ? packet->payload[offset] : packet->payload[46];\n+    u_int8_t  session_id_len =  0;\n+    if (base_offset < total_len)\n+      session_id_len = packet->payload[base_offset];\n \n #ifdef DEBUG_TLS\n     printf(\"SSL [len: %u][handshake_type: %02X]\\n\", packet->payload_packet_len, handshake_type);\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42482534-vul",
+      "digest": "sha256:e7ff7cc96f2fffed732054a3115b0c75f1d8e5ea18960c6ec2151cfcc8d8c7b4"
+    },
+    "patched": {
+      "ref": "n132/arvo:42482534-fix",
+      "digest": "sha256:7db5b64f9f1019611ae4b4301000775c3d95fa37f1b523d5e13fda751030a617"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/ndpi/src/lib/protocols/tls.c:862",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/ndpi/src/lib/protocols/tls.c:862"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

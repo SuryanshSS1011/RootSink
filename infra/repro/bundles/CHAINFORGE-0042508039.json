@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042508039",
+  "chain": "CWE-1284->CWE-787",
+  "project": "ghostpdl",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42508039",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "706664b9e9bd9c30b8a394d27014f16a66450948",
+      "fix_commits": [
+        "706664b9e9bd9c30b8a394d27014f16a66450948"
+      ],
+      "repo": "https://cgit.ghostscript.com/ghostpdl.git"
+    },
+    "patch": "From 706664b9e9bd9c30b8a394d27014f16a66450948 Mon Sep 17 00:00:00 2001\nFrom: Ken Sharp <ken.sharp@artifex.com>\nDate: Tue, 1 Feb 2022 13:08:05 +0000\nSubject: [PATCH] OSS-fuzz #44258 - treat /Prev XRefStm with increased /Size as\n an error\n\nThe file has an XrefStm which has a /Prev in the stream dictionary. The\n/Prev key has a value pointing to a previous XRefStm (so this is an\nincrementally updated file).\n\nThe /Size in the initial XRefStm should be at least as large as the\n/Size in the previous XRefStm (it is the largest object in the PDF file\nand incrementally updated files do not remove objects). In this case\nthe previous XRefStm has a larger /Size than the initial one, which is\nillegal.\n\nWe were then attempting to read more entries into the xref table than\nwe had allocated, leading to writing off the end of the buffer.\n\nFix by treating an increased /Size in a /Prev xref as an error.\n---\n pdf/pdf_xref.c | 3 +++\n 1 file changed, 3 insertions(+)\n\ndiff --git a/pdf/pdf_xref.c b/pdf/pdf_xref.c\nindex 1d33164..e663796 100644\n--- a/pdf/pdf_xref.c\n+++ b/pdf/pdf_xref.c\n@@ -205,6 +205,9 @@ static int pdfi_process_xref_stream(pdf_context *ctx, pdf_stream *stream_obj, pd\n         ctx->Trailer = sdict;\n         pdfi_countup(sdict);\n     } else {\n+        if (size > ctx->xref_table->xref_size)\n+            return_error(gs_error_rangecheck);\n+\n         code = pdfi_merge_dicts(ctx, ctx->Trailer, sdict);\n         if (code < 0) {\n             if (code == gs_error_VMerror || ctx->args.pdfstoponerror)\n-- \n2.55.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42508039-vul",
+      "digest": "sha256:a1adcbf33d2ab56d98b16e8fbb265589ae1e330c65700011b9ba0d724938213d"
+    },
+    "patched": {
+      "ref": "n132/arvo:42508039-fix",
+      "digest": "sha256:0227725a8dc6e1cead3fa5f7b0266e8e6b492ad130325bfcb28bfed8aa558839"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/ghostpdl/./pdf/pdf_xref.c:114",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/ghostpdl/./pdf/pdf_xref.c:114"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

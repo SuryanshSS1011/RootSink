@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042488053",
+  "chain": "CWE-456->CWE-457",
+  "project": "poppler",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42488053",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "c67bd3fafe0cff41855b4a2fdf7a3eb98a05ea3e",
+      "fix_commits": [
+        "c67bd3fafe0cff41855b4a2fdf7a3eb98a05ea3e"
+      ],
+      "repo": "https://gitlab.freedesktop.org/poppler/poppler.git"
+    },
+    "patch": "From c67bd3fafe0cff41855b4a2fdf7a3eb98a05ea3e Mon Sep 17 00:00:00 2001\nFrom: Albert Astals Cid <aacid@kde.org>\nDate: Thu, 15 Oct 2020 14:18:56 +0200\nSubject: [PATCH] Fix uninitialized memory read on broken files\n\noss-fuzz/26264\n---\n poppler/SecurityHandler.h | 2 +-\n 1 file changed, 1 insertion(+), 1 deletion(-)\n\ndiff --git a/poppler/SecurityHandler.h b/poppler/SecurityHandler.h\nindex 6f888e6..13cf1ed 100644\n--- a/poppler/SecurityHandler.h\n+++ b/poppler/SecurityHandler.h\n@@ -105,7 +105,7 @@ public:\n     int getPermissionFlags() const override { return permFlags; }\n     bool getOwnerPasswordOk() const override { return ownerPasswordOk; }\n     const unsigned char *getFileKey() const override { return fileKey; }\n-    int getFileKeyLength() const override { return fileKeyLength; }\n+    int getFileKeyLength() const override { return ok ? fileKeyLength : 0; }\n     int getEncVersion() const override { return encVersion; }\n     int getEncRevision() const override { return encRevision; }\n     CryptAlgorithm getEncAlgorithm() const override { return encAlgorithm; }\n-- \n2.55.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42488053-vul",
+      "digest": "sha256:480a0b46ef31fb7418624a5082d317289f5b6ab7c46d0a3494d24a1c221d7b69"
+    },
+    "patched": {
+      "ref": "n132/arvo:42488053-fix",
+      "digest": "sha256:40bce157fcaed03129e781c3e916fc1749dc114ee636ad558b824c92376ebb1a"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/poppler/poppler/Decrypt.cc:592",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/poppler/poppler/Decrypt.cc:592"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

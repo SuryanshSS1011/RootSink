@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042473821",
+  "chain": "CWE-456->CWE-457",
+  "project": "file",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42473821",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "dcda2612a5f38a3d9e15c0ac9a7d156d74b3a395",
+      "fix_commits": [
+        "dcda2612a5f38a3d9e15c0ac9a7d156d74b3a395"
+      ],
+      "repo": "https://github.com/file/file"
+    },
+    "patch": "From dcda2612a5f38a3d9e15c0ac9a7d156d74b3a395 Mon Sep 17 00:00:00 2001\nFrom: Christos Zoulas <christos@zoulas.com>\nDate: Thu, 28 Feb 2019 12:52:56 +0000\nSubject: [PATCH] Simplify and always return if not found (found by OSS-fuzz)\n\n---\n src/softmagic.c | 28 ++++++++++------------------\n 1 file changed, 10 insertions(+), 18 deletions(-)\n\ndiff --git a/src/softmagic.c b/src/softmagic.c\nindex 9999ef6..2befe35 100644\n--- a/src/softmagic.c\n+++ b/src/softmagic.c\n@@ -32,7 +32,7 @@\n #include \"file.h\"\n \n #ifndef\tlint\n-FILE_RCSID(\"@(#)$File: softmagic.c,v 1.279 2019/02/27 16:52:23 christos Exp $\")\n+FILE_RCSID(\"@(#)$File: softmagic.c,v 1.280 2019/02/28 12:52:56 christos Exp $\")\n #endif\t/* lint */\n \n #include \"magic.h\"\n@@ -2066,23 +2066,15 @@ magiccheck(struct magic_set *ms, struct magic *m)\n #ifdef HAVE_MEMMEM\n \t\tif (slen > 0 && m->str_flags == 0) {\n \t\t\tconst char *found;\n-\t\t\tif (m->str_range != 0\n-\t\t\t    && ms->search.s_len >= m->str_range + slen) {\n-\t\t\t\tfound = memmem(ms->search.s,\n-\t\t\t\t    m->str_range + slen, m->value.s, slen);\n-\t\t\t} else {\n-\t\t\t\tfound = memmem(ms->search.s,\n-\t\t\t\t    ms->search.s_len, m->value.s, slen);\n-\t\t\t\tif (!found)\n-\t\t\t\t\treturn 0;\n-\t\t\t}\n-\t\t\tif (!found) {\n-\t\t\t\tv = 1;\n-\t\t\t} else {\n-\t\t\t\tidx = found - ms->search.s;\n-\t\t\t\tms->search.offset += idx;\n-\t\t\t\tms->search.rm_len = ms->search.s_len - idx;\n-\t\t\t}\n+\t\t\tidx = m->str_range + slen;\n+\t\t\tif (m->str_range == 0 || ms->search.s_len < idx)\n+\t\t\t\tidx = ms->search.s_len;\n+\t\t\tfound = memmem(ms->search.s, idx, m->value.s, slen);\n+\t\t\tif (!found)\n+\t\t\t\treturn 0;\n+\t\t\tidx = found - ms->search.s;\n+\t\t\tms->search.offset += idx;\n+\t\t\tms->search.rm_len = ms->search.s_len - idx;\n \t\t\tbreak;\n \t\t}\n #endif\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42473821-vul",
+      "digest": "sha256:8590f1715ce63c34794d78e46f578e8dd2f744a259f049c52d1539e5018fbd22"
+    },
+    "patched": {
+      "ref": "n132/arvo:42473821-fix",
+      "digest": "sha256:1029489afc192a28e29f9c5ce849da1ae5f4f3ba87cff50e86172745b79ec23a"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/file/src/softmagic.c:675",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/file/src/softmagic.c:675"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

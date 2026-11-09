@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042536962",
+  "chain": "CWE-456->CWE-457",
+  "project": "capstonenext",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42536962",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "981d648b28f3c6d89a8c676a98bb367da16a00fb",
+      "fix_commits": [
+        "981d648b28f3c6d89a8c676a98bb367da16a00fb"
+      ],
+      "repo": "https://github.com/aquynh/capstone"
+    },
+    "patch": "From 981d648b28f3c6d89a8c676a98bb367da16a00fb Mon Sep 17 00:00:00 2001\nFrom: Rot127 <45763064+Rot127@users.noreply.github.com>\nDate: Mon, 7 Oct 2024 13:54:01 +0000\nSubject: [PATCH] Add hard asserts to all SStream functions and memset MCInst.\n (#2501)\n\n---\n MCInst.c  |   1 +\n SStream.c | 149 ++++++++++++++++++++++++++++++------------------------\n 2 files changed, 84 insertions(+), 66 deletions(-)\n\ndiff --git a/MCInst.c b/MCInst.c\nindex 9c05f6f..9c5d7ba 100644\n--- a/MCInst.c\n+++ b/MCInst.c\n@@ -18,6 +18,7 @@\n \n void MCInst_Init(MCInst *inst, cs_arch arch)\n {\n+\tmemset(inst, 0, sizeof(MCInst));\n \t// unnecessary to initialize in loop . its expensive and inst->size should be honored\n \tinst->Operands[0].Kind = kInvalid;\n \tinst->Operands[0].ImmVal = 0;\ndiff --git a/SStream.c b/SStream.c\nindex e561345..5ccbf53 100644\n--- a/SStream.c\n+++ b/SStream.c\n@@ -153,6 +153,7 @@ void SStream_Close(SStream *ss) {\n void SStream_concat0(SStream *ss, const char *s)\n {\n #ifndef CAPSTONE_DIET\n+\tassert(ss && s);\n \tSSTREAM_RETURN_IF_CLOSED(ss);\n \tif (s[0] == '\\0')\n \t\treturn;\n@@ -178,6 +179,7 @@ void SStream_concat0(SStream *ss, const char *s)\n void SStream_concat1(SStream *ss, const char c)\n {\n #ifndef CAPSTONE_DIET\n+\tassert(ss);\n \tSSTREAM_RETURN_IF_CLOSED(ss);\n \tif (c == '\\0')\n \t\treturn;\n@@ -201,6 +203,7 @@ void SStream_concat1(SStream *ss, const char c)\n void SStream_concat(SStream *ss, const char *fmt, ...)\n {\n #ifndef CAPSTONE_DIET\n+\tassert(ss && fmt);\n \tSSTREAM_RETURN_IF_CLOSED(ss);\n \tva_list ap;\n \tint ret;\n@@ -218,160 +221,174 @@ void SStream_concat(SStream *ss, const char *fmt, ...)\n }\n \n // print number with prefix #\n-void printInt64Bang(SStream *O, int64_t val)\n+void printInt64Bang(SStream *ss, int64_t val)\n {\n-\tSSTREAM_RETURN_IF_CLOSED(O);\n-\tSStream_concat1(O, '#');\n-\tprintInt64(O, val);\n+\tassert(ss);\n+\tSSTREAM_RETURN_IF_CLOSED(ss);\n+\tSStream_concat1(ss, '#');\n+\tprintInt64(ss, val);\n }\n \n-void printUInt64Bang(SStream *O, uint64_t val)\n+void printUInt64Bang(SStream *ss, uint64_t val)\n {\n-\tSSTREAM_RETURN_IF_CLOSED(O);\n-\tSStream_concat1(O, '#');\n-\tprintUInt64(O, val);\n+\tassert(ss);\n+\tSSTREAM_RETURN_IF_CLOSED(ss);\n+\tSStream_concat1(ss, '#');\n+\tprintUInt64(ss, val);\n }\n \n // print number\n-void printInt64(SStream *O, int64_t val)\n+void printInt64(SStream *ss, int64_t val)\n {\n-\tSSTREAM_RETURN_IF_CLOSED(O);\n+\tassert(ss);\n+\tSSTREAM_RETURN_IF_CLOSED(ss);\n \tif (val >= 0) {\n \t\tif (val > HEX_THRESHOLD)\n-\t\t\tSStream_concat(O, \"0x%\"PRIx64, val);\n+\t\t\tSStream_concat(ss, \"0x%\"PRIx64, val);\n \t\telse\n-\t\t\tSStream_concat(O, \"%\"PRIu64, val);\n+\t\t\tSStream_concat(ss, \"%\"PRIu64, val);\n \t} else {\n \t\tif (val < -HEX_THRESHOLD) {\n \t\t\tif (val == INT64_MIN)\n-\t\t\t\tSStream_concat(O, \"-0x%\"PRIx64, (uint64_t) INT64_MAX + 1);\n+\t\t\t\tSStream_concat(ss, \"-0x%\"PRIx64, (uint64_t) INT64_MAX + 1);\n \t\t\telse\n-\t\t\t\tSStream_concat(O, \"-0x%\"PRIx64, (uint64_t)-val);\n+\t\t\t\tSStream_concat(ss, \"-0x%\"PRIx64, (uint64_t)-val);\n \t\t} else\n-\t\t\tSStream_concat(O, \"-%\"PRIu64, -val);\n+\t\t\tSStream_concat(ss, \"-%\"PRIu64, -val);\n \t}\n }\n \n-void printUInt64(SStream *O, uint64_t val)\n+void printUInt64(SStream *ss, uint64_t val)\n {\n-\tSSTREAM_RETURN_IF_CLOSED(O);\n+\tassert(ss);\n+\tSSTREAM_RETURN_IF_CLOSED(ss);\n \tif (val > HEX_THRESHOLD)\n-\t\tSStream_concat(O, \"0x%\"PRIx64, val);\n+\t\tSStream_concat(ss, \"0x%\"PRIx64, val);\n \telse\n-\t\tSStream_concat(O, \"%\"PRIu64, val);\n+\t\tSStream_concat(ss, \"%\"PRIu64, val);\n }\n \n // print number in decimal mode\n-void printInt32BangDec(SStream *O, int32_t val)\n+void printInt32BangDec(SStream *ss, int32_t val)\n {\n-\tSSTREAM_RETURN_IF_CLOSED(O);\n+\tassert(ss);\n+\tSSTREAM_RETURN_IF_CLOSED(ss);\n \tif (val >= 0)\n-\t\tSStream_concat(O, \"#%\" PRIu32, val);\n+\t\tSStream_concat(ss, \"#%\" PRIu32, val);\n \telse {\n \t\tif (val == INT32_MIN)\n-\t\t\tSStream_concat(O, \"#-%\" PRIu32, val);\n+\t\t\tSStream_concat(ss, \"#-%\" PRIu32, val);\n \t\telse\n-\t\t\tSStream_concat(O, \"#-%\" PRIu32, (uint32_t)-val);\n+\t\t\tSStream_concat(ss, \"#-%\" PRIu32, (uint32_t)-val);\n \t}\n }\n \n-void printInt32Bang(SStream *O, int32_t val)\n+void printInt32Bang(SStream *ss, int32_t val)\n {\n-\tSSTREAM_RETURN_IF_CLOSED(O);\n-\tSStream_concat1(O, '#');\n-\tprintInt32(O, val);\n+\tassert(ss);\n+\tSSTREAM_RETURN_IF_CLOSED(ss);\n+\tSStream_concat1(ss, '#');\n+\tprintInt32(ss, val);\n }\n \n-void printInt8(SStream *O, int8_t val)\n+void printInt8(SStream *ss, int8_t val)\n {\n-\tSSTREAM_RETURN_IF_CLOSED(O);\n+\tassert(ss);\n+\tSSTREAM_RETURN_IF_CLOSED(ss);\n \tif (val >= 0) {\n \t\tif (val > HEX_THRESHOLD)\n-\t\t\tSStream_concat(O, \"0x%\" PRIx8, val);\n+\t\t\tSStream_concat(ss, \"0x%\" PRIx8, val);\n \t\telse\n-\t\t\tSStream_concat(O, \"%\" PRId8, val);\n+\t\t\tSStream_concat(ss, \"%\" PRId8, val);\n \t} else {\n \t\tif (val < -HEX_THRESHOLD) {\n \t\t\tif (val == INT8_MIN)\n-\t\t\t\tSStream_concat(O, \"-0x%\" PRIx8, (uint8_t) INT8_MAX + 1);\n+\t\t\t\tSStream_concat(ss, \"-0x%\" PRIx8, (uint8_t) INT8_MAX + 1);\n \t\t\telse\n-\t\t\t\tSStream_concat(O, \"-0x%\" PRIx8, (int8_t)-val);\n+\t\t\t\tSStream_concat(ss, \"-0x%\" PRIx8, (int8_t)-val);\n \t\t} else\n-\t\t\tSStream_concat(O, \"-%\" PRIu8, -val);\n+\t\t\tSStream_concat(ss, \"-%\" PRIu8, -val);\n \t}\n }\n \n-void printInt16(SStream *O, int16_t val)\n+void printInt16(SStream *ss, int16_t val)\n {\n-\tSSTREAM_RETURN_IF_CLOSED(O);\n+\tassert(ss);\n+\tSSTREAM_RETURN_IF_CLOSED(ss);\n \tif (val >= 0) {\n \t\tif (val > HEX_THRESHOLD)\n-\t\t\tSStream_concat(O, \"0x%\" PRIx16, val);\n+\t\t\tSStream_concat(ss, \"0x%\" PRIx16, val);\n \t\telse\n-\t\t\tSStream_concat(O, \"%\" PRId16, val);\n+\t\t\tSStream_concat(ss, \"%\" PRId16, val);\n \t} else {\n \t\tif (val < -HEX_THRESHOLD) {\n \t\t\tif (val == INT16_MIN)\n-\t\t\t\tSStream_concat(O, \"-0x%\" PRIx16, (uint16_t) INT16_MAX + 1);\n+\t\t\t\tSStream_concat(ss, \"-0x%\" PRIx16, (uint16_t) INT16_MAX + 1);\n \t\t\telse\n-\t\t\t\tSStream_concat(O, \"-0x%\" PRIx16, (int16_t)-val);\n+\t\t\t\tSStream_concat(ss, \"-0x%\" PRIx16, (int16_t)-val);\n \t\t} else\n-\t\t\tSStream_concat(O, \"-%\" PRIu16, -val);\n+\t\t\tSStream_concat(ss, \"-%\" PRIu16, -val);\n \t}\n }\n \n-void printInt32(SStream *O, int32_t val)\n+void printInt32(SStream *ss, int32_t val)\n {\n-\tSSTREAM_RETURN_IF_CLOSED(O);\n+\tassert(ss);\n+\tSSTREAM_RETURN_IF_CLOSED(ss);\n \tif (val >= 0) {\n \t\tif (val > HEX_THRESHOLD)\n-\t\t\tSStream_concat(O, \"0x%\" PRIx32, val);\n+\t\t\tSStream_concat(ss, \"0x%\" PRIx32, val);\n \t\telse\n-\t\t\tSStream_concat(O, \"%\" PRId32, val);\n+\t\t\tSStream_concat(ss, \"%\" PRId32, val);\n \t} else {\n \t\tif (val < -HEX_THRESHOLD) {\n \t\t\tif (val == INT32_MIN)\n-\t\t\t\tSStream_concat(O, \"-0x%\" PRIx32, (uint32_t) INT32_MAX + 1);\n+\t\t\t\tSStream_concat(ss, \"-0x%\" PRIx32, (uint32_t) INT32_MAX + 1);\n \t\t\telse\n-\t\t\t\tSStream_concat(O, \"-0x%\" PRIx32, (int32_t)-val);\n+\t\t\t\tSStream_concat(ss, \"-0x%\" PRIx32, (int32_t)-val);\n \t\t} else {\n-\t\t\tSStream_concat(O, \"-%\" PRIu32, (uint32_t)-val);\n+\t\t\tSStream_concat(ss, \"-%\" PRIu32, (uint32_t)-val);\n \t\t}\n \t}\n }\n \n-void printUInt32Bang(SStream *O, uint32_t val)\n+void printUInt32Bang(SStream *ss, uint32_t val)\n {\n-\tSSTREAM_RETURN_IF_CLOSED(O);\n-\tSStream_concat1(O, '#');\n-\tprintUInt32(O, val);\n+\tassert(ss);\n+\tSSTREAM_RETURN_IF_CLOSED(ss);\n+\tSStream_concat1(ss, '#');\n+\tprintUInt32(ss, val);\n }\n \n-void printUInt32(SStream *O, uint32_t val)\n+void printUInt32(SStream *ss, uint32_t val)\n {\n-\tSSTREAM_RETURN_IF_CLOSED(O);\n+\tassert(ss);\n+\tSSTREAM_RETURN_IF_CLOSED(ss);\n \tif (val > HEX_THRESHOLD)\n-\t\tSStream_concat(O, \"0x%x\", val);\n+\t\tSStream_concat(ss, \"0x%x\", val);\n \telse\n-\t\tSStream_concat(O, \"%u\", val);\n+\t\tSStream_concat(ss, \"%u\", val);\n }\n \n-void printFloat(SStream *O, float val)\n+void printFloat(SStream *ss, float val)\n {\n-\tSSTREAM_RETURN_IF_CLOSED(O);\n-\tSStream_concat(O, \"%e\", val);\n+\tassert(ss);\n+\tSSTREAM_RETURN_IF_CLOSED(ss);\n+\tSStream_concat(ss, \"%e\", val);\n }\n \n-void printFloatBang(SStream *O, float val)\n+void printFloatBang(SStream *ss, float val)\n {\n-\tSSTREAM_RETURN_IF_CLOSED(O);\n-\tSStream_concat(O, \"#%e\", val);\n+\tassert(ss);\n+\tSSTREAM_RETURN_IF_CLOSED(ss);\n+\tSStream_concat(ss, \"#%e\", val);\n }\n \n-void printExpr(SStream *O, uint64_t val)\n+void printExpr(SStream *ss, uint64_t val)\n {\n-\tSSTREAM_RETURN_IF_CLOSED(O);\n-\tSStream_concat(O, \"%\"PRIu64, val);\n+\tassert(ss);\n+\tSSTREAM_RETURN_IF_CLOSED(ss);\n+\tSStream_concat(ss, \"%\"PRIu64, val);\n }\n \n SStream *markup_OS(SStream *OS, SStreamMarkup style) {\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42536962-vul",
+      "digest": "sha256:c7be094a175f2e98bae6e74b9dfae85e2f395a94b3640b0501ece2386b925606"
+    },
+    "patched": {
+      "ref": "n132/arvo:42536962-fix",
+      "digest": "sha256:e4d3e0a6ccf62350787f49fe6f25bdec4ce2078da5995b2c861379eae90933c7"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/capstonenext/MCInst.c:113",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/capstonenext/MCInst.c:113"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

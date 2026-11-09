@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042519827",
+  "chain": "CWE-20->CWE-125",
+  "project": "zeek",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42519827",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "44c19086e8dbde76ab25bf1ca94f910c5d6f5a3c",
+      "fix_commits": [
+        "44c19086e8dbde76ab25bf1ca94f910c5d6f5a3c"
+      ],
+      "repo": "https://github.com/zeek/zeek"
+    },
+    "patch": "diff --git a/.cirrus.yml b/.cirrus.yml\nindex 9e4d40d3b6b..ef9209f5656 100644\n--- a/.cirrus.yml\n+++ b/.cirrus.yml\n@@ -441,6 +441,9 @@ docker_build_template: &DOCKER_BUILD_TEMPLATE\n   build_final_script:\n     - cd docker && docker build --cache-from ${IMAGE_TAG} -t ${IMAGE_TAG} -f final.Dockerfile .\n     - docker save ${IMAGE_TAG} | zstd > ${ZEEK_IMAGE_CACHE_DIR}/final.zst\n+  test_script:\n+    - docker tag ${IMAGE_TAG} zeek:latest\n+    - make -C docker/btest\n \n arm64_container_image_docker_builder:\n   env:\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42519827-vul",
+      "digest": "sha256:c1ac6195ea8dee38790b1ae28b4a3182d809fefa57a4c4574c3b4202056607ad"
+    },
+    "patched": {
+      "ref": "n132/arvo:42519827-fix",
+      "digest": "sha256:36a22252cc07ac558695487ee258e02c274ead992081b4fa7556bfcd7f3ef414"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/zeek/src/include/zeek/Val.h:1147",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/zeek/src/include/zeek/Val.h:1147"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042475294",
+  "chain": "CWE-1284->CWE-787",
+  "project": "ffmpeg",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42475294",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "7ac5067146613997bb38442cb022d7f41321a706",
+      "fix_commits": [
+        "7ac5067146613997bb38442cb022d7f41321a706"
+      ],
+      "repo": "https://git.ffmpeg.org/ffmpeg.git"
+    },
+    "patch": "From 7ac5067146613997bb38442cb022d7f41321a706 Mon Sep 17 00:00:00 2001\nFrom: Michael Niedermayer <michael@niedermayer.cc>\nDate: Thu, 11 May 2017 15:29:31 +0200\nSubject: [PATCH] avcodec/scpr: Check y in first line loop in decompress_i()\n\nFixes: out of array access\nFixes: 1478/clusterfuzz-testcase-minimized-5285486908145664\n\nFound-by: continuous fuzzing process https://github.com/google/oss-fuzz/tree/master/targets/ffmpeg\nSigned-off-by: Michael Niedermayer <michael@niedermayer.cc>\n---\n libavcodec/scpr.c | 3 +++\n 1 file changed, 3 insertions(+)\n\ndiff --git a/libavcodec/scpr.c b/libavcodec/scpr.c\nindex ba1f65f..b87c047 100644\n--- a/libavcodec/scpr.c\n+++ b/libavcodec/scpr.c\n@@ -331,6 +331,9 @@ static int decompress_i(AVCodecContext *avctx, uint32_t *dst, int linesize)\n         clr = (b << 16) + (g << 8) + r;\n         k += run;\n         while (run-- > 0) {\n+            if (y >= avctx->height)\n+                return AVERROR_INVALIDDATA;\n+\n             dst[y * linesize + x] = clr;\n             lx = x;\n             ly = y;\n-- \n2.55.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42475294-vul",
+      "digest": "sha256:c3b017a889a403fa6b867440783f63e297bfbc885af0a88ffcf5dba6cf6a46fa"
+    },
+    "patched": {
+      "ref": "n132/arvo:42475294-fix",
+      "digest": "sha256:2af2d9f0de2d03227e2616b43d3c7d94d797260012e5e92f014ddddcc7cb919d"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/ffmpeg/libavcodec/scpr.c:334",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/ffmpeg/libavcodec/scpr.c:334"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

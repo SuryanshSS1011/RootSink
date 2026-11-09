@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042521038",
+  "chain": "CWE-20->CWE-787",
+  "project": "samba",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42521038",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "795bab5629195395d512bb9a830542de6067195b",
+      "fix_commits": [
+        "795bab5629195395d512bb9a830542de6067195b"
+      ],
+      "repo": "https://gitlab.com/samba-team/samba"
+    },
+    "patch": "diff --git a/lib/ldb/tests/ldb_filter_attrs_test.c b/lib/ldb/tests/ldb_filter_attrs_test.c\nindex 7d555e0da2e220d09dcda626a85d6ecb97efcd81..9e985e13c6368e9be9191ba3550c3839903a66f6 100644\n--- a/lib/ldb/tests/ldb_filter_attrs_test.c\n+++ b/lib/ldb/tests/ldb_filter_attrs_test.c\n@@ -660,7 +660,7 @@ static void test_filter_attrs_one_attr_matched_star(void **state)\n \tassert_string_equal(ldb_msg_find_attr_as_string(filtered_msg,\n \t\t\t\t\t\t\t\"foo\",\n \t\t\t\t\t\t\tNULL),\n-\t\t\t    value);\n+\t\t\t    (const char *)value);\n }\n \n /*\n@@ -729,11 +729,11 @@ static void test_filter_attrs_two_attr_matched_star(void **state)\n \tassert_string_equal(ldb_msg_find_attr_as_string(filtered_msg,\n \t\t\t\t\t\t\t\"foo\",\n \t\t\t\t\t\t\tNULL),\n-\t\t\t    value1);\n+\t\t\t    (const char *)value1);\n \tassert_string_equal(ldb_msg_find_attr_as_string(filtered_msg,\n \t\t\t\t\t\t\t\"bar\",\n \t\t\t\t\t\t\tNULL),\n-\t\t\t    value2);\n+\t\t\t    (const char *)value2);\n }\n \n /*\n@@ -828,7 +828,7 @@ static void test_filter_attrs_one_attr_matched_star_dn(void **state)\n \tassert_string_equal(ldb_msg_find_attr_as_string(filtered_msg,\n \t\t\t\t\t\t\t\"foo\",\n \t\t\t\t\t\t\tNULL),\n-\t\t\t    value);\n+\t\t\t    (const char *)value);\n }\n \n /*\n@@ -877,7 +877,7 @@ static void test_filter_attrs_one_attr_matched_dn(void **state)\n \tassert_ptr_equal(filtered_msg->dn, in.dn);\n \tassert_string_equal(filtered_msg->elements[0].name, \"distinguishedName\");\n \tassert_int_equal(filtered_msg->elements[0].num_values, 1);\n-\tassert_string_equal(filtered_msg->elements[0].values[0].data,\n+\tassert_string_equal((const char *)filtered_msg->elements[0].values[0].data,\n \t\t\t    ldb_dn_get_linearized(in.dn));\n }\n \ndiff --git a/lib/ldb/tests/ldb_mod_op_test.c b/lib/ldb/tests/ldb_mod_op_test.c\nindex cf40fe42b73c790df5d0673c478c1d4c5e226d93..eca59068c9f2ce5f146ea1f4dd04b1fa6b73f452 100644\n--- a/lib/ldb/tests/ldb_mod_op_test.c\n+++ b/lib/ldb/tests/ldb_mod_op_test.c\n@@ -152,7 +152,7 @@ static void test_ldif_message(void **state)\n \t\t\"supersecret: password\\n\"\n \t\t\"binary:: //8=\\n\"\n \t\t\"\\n\";\n-\t\n+\n \tstruct ldb_message *msg = get_test_ldb_message(test_ctx,\n \t\t\t\t\t\t       test_ctx->ldb);\n \n@@ -182,13 +182,13 @@ static void test_ldif_message_redacted(void **state)\n \t\t\"supersecret\",\n \t\tNULL\n \t};\n-\t\n+\n \tstruct ldb_message *msg = ldb_msg_new(test_ctx);\n \n \tldb_set_opaque(test_ctx->ldb,\n \t\t       LDB_SECRET_ATTRIBUTE_LIST_OPAQUE,\n \t\t       secret_attrs);\n-\t\n+\n \tassert_non_null(msg);\n \n \tmsg->dn = ldb_dn_new(msg, test_ctx->ldb, \"dc=samba,dc=org\");\n@@ -924,12 +924,12 @@ static void test_ldb_modify_add_key(void **state)\n \tel = ldb_msg_find_element(res->msgs[0], \"cn\");\n \tassert_non_null(el);\n \tassert_int_equal(el->num_values, 1);\n-\tassert_string_equal(el->values[0].data, \"test_mod_cn\");\n+\tassert_string_equal((const char *)el->values[0].data, \"test_mod_cn\");\n \n \tel = ldb_msg_find_element(res->msgs[0], \"name\");\n \tassert_non_null(el);\n \tassert_int_equal(el->num_values, 1);\n-\tassert_string_equal(el->values[0].data, \"test_mod_name\");\n+\tassert_string_equal((const char *)el->values[0].data, \"test_mod_name\");\n }\n \n static void test_ldb_modify_extend_key(void **state)\n@@ -952,8 +952,8 @@ static void test_ldb_modify_extend_key(void **state)\n \tel = ldb_msg_find_element(res->msgs[0], \"cn\");\n \tassert_non_null(el);\n \tassert_int_equal(el->num_values, 2);\n-\tassert_string_equal(el->values[0].data, \"test_mod_cn\");\n-\tassert_string_equal(el->values[1].data, \"test_mod_cn2\");\n+\tassert_string_equal((const char *)el->values[0].data, \"test_mod_cn\");\n+\tassert_string_equal((const char *)el->values[1].data, \"test_mod_cn2\");\n }\n \n static void test_ldb_modify_add_key_noval(void **state)\n@@ -1009,7 +1009,7 @@ static void test_ldb_modify_replace_key(void **state)\n \tel = ldb_msg_find_element(res->msgs[0], \"cn\");\n \tassert_non_null(el);\n \tassert_int_equal(el->num_values, 1);\n-\tassert_string_equal(el->values[0].data, new_cn);\n+\tassert_string_equal((const char *)el->values[0].data, new_cn);\n }\n \n static void test_ldb_modify_replace_noexist_key(void **state)\n@@ -1032,12 +1032,12 @@ static void test_ldb_modify_replace_noexist_key(void **state)\n \tel = ldb_msg_find_element(res->msgs[0], \"cn\");\n \tassert_non_null(el);\n \tassert_int_equal(el->num_values, 1);\n-\tassert_string_equal(el->values[0].data, \"test_mod_cn\");\n+\tassert_string_equal((const char *)el->values[0].data, \"test_mod_cn\");\n \n \tel = ldb_msg_find_element(res->msgs[0], mod_kvs[0].key);\n \tassert_non_null(el);\n \tassert_int_equal(el->num_values, 1);\n-\tassert_string_equal(el->values[0].data, mod_kvs[0].val);\n+\tassert_string_equal((const char *)el->values[0].data, mod_kvs[0].val);\n }\n \n static void test_ldb_modify_replace_zero_vals(void **state)\n@@ -1232,7 +1232,7 @@ static void assert_attr_has_vals(struct ldb_message *msg,\n \n \tassert_int_equal(el->num_values, nvals);\n \tfor (i = 0; i < nvals; i++) {\n-\t\tassert_string_equal(el->values[i].data,\n+\t\tassert_string_equal((const char *)el->values[i].data,\n \t\t\t\t    vals[i]);\n \t}\n }\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42521038-vul",
+      "digest": "sha256:d2fde0b39535207ba35a65bebcc3401317debaa888a4a548148dd8bedab6f239"
+    },
+    "patched": {
+      "ref": "n132/arvo:42521038-fix",
+      "digest": "sha256:7d98c630f335e9a3f3123b10a6684f2b7e3d7ac5f2772676ce968c120ca553b9"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/samba/bin/default/../../source3/printing/lpq_parse.c:673",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/samba/bin/default/../../source3/printing/lpq_parse.c:673"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

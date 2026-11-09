@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042510459",
+  "chain": "CWE-416->CWE-787",
+  "project": "kimageformats",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42510459",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "9e28aae868156242e4a83faa71190ad15df7c108",
+      "fix_commits": [
+        "9e28aae868156242e4a83faa71190ad15df7c108"
+      ],
+      "repo": "https://invent.kde.org/frameworks/kimageformats.git"
+    },
+    "patch": "diff --git a/src/imageformats/psd.cpp b/src/imageformats/psd.cpp\nindex c55bc50312915326b1a7a14baafaaa5db79ac3f7..a60fe502060dcb1ebedfd71dfa553b136e772ec6 100644\n--- a/src/imageformats/psd.cpp\n+++ b/src/imageformats/psd.cpp\n@@ -501,10 +501,8 @@ static QImage::Format imageFormat(const PSDHeader &header)\n         format = QImage::Format_Indexed8;\n         break;\n     case CM_BITMAP:\n-        format = QImage::Format_Mono;\n+        format = header.depth == 1 ? QImage::Format_Mono : QImage::Format_Invalid;\n         break;\n-    default:\n-        qDebug() << \"Unsupported color mode\" << header.color_mode;\n     }\n     return format;\n }\n@@ -624,7 +622,13 @@ static bool LoadPSD(QDataStream &stream, const PSDHeader &header, QImage &img)\n         return false;\n     }\n \n-    img = QImage(header.width, header.height, imageFormat(header));\n+    const QImage::Format format = imageFormat(header);\n+    if (format == QImage::Format_Invalid) {\n+        qWarning() << \"Unsupported image format\" << header.color_mode << header.depth;\n+        return false;\n+    }\n+\n+    img = QImage(header.width, header.height, format);\n     if (img.isNull()) {\n         qWarning() << \"Failed to allocate image, invalid dimensions?\" << QSize(header.width, header.height);\n         return false;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42510459-vul",
+      "digest": "sha256:17227e6a2ef9eb3736fa5e77e8d361f701dca635d8894fa826675f07eee761af"
+    },
+    "patched": {
+      "ref": "n132/arvo:42510459-fix",
+      "digest": "sha256:ada46e802e8c2f222bfc6fc70e86226e4bb5e5c6d089c68205c2747555e1c6f3"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/kimageformats/src/imageformats/psd.cpp:557",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/kimageformats/src/imageformats/psd.cpp:557"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

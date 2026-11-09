@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042472620",
+  "chain": "CWE-1285->CWE-787",
+  "project": "wireshark",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42472620",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "22f05d620f428c0769227f0173876c95fb9aead4",
+      "fix_commits": [
+        "22f05d620f428c0769227f0173876c95fb9aead4"
+      ],
+      "repo": "https://github.com/wireshark/wireshark"
+    },
+    "patch": "diff --git a/epan/dissectors/packet-quakeworld.c b/epan/dissectors/packet-quakeworld.c\nindex d3e1e840372..59a16585c11 100644\n--- a/epan/dissectors/packet-quakeworld.c\n+++ b/epan/dissectors/packet-quakeworld.c\n@@ -85,20 +85,15 @@ static expert_field ei_quakeworld_connectionless_command_invalid = EI_INIT;\n \n #define MAX_TEXT_SIZE\t2048\n \n-static\tchar\tcom_token[MAX_TEXT_SIZE+1];\n-static\tint\tcom_token_start;\n-static\tint\tcom_token_length;\n-\n static const char *\n-COM_Parse (const char *data)\n+COM_Parse (const char *data, int data_len, int* token_start, int* token_len)\n {\n-\tint\tc;\n-\tint\tlen;\n+\tint c;\n+\tchar* com_token = (char*)wmem_alloc(wmem_packet_scope(), data_len+1);\n \n-\tlen = 0;\n \tcom_token[0] = '\\0';\n-\tcom_token_start = 0;\n-\tcom_token_length = 0;\n+\t*token_start = 0;\n+\t*token_len = 0;\n \n \tif (data == NULL)\n \t\treturn NULL;\n@@ -112,14 +107,14 @@ COM_Parse (const char *data)\n \t\tif ((c != ' ') && (!g_ascii_iscntrl(c)))\n \t\t    break;\n \t\tdata++;\n-\t\tcom_token_start++;\n+\t\t(*token_start)++;\n \t}\n \n \t/* skip // comments */\n \tif ((c=='/') && (data[1]=='/')) {\n \t\twhile (*data && *data != '\\n'){\n \t\t\tdata++;\n-\t\t\tcom_token_start++;\n+\t\t\t(*token_start)++;\n \t\t}\n \t\tgoto skipwhite;\n \t}\n@@ -127,36 +122,39 @@ COM_Parse (const char *data)\n \t/* handle quoted strings specially */\n \tif (c == '\\\"') {\n \t\tdata++;\n-\t\tcom_token_start++;\n-\t\twhile (TRUE) {\n+\t\t(*token_start)++;\n+\t\twhile (*token_len < data_len) {\n \t\t\tc = *data++;\n \t\t\tif ((c=='\\\"') || (c=='\\0')) {\n-\t\t\t\tcom_token[len] = '\\0';\n+\t\t\t\tcom_token[*token_len] = '\\0';\n \t\t\t\treturn data;\n \t\t\t}\n-\t\t\tcom_token[len] = c;\n-\t\t\tlen++;\n-\t\t\tcom_token_length++;\n+\t\t\tcom_token[*token_len] = c;\n+\t\t\t(*token_len)++;\n \t\t}\n \t}\n \n+\tif (*token_len == data_len) {\n+\t\tcom_token[*token_len] = '\\0';\n+\t\treturn data;\n+\t}\n+\n \t/* parse a regular word */\n \tdo {\n-\t\tcom_token[len] = c;\n+\t\tcom_token[*token_len] = c;\n \t\tdata++;\n-\t\tlen++;\n-\t\tcom_token_length++;\n+\t\t(*token_len)++;\n \t\tc = *data;\n-\t} while (( c != ' ') && (!g_ascii_iscntrl(c)));\n+\t} while (( c != ' ') && (!g_ascii_iscntrl(c)) && (*token_len < data_len));\n \n-\tcom_token[len] = '\\0';\n+\tcom_token[*token_len] = '\\0';\n \treturn data;\n }\n \n \n #define\t\t\tMAX_ARGS 80\n static\tint\t\tcmd_argc = 0;\n-static\tchar\t\t*cmd_argv[MAX_ARGS];\n+static\tconst char\t*cmd_argv[MAX_ARGS];\n static\tconst char\t*cmd_null_string = \"\";\n static\tint\t\tcmd_argv_start[MAX_ARGS];\n static\tint\t\tcmd_argv_length[MAX_ARGS];\n@@ -198,17 +196,18 @@ Cmd_Argv_length(int arg)\n \n \n static void\n-Cmd_TokenizeString(const char* text)\n+Cmd_TokenizeString(const char* text, int text_len)\n {\n \tint start;\n-\n+\tint com_token_start;\n+\tint com_token_length;\n \tcmd_argc = 0;\n \n \tstart = 0;\n-\twhile (TRUE) {\n+\twhile (start < text_len) {\n \n \t\t/* skip whitespace up to a \\n */\n-\t\twhile (*text && *text <= ' ' && *text != '\\n') {\n+\t\twhile (*text && *text <= ' ' && *text != '\\n' && start < text_len) {\n \t\t\ttext++;\n \t\t\tstart++;\n \t\t}\n@@ -219,15 +218,15 @@ Cmd_TokenizeString(const char* text)\n \t\t\tbreak;\n \t\t}\n \n-\t\tif (!*text)\n+\t\tif ((!*text) || (start == text_len))\n \t\t\treturn;\n \n-\t\ttext = COM_Parse (text);\n+\t\ttext = COM_Parse (text, text_len-start, &com_token_start, &com_token_length);\n \t\tif (!text)\n \t\t\treturn;\n \n \t\tif (cmd_argc < MAX_ARGS) {\n-\t\t\tcmd_argv[cmd_argc] = wmem_strdup(wmem_packet_scope(), com_token);\n+\t\t\tcmd_argv[cmd_argc] = (char*)text;\n \t\t\tcmd_argv_start[cmd_argc] = start + com_token_start;\n \t\t\tcmd_argv_length[cmd_argc] = com_token_length;\n \t\t\tcmd_argc++;\n@@ -381,7 +380,7 @@ dissect_quakeworld_ConnectionlessPacket(tvbuff_t *tvb, packet_info *pinfo,\n \t\t/* client to server commands */\n \t\tconst char *c;\n \n-\t\tCmd_TokenizeString(text);\n+\t\tCmd_TokenizeString(text, len);\n \t\tc = Cmd_Argv(0);\n \n \t\t/* client to sever commands */\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42472620-vul",
+      "digest": "sha256:9bd9ad7ffda1c33a5b85f4f5f00a704bf1211831d73dc6c8d5a785a7e21642f1"
+    },
+    "patched": {
+      "ref": "n132/arvo:42472620-fix",
+      "digest": "sha256:cb8262222dd233b7b5cf2d714da0c7fbeb3c19c71b26311c552888882af7e56a"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "global-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/wireshark/epan/dissectors/packet-quakeworld.c:134",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "global-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/wireshark/epan/dissectors/packet-quakeworld.c:134"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

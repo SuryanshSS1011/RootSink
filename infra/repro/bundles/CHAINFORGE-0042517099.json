@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042517099",
+  "chain": "CWE-1284->CWE-125",
+  "project": "fluent-bit",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42517099",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "5949473d5ce9e3d56ae2e248cc3a82a13474aabd",
+      "fix_commits": [
+        "5949473d5ce9e3d56ae2e248cc3a82a13474aabd"
+      ],
+      "repo": "https://github.com/fluent/fluent-bit"
+    },
+    "patch": "diff --git a/src/flb_parser.c b/src/flb_parser.c\nindex 77f0dbf1b82..4b5a348cc88 100644\n--- a/src/flb_parser.c\n+++ b/src/flb_parser.c\n@@ -973,6 +973,12 @@ int flb_parser_tzone_offset(const char *str, int len, int *tmdiff)\n         return -1;\n     }\n \n+    /* Ensure there is enough data */\n+    if (len < 4) {\n+        *tmdiff = 0;\n+        return -1;\n+    }\n+\n     /* Negative value ? */\n     neg = (*p++ == '-');\n \n@@ -982,6 +988,11 @@ int flb_parser_tzone_offset(const char *str, int len, int *tmdiff)\n     /* Gather hours and minutes */\n     hour = ((p[0] - '0') * 10) + (p[1] - '0');\n     if (end - p == 5 && p[2] == ':') {\n+        /* Ensure there is enough data */\n+        if (len < 5) {\n+            *tmdiff = 0;\n+            return -1;\n+        }\n         min = ((p[3] - '0') * 10) + (p[4] - '0');\n     }\n     else {\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42517099-vul",
+      "digest": "sha256:3b64b5e4f0d9a9ef36c04fa707dfc7148a73ff186afda3c449088563ea54f9c0"
+    },
+    "patched": {
+      "ref": "n132/arvo:42517099-fix",
+      "digest": "sha256:15a638d69cc83f70cd85b6befc3595eff5a2f3fd7aa5665d6342e0ccc2bbdaca"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/fluent-bit/src/flb_parser.c:304",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/fluent-bit/src/flb_parser.c:304"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

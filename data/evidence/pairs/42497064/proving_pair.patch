@@ -1,0 +1,51 @@
+diff --git a/src/in_dxf.c b/src/in_dxf.c
+index 73505329ca..344e15e3ce 100644
+--- a/src/in_dxf.c
++++ b/src/in_dxf.c
+@@ -11874,12 +11899,12 @@ new_object (char *restrict name, char *restrict dxfname,
+                              "dim_rotation", ang, pair->value.d, "BD", 50);
+                 }
+               // accept wrong colors
+-              else if (is_class_stable (obj->name) && (pair->code < 60 || pair->code > 68))
++              else if (is_dxf_class_importable (obj->name) && (pair->code < 60 || pair->code > 68))
+                 {
+                   goto invalid_dxf;
+                 }
+               else
+-                LOG_WARN ("Unknown DXF code %d for %s", pair->code, name);
++                LOG_WARN ("Unknown DXF code %d for %s", pair->code, name); // Debugging or Unhandled class
+             }
+         }
+     next_pair:
+diff --git a/src/classes.c b/src/classes.c
+index 652a7f63bf..303cc90d5b 100644
+--- a/src/classes.c
++++ b/src/classes.c
+@@ -526,6 +526,27 @@ bool is_class_unhandled (const char* name)
+ #endif
+ }
+ 
++// if all DXF groups are known
++bool is_dxf_class_importable (const char* name)
++{
++  // hash lookup
++  Dwg_Class_Stability stability;
++  if (dwg_object_name (name, NULL, NULL, NULL, &stability)) {
++    if (stability == DWG_CLASS_UNSTABLE)
++      {
++        return !strEQc (name, "MATERIAL") &&      // 72 missing
++               !strEQc (name, "ARC_DIMENSION") && // 2 missing
++               !strEQc (name, "SUN") &&           // 421 missing
++               !strEQc (name, "PROXY_ENTITY") &&  // 90 missing
++               !strEQc (name, "PROXY_OBJECT");    // 90 missing
++      }
++    else
++      return stability == DWG_CLASS_STABLE;
++  }
++  else
++    return false;
++}
++
+ bool dwg_find_class (const Dwg_Data *restrict dwg, const char* dxfname, BITCODE_BS *numberp)
+ {
+   assert(dwg);

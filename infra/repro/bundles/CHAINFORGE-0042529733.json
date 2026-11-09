@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042529733",
+  "chain": "CWE-456->CWE-457",
+  "project": "flac",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42529733",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "89a4d2b9fc802bf903f728d34f72c606b2d525e5",
+      "fix_commits": [
+        "89a4d2b9fc802bf903f728d34f72c606b2d525e5"
+      ],
+      "repo": "https://github.com/xiph/flac"
+    },
+    "patch": "From 89a4d2b9fc802bf903f728d34f72c606b2d525e5 Mon Sep 17 00:00:00 2001\nFrom: Martijn van Beurden <mvanb1@gmail.com>\nDate: Tue, 5 Mar 2024 17:58:17 +0100\nSubject: [PATCH] Fix format ending up with wrong subformat (#676)\n\nIt was possible the format was taken from foreign metadata and the\nsubformat from command-line options.\n\nCredit: Oss-Fuzz\nIssue: https://bugs.chromium.org/p/oss-fuzz/issues/detail?id=63790\n---\n src/flac/main.c | 8 ++++++--\n 1 file changed, 6 insertions(+), 2 deletions(-)\n\ndiff --git a/src/flac/main.c b/src/flac/main.c\nindex d57ad9c..46a2dcc 100644\n--- a/src/flac/main.c\n+++ b/src/flac/main.c\n@@ -2205,10 +2205,14 @@ int decode_file(const char *infilename)\n \t\toutput_format = FORMAT_WAVE;\n \n \t/* Now do subformats */\n-\tif(option_values.force_legacy_wave_format)\n+\tif(option_values.force_legacy_wave_format) {\n+\t\toutput_format = FORMAT_WAVE;\n \t\toutput_subformat = SUBFORMAT_WAVE_PCM;\n-\telse if(option_values.force_extensible_wave_format)\n+\t}\n+\telse if(option_values.force_extensible_wave_format) {\n+\t\toutput_format = FORMAT_WAVE;\n \t\toutput_subformat = SUBFORMAT_WAVE_EXTENSIBLE;\n+\t}\n \telse if(option_values.force_aiff_c_none_format) {\n \t\toutput_format = FORMAT_AIFF_C;\n \t\toutput_subformat = SUBFORMAT_AIFF_C_NONE;\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42529733-vul",
+      "digest": "sha256:c8ae0fb685e954563cdb22a83bca95c7220b4e802ce71d43db0519d64bcc78fc"
+    },
+    "patched": {
+      "ref": "n132/arvo:42529733-fix",
+      "digest": "sha256:bec767f07aea7e99be55490eed3cfd7fc7a771998183952469c5f9862092a217"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/flac/oss-fuzz/../src/flac/decode.c:1263",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/flac/oss-fuzz/../src/flac/decode.c:1263"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

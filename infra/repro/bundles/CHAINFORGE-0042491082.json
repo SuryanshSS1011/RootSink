@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042491082",
+  "chain": "CWE-20->CWE-787",
+  "project": "wolfssl",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42491082",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "81f70fba5f6f3fd4715cbe1d51e3b7e76ce22b5d",
+      "fix_commits": [
+        "81f70fba5f6f3fd4715cbe1d51e3b7e76ce22b5d"
+      ],
+      "repo": "https://github.com/wolfssl/wolfssl"
+    },
+    "patch": "diff --git a/wolfcrypt/src/sp_int.c b/wolfcrypt/src/sp_int.c\nindex af1c9c24460..39684a232fe 100644\n--- a/wolfcrypt/src/sp_int.c\n+++ b/wolfcrypt/src/sp_int.c\n@@ -12711,14 +12711,24 @@ int sp_tohex(sp_int* a, char* str)\n             i = a->used - 1;\n     #ifndef WC_DISABLE_RADIX_ZERO_PAD\n             for (j = SP_WORD_SIZE - 8; j >= 0; j -= 8) {\n-                if (((a->dp[i] >> j) & 0xff) != 0)\n+                if (((a->dp[i] >> j) & 0xff) != 0) {\n                     break;\n+                }\n+                else if (j == 0) {\n+                    j = SP_WORD_SIZE - 8;\n+                    --i;\n+                }\n             }\n             j += 4;\n     #else\n             for (j = SP_WORD_SIZE - 4; j >= 0; j -= 4) {\n-                if (((a->dp[i] >> j) & 0xf) != 0)\n+                if (((a->dp[i] >> j) & 0xf) != 0) {\n                     break;\n+                }\n+                else if (j == 0) {\n+                    j = SP_WORD_SIZE - 4;\n+                    --i;\n+                }\n             }\n     #endif /* WC_DISABLE_RADIX_ZERO_PAD */\n             for (; j >= 0; j -= 4) {\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42491082-vul",
+      "digest": "sha256:40964349f2c58b3add8003c145c76cb10dba4a34c45229e800871e7e0e96db38"
+    },
+    "patched": {
+      "ref": "n132/arvo:42491082-fix",
+      "digest": "sha256:86eb12baf7446fb7f0a0dd0b4cf1e14a8304ba9870833a239273281dde93d6b8"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/cryptofuzz-sp-math-all/modules/wolfcrypt/bn_helper.cpp:201",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/cryptofuzz-sp-math-all/modules/wolfcrypt/bn_helper.cpp:201"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

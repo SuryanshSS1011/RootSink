@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0420198855",
+  "chain": "CWE-1284->CWE-125",
+  "project": "readstat",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "420198855",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "039118f405d4094790c61b6467b90e193731f180",
+      "fix_commits": [
+        "039118f405d4094790c61b6467b90e193731f180"
+      ],
+      "repo": "https://github.com/WizardMac/ReadStat"
+    },
+    "patch": "diff --git a/src/spss/readstat_sav_parse.c b/src/spss/readstat_sav_parse.c\nindex 40c36a3a..43846a24 100644\n--- a/src/spss/readstat_sav_parse.c\n+++ b/src/spss/readstat_sav_parse.c\n@@ -411,13 +411,13 @@ readstat_error_t sav_parse_long_variable_names_record(void *data, int count, sav\n                 // been set when this record is processed. So just set the longname to every\n                 // matching variable, ghost or real.\n                 varlookup_t *iter_match = found;\n-                while (strcmp(iter_match->name, temp_key) == 0 && iter_match >= table) {\n+                while (iter_match >= table && strcmp(iter_match->name, temp_key) == 0) {\n                     spss_varinfo_t *info = ctx->varinfo[iter_match->index];\n                     snprintf(info->longname, sizeof(info->longname), \"%*s\", (int)str_len, temp_val);\n                     iter_match--;\n                 }\n                 iter_match = found + 1;\n-                while (strcmp(iter_match->name, temp_key) == 0 && iter_match - table < var_count) {\n+                while (iter_match - table < var_count && strcmp(iter_match->name, temp_key) == 0) {\n                     spss_varinfo_t *info = ctx->varinfo[iter_match->index];\n                     snprintf(info->longname, sizeof(info->longname), \"%*s\", (int)str_len, temp_val);\n                     iter_match++;\n@@ -471,13 +471,13 @@ readstat_error_t sav_parse_long_variable_names_record(void *data, int count, sav\n                 // been set when this record is processed. So just set the longname to every\n                 // matching variable, ghost or real.\n                 varlookup_t *iter_match = found;\n-                while (strcmp(iter_match->name, temp_key) == 0 && iter_match >= table) {\n+                while (iter_match >= table && strcmp(iter_match->name, temp_key) == 0) {\n                     spss_varinfo_t *info = ctx->varinfo[iter_match->index];\n                     snprintf(info->longname, sizeof(info->longname), \"%*s\", (int)str_len, temp_val);\n                     iter_match--;\n                 }\n                 iter_match = found + 1;\n-                while (strcmp(iter_match->name, temp_key) == 0 && iter_match - table < var_count) {\n+                while (iter_match - table < var_count && strcmp(iter_match->name, temp_key) == 0) {\n                     spss_varinfo_t *info = ctx->varinfo[iter_match->index];\n                     snprintf(info->longname, sizeof(info->longname), \"%*s\", (int)str_len, temp_val);\n                     iter_match++;\ndiff --git a/src/spss/readstat_sav_parse.rl b/src/spss/readstat_sav_parse.rl\nindex 06172022..eb3fd075 100644\n--- a/src/spss/readstat_sav_parse.rl\n+++ b/src/spss/readstat_sav_parse.rl\n@@ -112,13 +112,13 @@ readstat_error_t sav_parse_long_variable_names_record(void *data, int count, sav\n                 // been set when this record is processed. So just set the longname to every\n                 // matching variable, ghost or real.\n                 varlookup_t *iter_match = found;\n-                while (strcmp(iter_match->name, temp_key) == 0 && iter_match >= table) {\n+                while (iter_match >= table && strcmp(iter_match->name, temp_key) == 0) {\n                     spss_varinfo_t *info = ctx->varinfo[iter_match->index];\n                     snprintf(info->longname, sizeof(info->longname), \"%*s\", (int)str_len, temp_val);\n                     iter_match--;\n                 }\n                 iter_match = found + 1;\n-                while (strcmp(iter_match->name, temp_key) == 0 && iter_match - table < var_count) {\n+                while (iter_match - table < var_count && strcmp(iter_match->name, temp_key) == 0) {\n                     spss_varinfo_t *info = ctx->varinfo[iter_match->index];\n                     snprintf(info->longname, sizeof(info->longname), \"%*s\", (int)str_len, temp_val);\n                     iter_match++;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:420198855-vul",
+      "digest": "sha256:61d978642442d312944cf2bdcf7418c35c1916ac5fa54dcf3a8f4b448bb2f805"
+    },
+    "patched": {
+      "ref": "n132/arvo:420198855-fix",
+      "digest": "sha256:0614c92d75c7ddacfa07f110650d78adb1f550ed324d70b3da3af100eeed69bd"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/readstat/src/spss/readstat_sav_parse.rl:121",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/readstat/src/spss/readstat_sav_parse.rl:121"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

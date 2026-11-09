@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042480986",
+  "chain": "CWE-1284->CWE-787",
+  "project": "imagemagick",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42480986",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "4a0d0200e0d95c9731bae0423463f0741b74c8f1",
+      "fix_commits": [
+        "4a0d0200e0d95c9731bae0423463f0741b74c8f1"
+      ],
+      "repo": "https://github.com/imagemagick/imagemagick"
+    },
+    "patch": "diff --git a/MagickCore/fx.c b/MagickCore/fx.c\nindex 9a80f39bebb..e5fdaac7e05 100644\n--- a/MagickCore/fx.c\n+++ b/MagickCore/fx.c\n@@ -1933,7 +1933,7 @@ static double FxEvaluateSubexpression(FxInfo *fx_info,\n         (void) ThrowMagickException(exception,GetMagickModule(),OptionError,\n           \"ParenthesisNestedTooDeeply\",\"`%s'\",expression);\n       length=CopyMagickString(subexpression,expression+1,MagickPathExtent);\n-      if (length > 1)\n+      if (length != 0)\n         subexpression[length-1]='\\0';\n       gamma=FxEvaluateSubexpression(fx_info,channel,x,y,subexpression,depth+1,\n         beta,exception);\n@@ -2135,7 +2135,7 @@ static double FxEvaluateSubexpression(FxInfo *fx_info,\n           if (strlen(expression) > 6)\n             length=CopyMagickString(subexpression,expression+6,\n               MagickPathExtent);\n-          if (length > 1)\n+          if (length != 0)\n             subexpression[length-1]='\\0';\n           if (fx_info->file != (FILE *) NULL)\n             (void) FormatLocaleFile(fx_info->file,\"%s[%.20g,%.20g].%s: \"\n@@ -2152,7 +2152,8 @@ static double FxEvaluateSubexpression(FxInfo *fx_info,\n             Parse do(expression,condition test).\n           */\n           length=CopyMagickString(subexpression,expression+3,MagickPathExtent);\n-          subexpression[length-1]='\\0';\n+          if (length != 0)\n+            subexpression[length-1]='\\0';\n           p=subexpression;\n           for (q=(char *) p; (*q != ',') && (*q != '\\0'); q++)\n             if (*q == '(')\n@@ -2226,7 +2227,8 @@ static double FxEvaluateSubexpression(FxInfo *fx_info,\n             Parse for(initialization, condition test, expression).\n           */\n           length=CopyMagickString(subexpression,expression+4,MagickPathExtent);\n-          subexpression[length-1]='\\0';\n+          if (length != 0)\n+            subexpression[length-1]='\\0';\n           p=subexpression;\n           for (q=(char *) p; (*q != ',') && (*q != '\\0'); q++)\n             if (*q == '(')\n@@ -2322,7 +2324,8 @@ static double FxEvaluateSubexpression(FxInfo *fx_info,\n             length;\n \n           length=CopyMagickString(subexpression,expression+3,MagickPathExtent);\n-          subexpression[length-1]='\\0';\n+          if (length != 0)\n+            subexpression[length-1]='\\0';\n           p=subexpression;\n           for (q=(char *) p; (*q != ',') && (*q != '\\0'); q++)\n             if (*q == '(')\n@@ -2639,7 +2642,8 @@ static double FxEvaluateSubexpression(FxInfo *fx_info,\n             Parse while(condition test, expression).\n           */\n           length=CopyMagickString(subexpression,expression+6,MagickPathExtent);\n-          subexpression[length-1]='\\0';\n+          if (length != 0)\n+            subexpression[length-1]='\\0';\n           p=subexpression;\n           for (q=(char *) p; (*q != ',') && (*q != '\\0'); q++)\n             if (*q == '(')\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42480986-vul",
+      "digest": "sha256:1e5681fdf8741dce0865b962515a97a4d758a7be428a98df65c0a598f9dc5111"
+    },
+    "patched": {
+      "ref": "n132/arvo:42480986-fix",
+      "digest": "sha256:f3a7dcc6bb87db66d5c10457c5f3cacbac19857f0d7f48c1fac6f6118e6df0a9"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/imagemagick/MagickCore/fx.c:2844",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/imagemagick/MagickCore/fx.c:2844"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

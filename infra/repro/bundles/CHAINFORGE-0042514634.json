@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042514634",
+  "chain": "CWE-416->CWE-787",
+  "project": "libredwg",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42514634",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "428d1ed6a874d11b39a34f779140755f087fc9e2",
+      "fix_commits": [
+        "428d1ed6a874d11b39a34f779140755f087fc9e2"
+      ],
+      "repo": "https://github.com/LibreDWG/libredwg"
+    },
+    "patch": "diff --git a/src/dynapi.c b/src/dynapi.c\nindex 9be9ca4fb4..9f2aec1acb 100644\n--- a/src/dynapi.c\n+++ b/src/dynapi.c\n@@ -14273,7 +14273,7 @@ dynapi_set_helper (void *restrict old, const Dwg_DYNAPI_field *restrict f,\n       else if (strEQc (f->type, \"TFv\"))\n         {\n           char *str = (char *)calloc (f->size, 1);\n-          strcpy (str, *(char**)value);\n+          strncpy (str, *(char**)value, f->size);\n           memcpy (old, &str, sizeof (char*)); // size of ptr\n         }\n       // ascii\ndiff --git a/src/gen-dynapi.pl b/src/gen-dynapi.pl\nindex c4eb5ac9b1..429457cd6c 100755\n--- a/src/gen-dynapi.pl\n+++ b/src/gen-dynapi.pl\n@@ -3111,7 +3111,7 @@ sub out_classes {\n       else if (strEQc (f->type, \"TFv\"))\n         {\n           char *str = (char *)calloc (f->size, 1);\n-          strcpy (str, *(char**)value);\n+          strncpy (str, *(char**)value, f->size);\n           memcpy (old, &str, sizeof (char*)); // size of ptr\n         }\n       // ascii\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42514634-vul",
+      "digest": "sha256:96c9f3e4ebd1537dec53d7673cc2d12dfef7582576ba8860972b780261777ee0"
+    },
+    "patched": {
+      "ref": "n132/arvo:42514634-fix",
+      "digest": "sha256:1c95fd36c98e998812f392910f4fea77e1cc86e8842c2b7dbbbed15bfcbdbe0a"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/libredwg/src/gen-dynapi.pl:3112",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/libredwg/src/gen-dynapi.pl:3112"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

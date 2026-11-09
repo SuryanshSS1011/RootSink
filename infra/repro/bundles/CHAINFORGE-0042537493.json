@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042537493",
+  "chain": "CWE-416->CWE-125",
+  "project": "libxml2",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42537493",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "a530ff125dbf8ab4f297c0b91fc8fa34d4183bf5",
+      "fix_commits": [
+        "a530ff125dbf8ab4f297c0b91fc8fa34d4183bf5"
+      ],
+      "repo": "https://gitlab.gnome.org/GNOME/libxml2.git"
+    },
+    "patch": "From a530ff125dbf8ab4f297c0b91fc8fa34d4183bf5 Mon Sep 17 00:00:00 2001\nFrom: Nick Wellnhofer <wellnhofer@aevum.de>\nDate: Mon, 29 Jul 2024 14:18:57 +0200\nSubject: [PATCH] io: Always consume encoding handler when creating output\n buffers\n\nAlso free encoding handler in error case.\n\nRemove xmlAllocOutputBufferInternal which was identical to\nxmlAllocOutputBuffer.\n---\n HTMLtree.c           | 22 ++++---------\n include/private/io.h |  2 --\n xmlIO.c              | 78 +++++++++++++-------------------------------\n xmlsave.c            |  5 ---\n 4 files changed, 29 insertions(+), 78 deletions(-)\n\ndiff --git a/HTMLtree.c b/HTMLtree.c\nindex cdfaed9..ab5c816 100644\n--- a/HTMLtree.c\n+++ b/HTMLtree.c\n@@ -508,10 +508,8 @@ htmlNodeDumpFileFormat(FILE *out, xmlDocPtr doc,\n      */\n     handler = htmlFindOutputEncoder(encoding);\n     buf = xmlOutputBufferCreateFile(out, handler);\n-    if (buf == NULL) {\n-        xmlCharEncCloseFunc(handler);\n+    if (buf == NULL)\n         return(0);\n-    }\n \n     htmlNodeDumpFormatOutput(buf, doc, cur, NULL, format);\n \n@@ -560,11 +558,9 @@ htmlDocDumpMemoryFormat(xmlDocPtr cur, xmlChar**mem, int *size, int format) {\n \n     encoding = (const char *) htmlGetMetaEncoding(cur);\n     handler = htmlFindOutputEncoder(encoding);\n-    buf = xmlAllocOutputBufferInternal(handler);\n-    if (buf == NULL) {\n-        xmlCharEncCloseFunc(handler);\n+    buf = xmlAllocOutputBuffer(handler);\n+    if (buf == NULL)\n \treturn;\n-    }\n \n     htmlDocContentDumpFormatOutput(buf, cur, NULL, format);\n \n@@ -1029,10 +1025,8 @@ htmlDocDump(FILE *f, xmlDocPtr cur) {\n     encoding = (const char *) htmlGetMetaEncoding(cur);\n     handler = htmlFindOutputEncoder(encoding);\n     buf = xmlOutputBufferCreateFile(f, handler);\n-    if (buf == NULL) {\n-        xmlCharEncCloseFunc(handler);\n+    if (buf == NULL)\n         return(-1);\n-    }\n     htmlDocContentDumpOutput(buf, cur, NULL);\n \n     ret = xmlOutputBufferClose(buf);\n@@ -1063,10 +1057,8 @@ htmlSaveFile(const char *filename, xmlDocPtr cur) {\n     encoding = (const char *) htmlGetMetaEncoding(cur);\n     handler = htmlFindOutputEncoder(encoding);\n     buf = xmlOutputBufferCreateFilename(filename, handler, cur->compression);\n-    if (buf == NULL) {\n-        xmlCharEncCloseFunc(handler);\n+    if (buf == NULL)\n         return(0);\n-    }\n \n     htmlDocContentDumpOutput(buf, cur, NULL);\n \n@@ -1107,10 +1099,8 @@ htmlSaveFileFormat(const char *filename, xmlDocPtr cur,\n      * save the content to a temp buffer.\n      */\n     buf = xmlOutputBufferCreateFilename(filename, handler, 0);\n-    if (buf == NULL) {\n-        xmlCharEncCloseFunc(handler);\n+    if (buf == NULL)\n         return(0);\n-    }\n \n     htmlDocContentDumpFormatOutput(buf, cur, encoding, format);\n \ndiff --git a/include/private/io.h b/include/private/io.h\nindex e360793..8748c66 100644\n--- a/include/private/io.h\n+++ b/include/private/io.h\n@@ -32,8 +32,6 @@ xmlNewInputBufferMemory(const void *mem, size_t size, int flags,\n                         xmlCharEncoding enc);\n \n #ifdef LIBXML_OUTPUT_ENABLED\n-XML_HIDDEN xmlOutputBufferPtr\n-xmlAllocOutputBufferInternal(xmlCharEncodingHandlerPtr encoder);\n XML_HIDDEN void\n xmlOutputBufferWriteQuotedString(xmlOutputBufferPtr buf,\n                                  const xmlChar *string);\ndiff --git a/xmlIO.c b/xmlIO.c\nindex 1b7b460..0e54f71 100644\n--- a/xmlIO.c\n+++ b/xmlIO.c\n@@ -1237,6 +1237,8 @@ xmlAllocParserInputBuffer(xmlCharEncoding enc) {\n  *\n  * Create a buffered parser output\n  *\n+ * Consumes @encoder even in error case.\n+ *\n  * Returns the new parser output or NULL\n  */\n xmlOutputBufferPtr\n@@ -1245,11 +1247,13 @@ xmlAllocOutputBuffer(xmlCharEncodingHandlerPtr encoder) {\n \n     ret = (xmlOutputBufferPtr) xmlMalloc(sizeof(xmlOutputBuffer));\n     if (ret == NULL) {\n+        xmlCharEncCloseFunc(encoder);\n \treturn(NULL);\n     }\n     memset(ret, 0, sizeof(xmlOutputBuffer));\n     ret->buffer = xmlBufCreate(MINLEN);\n     if (ret->buffer == NULL) {\n+        xmlCharEncCloseFunc(encoder);\n         xmlFree(ret);\n \treturn(NULL);\n     }\n@@ -1258,8 +1262,7 @@ xmlAllocOutputBuffer(xmlCharEncodingHandlerPtr encoder) {\n     if (encoder != NULL) {\n         ret->conv = xmlBufCreate(MINLEN);\n \tif (ret->conv == NULL) {\n-            xmlBufFree(ret->buffer);\n-\t    xmlFree(ret);\n+            xmlOutputBufferClose(ret);\n \t    return(NULL);\n \t}\n \n@@ -1276,53 +1279,6 @@ xmlAllocOutputBuffer(xmlCharEncodingHandlerPtr encoder) {\n \n     return(ret);\n }\n-\n-/**\n- * xmlAllocOutputBufferInternal:\n- * @encoder:  the encoding converter or NULL\n- *\n- * Create a buffered parser output\n- *\n- * Returns the new parser output or NULL\n- */\n-xmlOutputBufferPtr\n-xmlAllocOutputBufferInternal(xmlCharEncodingHandlerPtr encoder) {\n-    xmlOutputBufferPtr ret;\n-\n-    ret = (xmlOutputBufferPtr) xmlMalloc(sizeof(xmlOutputBuffer));\n-    if (ret == NULL) {\n-\treturn(NULL);\n-    }\n-    memset(ret, 0, sizeof(xmlOutputBuffer));\n-    ret->buffer = xmlBufCreate(MINLEN);\n-    if (ret->buffer == NULL) {\n-        xmlFree(ret);\n-\treturn(NULL);\n-    }\n-\n-    ret->encoder = encoder;\n-    if (encoder != NULL) {\n-        ret->conv = xmlBufCreate(MINLEN);\n-\tif (ret->conv == NULL) {\n-            xmlBufFree(ret->buffer);\n-\t    xmlFree(ret);\n-\t    return(NULL);\n-\t}\n-\n-\t/*\n-\t * This call is designed to initiate the encoder state\n-\t */\n-        xmlCharEncOutput(ret, 1);\n-    } else\n-        ret->conv = NULL;\n-    ret->writecallback = NULL;\n-    ret->closecallback = NULL;\n-    ret->context = NULL;\n-    ret->written = 0;\n-\n-    return(ret);\n-}\n-\n #endif /* LIBXML_OUTPUT_ENABLED */\n \n /**\n@@ -1536,10 +1492,9 @@ __xmlOutputBufferCreateFilename(const char *URI,\n     /*\n      * Allocate the Output buffer front-end.\n      */\n-    ret = xmlAllocOutputBufferInternal(encoder);\n+    ret = xmlAllocOutputBuffer(encoder);\n     if (ret == NULL) {\n         xmlFree(unescaped);\n-        xmlCharEncCloseFunc(encoder);\n         return(NULL);\n     }\n \n@@ -1589,6 +1544,8 @@ __xmlOutputBufferCreateFilename(const char *URI,\n  * TODO: currently if compression is set, the library only support\n  *       writing to a local file.\n  *\n+ * Consumes @encoder even in error case.\n+ *\n  * Returns the new output or NULL\n  */\n xmlOutputBufferPtr\n@@ -1643,6 +1600,8 @@ xmlParserInputBufferCreateFile(FILE *file, xmlCharEncoding enc) {\n  * Create a buffered output for the progressive saving to a FILE *\n  * buffered C I/O\n  *\n+ * Consumes @encoder even in error case.\n+ *\n  * Returns the new parser output or NULL\n  */\n xmlOutputBufferPtr\n@@ -1651,7 +1610,7 @@ xmlOutputBufferCreateFile(FILE *file, xmlCharEncodingHandlerPtr encoder) {\n \n     if (file == NULL) return(NULL);\n \n-    ret = xmlAllocOutputBufferInternal(encoder);\n+    ret = xmlAllocOutputBuffer(encoder);\n     if (ret != NULL) {\n         ret->context = file;\n \tret->writecallback = xmlFileWrite;\n@@ -1668,6 +1627,8 @@ xmlOutputBufferCreateFile(FILE *file, xmlCharEncodingHandlerPtr encoder) {\n  *\n  * Create a buffered output for the progressive saving to a xmlBuffer\n  *\n+ * Consumes @encoder even in error case.\n+ *\n  * Returns the new parser output or NULL\n  */\n xmlOutputBufferPtr\n@@ -1932,6 +1893,8 @@ xmlNewInputBufferString(const char *str, int flags) {\n  * Create a buffered output for the progressive saving\n  * to a file descriptor\n  *\n+ * Consumes @encoder even in error case.\n+ *\n  * Returns the new parser output or NULL\n  */\n xmlOutputBufferPtr\n@@ -1940,7 +1903,7 @@ xmlOutputBufferCreateFd(int fd, xmlCharEncodingHandlerPtr encoder) {\n \n     if (fd < 0) return(NULL);\n \n-    ret = xmlAllocOutputBufferInternal(encoder);\n+    ret = xmlAllocOutputBuffer(encoder);\n     if (ret != NULL) {\n         ret->context = (void *) (ptrdiff_t) fd;\n \tret->writecallback = xmlFdWrite;\n@@ -1997,6 +1960,8 @@ xmlParserInputBufferCreateIO(xmlInputReadCallback   ioread,\n  * Create a buffered output for the progressive saving\n  * to an I/O handler\n  *\n+ * Consumes @encoder even in error case.\n+ *\n  * Returns the new parser output or NULL\n  */\n xmlOutputBufferPtr\n@@ -2005,9 +1970,12 @@ xmlOutputBufferCreateIO(xmlOutputWriteCallback   iowrite,\n \t xmlCharEncodingHandlerPtr encoder) {\n     xmlOutputBufferPtr ret;\n \n-    if (iowrite == NULL) return(NULL);\n+    if (iowrite == NULL) {\n+        xmlCharEncCloseFunc(encoder);\n+        return(NULL);\n+    }\n \n-    ret = xmlAllocOutputBufferInternal(encoder);\n+    ret = xmlAllocOutputBuffer(encoder);\n     if (ret != NULL) {\n         ret->context = (void *) ioctx;\n \tret->writecallback = iowrite;\ndiff --git a/xmlsave.c b/xmlsave.c\nindex 4dbcf8a..24b279c 100644\n--- a/xmlsave.c\n+++ b/xmlsave.c\n@@ -1960,7 +1960,6 @@ xmlSaveToFd(int fd, const char *encoding, int options)\n     if (ret == NULL) return(NULL);\n     ret->buf = xmlOutputBufferCreateFd(fd, ret->handler);\n     if (ret->buf == NULL) {\n-        xmlCharEncCloseFunc(ret->handler);\n \txmlFreeSaveCtxt(ret);\n \treturn(NULL);\n     }\n@@ -1990,7 +1989,6 @@ xmlSaveToFilename(const char *filename, const char *encoding, int options)\n     ret->buf = xmlOutputBufferCreateFilename(filename, ret->handler,\n                                              compression);\n     if (ret->buf == NULL) {\n-        xmlCharEncCloseFunc(ret->handler);\n \txmlFreeSaveCtxt(ret);\n \treturn(NULL);\n     }\n@@ -2018,7 +2016,6 @@ xmlSaveToBuffer(xmlBufferPtr buffer, const char *encoding, int options)\n     if (ret == NULL) return(NULL);\n     ret->buf = xmlOutputBufferCreateBuffer(buffer, ret->handler);\n     if (ret->buf == NULL) {\n-        xmlCharEncCloseFunc(ret->handler);\n \txmlFreeSaveCtxt(ret);\n \treturn(NULL);\n     }\n@@ -2049,7 +2046,6 @@ xmlSaveToIO(xmlOutputWriteCallback iowrite,\n     if (ret == NULL) return(NULL);\n     ret->buf = xmlOutputBufferCreateIO(iowrite, ioclose, ioctx, ret->handler);\n     if (ret->buf == NULL) {\n-        xmlCharEncCloseFunc(ret->handler);\n \txmlFreeSaveCtxt(ret);\n \treturn(NULL);\n     }\n@@ -2554,7 +2550,6 @@ xmlDocDumpFormatMemoryEnc(xmlDocPtr out_doc, xmlChar **doc_txt_ptr,\n     out_buff = xmlAllocOutputBuffer(conv_hdlr);\n     if (out_buff == NULL ) {\n         xmlSaveErrMemory(NULL);\n-        xmlCharEncCloseFunc(conv_hdlr);\n         return;\n     }\n \n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42537493-vul",
+      "digest": "sha256:2539f65395816532df147d8eb5c4755545d4a27d21817edb9500db1281a73736"
+    },
+    "patched": {
+      "ref": "n132/arvo:42537493-fix",
+      "digest": "sha256:7aa7b5a49d93b584d6c972a0345bbc78272f9e2a9b46959aea158325d65896ea"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/libxml2/encoding.c:1920",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/libxml2/encoding.c:1920"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

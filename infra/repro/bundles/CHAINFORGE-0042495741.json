@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042495741",
+  "chain": "CWE-1285->CWE-787",
+  "project": "wasm3",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42495741",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "e7084d13903029784f74706cd8fdd70277d2ecab",
+      "fix_commits": [
+        "e7084d13903029784f74706cd8fdd70277d2ecab"
+      ],
+      "repo": "https://github.com/wasm3/wasm3"
+    },
+    "patch": "diff --git a/source/m3_compile.c b/source/m3_compile.c\nindex 6fc5e514..78c8588a 100644\n--- a/source/m3_compile.c\n+++ b/source/m3_compile.c\n@@ -2207,6 +2207,8 @@ M3Result  Compile_BlockStatements  (IM3Compilation o)\n {\n     M3Result result = m3Err_none;\n \n+    _throwif(\"block code underrun\", o->wasm >= o->wasmEnd);\n+\n     while (o->wasm < o->wasmEnd)\n     {                                                                   emit_stack_dump (o);\n         m3opcode_t opcode;\ndiff --git a/source/m3_core.h b/source/m3_core.h\nindex ef06459c..4e858176 100644\n--- a/source/m3_core.h\n+++ b/source/m3_core.h\n@@ -163,6 +163,7 @@ M3CodePageHeader;\n #define d_m3MaxSaneImportsCount             10000\n #define d_m3MaxSaneExportsCount             10000\n #define d_m3MaxSaneGlobalsCount             100000\n+#define d_m3MaxSaneElementSegments          100000\n #define d_m3MaxSaneDataSegments             100000\n #define d_m3MaxSaneUtf8Length               2000\n #define d_m3MaxSaneFunctionArgRetCount      1000    // still insane, but whatever\ndiff --git a/source/m3_parse.c b/source/m3_parse.c\nindex d11f3d37..bc3ff38d 100644\n--- a/source/m3_parse.c\n+++ b/source/m3_parse.c\n@@ -102,6 +102,7 @@ _               (NormalizeType (& retType, wasmType));\n \n             Environment_AddFuncType (io_module->environment, & ftype);\n             io_module->funcTypes [i] = ftype;\n+            ftype = NULL; // ownership transfered to environment\n         }\n     }\n \n@@ -217,6 +218,7 @@ _               (Module_AddGlobal (io_module, & global, type, isMutable, true /*\n M3Result  ParseSection_Export  (IM3Module io_module, bytes_t i_bytes, cbytes_t  i_end)\n {\n     M3Result result = m3Err_none;\n+    const char * utf8 = NULL;\n \n     u32 numExports;\n _   (ReadLEB_u32 (& numExports, & i_bytes, i_end));                                 m3log (parse, \"** Export [%d]\", numExports);\n@@ -225,7 +227,6 @@ _   (ReadLEB_u32 (& numExports, & i_bytes, i_end));\n \n     for (u32 i = 0; i < numExports; ++i)\n     {\n-        const char * utf8;\n         u8 exportKind;\n         u32 index;\n \n@@ -254,7 +255,9 @@ _       (ReadLEB_u32 (& index, & i_bytes, i_end));\n         m3_Free (utf8);\n     }\n \n-    _catch: return result;\n+_catch:\n+    m3_Free (utf8);\n+    return result;\n }\n \n \n@@ -305,6 +308,8 @@ M3Result  ParseSection_Element  (IM3Module io_module, bytes_t i_bytes, cbytes_t\n \n     _throwif (\"error parsing Element section\", result);\n \n+    _throwif(\"too many element segments\", numSegments > d_m3MaxSaneElementSegments);\n+\n     io_module->elementSection = i_bytes;\n     io_module->elementSectionEnd = i_end;\n     io_module->numElementSegments = numSegments;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42495741-vul",
+      "digest": "sha256:14a85ca6711d434c9a60c2ff36c59d539e9de31419e4eac567d85ce7a07b0bc5"
+    },
+    "patched": {
+      "ref": "n132/arvo:42495741-fix",
+      "digest": "sha256:4cb7785a1d313a13f670707bbf0b54f9af7077f8ea9b40139af0175806cb6bda"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "SEGV",
+        "direction": "READ",
+        "crash_site": null,
+        "implies_sink_cwe": 476
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "SEGV",
+        "direction": "READ",
+        "site": null
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-958269706",
+  "chain": "CWE-129->CWE-125",
+  "project": "openh264",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42508700",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/cisco/openh264/commit/27d06a2032d1792ad486bfbf4acd0183b964cdf4",
+      "fix_commits": [
+        "27d06a2032d1792ad486bfbf4acd0183b964cdf4"
+      ],
+      "repo": "https://github.com/cisco/openh264"
+    },
+    "patch": "diff --git a/codec/decoder/core/src/manage_dec_ref.cpp b/codec/decoder/core/src/manage_dec_ref.cpp\nindex 755b72f2c0..993c85cc80 100644\n--- a/codec/decoder/core/src/manage_dec_ref.cpp\n+++ b/codec/decoder/core/src/manage_dec_ref.cpp\n@@ -873,7 +873,7 @@ static int32_t AddLongTermToList (PRefPic pRefPic, PPicture pPic, int32_t iLongT\n   if (pRefPic->uiLongRefCount[LIST_0] == 0) {\n     pRefPic->pLongRefList[LIST_0][pRefPic->uiLongRefCount[LIST_0]] = pPic;\n   } else {\n-    for (i = 0; i < pRefPic->uiLongRefCount[LIST_0]; i++) {\n+    for (i = 0; i < WELS_MIN(pRefPic->uiLongRefCount[LIST_0], MAX_REF_PIC_COUNT); i++) {\n       if (!pRefPic->pLongRefList[LIST_0][i]) {\n         return ERR_INFO_INVALID_PTR;\n       }\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42508700-vul",
+      "digest": "sha256:1ce213e094effb0544aa23da9a5982e7af89615f4fbc417bab47d2e44f5dcdf7"
+    },
+    "patched": {
+      "ref": "n132/arvo:42508700-fix",
+      "digest": "sha256:b70c646936bf42a6c22aa3410cc551c38cd787b834a3b023d36c6ae6faeccb56"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "crash_site": "/src/openh264/codec/decoder/core/src/manage_dec_ref.cpp:884",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 129,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "site": "/src/openh264/codec/decoder/core/src/manage_dec_ref.cpp:884"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

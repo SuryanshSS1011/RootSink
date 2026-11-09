@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042491719",
+  "chain": "CWE-416->CWE-125",
+  "project": "fio",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42491719",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "85b9ee7e801f59c61c0a81c75a56563098443445",
+      "fix_commits": [
+        "85b9ee7e801f59c61c0a81c75a56563098443445"
+      ],
+      "repo": "https://github.com/axboe/fio"
+    },
+    "patch": "diff --git a/options.c b/options.c\nindex 47b20c2479..0b4c48d618 100644\n--- a/options.c\n+++ b/options.c\n@@ -5115,10 +5115,10 @@ static char *fio_keyword_replace(char *opt)\n \t\t\t * If there's more in the original string, copy that\n \t\t\t * in too\n \t\t\t */\n-\t\t\topt += strlen(kw->word) + olen;\n+\t\t\topt += olen + strlen(kw->word);\n \t\t\t/* keeps final zero thanks to calloc */\n \t\t\tif (strlen(opt))\n-\t\t\t\tmemcpy(new + olen + len, opt, opt - o_org - 1);\n+\t\t\t\tmemcpy(new + olen + len, opt, strlen(opt));\n \n \t\t\t/*\n \t\t\t * replace opt and free the old opt\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42491719-vul",
+      "digest": "sha256:189224baa79b6c01b6cde589d1197f5b587540c9fadd501b13d70d8e24bd862b"
+    },
+    "patched": {
+      "ref": "n132/arvo:42491719-fix",
+      "digest": "sha256:0c36e53e707bd462db48f43ef6bab4aec090c6b55aac8b173d9f1776d716d215"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/fio/options.c:5121",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/fio/options.c:5121"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

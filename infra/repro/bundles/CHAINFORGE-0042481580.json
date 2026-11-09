@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042481580",
+  "chain": "CWE-416->CWE-125",
+  "project": "open62541",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42481580",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "5caf5e4314baa1e2024e744bd2a596d492d188c6",
+      "fix_commits": [
+        "5caf5e4314baa1e2024e744bd2a596d492d188c6"
+      ],
+      "repo": "https://github.com/open62541/open62541"
+    },
+    "patch": "From 5caf5e4314baa1e2024e744bd2a596d492d188c6 Mon Sep 17 00:00:00 2001\nFrom: Julius Pfrommer <julius.pfrommer@web.de>\nDate: Wed, 27 May 2020 09:59:12 +0200\nSubject: [PATCH] fix(ci): Don't reinstall existing packages on Azure\n\n---\n tools/azure-devops/win/install.ps1 | 4 ++--\n 1 file changed, 2 insertions(+), 2 deletions(-)\n\ndiff --git a/tools/azure-devops/win/install.ps1 b/tools/azure-devops/win/install.ps1\nindex b14e53e..8c9513c 100644\n--- a/tools/azure-devops/win/install.ps1\n+++ b/tools/azure-devops/win/install.ps1\n@@ -14,10 +14,10 @@ try {\n         # pacman may complain that the directory does not exist, thus create it.\n         # See https://github.com/open62541/open62541/issues/2068\n         & C:\\msys64\\usr\\bin\\mkdir -p /var/cache/pacman/pkg\n-        & C:\\msys64\\usr\\bin\\pacman --noconfirm -S mingw-w64-x86_64-mbedtls\n+        & cmd /c 'C:\\\\msys64\\\\usr\\\\bin\\\\pacman 2>&1' --noconfirm --needed -S mingw-w64-x86_64-mbedtls\n \n         Write-Host -ForegroundColor Green \"`n### Installing clang via PacMan ###`n\"\n-        & C:\\msys64\\usr\\bin\\pacman --noconfirm -S mingw-w64-x86_64-clang mingw-w64-i686-clang\n+        & cmd /c 'C:\\\\msys64\\\\usr\\\\bin\\\\pacman 2>&1' --noconfirm --needed -S mingw-w64-x86_64-clang mingw-w64-i686-clang\n     } elseif ($env:CC_SHORTNAME -eq \"vs2015\" -or $env:CC_SHORTNAME -eq \"vs2017\") {\n         Write-Host -ForegroundColor Green \"`n### Installing mbedtls via vcpkg ###`n\"\n         & vcpkg install mbedtls:x86-windows-static\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42481580-vul",
+      "digest": "sha256:96a11fad13e8398fa81486cd6ae5663d6310c285fdb579714bf8a08c37bca0eb"
+    },
+    "patched": {
+      "ref": "n132/arvo:42481580-fix",
+      "digest": "sha256:baabd5a418d19d99370458069f69f369f1296ed5099b989b8c3ffd5d4d3b61c2"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/open62541/src/ua_types.c:140",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/open62541/src/ua_types.c:140"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

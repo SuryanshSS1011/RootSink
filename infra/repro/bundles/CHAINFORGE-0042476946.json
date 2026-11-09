@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042476946",
+  "chain": "CWE-416->CWE-125",
+  "project": "libspng",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42476946",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "d876b1d23f0642304c758194045889a19ea823a0",
+      "fix_commits": [
+        "d876b1d23f0642304c758194045889a19ea823a0"
+      ],
+      "repo": "https://gitlab.com/randy408/libspng.git"
+    },
+    "patch": "diff --git a/spng.c b/spng.c\nindex 1ba0589168ec6fe02a704876518c5e379a14fb59..d1b4bbf54e9814d09e2dc81e73e505fdebd2375a 100644\n--- a/spng.c\n+++ b/spng.c\n@@ -1066,11 +1066,11 @@ static int read_chunks_before_idat(spng_ctx *ctx)\n             continue;\n         }\n \n-        data = ctx->data;\n-\n         ret = read_chunk_bytes(ctx, chunk.length);\n         if(ret) return ret;\n \n+        data = ctx->data;\n+\n         if(is_critical_chunk(&chunk))\n         {\n             if(!memcmp(chunk.type, type_plte, 4))\n@@ -1302,6 +1302,44 @@ static int read_chunks_before_idat(spng_ctx *ctx)\n             ctx->file.phys = 1;\n             ctx->stored.phys = 1;\n         }\n+        else if(!memcmp(chunk.type, type_time, 4))\n+        {\n+            if(ctx->file.time) return SPNG_EDUP_TIME;\n+\n+            if(chunk.length != 7) return SPNG_ECHUNK_SIZE;\n+\n+            struct spng_time time;\n+\n+            time.year = read_u16(data);\n+            memcpy(&time.month, data + 2, 1);\n+            memcpy(&time.day, data + 3, 1);\n+            memcpy(&time.hour, data + 4, 1);\n+            memcpy(&time.minute, data + 5, 1);\n+            memcpy(&time.second, data + 6, 1);\n+\n+            if(check_time(&time)) return SPNG_ETIME;\n+\n+            ctx->file.time = 1;\n+\n+            if(!ctx->user.time) memcpy(&ctx->time, &time, sizeof(struct spng_time));\n+\n+            ctx->stored.time = 1;\n+        }\n+        else if(!memcmp(chunk.type, type_offs, 4))\n+        {\n+            if(ctx->file.offs) return SPNG_EDUP_OFFS;\n+\n+            if(chunk.length != 9) return SPNG_ECHUNK_SIZE;\n+\n+            ctx->offs.x = read_s32(data);\n+            ctx->offs.y = read_s32(data + 4);\n+            memcpy(&ctx->offs.unit_specifier, data + 8, 1);\n+\n+            if(check_offs(&ctx->offs)) return SPNG_EOFFS;\n+\n+            ctx->file.offs = 1;\n+            ctx->stored.offs = 1;\n+        }\n         else if(!memcmp(chunk.type, type_splt, 4))\n         {\n             if(ctx->user.splt) continue; /* XXX: should check profile names for uniqueness */\n@@ -1404,29 +1442,6 @@ static int read_chunks_before_idat(spng_ctx *ctx)\n \n             ctx->stored.splt = 1;\n         }\n-        else if(!memcmp(chunk.type, type_time, 4))\n-        {\n-            if(ctx->file.time) return SPNG_EDUP_TIME;\n-\n-            if(chunk.length != 7) return SPNG_ECHUNK_SIZE;\n-\n-            struct spng_time time;\n-\n-            time.year = read_u16(data);\n-            memcpy(&time.month, data + 2, 1);\n-            memcpy(&time.day, data + 3, 1);\n-            memcpy(&time.hour, data + 4, 1);\n-            memcpy(&time.minute, data + 5, 1);\n-            memcpy(&time.second, data + 6, 1);\n-\n-            if(check_time(&time)) return SPNG_ETIME;\n-\n-            ctx->file.time = 1;\n-\n-            if(!ctx->user.time) memcpy(&ctx->time, &time, sizeof(struct spng_time));\n-\n-            ctx->stored.time = 1;\n-        }\n         else if(!memcmp(chunk.type, type_text, 4) ||\n                 !memcmp(chunk.type, type_ztxt, 4) ||\n                 !memcmp(chunk.type, type_itxt, 4))\n@@ -1435,21 +1450,6 @@ static int read_chunks_before_idat(spng_ctx *ctx)\n \n             continue; /* XXX: https://gitlab.com/randy408/libspng/issues/31 */\n         }\n-        else if(!memcmp(chunk.type, type_offs, 4))\n-        {\n-            if(ctx->file.offs) return SPNG_EDUP_OFFS;\n-\n-            if(chunk.length != 9) return SPNG_ECHUNK_SIZE;\n-\n-            ctx->offs.x = read_s32(data);\n-            ctx->offs.y = read_s32(data + 4);\n-            memcpy(&ctx->offs.unit_specifier, data + 8, 1);\n-\n-            if(check_offs(&ctx->offs)) return SPNG_EOFFS;\n-\n-            ctx->file.offs = 1;\n-            ctx->stored.offs = 1;\n-        }\n         else if(!memcmp(chunk.type, type_exif, 4))\n         {\n             if(ctx->file.exif) return SPNG_EDUP_EXIF;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42476946-vul",
+      "digest": "sha256:b2b076306bc7b4fb60a5d0d326e26cee5fc3ff61355a5981a552f956a17a16d5"
+    },
+    "patched": {
+      "ref": "n132/arvo:42476946-fix",
+      "digest": "sha256:a0fd03ffe87031dbf8f4cd293ecdb32daa481f0aa965a5fb471ebab7a1f82c45"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/libspng/build/../spng.c:1454",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/libspng/build/../spng.c:1454"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

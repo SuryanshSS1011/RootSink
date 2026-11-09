@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042521059",
+  "chain": "CWE-1285->CWE-125",
+  "project": "libxml2",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42521059",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "5d55315e32b34af7070d38060ccf9a60941b9696",
+      "fix_commits": [
+        "5d55315e32b34af7070d38060ccf9a60941b9696"
+      ],
+      "repo": "https://gitlab.gnome.org/GNOME/libxml2.git"
+    },
+    "patch": "diff --git a/parser.c b/parser.c\nindex 37519bda84f5e6c5628105f2fe821a48f2b6f33c..f302f34c06409b84090b8faafa9ee44847c5784e 100644\n--- a/parser.c\n+++ b/parser.c\n@@ -12106,7 +12106,11 @@ done:\n #endif\n     return(ret);\n encoding_error:\n-    {\n+    if (ctxt->input->end - ctxt->input->cur < 4) {\n+\t__xmlErrEncoding(ctxt, XML_ERR_INVALID_CHAR,\n+\t\t     \"Input is not proper UTF-8, indicate encoding !\\n\",\n+\t\t     NULL, NULL);\n+    } else {\n         char buffer[150];\n \n \tsnprintf(buffer, 149, \"Bytes: 0x%02X 0x%02X 0x%02X 0x%02X\\n\",\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42521059-vul",
+      "digest": "sha256:f0d7a1e1bd1925e15408a775a27799065c71dfb9e41d408fddb58f2d7548241c"
+    },
+    "patched": {
+      "ref": "n132/arvo:42521059-fix",
+      "digest": "sha256:be6aa2d17e6997c8039d52cbe7f840b1832624965e42b52a94eac3b588d3a305"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/libxml2/parser.c:12080",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/libxml2/parser.c:12080"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042493847",
+  "chain": "CWE-416->CWE-787",
+  "project": "libcoap",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42493847",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "f930b0ad5bc73689d4b63d3742f39d6ff49197a9",
+      "fix_commits": [
+        "f930b0ad5bc73689d4b63d3742f39d6ff49197a9"
+      ],
+      "repo": "https://github.com/obgm/libcoap"
+    },
+    "patch": "diff --git a/src/pdu.c b/src/pdu.c\nindex a473944140..db8051ba37 100644\n--- a/src/pdu.c\n+++ b/src/pdu.c\n@@ -933,7 +933,7 @@ coap_pdu_parse_opt_base(coap_pdu_t *pdu, uint16_t len) {\n static int\n write_prefix(char **obp, size_t *len, const char *prf, size_t prflen) {\n   /* Make sure space for null terminating byte */\n-  if (*len + 1 < prflen) {\n+  if (*len > prflen +1) {\n     return 0;\n   }\n \n@@ -946,7 +946,7 @@ write_prefix(char **obp, size_t *len, const char *prf, size_t prflen) {\n static int\n write_char(char **obp, size_t *len, char c, int printable) {\n   /* Make sure space for null terminating byte */\n-  if (*len + 1 < 2) {\n+  if (*len > 3) {\n     return 0;\n   }\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42493847-vul",
+      "digest": "sha256:8f9dd14145781ac6b22a2940d5a25a3cd5f80cb7b0a44c3f3237d3d3668c730a"
+    },
+    "patched": {
+      "ref": "n132/arvo:42493847-fix",
+      "digest": "sha256:76c5c3e032b21490a01377ed6894b62cd94ef21edb9f9c50b310ed258fe76507"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "global-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/libcoap/src/pdu.c:1067",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "global-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/libcoap/src/pdu.c:1067"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

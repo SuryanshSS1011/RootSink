@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042503362",
+  "chain": "CWE-1285->CWE-125",
+  "project": "duckdb",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42503362",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "0f64242a22cb444e438184035dbf244c061a2faa",
+      "fix_commits": [
+        "0f64242a22cb444e438184035dbf244c061a2faa"
+      ],
+      "repo": "https://github.com/duckdb/duckdb"
+    },
+    "patch": "diff --git a/src/function/aggregate/holistic/quantile.cpp b/src/function/aggregate/holistic/quantile.cpp\nindex b12b098c2479..3eebe52bc9b5 100644\n--- a/src/function/aggregate/holistic/quantile.cpp\n+++ b/src/function/aggregate/holistic/quantile.cpp\n@@ -19,9 +19,13 @@ hugeint_t operator*(const hugeint_t &h, const double &d) {\n \n using FrameBounds = std::pair<idx_t, idx_t>;\n \n+template <typename SAVE_TYPE>\n struct QuantileState {\n-\tdata_ptr_t v;\n-\tidx_t len;\n+\t// Regular aggregation\n+\tstd::vector<SAVE_TYPE> v;\n+\n+\t// Windowed Aggregation\n+\tstd::vector<idx_t> w;\n \tidx_t pos;\n \n \t// List temporaries\n@@ -29,26 +33,17 @@ struct QuantileState {\n \tstd::vector<idx_t> lower;\n \tstd::vector<idx_t> upper;\n \n-\tQuantileState() : v(nullptr), len(0), pos(0) {\n+\tQuantileState() : pos(0) {\n \t}\n \n \t~QuantileState() {\n-\t\tif (v) {\n-\t\t\tfree(v);\n-\t\t\tv = nullptr;\n-\t\t}\n \t}\n \n-\ttemplate <typename T>\n-\tvoid Resize(idx_t new_len) {\n-\t\tif (new_len <= len) {\n-\t\t\treturn;\n+\tinline void SetPos(size_t pos_p) {\n+\t\tpos = pos_p;\n+\t\tif (pos >= w.size()) {\n+\t\t\tw.resize(pos);\n \t\t}\n-\t\tv = (data_ptr_t)realloc(v, new_len * sizeof(T));\n-\t\tif (!v) {\n-\t\t\tthrow InternalException(\"Memory allocation failure\");\n-\t\t}\n-\t\tlen = new_len;\n \t}\n };\n \n@@ -87,10 +82,8 @@ void ReuseIndexes(idx_t *index, const FrameBounds &frame, const FrameBounds &pre\n \t}\n }\n \n-template <class STATE>\n-static idx_t ReplaceIndex(STATE *state, const FrameBounds &frame, const FrameBounds &prev) {\n-\tD_ASSERT(state->v);\n-\tauto index = (idx_t *)state->v;\n+static idx_t ReplaceIndex(idx_t *index, const FrameBounds &frame, const FrameBounds &prev) {\n+\tD_ASSERT(index);\n \n \tidx_t j = 0;\n \tfor (idx_t p = 0; p < (prev.second - prev.first); ++p) {\n@@ -108,12 +101,12 @@ static idx_t ReplaceIndex(STATE *state, const FrameBounds &frame, const FrameBou\n \treturn j;\n }\n \n-template <class INPUT_TYPE, class STATE>\n-static inline bool CanReplace(STATE *state, const INPUT_TYPE *fdata, const idx_t j, const idx_t k0, const idx_t k1) {\n+template <class INPUT_TYPE>\n+static inline bool CanReplace(const idx_t *index, const INPUT_TYPE *fdata, const idx_t j, const idx_t k0,\n+                              const idx_t k1) {\n \tauto same = false;\n \n-\tD_ASSERT(state->v);\n-\tauto index = (idx_t *)state->v;\n+\tD_ASSERT(index);\n \n \tauto curr = fdata[index[j]];\n \tif (k1 < j) {\n@@ -249,22 +242,15 @@ struct QuantileOperation {\n \n \ttemplate <class INPUT_TYPE, class STATE, class OP>\n \tstatic void Operation(STATE *state, FunctionData *bind_data_p, INPUT_TYPE *data, ValidityMask &mask, idx_t idx) {\n-\t\tif (state->pos == state->len) {\n-\t\t\t// growing conservatively here since we could be running this on many small groups\n-\t\t\tstate->template Resize<SAVE_TYPE>(state->len == 0 ? 1 : state->len * 2);\n-\t\t}\n-\t\tD_ASSERT(state->v);\n-\t\t((SAVE_TYPE *)state->v)[state->pos++] = data[idx];\n+\t\tstate->v.emplace_back(data[idx]);\n \t}\n \n \ttemplate <class STATE, class OP>\n \tstatic void Combine(const STATE &source, STATE *target) {\n-\t\tif (source.pos == 0) {\n+\t\tif (source.v.empty()) {\n \t\t\treturn;\n \t\t}\n-\t\ttarget->template Resize<SAVE_TYPE>(target->pos + source.pos);\n-\t\tmemcpy(target->v + target->pos * sizeof(SAVE_TYPE), source.v, source.pos * sizeof(SAVE_TYPE));\n-\t\ttarget->pos += source.pos;\n+\t\ttarget->v.insert(target->v.end(), source.v.begin(), source.v.end());\n \t}\n \n \ttemplate <class STATE>\n@@ -325,17 +311,15 @@ struct QuantileScalarOperation : public QuantileOperation<SAVE_TYPE> {\n \ttemplate <class RESULT_TYPE, class STATE>\n \tstatic void Finalize(Vector &result, FunctionData *bind_data_p, STATE *state, RESULT_TYPE *target,\n \t                     ValidityMask &mask, idx_t idx) {\n-\t\tif (state->pos == 0) {\n+\t\tif (state->v.empty()) {\n \t\t\tmask.SetInvalid(idx);\n \t\t\treturn;\n \t\t}\n-\t\tD_ASSERT(state->v);\n \t\tD_ASSERT(bind_data_p);\n \t\tauto bind_data = (QuantileBindData *)bind_data_p;\n \t\tD_ASSERT(bind_data->quantiles.size() == 1);\n-\t\tInterpolator<SAVE_TYPE, RESULT_TYPE, DISCRETE> interp(bind_data->quantiles[0], state->pos);\n-\t\tauto v_t = (SAVE_TYPE *)state->v;\n-\t\ttarget[idx] = interp(v_t);\n+\t\tInterpolator<SAVE_TYPE, RESULT_TYPE, DISCRETE> interp(bind_data->quantiles[0], state->v.size());\n+\t\ttarget[idx] = interp(state->v.data());\n \t}\n \n \ttemplate <class STATE, class INPUT_TYPE, class RESULT_TYPE>\n@@ -346,11 +330,10 @@ struct QuantileScalarOperation : public QuantileOperation<SAVE_TYPE> {\n \n \t\t//  Lazily initialise frame state\n \t\tconst auto prev_valid = state->pos == (prev.second - prev.first);\n-\t\tstate->pos = frame.second - frame.first;\n-\t\tstate->template Resize<idx_t>(state->pos);\n+\t\tstate->SetPos(frame.second - frame.first);\n \n-\t\tD_ASSERT(state->v);\n-\t\tauto index = (idx_t *)state->v;\n+\t\tauto index = state->w.data();\n+\t\tD_ASSERT(index);\n \n \t\tD_ASSERT(bind_data_p);\n \t\tauto bind_data = (QuantileBindData *)bind_data_p;\n@@ -361,15 +344,16 @@ struct QuantileScalarOperation : public QuantileOperation<SAVE_TYPE> {\n \t\tbool same = false;\n \t\tif (prev_valid && dmask.AllValid() && frame.first == prev.first + 1 && frame.second == prev.second + 1) {\n \t\t\t//  Fixed frame size\n-\t\t\tconst auto j = ReplaceIndex(state, frame, prev);\n+\t\t\tconst auto j = ReplaceIndex(index, frame, prev);\n \t\t\tInterpolator<INPUT_TYPE, RESULT_TYPE, DISCRETE> interp(q, state->pos);\n-\t\t\tsame = CanReplace(state, data, j, interp.FRN, interp.CRN);\n+\t\t\tsame = CanReplace(index, data, j, interp.FRN, interp.CRN);\n \t\t} else {\n \t\t\tReuseIndexes(index, frame, prev);\n \t\t}\n \n \t\tif (!same) {\n \t\t\tif (!dmask.AllValid()) {\n+\t\t\t\t// Remove the NULLs\n \t\t\t\tIndirectNotNull not_null(dmask, MinValue(frame.first, prev.first));\n \t\t\t\tstate->pos = std::partition(index, index + state->pos, not_null) - index;\n \t\t\t}\n@@ -393,7 +377,7 @@ struct QuantileScalarOperation : public QuantileOperation<SAVE_TYPE> {\n \n template <typename INPUT_TYPE>\n AggregateFunction GetTypedDiscreteQuantileAggregateFunction(const LogicalType &type) {\n-\tusing STATE = QuantileState;\n+\tusing STATE = QuantileState<INPUT_TYPE>;\n \tusing OP = QuantileScalarOperation<INPUT_TYPE, true>;\n \tauto fun = AggregateFunction::UnaryAggregateDestructor<STATE, INPUT_TYPE, INPUT_TYPE, OP>(type, type);\n \tfun.window = AggregateFunction::UnaryWindow<STATE, INPUT_TYPE, INPUT_TYPE, OP>;\n@@ -452,7 +436,7 @@ struct QuantileListOperation : public QuantileOperation<SAVE_TYPE> {\n \ttemplate <class RESULT_TYPE, class STATE>\n \tstatic void Finalize(Vector &result_list, FunctionData *bind_data_p, STATE *state, RESULT_TYPE *target,\n \t                     ValidityMask &mask, idx_t idx) {\n-\t\tif (state->pos == 0) {\n+\t\tif (state->v.empty()) {\n \t\t\tmask.SetInvalid(idx);\n \t\t\treturn;\n \t\t}\n@@ -465,12 +449,12 @@ struct QuantileListOperation : public QuantileOperation<SAVE_TYPE> {\n \t\tListVector::Reserve(result_list, ridx + bind_data->quantiles.size());\n \t\tauto rdata = FlatVector::GetData<CHILD_TYPE>(result);\n \n-\t\tD_ASSERT(state->v);\n-\t\tauto v_t = (SAVE_TYPE *)state->v;\n+\t\tauto v_t = state->v.data();\n+\t\tD_ASSERT(v_t);\n \n \t\ttarget[idx].offset = ridx;\n \t\tfor (const auto &quantile : bind_data->quantiles) {\n-\t\t\tInterpolator<SAVE_TYPE, CHILD_TYPE, DISCRETE> interp(quantile, state->pos);\n+\t\t\tInterpolator<SAVE_TYPE, CHILD_TYPE, DISCRETE> interp(quantile, state->v.size());\n \t\t\trdata[ridx] = interp(v_t);\n \t\t\t++ridx;\n \t\t}\n@@ -498,18 +482,16 @@ struct QuantileListOperation : public QuantileOperation<SAVE_TYPE> {\n \t\tauto rdata = FlatVector::GetData<CHILD_TYPE>(result);\n \n \t\t//  Lazily initialise frame state\n-\t\tconst auto prev_valid = state->pos == (prev.second - prev.first);\n-\t\tstate->pos = frame.second - frame.first;\n-\t\tstate->template Resize<idx_t>(state->pos);\n+\t\tconst auto prev_valid = state->w.size() == (prev.second - prev.first);\n+\t\tstate->SetPos(frame.second - frame.first);\n \n-\t\tD_ASSERT(state->v);\n-\t\tauto index = (idx_t *)state->v;\n+\t\tauto index = state->w.data();\n \n \t\tbool fixed = false;\n \t\tauto j = state->pos;\n \t\tif (prev_valid && dmask.AllValid() && frame.first == prev.first + 1 && frame.second == prev.second + 1) {\n \t\t\t//  Fixed frame size\n-\t\t\tj = ReplaceIndex(state, frame, prev);\n+\t\t\tj = ReplaceIndex(index, frame, prev);\n \t\t\tfixed = true;\n \t\t} else {\n \t\t\tReuseIndexes(index, frame, prev);\n@@ -534,7 +516,7 @@ struct QuantileListOperation : public QuantileOperation<SAVE_TYPE> {\n \t\t\tconst auto &quantile = bind_data->quantiles[q];\n \t\t\tInterpolator<INPUT_TYPE, CHILD_TYPE, DISCRETE> interp(quantile, state->pos);\n \n-\t\t\tif (fixed && CanReplace(state, data, j, interp.FRN, interp.CRN)) {\n+\t\t\tif (fixed && CanReplace(index, data, j, interp.FRN, interp.CRN)) {\n \t\t\t\trdata[lentry.offset + q] = interp(data, index);\n \t\t\t\tstate->upper.resize(state->lower.size(), interp.FRN);\n \t\t\t} else {\n@@ -563,7 +545,7 @@ struct QuantileListOperation : public QuantileOperation<SAVE_TYPE> {\n \n template <typename INPUT_TYPE>\n AggregateFunction GetTypedDiscreteQuantileListAggregateFunction(const LogicalType &type) {\n-\tusing STATE = QuantileState;\n+\tusing STATE = QuantileState<INPUT_TYPE>;\n \tusing OP = QuantileListOperation<INPUT_TYPE, INPUT_TYPE, true>;\n \tauto fun = QuantileListAggregate<STATE, INPUT_TYPE, list_entry_t, OP>(type, type);\n \tfun.window = AggregateFunction::UnaryWindow<STATE, INPUT_TYPE, list_entry_t, OP>;\n@@ -619,7 +601,7 @@ AggregateFunction GetDiscreteQuantileListAggregateFunction(const LogicalType &ty\n template <typename INPUT_TYPE, typename TARGET_TYPE>\n AggregateFunction GetTypedContinuousQuantileAggregateFunction(const LogicalType &input_type,\n                                                               const LogicalType &target_type) {\n-\tusing STATE = QuantileState;\n+\tusing STATE = QuantileState<INPUT_TYPE>;\n \tusing OP = QuantileScalarOperation<INPUT_TYPE, false>;\n \tauto fun = AggregateFunction::UnaryAggregateDestructor<STATE, INPUT_TYPE, TARGET_TYPE, OP>(input_type, target_type);\n \tfun.window = AggregateFunction::UnaryWindow<STATE, INPUT_TYPE, TARGET_TYPE, OP>;\n@@ -673,7 +655,7 @@ AggregateFunction GetContinuousQuantileAggregateFunction(const LogicalType &type\n template <typename INPUT_TYPE, typename CHILD_TYPE>\n AggregateFunction GetTypedContinuousQuantileListAggregateFunction(const LogicalType &input_type,\n                                                                   const LogicalType &result_type) {\n-\tusing STATE = QuantileState;\n+\tusing STATE = QuantileState<INPUT_TYPE>;\n \tusing OP = QuantileListOperation<INPUT_TYPE, CHILD_TYPE, false>;\n \tauto fun = QuantileListAggregate<STATE, INPUT_TYPE, list_entry_t, OP>(input_type, result_type);\n \tfun.window = AggregateFunction::UnaryWindow<STATE, INPUT_TYPE, list_entry_t, OP>;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42503362-vul",
+      "digest": "sha256:b420bb25baca6b5d0e9eea88233345b87fed7ccba98cd90e376b1d86df7d00e8"
+    },
+    "patched": {
+      "ref": "n132/arvo:42503362-fix",
+      "digest": "sha256:e753f3bed6db4cebf1e7a2bd518cae5cfb98a15454664f9f149b52724d0f4f35"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/duckdb/src/common/operator/cast_operators.cpp:875",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/duckdb/src/common/operator/cast_operators.cpp:875"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042483073",
+  "chain": "CWE-456->CWE-457",
+  "project": "ndpi",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42483073",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "b568c26989b9baf72940007d220d5c47eae67618",
+      "fix_commits": [
+        "b568c26989b9baf72940007d220d5c47eae67618"
+      ],
+      "repo": "https://github.com/ntop/nDPI"
+    },
+    "patch": "From b568c26989b9baf72940007d220d5c47eae67618 Mon Sep 17 00:00:00 2001\nFrom: Philippe Antoine <contact@catenacyber.fr>\nDate: Mon, 20 Jul 2020 10:07:54 +0200\nSubject: [PATCH] Enables fuzz targets even without sanitizer\n\nShould fix ossfuzz build\n---\n configure.seed | 2 +-\n 1 file changed, 1 insertion(+), 1 deletion(-)\n\ndiff --git a/configure.seed b/configure.seed\nindex 1a385f0..1c520f9 100644\n--- a/configure.seed\n+++ b/configure.seed\n@@ -8,7 +8,7 @@ AC_ARG_WITH(sanitizer,     AS_HELP_STRING([--with-sanitizer], [Build with suppor\n AC_ARG_ENABLE(fuzztargets, AS_HELP_STRING([--enable-fuzztargets], [Enable fuzz targets]),[enable_fuzztargets=$enableval],[enable_fuzztargets=no])\n AM_CONDITIONAL([BUILD_FUZZTARGETS], [test \"x$enable_fuzztargets\" = \"xyes\"])\n \n-AS_IF([test \"${with_sanitizer+set}\" = set -o \"x$enable_fuzztargets\" = \"xyes\"],[\n+AS_IF([test \"${with_sanitizer+set}\" = set],[\n   CFLAGS+=\"${CFLAGS} -g3 -O0 -Wno-unused-value -fsanitize=address -fsanitize=undefined -fno-sanitize=alignment -fsanitize=leak -fno-omit-frame-pointer\"\n   LDFLAGS+=\"${LDFLAGS} -fsanitize=address -fsanitize=undefined -fno-sanitize=alignment -fsanitize=leak\"\n ])\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42483073-vul",
+      "digest": "sha256:9cf5b7405e739d3188d56f3d1107be98dd575f6f8e84bb8098377cec36c623fe"
+    },
+    "patched": {
+      "ref": "n132/arvo:42483073-fix",
+      "digest": "sha256:b1249e7e66f72c906925121cf170018f8a236f91f74c1178e954818ad67e05e8"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/ndpi/src/lib/protocols/tls.c:795",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/ndpi/src/lib/protocols/tls.c:795"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

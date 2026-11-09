@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042524804",
+  "chain": "CWE-1285->CWE-125",
+  "project": "ntopng",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42524804",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "f95b4cdd852fca7052fc7a2b115e4958499f1df9",
+      "fix_commits": [
+        "f95b4cdd852fca7052fc7a2b115e4958499f1df9"
+      ],
+      "repo": "https://github.com/ntop/ntopng"
+    },
+    "patch": "diff --git a/fuzz/onefile.cpp b/fuzz/onefile.cpp\nindex 7fa68f8c3bea..7f9a6c340264 100644\n--- a/fuzz/onefile.cpp\n+++ b/fuzz/onefile.cpp\n@@ -47,7 +47,7 @@ int main(int argc, char *argv[]) {\n     fseek(f, 0, SEEK_SET); /* same as rewind(f); */\n \n     uint8_t *string = (uint8_t *)malloc(fsize + 1);\n-    fread(string, fsize, 1, f);\n+    size_t l = fread(string, fsize, 1, f);\n \n     fclose(f);\n \n@@ -58,4 +58,4 @@ int main(int argc, char *argv[]) {\n     return 0;\n }\n \n-#endif\n\\ No newline at end of file\n+#endif\ndiff --git a/fuzz/stub/RedisStub.cpp b/fuzz/stub/RedisStub.cpp\nindex 794930a5dece..52abb7a45d1b 100644\n--- a/fuzz/stub/RedisStub.cpp\n+++ b/fuzz/stub/RedisStub.cpp\n@@ -60,10 +60,10 @@ int Redis::info(char *rsp, u_int rsp_len) {\n     if (rsp_len == 0) return -1;\n \n     stats.num_other++;\n-    if (snprintf(rsp, rsp_len, \"\") < 0) {\n-        rsp[0] = 0;\n-        return -1;\n-    }\n+    if(rsp_len == 0)\n+      return -1;\n+    \n+    rsp[0] = 0;\n     return 0;\n }\n \n@@ -368,8 +368,8 @@ int Redis::lindex(const char *queue_name, int idx, char *buf, u_int buf_len) {\n \n     const auto &list = this->listStore[strKey];\n \n-    if (idx < 0) idx += list.size();\n-    if (idx < 0 || idx >= list.size()) {\n+    if (idx < 0) idx += (int)list.size();\n+    if (idx < 0 || idx >= (int)list.size()) {\n         buf[0] = 0;\n         return -1;\n     }\n@@ -458,7 +458,7 @@ int Redis::lrange(const char *list_name, char ***elements, int start_offset,\n     }\n \n     *elements = (char **)malloc(retList.size() * sizeof(char *));\n-    for (int i = 0; i < retList.size(); ++i)\n+    for (int i = 0; i < (int)retList.size(); ++i)\n         (*elements)[i] = strdup(retList[i].c_str());\n \n     return retList.size();\n@@ -567,4 +567,4 @@ char *Redis::dump(char *key) {\n     return ret;\n }\n \n-int Redis::restore(char *key, char *buf) { return 0; }\n\\ No newline at end of file\n+int Redis::restore(char *key, char *buf) { return 0; }\ndiff --git a/src/HostPools.cpp b/src/HostPools.cpp\nindex 9453c40cff02..695731b21fc1 100644\n--- a/src/HostPools.cpp\n+++ b/src/HostPools.cpp\n@@ -309,7 +309,16 @@ void HostPools::reloadPools() {\n   if (!iface || (iface->get_id() == -1)) return;\n \n   new_tree = new (std::nothrow) VLANAddressTree;\n+  if(new_tree == NULL) {\n+    return;\n+  }\n+  \n   new_stats = new (std::nothrow) HostPoolStats *[MAX_NUM_HOST_POOLS];\n+  if(new_stats == NULL) {\n+    delete new_tree;\n+    return;\n+  }\n+  \n   for (u_int32_t i = 0; i < MAX_NUM_HOST_POOLS; i++) new_stats[i] = NULL;\n \n   snprintf(kname, sizeof(kname), HOST_POOL_IDS_KEY);\n@@ -324,9 +333,12 @@ void HostPools::reloadPools() {\n   if (new_stats[0]) new_stats[0]->updateName(DEFAULT_POOL_NAME);\n \n   /* Keys are pool ids */\n-  if ((num_pools = redis->smembers(kname, &pools)) == -1)\n+  if ((num_pools = redis->smembers(kname, &pools)) == -1) {\n+    delete new_tree;\n+    delete new_stats;\n     return; /* Something went wrong with redis? */\n-\n+  }\n+  \n   for (int i = 0; i < num_pools; i++) {\n     if (!pools[i]) continue;\n \n@@ -347,8 +359,7 @@ void HostPools::reloadPools() {\n \n     if (_pool_id != 0) {            /* Pool id 0 stats already updated */\n       if (stats && stats[_pool_id]) /* Duplicate existing statistics */\n-        new_stats[_pool_id] =\n-            new (std::nothrow) HostPoolStats(*stats[_pool_id]);\n+        new_stats[_pool_id] = new (std::nothrow) HostPoolStats(*stats[_pool_id]);\n       else /* Brand new statistics */\n         new_stats[_pool_id] = new (std::nothrow) HostPoolStats(iface);\n     }\ndiff --git a/src/IEC104Stats.cpp b/src/IEC104Stats.cpp\nindex 1c67404518bd..84990b8166da 100644\n--- a/src/IEC104Stats.cpp\n+++ b/src/IEC104Stats.cpp\n@@ -182,12 +182,8 @@ void IEC104Stats::processPacket(Flow *f, bool tx_direction,\n         bool initial_run =\n             ((rx_seq_num == 0) && (tx_seq_num == 0)) ? true : false;\n \n-        tx_value =\n-            ((((u_int16_t)payload[offset + 2]) << 8) + payload[offset + 1]) >>\n-            1;\n-        rx_value =\n-            ((((u_int16_t)payload[offset + 4]) << 8) + payload[offset + 3]) >>\n-            1;\n+        tx_value = ((((u_int16_t)payload[offset + 2]) << 8) + payload[offset + 1]) >> 1;\n+        rx_value = ((((u_int16_t)payload[offset + 4]) << 8) + payload[offset + 3]) >> 1;\n \n         if (!tx_direction) {\n           /* Counters are swapped */\n@@ -232,7 +228,7 @@ void IEC104Stats::processPacket(Flow *f, bool tx_direction,\n \n         /* Skip magic(1), len(1), type/TX(2), RX(2) = 6 */\n         len -= 6 /* Skip magic and len */,\n-            offset += 5 /* magic already skept */;\n+\t  offset += 5 /* magic already skept */;\n \n         if (payload_len >= (offset + len)) {\n           u_int8_t type_id = payload[offset];\n@@ -388,8 +384,8 @@ void IEC104Stats::processPacket(Flow *f, bool tx_direction,\n         // ntop->getTrace()->traceEvent(TRACE_WARNING, \"*** short APDUs\");\n         break;\n       }\n-\n-      if (payload[offset] == 0x68 /* IEC magic byte */)\n+      \n+      if((offset < payload_len) && (payload[offset] == 0x68 /* IEC magic byte */))\n         offset += 1; /* We skip the initial magic byte */\n       else {\n #ifdef DEBUG_IEC60870\ndiff --git a/src/LuaEngine.cpp b/src/LuaEngine.cpp\nindex 156ee8db3277..9c2ead45cbad 100644\n--- a/src/LuaEngine.cpp\n+++ b/src/LuaEngine.cpp\n@@ -971,7 +971,7 @@ int LuaEngine::handle_script_request(struct mg_connection *conn,\n   char key[64], ifname[MAX_INTERFACE_NAME_LEN];\n   bool is_interface_allowed;\n   AddressTree ptree;\n-  int rc, post_data_len;\n+  int rc, post_data_len = 0;\n   const char *content_type;\n   u_int8_t valid_csrf = 1;\n   char *post_data = NULL;\ndiff --git a/src/LuaEngineInterface.cpp b/src/LuaEngineInterface.cpp\nindex 8748932aba47..6c93fe562c2d 100644\n--- a/src/LuaEngineInterface.cpp\n+++ b/src/LuaEngineInterface.cpp\n@@ -5115,10 +5115,11 @@ static int ntop_interface_is_syslog_interface(lua_State *vm) {\n /* ****************************************** */\n \n static int ntop_clickhouse_exec_csv_query(lua_State *vm) {\n+#ifdef HAVE_CLICKHOUSE\n   NetworkInterface *ntop_interface = getCurrentInterface(vm);\n   const char *sql;\n-  struct mg_connection *conn = getLuaVMUserdata(vm, conn);\n   bool use_json = false;\n+  struct mg_connection *conn = getLuaVMUserdata(vm, conn);\n \n   ntop->getTrace()->traceEvent(TRACE_DEBUG, \"%s() called\", __FUNCTION__);\n \n@@ -5129,11 +5130,10 @@ static int ntop_clickhouse_exec_csv_query(lua_State *vm) {\n     return (ntop_lua_return_value(vm, __FUNCTION__, CONST_LUA_PARAM_ERROR));\n \n   sql = lua_tostring(vm, 1);\n-\n+  \n   if (lua_type(vm, 2) == LUA_TBOOLEAN) /* optional */\n     use_json = lua_toboolean(vm, 2) ? true : false;\n \n-#ifdef HAVE_CLICKHOUSE\n   ntop_interface->exec_csv_query(sql, use_json, conn);\n #endif\n \ndiff --git a/src/NetworkInterface.cpp b/src/NetworkInterface.cpp\nindex f064c0123190..2c6b77ceeae0 100644\n--- a/src/NetworkInterface.cpp\n+++ b/src/NetworkInterface.cpp\n@@ -2483,8 +2483,11 @@ bool NetworkInterface::dissectPacket(u_int32_t bridge_iface_idx,\n     if (h->caplen < sizeof(u_int32_t))\n       return (false);\n \n-    memcpy(&null_type, &packet[eth_offset], sizeof(u_int32_t));\n-\n+    if((eth_offset + sizeof(u_int32_t)) <= h->caplen)\n+      memcpy(&null_type, &packet[eth_offset], sizeof(u_int32_t));\n+    else\n+      return (false);    \n+    \n     switch (null_type) {\n       case BSD_AF_INET:\n         eth_type = ETHERTYPE_IP;\n@@ -2566,14 +2569,14 @@ bool NetworkInterface::dissectPacket(u_int32_t bridge_iface_idx,\n   */\n decode_packet_eth:\n \n-  while (true) {\n-    if (eth_type == 0x8100 /* VLAN */) {\n+  while (ip_offset < h->caplen) {\n+    if((eth_type == 0x8100 /* VLAN */) && ((ip_offset + sizeof(Ether80211q)) < h->caplen)) {\n       Ether80211q *qType = (Ether80211q *)&packet[ip_offset];\n \n       vlan_id = ntohs(qType->vlanId) & 0xFFF;\n       eth_type = (packet[ip_offset + 2] << 8) + packet[ip_offset + 3];\n       ip_offset += 4;\n-    } else if (eth_type == 0x8847 /* MPLS */) {\n+    } else if((eth_type == 0x8847 /* MPLS */) && ((unsigned int)(ip_offset + 2) <  h->caplen)) {\n       u_int8_t bos; /* bottom_of_stack */\n \n       bos = (((u_int8_t)packet[ip_offset + 2]) & 0x1), ip_offset += 4;\ndiff --git a/src/flow_checks/CustomFlowLuaScript.cpp b/src/flow_checks/CustomFlowLuaScript.cpp\nindex c7f3f5256fc2..98d0b9bf4493 100644\n--- a/src/flow_checks/CustomFlowLuaScript.cpp\n+++ b/src/flow_checks/CustomFlowLuaScript.cpp\n@@ -37,7 +37,7 @@ CustomFlowLuaScript::CustomFlowLuaScript()\n /* ***************************************************** */\n \n LuaEngine *CustomFlowLuaScript::initVM(const char *script_path) {\n-  char where[256];\n+  char where[512];\n   struct stat s;\n \n   snprintf(where, sizeof(where), \"%s/%s\", ntop->get_install_dir(), script_path);\ndiff --git a/src/host_checks/CustomHostLuaScript.cpp b/src/host_checks/CustomHostLuaScript.cpp\nindex f9c57d84dd6a..44660606a175 100644\n--- a/src/host_checks/CustomHostLuaScript.cpp\n+++ b/src/host_checks/CustomHostLuaScript.cpp\n@@ -54,7 +54,7 @@ CustomHostLuaScript::~CustomHostLuaScript() {\n LuaEngine *CustomHostLuaScript::initVM() {\n   const char *script_path =\n       \"scripts/callbacks/checks/hosts/custom_host_lua_script.lua\";\n-  char where[256];\n+  char where[512];\n   struct stat s;\n \n   snprintf(where, sizeof(where), \"%s/%s\", ntop->get_install_dir(), script_path);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42524804-vul",
+      "digest": "sha256:ead995cd077591038323a538039b8d332090aff8002fdc992c03271cf5c605f6"
+    },
+    "patched": {
+      "ref": "n132/arvo:42524804-fix",
+      "digest": "sha256:e869835adbfccfa2eac145545aade138b7fe93e24d8d7c48f0d1f842a9a3c0a5"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/ntopng/src/NetworkInterface.cpp:2531",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/ntopng/src/NetworkInterface.cpp:2531"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

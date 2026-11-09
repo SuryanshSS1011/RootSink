@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-950866265",
+  "chain": "CWE-843->CWE-119",
+  "project": "gdal",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42539750",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/OSGeo/gdal/commit/83d53c738a14b78a2b55ae3367ebb2a5a54e454d",
+      "fix_commits": [
+        "83d53c738a14b78a2b55ae3367ebb2a5a54e454d"
+      ],
+      "repo": "https://github.com/OSGeo/gdal"
+    },
+    "patch": "diff --git a/gdal/ogr/ogrsf_frmts/xlsx/ogr_xlsx.h b/gdal/ogr/ogrsf_frmts/xlsx/ogr_xlsx.h\nindex d8f955d8acf1..8972804c4e5c 100644\n--- a/gdal/ogr/ogrsf_frmts/xlsx/ogr_xlsx.h\n+++ b/gdal/ogr/ogrsf_frmts/xlsx/ogr_xlsx.h\n@@ -95,8 +95,7 @@ class OGRXLSXLayer final: public OGRMemLayer\n     { Init(); return OGRMemLayer::GetFeatureCount(bForce); }\n \n     virtual OGRErr      CreateField( OGRFieldDefn *poField,\n-                                     int bApproxOK = TRUE ) override\n-    { Init(); SetUpdated(); return OGRMemLayer::CreateField(poField, bApproxOK); }\n+                                     int bApproxOK = TRUE ) override;\n \n     virtual OGRErr      DeleteField( int iField ) override\n     { Init(); SetUpdated(); return OGRMemLayer::DeleteField(iField); }\ndiff --git a/gdal/ogr/ogrsf_frmts/xlsx/ogrxlsxdatasource.cpp b/gdal/ogr/ogrsf_frmts/xlsx/ogrxlsxdatasource.cpp\nindex 8b65c360d758..cf16255eaf0b 100644\n--- a/gdal/ogr/ogrsf_frmts/xlsx/ogrxlsxdatasource.cpp\n+++ b/gdal/ogr/ogrsf_frmts/xlsx/ogrxlsxdatasource.cpp\n@@ -112,6 +112,20 @@ OGRFeature* OGRXLSXLayer::GetNextFeature()\n     return poFeature;\n }\n \n+OGRErr OGRXLSXLayer::CreateField( OGRFieldDefn *poField, int bApproxOK )\n+{\n+    Init();\n+    // BuildColString() takes a 4 character string + nul byte\n+    if( GetLayerDefn()->GetFieldCount() >= 2000 )\n+    {\n+        CPLError(CE_Failure, CPLE_AppDefined,\n+                 \"Maximum number of fields supported is 2000\");\n+        return OGRERR_FAILURE;\n+    }\n+    SetUpdated();\n+    return OGRMemLayer::CreateField(poField, bApproxOK);\n+}\n+\n /************************************************************************/\n /*                           GetFeature()                               */\n /************************************************************************/\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42539750-vul",
+      "digest": "sha256:1516d9747b030b70daa908b1a96ca768c9fa8691ecaee80776398607798071ae"
+    },
+    "patched": {
+      "ref": "n132/arvo:42539750-fix",
+      "digest": "sha256:fb3bc05df1c641c5dc95c0ad18457a63e9a6eadd31d621a4b480fa4d4ee4cf1b"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "crash_site": "/src/gdal/gdal/port/cpl_vsil.cpp:1266",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 843,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 119,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "site": "/src/gdal/gdal/port/cpl_vsil.cpp:1266"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

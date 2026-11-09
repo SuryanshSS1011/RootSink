@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042537614",
+  "chain": "CWE-456->CWE-457",
+  "project": "ffmpeg",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42537614",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "c95ea0310468e0a0906fa7d590ff7406c39d6991",
+      "fix_commits": [
+        "c95ea0310468e0a0906fa7d590ff7406c39d6991"
+      ],
+      "repo": "https://git.ffmpeg.org/ffmpeg.git"
+    },
+    "patch": "From c95ea0310468e0a0906fa7d590ff7406c39d6991 Mon Sep 17 00:00:00 2001\nFrom: Michael Niedermayer <michael@niedermayer.cc>\nDate: Wed, 7 Aug 2024 00:18:51 +0200\nSubject: [PATCH] avformat/wtvdec: clear sectors\n\nThe code can leave uninitialized holes in the array.\nFixes: use of uninitialized values\nFixes: 70883/clusterfuzz-testcase-minimized-ffmpeg_dem_WTV_fuzzer-6698694567591936\n\nFound-by: continuous fuzzing process https://github.com/google/oss-fuzz/tree/master/projects/ffmpeg\nReviewed-by: Peter Ross <pross@xvid.org>\nSigned-off-by: Michael Niedermayer <michael@niedermayer.cc>\n---\n libavformat/wtvdec.c | 2 +-\n 1 file changed, 1 insertion(+), 1 deletion(-)\n\ndiff --git a/libavformat/wtvdec.c b/libavformat/wtvdec.c\nindex e153034..1a6c4c3 100644\n--- a/libavformat/wtvdec.c\n+++ b/libavformat/wtvdec.c\n@@ -185,7 +185,7 @@ static AVIOContext * wtvfile_open_sector(unsigned first_sector, uint64_t length,\n         int nb_sectors1 = read_ints(s->pb, sectors1, WTV_SECTOR_SIZE / 4);\n         int i;\n \n-        wf->sectors = av_malloc_array(nb_sectors1, 1 << WTV_SECTOR_BITS);\n+        wf->sectors = av_calloc(nb_sectors1, 1 << WTV_SECTOR_BITS);\n         if (!wf->sectors) {\n             av_free(wf);\n             return NULL;\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42537614-vul",
+      "digest": "sha256:84bf1b396dbc166e78d83b991c96ae1fc202ae09abb401dc05a3f08cda8816ec"
+    },
+    "patched": {
+      "ref": "n132/arvo:42537614-fix",
+      "digest": "sha256:292d08c40f9827656762d5b4c249df185a5231c4afcecb38c0b845e2ee60f8a2"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/ffmpeg/libavformat/wtvdec.c:98",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/ffmpeg/libavformat/wtvdec.c:98"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042477976",
+  "chain": "CWE-1285->CWE-125",
+  "project": "unicorn",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42477976",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "901efc4bd45bffa7fae58a06a90949b070ed7303",
+      "fix_commits": [
+        "901efc4bd45bffa7fae58a06a90949b070ed7303"
+      ],
+      "repo": "https://github.com/unicorn-engine/unicorn"
+    },
+    "patch": "diff --git a/qemu/cputlb.c b/qemu/cputlb.c\nindex 87f14f7543..fd0bb806cc 100644\n--- a/qemu/cputlb.c\n+++ b/qemu/cputlb.c\n@@ -295,6 +295,11 @@ tb_page_addr_t get_page_addr_code(CPUArchState *env1, target_ulong addr)\n \n     page_index = (addr >> TARGET_PAGE_BITS) & (CPU_TLB_SIZE - 1);\n     mmu_idx = cpu_mmu_index(env1);\n+\n+    if ((mmu_idx < 0) || (mmu_idx >= NB_MMU_MODES)) {\n+        return -1;\n+    }\n+\n     if (unlikely(env1->tlb_table[mmu_idx][page_index].addr_code !=\n                  (addr & TARGET_PAGE_MASK))) {\n         cpu_ldub_code(env1, addr);\ndiff --git a/qemu/target-i386/ops_sse.h b/qemu/target-i386/ops_sse.h\nindex e5fa7c7f74..f142f335d5 100644\n--- a/qemu/target-i386/ops_sse.h\n+++ b/qemu/target-i386/ops_sse.h\n@@ -1941,7 +1941,7 @@ SSE_HELPER_Q(helper_pcmpgtq, FCMPGTQ)\n \n static inline int pcmp_elen(CPUX86State *env, int reg, uint32_t ctrl)\n {\n-    int val;\n+    unsigned int val;\n \n     /* Presence of REX.W is indicated by a bit higher than 7 set */\n     if (ctrl >> 8) {\n@@ -1959,6 +1959,9 @@ static inline int pcmp_elen(CPUX86State *env, int reg, uint32_t ctrl)\n             return 16;\n         }\n     }\n+    if (val == 0x80000000) {\n+        val = 0;\n+    }\n     return val;\n }\n \ndiff --git a/qemu/tcg/optimize.c b/qemu/tcg/optimize.c\nindex d525f15bb8..fcf7a90acc 100644\n--- a/qemu/tcg/optimize.c\n+++ b/qemu/tcg/optimize.c\n@@ -1370,6 +1370,9 @@ static TCGArg *tcg_constant_folding(TCGContext *s, uint16_t *tcg_opc_ptr,\n             } else {\n         do_reset_output:\n                 for (i = 0; i < nb_oargs; i++) {\n+                    if (args[i] < 0 || args[i] >= TCG_MAX_TEMPS) {\n+                        continue;\n+                    }\n                     reset_temp(s, args[i]);\n                     /* Save the corresponding known-zero bits mask for the\n                        first output argument (only one supported so far). */\ndiff --git a/qemu/tcg/tcg.c b/qemu/tcg/tcg.c\nindex 93a327e858..b438b7e2f3 100644\n--- a/qemu/tcg/tcg.c\n+++ b/qemu/tcg/tcg.c\n@@ -1719,6 +1719,9 @@ static void tcg_liveness_analysis(TCGContext *s)\n                implies side effects */\n             if (!(def->flags & TCG_OPF_SIDE_EFFECTS) && nb_oargs != 0) {\n                 for(i = 0; i < nb_oargs; i++) {\n+                    if (args[i] < 0 || args[i] >= TCG_MAX_TEMPS) {\n+                        continue;\n+                    }\n                     arg = args[i];\n                     if (!dead_temps[arg] || mem_temps[arg]) {\n                         goto do_not_remove;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42477976-vul",
+      "digest": "sha256:a4ffe7fca85001252570a5a3ed44c428da0c08bdb997ae866b1b2c97e101f041"
+    },
+    "patched": {
+      "ref": "n132/arvo:42477976-fix",
+      "digest": "sha256:60f6b714fb2527aeec874b6a6c71e6b277a35fc28bdc0687980980a4bd39cc77"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "SEGV",
+        "direction": "READ",
+        "crash_site": "/src/unicorn/qemu/exec.c:1433",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "SEGV",
+        "direction": "READ",
+        "site": "/src/unicorn/qemu/exec.c:1433"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042531033",
+  "chain": "CWE-1284->CWE-787",
+  "project": "libxaac",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42531033",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "2624ae15b4d115a02623ec9f231237c429337a02",
+      "fix_commits": [
+        "2624ae15b4d115a02623ec9f231237c429337a02"
+      ],
+      "repo": "https://github.com/ittiam-systems/libxaac"
+    },
+    "patch": "diff --git a/decoder/ixheaacd_headerdecode.c b/decoder/ixheaacd_headerdecode.c\nindex 41c45943..03fb0677 100644\n--- a/decoder/ixheaacd_headerdecode.c\n+++ b/decoder/ixheaacd_headerdecode.c\n@@ -535,6 +535,11 @@ WORD32 ixheaacd_ga_hdr_dec(ia_aac_dec_state_struct *aac_state_struct,\n \n   aac_state_struct->ch_config = ixheaacd_read_bits_buf(it_bit_buff, 4);\n \n+  if (aac_state_struct->audio_object_type == AOT_USAC &&\n+      ((aac_state_struct->ch_config >= 3) && (aac_state_struct->ch_config != 8))) {\n+    return IA_XHEAAC_DEC_INIT_FATAL_DEC_INIT_FAIL;\n+  }\n+\n   pstr_audio_specific_config->channel_configuration =\n       aac_state_struct->ch_config;\n \ndiff --git a/decoder/ixheaacd_init_config.c b/decoder/ixheaacd_init_config.c\nindex d5373a88..f58b72e1 100644\n--- a/decoder/ixheaacd_init_config.c\n+++ b/decoder/ixheaacd_init_config.c\n@@ -644,6 +644,9 @@ WORD32 ixheaacd_config(ia_bit_buf_struct *it_bit_buff, ia_usac_config_struct *ps\n     if (BS_MAX_NUM_OUT_CHANNELS < pstr_usac_conf->num_out_channels) {\n       return IA_XHEAAC_DEC_INIT_FATAL_STREAM_CHAN_GT_MAX;\n     }\n+    if (pstr_usac_conf->num_out_channels < 1) {\n+      return IA_XHEAAC_DEC_INIT_FATAL_DEC_INIT_FAIL;\n+    }\n     for (i = 0; i < pstr_usac_conf->num_out_channels; i++)\n       pstr_usac_conf->output_channel_pos[i] =\n           ixheaacd_read_bits_buf(it_bit_buff, 5);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42531033-vul",
+      "digest": "sha256:6b369edbeb4120a7ddd1f5ecc95f7a07e8de2555f811ec0b095064f8a456500f"
+    },
+    "patched": {
+      "ref": "n132/arvo:42531033-fix",
+      "digest": "sha256:499ffa521bdf3b89e9ee4814fde89cff553c1538501cb8fe6f7a3609f4a1a7eb"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/libxaac/decoder/ixheaacd_sbrdec_initfuncs.c:458",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/libxaac/decoder/ixheaacd_sbrdec_initfuncs.c:458"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

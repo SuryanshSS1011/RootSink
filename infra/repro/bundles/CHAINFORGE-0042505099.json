@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042505099",
+  "chain": "CWE-20->CWE-125",
+  "project": "curl",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42505099",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "0b664ba968437715819bfe4c7ada5679d16ebbc3",
+      "fix_commits": [
+        "0b664ba968437715819bfe4c7ada5679d16ebbc3"
+      ],
+      "repo": "https://github.com/curl/curl"
+    },
+    "patch": "diff --git a/lib/curl_fnmatch.c b/lib/curl_fnmatch.c\nindex da83393b4906..8a1e106c4565 100644\n--- a/lib/curl_fnmatch.c\n+++ b/lib/curl_fnmatch.c\n@@ -133,6 +133,9 @@ static int setcharset(unsigned char **p, unsigned char *charset)\n   unsigned char c;\n   for(;;) {\n     c = **p;\n+    if(!c)\n+      return SETCHARSET_FAIL;\n+\n     switch(state) {\n     case CURLFNM_SCHS_DEFAULT:\n       if(ISALNUM(c)) { /* ASCII value */\n@@ -196,9 +199,6 @@ static int setcharset(unsigned char **p, unsigned char *charset)\n         else\n           return SETCHARSET_FAIL;\n       }\n-      else if(c == '\\0') {\n-        return SETCHARSET_FAIL;\n-      }\n       else {\n         charset[c] = 1;\n         (*p)++;\n@@ -274,9 +274,6 @@ static int setcharset(unsigned char **p, unsigned char *charset)\n       else if(c == ']') {\n         return SETCHARSET_OK;\n       }\n-      else if(c == '\\0') {\n-        return SETCHARSET_FAIL;\n-      }\n       else if(ISPRINT(c)) {\n         charset[c] = 1;\n         (*p)++;\ndiff --git a/tests/data/Makefile.inc b/tests/data/Makefile.inc\nindex 2a2ca508a84c..8383d4c64d5c 100644\n--- a/tests/data/Makefile.inc\n+++ b/tests/data/Makefile.inc\n@@ -125,7 +125,7 @@ test1136 test1137 test1138 test1139 test1140 test1141 test1142 test1143 \\\n test1144 test1145 test1146 test1147 test1148 test1149 test1150 test1151 \\\n test1152 test1153 \\\n \\\n-test1160 test1161 test1162 \\\n+test1160 test1161 test1162 test1163 \\\n test1200 test1201 test1202 test1203 test1204 test1205 test1206 test1207 \\\n test1208 test1209 test1210 test1211 test1212 test1213 test1214 test1215 \\\n test1216 test1217 test1218 test1219 \\\ndiff --git a/tests/data/test1163 b/tests/data/test1163\nnew file mode 100644\nindex 000000000000..a109b511bcc7\n--- /dev/null\n+++ b/tests/data/test1163\n@@ -0,0 +1,52 @@\n+<testcase>\n+<info>\n+<keywords>\n+FTP\n+RETR\n+LIST\n+wildcardmatch\n+ftplistparser\n+flaky\n+</keywords>\n+</info>\n+\n+#\n+# Server-side\n+<reply>\n+<data>\n+</data>\n+</reply>\n+\n+# Client-side\n+<client>\n+<server>\n+ftp\n+</server>\n+<tool>\n+lib576\n+</tool>\n+<name>\n+FTP wildcard with pattern ending with an open-bracket\n+</name>\n+<command>\n+\"ftp://%HOSTIP:%FTPPORT/fully_simulated/DOS/*[][\"\n+</command>\n+</client>\n+<verify>\n+<protocol>\n+USER anonymous\n+PASS ftp@example.com\n+PWD\n+CWD fully_simulated\n+CWD DOS\n+EPSV\n+TYPE A\n+LIST\n+QUIT\n+</protocol>\n+# 78 == CURLE_REMOTE_FILE_NOT_FOUND\n+<errorcode>\n+78\n+</errorcode>\n+</verify>\n+</testcase>\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42505099-vul",
+      "digest": "sha256:939fe54459eef75310258fd20b67acbe82b382efcc49bf27d8b424ccfeec29bf"
+    },
+    "patched": {
+      "ref": "n132/arvo:42505099-fix",
+      "digest": "sha256:37e1e238b70b6312ec8d63eed7328031aa9a06d8264e052cbaed08e40748734c"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/curl/lib/curl_fnmatch.c:135",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/curl/lib/curl_fnmatch.c:135"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

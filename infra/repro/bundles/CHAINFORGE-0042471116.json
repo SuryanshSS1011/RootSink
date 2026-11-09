@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042471116",
+  "chain": "CWE-416->CWE-787",
+  "project": "libarchive",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42471116",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "b52dd6c9e4ef7cf95c2a6ae5ab7ccac7f6d462a1",
+      "fix_commits": [
+        "b52dd6c9e4ef7cf95c2a6ae5ab7ccac7f6d462a1"
+      ],
+      "repo": "https://github.com/libarchive/libarchive"
+    },
+    "patch": "diff --git a/libarchive/archive_read_support_format_rar5.c b/libarchive/archive_read_support_format_rar5.c\nindex 31f9dd530e..99d8176818 100644\n--- a/libarchive/archive_read_support_format_rar5.c\n+++ b/libarchive/archive_read_support_format_rar5.c\n@@ -1836,7 +1836,10 @@ static int rar5_read_header(struct archive_read *a,\n \n static void init_unpack(struct rar5* rar) {\n     rar->file.calculated_crc32 = 0;\n-    rar->cstate.window_mask = rar->cstate.window_size - 1;\n+    if (rar->cstate.window_size)\n+        rar->cstate.window_mask = rar->cstate.window_size - 1;\n+    else\n+        rar->cstate.window_mask = 0;\n \n     if(rar->cstate.window_buf)\n         free(rar->cstate.window_buf);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42471116-vul",
+      "digest": "sha256:4587eaf6cddbb27d037bfb35be25df232862d8d3e18c6a27828f16234bbd7ac2"
+    },
+    "patched": {
+      "ref": "n132/arvo:42471116-fix",
+      "digest": "sha256:be58a6456d8a811631326f0628a135ce24adf8b355d13c9f322b10caec4ac52e"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/libarchive/libarchive/archive_read_support_format_rar5.c:2424",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/libarchive/libarchive/archive_read_support_format_rar5.c:2424"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

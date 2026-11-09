@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042492964",
+  "chain": "CWE-1284->CWE-787",
+  "project": "flatbuffers",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42492964",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "fee095410b0969765b5c2545c10e585f69e961b0",
+      "fix_commits": [
+        "fee095410b0969765b5c2545c10e585f69e961b0"
+      ],
+      "repo": "https://github.com/google/flatbuffers"
+    },
+    "patch": "diff --git a/include/flatbuffers/base.h b/include/flatbuffers/base.h\nindex 46340ec852..54a51aacb8 100644\n--- a/include/flatbuffers/base.h\n+++ b/include/flatbuffers/base.h\n@@ -330,6 +330,11 @@ typedef uintmax_t largest_scalar_t;\n // We support aligning the contents of buffers up to this size.\n #define FLATBUFFERS_MAX_ALIGNMENT 16\n \n+inline bool VerifyAlignmentRequirements(size_t align, size_t min_align = 1) {\n+  return (min_align <= align) && (align <= (FLATBUFFERS_MAX_ALIGNMENT)) &&\n+         (align & (align - 1)) == 0;  // must be power of 2\n+}\n+\n #if defined(_MSC_VER)\n   #pragma warning(disable: 4351) // C4351: new behavior: elements of array ... will be default initialized\n   #pragma warning(push)\ndiff --git a/include/flatbuffers/flatbuffers.h b/include/flatbuffers/flatbuffers.h\nindex 4402c719c0..c7fadd515b 100644\n--- a/include/flatbuffers/flatbuffers.h\n+++ b/include/flatbuffers/flatbuffers.h\n@@ -1670,11 +1670,13 @@ class FlatBufferBuilder {\n   // This is useful when storing a nested_flatbuffer in a vector of bytes,\n   // or when storing SIMD floats, etc.\n   void ForceVectorAlignment(size_t len, size_t elemsize, size_t alignment) {\n+    FLATBUFFERS_ASSERT(VerifyAlignmentRequirements(alignment));\n     PreAlign(len * elemsize, alignment);\n   }\n \n   // Similar to ForceVectorAlignment but for String fields.\n   void ForceStringAlignment(size_t len, size_t alignment) {\n+    FLATBUFFERS_ASSERT(VerifyAlignmentRequirements(alignment));\n     PreAlign((len + 1) * sizeof(char), alignment);\n   }\n \ndiff --git a/include/flatbuffers/idl.h b/include/flatbuffers/idl.h\nindex 1f549f9355..116f500094 100644\n--- a/include/flatbuffers/idl.h\n+++ b/include/flatbuffers/idl.h\n@@ -967,6 +967,8 @@ class Parser : public ParserState {\n   FLATBUFFERS_CHECKED_ERROR CheckClash(std::vector<FieldDef *> &fields,\n                                        StructDef *struct_def,\n                                        const char *suffix, BaseType baseType);\n+  FLATBUFFERS_CHECKED_ERROR ParseAlignAttribute(\n+      const std::string &align_constant, size_t min_align, size_t *align);\n \n   bool SupportsAdvancedUnionFeatures() const;\n   bool SupportsAdvancedArrayFeatures() const;\ndiff --git a/include/flatbuffers/util.h b/include/flatbuffers/util.h\nindex 7a3e12f3a5..f30bd98c9a 100644\n--- a/include/flatbuffers/util.h\n+++ b/include/flatbuffers/util.h\n@@ -335,6 +335,9 @@ inline bool StringToFloatImpl(T *val, const char *const str) {\n // - If the converted value falls out of range of corresponding return type, a\n // range error occurs. In this case value MAX(T)/MIN(T) is returned.\n template<typename T> inline bool StringToNumber(const char *s, T *val) {\n+  // Assert on `unsigned long` and `signed long` on LP64.\n+  // If it is necessary, it could be solved with flatbuffers::enable_if<B,T>.\n+  static_assert(sizeof(T) < sizeof(int64_t), \"unexpected type T\");\n   FLATBUFFERS_ASSERT(s && val);\n   int64_t i64;\n   // The errno check isn't needed, will return MAX/MIN on overflow.\ndiff --git a/src/idl_parser.cpp b/src/idl_parser.cpp\nindex 7cdddaffd7..e32adc67c1 100644\n--- a/src/idl_parser.cpp\n+++ b/src/idl_parser.cpp\n@@ -1458,6 +1458,23 @@ void SimpleQsort(T *begin, T *end, size_t width, F comparator, S swapper) {\n   SimpleQsort(r, end, width, comparator, swapper);\n }\n \n+CheckedError Parser::ParseAlignAttribute(const std::string &align_constant,\n+                                         size_t min_align, size_t *align) {\n+  // Use uint8_t to avoid problems with size_t==`unsigned long` on LP64.\n+  uint8_t align_value;\n+  if (StringToNumber(align_constant.c_str(), &align_value) &&\n+      VerifyAlignmentRequirements(static_cast<size_t>(align_value),\n+                                  min_align)) {\n+    *align = align_value;\n+    return NoError();\n+  }\n+  return Error(\"unexpected force_align value '\" + align_constant +\n+               \"', alignment must be a power of two integer ranging from the \"\n+               \"type\\'s natural alignment \" +\n+               NumToString(min_align) + \" to \" +\n+               NumToString(FLATBUFFERS_MAX_ALIGNMENT));\n+}\n+\n CheckedError Parser::ParseVector(const Type &type, uoffset_t *ovalue,\n                                  FieldDef *field, size_t fieldn) {\n   uoffset_t count = 0;\n@@ -1470,13 +1487,14 @@ CheckedError Parser::ParseVector(const Type &type, uoffset_t *ovalue,\n   });\n   ECHECK(err);\n \n-  const auto *force_align = field->attributes.Lookup(\"force_align\");\n-  const size_t align =\n-      force_align ? static_cast<size_t>(atoi(force_align->constant.c_str()))\n-                  : 1;\n   const size_t len = count * InlineSize(type) / InlineAlignment(type);\n   const size_t elemsize = InlineAlignment(type);\n-  if (align > 1) { builder_.ForceVectorAlignment(len, elemsize, align); }\n+  const auto force_align = field->attributes.Lookup(\"force_align\");\n+  if (force_align) {\n+    size_t align;\n+    ECHECK(ParseAlignAttribute(force_align->constant, 1, &align));\n+    if (align > 1) { builder_.ForceVectorAlignment(len, elemsize, align); }\n+  }\n \n   builder_.StartVector(len, elemsize);\n   for (uoffset_t i = 0; i < count; i++) {\n@@ -2457,17 +2475,12 @@ CheckedError Parser::ParseDecl() {\n       struct_def->attributes.Lookup(\"original_order\") == nullptr && !fixed;\n   EXPECT('{');\n   while (token_ != '}') ECHECK(ParseField(*struct_def));\n-  auto force_align = struct_def->attributes.Lookup(\"force_align\");\n   if (fixed) {\n+    const auto force_align = struct_def->attributes.Lookup(\"force_align\");\n     if (force_align) {\n-      auto align = static_cast<size_t>(atoi(force_align->constant.c_str()));\n-      if (force_align->type.base_type != BASE_TYPE_INT ||\n-          align < struct_def->minalign || align > FLATBUFFERS_MAX_ALIGNMENT ||\n-          align & (align - 1))\n-        return Error(\n-            \"force_align must be a power of two integer ranging from the\"\n-            \"struct\\'s natural alignment to \" +\n-            NumToString(FLATBUFFERS_MAX_ALIGNMENT));\n+      size_t align;\n+      ECHECK(ParseAlignAttribute(force_align->constant, struct_def->minalign,\n+                                 &align));\n       struct_def->minalign = align;\n     }\n     if (!struct_def->bytesize) return Error(\"size 0 structs not allowed\");\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42492964-vul",
+      "digest": "sha256:fcfb387b4c43c26683851674daf73787a8e961dbb63b917e39d2ba144915b9f5"
+    },
+    "patched": {
+      "ref": "n132/arvo:42492964-fix",
+      "digest": "sha256:9e51029a2711685dd37baf0fabe8d9e45a5e6eca9bf758e91b3f2f6223e805bf"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/flatbuffers/tests/fuzzer/../../include/flatbuffers/flatbuffers.h:1038",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/flatbuffers/tests/fuzzer/../../include/flatbuffers/flatbuffers.h:1038"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

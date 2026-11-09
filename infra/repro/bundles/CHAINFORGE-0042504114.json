@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042504114",
+  "chain": "CWE-1285->CWE-125",
+  "project": "qpid-proton",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42504114",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "b788baad3e9d9ba028d3d115e272e94a30227e17",
+      "fix_commits": [
+        "b788baad3e9d9ba028d3d115e272e94a30227e17"
+      ],
+      "repo": "https://github.com/apache/qpid-proton"
+    },
+    "patch": "diff --git a/c/src/core/consumers.h b/c/src/core/consumers.h\nindex 48c3a0a6b2..930c7c717c 100644\n--- a/c/src/core/consumers.h\n+++ b/c/src/core/consumers.h\n@@ -543,7 +543,8 @@ static inline bool consume_descriptor(pni_consumer_t* consumer, pni_consumer_t *\n       size_t sposition = consumer->position;\n       uint8_t type;\n       consume_single_value_not_described(consumer, &type);\n-      *subconsumer = (pni_consumer_t){.output_start=consumer->output_start+sposition, .position=0, .size=consumer->position-sposition};\n+      size_t scsize = consumer->position > sposition ? consumer->position-sposition : 0;\n+      *subconsumer = (pni_consumer_t){.output_start=consumer->output_start+sposition, .position=0, .size=scsize};\n       return lq;\n     }\n     default:\n@@ -561,15 +562,17 @@ static inline bool consume_list(pni_consumer_t* consumer, pni_consumer_t *subcon\n     case PNE_LIST32: {\n       uint32_t s;\n       if (!pni_consumer_readf32(consumer, &s)) return false;\n-      *subconsumer = (pni_consumer_t){.output_start=consumer->output_start+consumer->position, .position=0, .size=s};\n-      consumer->position += s;\n+      size_t scsize = s < consumer->size-consumer->position ? s : consumer->size-consumer->position;\n+      *subconsumer = (pni_consumer_t){.output_start=consumer->output_start+consumer->position, .position=0, .size=scsize};\n+      consumer->position += scsize;\n       return pni_consumer_readf32(subconsumer, count);\n     }\n     case PNE_LIST8: {\n       uint8_t s;\n       if (!pni_consumer_readf8(consumer, &s)) return false;\n-      *subconsumer = (pni_consumer_t){.output_start=consumer->output_start+consumer->position, .position=0, .size=s};\n-      consumer->position += s;\n+      size_t scsize = s < consumer->size-consumer->position ? s : consumer->size-consumer->position;\n+      *subconsumer = (pni_consumer_t){.output_start=consumer->output_start+consumer->position, .position=0, .size=scsize};\n+      consumer->position += scsize;\n       uint8_t c;\n       if (!pni_consumer_readf8(subconsumer, &c)) return false;\n       *count = c;\n@@ -598,16 +601,18 @@ static inline bool consume_array(pni_consumer_t* consumer, pni_consumer_t *subco\n     case PNE_ARRAY32: {\n       uint32_t s;\n       if (!pni_consumer_readf32(consumer, &s)) return false;\n-      *subconsumer = (pni_consumer_t){.output_start=consumer->output_start+consumer->position, .position=0, .size=s};\n-      consumer->position += s;\n+      size_t scsize = s < consumer->size-consumer->position ? s : consumer->size-consumer->position;\n+      *subconsumer = (pni_consumer_t){.output_start=consumer->output_start+consumer->position, .position=0, .size=scsize};\n+      consumer->position += scsize;\n       if (!pni_consumer_readf32(subconsumer, count)) return false;\n       return pni_consumer_readf8(subconsumer, element_type);\n     }\n     case PNE_ARRAY8: {\n       uint8_t s;\n       if (!pni_consumer_readf8(consumer, &s)) return false;\n-      *subconsumer = (pni_consumer_t){.output_start=consumer->output_start+consumer->position, .position=0, .size=s};\n-      consumer->position += s;\n+      size_t scsize = s < consumer->size-consumer->position ? s : consumer->size-consumer->position;\n+      *subconsumer = (pni_consumer_t){.output_start=consumer->output_start+consumer->position, .position=0, .size=scsize};\n+      consumer->position += scsize;\n       uint8_t c;\n       if (!pni_consumer_readf8(subconsumer, &c)) return false;\n       *count = c;\ndiff --git a/c/tests/fuzz/fuzz-message-decode/minimized-fuzz-message-decode-6101905114267648 b/c/tests/fuzz/fuzz-message-decode/minimized-fuzz-message-decode-6101905114267648\nnew file mode 100644\nindex 0000000000..a8d73e8995\nBinary files /dev/null and b/c/tests/fuzz/fuzz-message-decode/minimized-fuzz-message-decode-6101905114267648 differ\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42504114-vul",
+      "digest": "sha256:1b84e2ebcea2cdc851946f9ce568aa4e008f3e98618997863506c41a32867fc1"
+    },
+    "patched": {
+      "ref": "n132/arvo:42504114-fix",
+      "digest": "sha256:4454e7f2b5c3c471a8b05f9fcaed54771628b9f56687e9c5629c195f1eacb4df"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/qpid-proton/c/src/core/consumers.h:56",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/qpid-proton/c/src/core/consumers.h:56"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

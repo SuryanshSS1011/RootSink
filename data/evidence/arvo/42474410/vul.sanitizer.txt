@@ -1,0 +1,71 @@
+======================= INFO =========================
+This binary is built for AFL-fuzz.
+To run the target function on individual input(s) execute this:
+  /out/ffmpeg_AV_CODEC_ID_RSCC_fuzzer < INPUT_FILE
+or
+  /out/ffmpeg_AV_CODEC_ID_RSCC_fuzzer INPUT_FILE1 [INPUT_FILE2 ... ]
+To fuzz with afl-fuzz execute this:
+  afl-fuzz [afl-flags] /out/ffmpeg_AV_CODEC_ID_RSCC_fuzzer [-N]
+afl-fuzz will run N iterations before re-spawning the process (default: 1000)
+======================================================
+Reading 1025 bytes from /tmp/poc
+=================================================================
+==118662==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x619000000e2c at pc 0x000000444e21 bp 0x7ffc8cda5560 sp 0x7ffc8cda4d10
+READ of size 8217 at 0x619000000e2c thread T0
+SCARINESS: 26 (multi-byte-read-heap-buffer-overflow)
+    #0 0x444e20 in __interceptor_memcpy.part.36 /src/llvm/projects/compiler-rt/lib/asan/../sanitizer_common/sanitizer_common_interceptors.inc:738
+    #1 0x14bad0d9a27a in inflate (/lib/x86_64-linux-gnu/libz.so.1+0xa27a)
+    #2 0x14bad0d9fa64 in uncompress (/lib/x86_64-linux-gnu/libz.so.1+0xfa64)
+    #3 0x53506a in rscc_decode_frame /src/ffmpeg/libavcodec/rscc.c:191:19
+    #4 0x5282b8 in decode_simple_internal /src/ffmpeg/libavcodec/decode.c:417:15
+    #5 0x527e24 in decode_simple_receive_frame /src/ffmpeg/libavcodec/decode.c:620:15
+    #6 0x51f8de in decode_receive_frame_internal /src/ffmpeg/libavcodec/decode.c:638:15
+    #7 0x51eedd in avcodec_send_packet /src/ffmpeg/libavcodec/decode.c:678:15
+    #8 0x520655 in compat_decode /src/ffmpeg/libavcodec/decode.c:847:15
+    #9 0x51846e in LLVMFuzzerTestOneInput /src/ffmpeg/tools/target_dec_fuzzer.c:216:23
+    #10 0x6aca8e in ExecuteFilesOnyByOne(int, char**) /src/libfuzzer/afl/afl_driver.cpp:265:5
+    #11 0x6ad01c in main /src/libfuzzer/afl/afl_driver.cpp:302:12
+    #12 0x14bad01a882f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+    #13 0x41c5b8 in _start (/out/ffmpeg_AV_CODEC_ID_RSCC_fuzzer+0x41c5b8)
+
+DEDUP_TOKEN: __interceptor_memcpy.part.36--inflate--uncompress
+0x619000000e2c is located 0 bytes to the right of 940-byte region [0x619000000a80,0x619000000e2c)
+allocated by thread T0 here:
+    #0 0x4dc058 in realloc /src/llvm/projects/compiler-rt/lib/asan/asan_malloc_linux.cc:79
+    #1 0x63a249 in av_buffer_realloc /src/ffmpeg/libavutil/buffer.c:177:25
+    #2 0x519546 in packet_alloc /src/ffmpeg/libavcodec/avpacket.c:77:11
+
+DEDUP_TOKEN: realloc--av_buffer_realloc--packet_alloc
+SUMMARY: AddressSanitizer: heap-buffer-overflow /src/llvm/projects/compiler-rt/lib/asan/../sanitizer_common/sanitizer_common_interceptors.inc:738 in __interceptor_memcpy.part.36
+Shadow bytes around the buggy address:
+  0x0c327fff8170: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c327fff8180: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c327fff8190: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c327fff81a0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c327fff81b0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x0c327fff81c0: 00 00 00 00 00[04]fa fa fa fa fa fa fa fa fa fa
+  0x0c327fff81d0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c327fff81e0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c327fff81f0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c327fff8200: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c327fff8210: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+==118662==ABORTING

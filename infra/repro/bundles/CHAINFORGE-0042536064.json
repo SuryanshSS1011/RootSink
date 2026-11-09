@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042536064",
+  "chain": "CWE-1284->CWE-125",
+  "project": "inchi",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42536064",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "9301aa1d62582206617c432d925a642a284e873d",
+      "fix_commits": [
+        "9301aa1d62582206617c432d925a642a284e873d"
+      ],
+      "repo": "https://github.com/IUPAC-InChI/InChI"
+    },
+    "patch": "diff --git a/INCHI-1-SRC/INCHI_BASE/src/bcf_s.h b/INCHI-1-SRC/INCHI_BASE/src/bcf_s.h\nindex d824c44a..21a4c683 100644\n--- a/INCHI-1-SRC/INCHI_BASE/src/bcf_s.h\n+++ b/INCHI-1-SRC/INCHI_BASE/src/bcf_s.h\n@@ -66,7 +66,7 @@\n #endif\r\n \r\n /* djb-rwth: control macros */\r\n-#define GCC_DEBUG 1 /* djb-rwth: required for GCC 12+ vs GCC 11- debugging */\r\n+/* #define GCC_DEBUG 0  djb-rwth: required for GCC 12+ vs GCC 11- debugging */\r\n #define RINCHI_TEST 0 /* djb-rwrh: RInChI testing */\r\n \r\n /* djb-rwth: custom functions */\r\n@@ -76,5 +76,6 @@ int memcpy_custom(char** dst, char* src, unsigned long long len);\n /* djb-rwth: external variables required for oss-fuzz fixes */\r\n extern int at_size_check1; /* djb-rwth: required for fixing oss-fuzz issue #68329 */\r\n extern int sminor_size; /* djb-rwth: required for fixing oss-fuzz issue #66746 */\r\n+extern int na_global; /* djb-rwth: required for fixing oss-fuzz issue #69315 */\r\n \r\n #endif\n\\ No newline at end of file\ndiff --git a/INCHI-1-SRC/INCHI_BASE/src/ichican2.c b/INCHI-1-SRC/INCHI_BASE/src/ichican2.c\nindex 8d955105..c0e85683 100644\n--- a/INCHI-1-SRC/INCHI_BASE/src/ichican2.c\n+++ b/INCHI-1-SRC/INCHI_BASE/src/ichican2.c\n@@ -54,7 +54,7 @@\n #include \"ichitime.h\"\n \n #include \"bcf_s.h\"\n-static int na_global; /* djb-rwth: required for fixing oss-fuzz issue #69315 */\n+int na_global; /* djb-rwth: required for fixing oss-fuzz issue #69315 */\n \n #define MAX_CELLS    32766\n #define MAX_NODES    32766\ndiff --git a/INCHI-1-SRC/INCHI_BASE/src/ichimap2.c b/INCHI-1-SRC/INCHI_BASE/src/ichimap2.c\nindex 89faf892..67ae4b58 100644\n--- a/INCHI-1-SRC/INCHI_BASE/src/ichimap2.c\n+++ b/INCHI-1-SRC/INCHI_BASE/src/ichimap2.c\n@@ -379,7 +379,7 @@ int SetNewRanksFromNeighLists( CANON_GLOBALS *pCG,\n                                int bUseAltSort,\n                                int( *comp )( const void *, const void *, void * ) )\n {\n-    int     i, nNumDiffRanks;\n+    int     i, nNumDiffRanks, j;\n     AT_RANK nCurrentRank;\n     /*  -- nAtomNumber[] is already properly set --\n     for ( i = 0; i < num_atoms; i++ ) {\n@@ -397,17 +397,24 @@ int SetNewRanksFromNeighLists( CANON_GLOBALS *pCG,\n     else\n         inchi_qsort( pCG, nAtomNumber, num_atoms, sizeof( nAtomNumber[0] ), comp /*CompNeighListRanksOrd*/ );\n \n-    for (i = num_atoms - 1, nCurrentRank = nNewRank[(int) nAtomNumber[i]] = (AT_RANK) num_atoms, nNumDiffRanks = 1;\n-          0 < i;\n-          i--)\n+    /* djb-rwth: fixing oss-fuzz issue #69315 */\n+    nNumDiffRanks = 1;\n+    if ((num_atoms > 0) && (num_atoms <= na_global))\n     {\n-        /*  Note: CompNeighListRanks() in following line implicitly reads nRank pointed by pn_RankForSort */\n-        if (CompNeighListRanks( &nAtomNumber[i - 1], &nAtomNumber[i], pCG ))\n+        nCurrentRank = (AT_RANK)num_atoms;\n+        j = num_atoms - 1;\n+        nNewRank[(int)nAtomNumber[j]] = nCurrentRank;\n+        \n+        for (i = num_atoms - 1; i > 0; i--)\n         {\n-            nNumDiffRanks++;\n-            nCurrentRank = (AT_RANK) i;\n+            /*  Note: CompNeighListRanks() in following line implicitly reads nRank pointed by pn_RankForSort */\n+            if (CompNeighListRanks(&nAtomNumber[i - 1], &nAtomNumber[i], pCG))\n+            {\n+                nNumDiffRanks++;\n+                nCurrentRank = (AT_RANK)i;\n+            }\n+            nNewRank[(int)nAtomNumber[i - 1]] = nCurrentRank;\n         }\n-        nNewRank[(int) nAtomNumber[i - 1]] = nCurrentRank;\n     }\n \n     return nNumDiffRanks;\ndiff --git a/INCHI-1-SRC/INCHI_BASE/src/ichiread.c b/INCHI-1-SRC/INCHI_BASE/src/ichiread.c\nindex 2ee98c9e..0e3f4aca 100644\n--- a/INCHI-1-SRC/INCHI_BASE/src/ichiread.c\n+++ b/INCHI-1-SRC/INCHI_BASE/src/ichiread.c\n@@ -80,7 +80,7 @@\n /* */\n \n #include \"bcf_s.h\"\n-\n+static int pi_nnc; /* djb-rwth: required for fixing oss-fuzz issue #69489 */\n \n #define SEGM_LINE_ADD 128\n \n@@ -5754,7 +5754,7 @@ int ParseSegmentPerm( const char *str,\n                     goto exit_function;\n                 }\n                 iComponent1 = (int)inchi_strtol(p, &q, 10);\n-                if (!iComponent1 || (iComponent1 > nNumComponents) || (iComponent1 > sminor_size)) /* djb-rwth: fixing oss-fuzz issue #66746 */\n+                if ((iComponent1 < 1) || (iComponent1 > nNumComponents) || (iComponent1 >= sminor_size)) /* djb-rwth: fixing oss-fuzz issue #66746 */\n                 {\n                     ret = RI_ERR_SYNTAX;  /* syntax error */\n                     goto exit_function;\n@@ -8367,7 +8367,8 @@ int ParseSegmentMobileH( const char *str,\n             pTaut = pEnd;\n             t = NULL; /* found no tautomeric group for this component */\n         }\n-        for (i = 0; i < mpy_component; i++)\n+        /* djb-rwth: fixing oss-fuzz issue #69489 */\n+        for (i = 0; (i < mpy_component) && (iComponent + i < pi_nnc); i++)\n         {\n             if (bMobileH == TAUT_NON)\n             {\n@@ -9869,6 +9870,7 @@ int ParseSegmentFormula( const char *str,\n                 {\n                     /* allocate InChI */\n                     pInChI = (INChI*)inchi_calloc(nNumComponents, sizeof(INChI));\n+                    pi_nnc = nNumComponents;\n                     if (!(pInChI))\n                     {\n                         return RI_ERR_ALLOC; /* alloc failure */\ndiff --git a/INCHI-1-SRC/INCHI_BASE/src/ichitaut.c b/INCHI-1-SRC/INCHI_BASE/src/ichitaut.c\nindex b6dc6789..667946a9 100644\n--- a/INCHI-1-SRC/INCHI_BASE/src/ichitaut.c\n+++ b/INCHI-1-SRC/INCHI_BASE/src/ichitaut.c\n@@ -50,6 +50,7 @@\n #include \"util.h\"\n \n #include \"bcf_s.h\"\n+static int tgi_mntg_global;\n \n /* Local prototypes */\n \n@@ -4394,7 +4395,6 @@ int MarkTautomerGroups( CANON_GLOBALS *pCG,\n     int  nNumEndPoints, nNumBondPos, nNumPossibleMobile;\n     int  bNonTautBond, bAltBond; /* djb-rwth: removing redundant variables */\n     int  nNumDonor, nNumAcceptor, bPossiblyEndpoint;\n-    T_GROUP *t_group;\n     int bIgnoreIsotopic; /* djb-rwth: removing redundant variables */\n     ENDPOINT_INFO eif1, eif2;\n     int nErr = 0;\n@@ -4425,7 +4425,8 @@ int MarkTautomerGroups( CANON_GLOBALS *pCG,\n         t_group_info->tGroupNumber = tGroupNumber;\n         t_group_info->max_num_t_groups = num_atoms / 2 + 1; /*  upper limit */\n         /* djb-rwth: fixing oss-fuzz issue #52978 */\n-        T_GROUP* tgi_tgr = (T_GROUP*)inchi_calloc(t_group_info->max_num_t_groups + 1, sizeof(t_group[0]));\n+        T_GROUP* tgi_tgr = (T_GROUP*)inchi_calloc((long long)t_group_info->max_num_t_groups + 1, sizeof(t_group_info->t_group[0]));\n+        tgi_mntg_global = t_group_info->max_num_t_groups;\n         if (!tgi_tgr)\n         {\n             t_group_info->max_num_t_groups = -1;\n@@ -6415,13 +6416,17 @@ int make_a_copy_of_t_group_info( T_GROUP_INFO *t_group_info,\n         if (( len = t_group_info_orig->max_num_t_groups ) > 0)\n         {\n             /* djb-rwth: fixing oss-fuzz issue #52978 */\n+            if (len != tgi_mntg_global)\n+            {\n+                len = tgi_mntg_global;\n+            }\n             T_GROUP* tgi_tg = (T_GROUP*)inchi_malloc(((long long)len+1) * sizeof(t_group_info->t_group[0])); /* djb-rwth: cast operator added */\n             if (tgi_tg && t_group_info_orig->t_group)\n             {\n                 t_group_info->t_group = tgi_tg;\n                 memcpy(tgi_tg,\n                     t_group_info_orig->t_group,\n-                    ((long long)len+1) * sizeof(t_group_info->t_group[0])); /* djb-rwth: cast operator added */\n+                    len * sizeof(t_group_info->t_group[0])); /* djb-rwth: cast operator added */\n             }\n             else\n             {\ndiff --git a/INCHI-1-SRC/INCHI_BASE/src/runichi3.c b/INCHI-1-SRC/INCHI_BASE/src/runichi3.c\nindex b1daa5d4..8e6ea2ad 100644\n--- a/INCHI-1-SRC/INCHI_BASE/src/runichi3.c\n+++ b/INCHI-1-SRC/INCHI_BASE/src/runichi3.c\n@@ -2506,7 +2506,7 @@ int  OrigAtData_RemoveHalfBond( int      this_atom,\n {\n     int k, kk;\n     /* djb-rwth: fixing oss-fuzz issues #68286, #30342 */\n-    if (at && (at + this_atom))\n+    if (at)\n     {\n         inp_ATOM* a = &(at[this_atom]);\n         if (a)\n@@ -4181,8 +4181,8 @@ int OAD_Polymer_CompareRanksOfTwoAtoms( int atom1, int atom2, OAD_AtProps *aprop\n     int a1typ = CARBOAT;\n     int a2typ = CARBOAT;\n \n-    /* djb-rwth: fixing oss-fuzz issue #68277 */\n-    if ((a1 > nat_global) || (a2 > nat_global) || (a1 < 0) || (a2 < 0))\n+    /* djb-rwth: fixing oss-fuzz issue #69501, #68277 */\n+    if ((a1 >= nat_global) || (a2 >= nat_global) || (a1 < 0) || (a2 < 0))\n     {\n         return 0;\n     }\ndiff --git a/INCHI-1-SRC/INCHI_BASE/src/strutil.c b/INCHI-1-SRC/INCHI_BASE/src/strutil.c\nindex bc310c00..1caf3244 100644\n--- a/INCHI-1-SRC/INCHI_BASE/src/strutil.c\n+++ b/INCHI-1-SRC/INCHI_BASE/src/strutil.c\n@@ -4410,16 +4410,6 @@ int MarkDisconnectedComponents( ORIG_ATOM_DATA *orig_at_data,\n     /* Mark and count; avoid deep DFS recursion: it may make verifying software unhappy */\n     /* nNewCompNumber[i] will contain new component number for atoms at[i], i=0..num_at-1 */\n     \n-    /* djb-rwth: GCC 12+ compiled executables crash here for 7 PubChem structures */\n-#if (GCC_DEBUG)\n-    FILE* gcc_fptr;\n-    gcc_fptr = fopen(\"gcc_crash_report.txt\", \"w\");\n-    if (!gcc_fptr)\n-    {\n-        printf(\"\\n>>>>>Error opening gcc_crash_report.txt file!<<<<<\\n\");\n-    }\n-#endif\n-\n     for (j = 0; j < num_at; j++)\n     {\n         if (!nNewCompNumber[j])\n@@ -4437,17 +4427,11 @@ int MarkDisconnectedComponents( ORIG_ATOM_DATA *orig_at_data,\n             /* find next neighbor */\n             do\n             {\n-#if (GCC_DEBUG)\n-                fprintf(gcc_fptr, \"\\ncur_at = %d, nxt_at = %d, iNeigh[cur_at] = %d, at[cur_at].val = %d \", cur_at, nxt_at, iNeigh[cur_at], at[cur_at].valence);\n-#endif\n                 if (iNeigh[cur_at] < at[cur_at].valence)\n                 {\n                     int ineigh_incr = (int)iNeigh[cur_at];\n                     nxt_at = at[cur_at].neighbor[ineigh_incr];\n                     iNeigh[cur_at]++;\n-#if (GCC_DEBUG)\n-                    fprintf(gcc_fptr, \"/ ineigh_incr = %d, new_nxt_at = %d, iNeigh[cur_at]_inc = %d, nNewCompNumber[nxt_at] = %d \", ineigh_incr, nxt_at, iNeigh[cur_at], nNewCompNumber[nxt_at]);\n-#endif\n \n                     if (!nNewCompNumber[nxt_at])\n                     {\n@@ -4467,19 +4451,9 @@ int MarkDisconnectedComponents( ORIG_ATOM_DATA *orig_at_data,\n                     cur_at = nPrevAtom[cur_at]; /* retract */\n                 }\n             } while (cur_neq_fst);\n-#if (GCC_DEBUG)\n-            fprintf(gcc_fptr, \"\\n\");\n-#endif\n         }\n     }\n \n-#if (GCC_DEBUG)\n-    if (gcc_fptr)\n-    {\n-        fclose(gcc_fptr);\n-    }\n-#endif\n-\n     inchi_free( nPrevAtom );\n     nPrevAtom = NULL;\n     inchi_free( iNeigh );\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42536064-vul",
+      "digest": "sha256:2b1669ee26d0bb626ba48b2920c21e533fc69a7cf495621732558176fd5ae2ae"
+    },
+    "patched": {
+      "ref": "n132/arvo:42536064-fix",
+      "digest": "sha256:d6c2827d9915b31367be00c3fbc415ba9476aa643453db85bbc0ba104ab4b685"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/inchi/INCHI-1-SRC/INCHI_BASE/src/ichiread.c:8375",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/inchi/INCHI-1-SRC/INCHI_BASE/src/ichiread.c:8375"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+======================= INFO =========================
+This binary is built for AFL-fuzz.
+To run the target function on individual input(s) execute this:
+  /out/encoder_label_fuzzer < INPUT_FILE
+or
+  /out/encoder_label_fuzzer INPUT_FILE1 [INPUT_FILE2 ... ]
+To fuzz with afl-fuzz execute this:
+  afl-fuzz [afl-flags] /out/encoder_label_fuzzer [-N]
+afl-fuzz will run N iterations before re-spawning the process (default: 1000)
+======================================================
+Reading 8 bytes from /tmp/poc
+=================================================================
+==39323==ERROR: AddressSanitizer: stack-buffer-overflow on address 0x7f1d4b2a883f at pc 0x0000006be277 bp 0x7fffd5a4b970 sp 0x7fffd5a4b968
+WRITE of size 1 at 0x7f1d4b2a883f thread T0
+SCARINESS: 46 (1-byte-write-stack-buffer-overflow)
+    #0 0x6be276 in FxEvaluateSubexpression /src/imagemagick/MagickCore/fx.c:2350:45
+    #1 0x6babf1 in FxEvaluateChannelExpression /src/imagemagick/MagickCore/fx.c:2975:10
+    #2 0x77c01f in InterpretImageProperties /src/imagemagick/MagickCore/property.c:3629:18
+    #3 0x8d9880 in ReadLABELImage /src/imagemagick/coders/label.c:127:12
+    #4 0x62c947 in ReadImage /src/imagemagick/MagickCore/constitute.c:497:13
+    #5 0x526d07 in Magick::Image::read(std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char> > const&) /src/imagemagick/Magick++/lib/Image.cpp:4081:12
+    #6 0x51d604 in fuzzEncoderWithStringFilename(std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char> >, unsigned char const*, unsigned long) /src/imagemagick/Magick++/fuzz/encoder_utils.cc:10:11
+    #7 0x51d305 in LLVMFuzzerTestOneInput /src/imagemagick/Magick++/fuzz/encoder_label_fuzzer.cc:10:10
+    #8 0x51de9f in ExecuteFilesOnyByOne(int, char**) /src/libfuzzer/afl/afl_driver.cpp:279:5
+    #9 0x51e43f in main /src/libfuzzer/afl/afl_driver.cpp:316:12
+    #10 0x7f1d4a26082f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+    #11 0x41d698 in _start (/out/encoder_label_fuzzer+0x41d698)
+
+DEDUP_TOKEN: FxEvaluateSubexpression--FxEvaluateChannelExpression--InterpretImageProperties
+Address 0x7f1d4b2a883f is located in stack of thread T0 at offset 63 in frame
+    #0 0x6bad7f in FxEvaluateSubexpression /src/imagemagick/MagickCore/fx.c:2097
+
+DEDUP_TOKEN: FxEvaluateSubexpression
+  This frame has 3 object(s):
+    [32, 40) 'q' (line 2100)
+    [64, 4160) 'subexpression' (line 2100) <== Memory access at offset 63 underflows this variable
+    [4288, 8384) 'numeric' (line 2302)
+HINT: this may be a false positive if your program uses some custom stack unwind mechanism or swapcontext
+      (longjmp and C++ exceptions *are* supported)
+SUMMARY: AddressSanitizer: stack-buffer-overflow /src/imagemagick/MagickCore/fx.c:2350:45 in FxEvaluateSubexpression
+Shadow bytes around the buggy address:
+  0x0fe42964d0b0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0fe42964d0c0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0fe42964d0d0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0fe42964d0e0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0fe42964d0f0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x0fe42964d100: f1 f1 f1 f1 00 f2 f2[f2]00 00 00 00 00 00 00 00
+  0x0fe42964d110: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0fe42964d120: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0fe42964d130: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0fe42964d140: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0fe42964d150: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+==39323==ABORTING

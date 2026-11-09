@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042492490",
+  "chain": "CWE-456->CWE-457",
+  "project": "matio",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42492490",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "36b8c01b1091ab51720ab6697c83534cfcf2e292",
+      "fix_commits": [
+        "36b8c01b1091ab51720ab6697c83534cfcf2e292"
+      ],
+      "repo": "https://github.com/tbeu/matio"
+    },
+    "patch": "From 36b8c01b1091ab51720ab6697c83534cfcf2e292 Mon Sep 17 00:00:00 2001\nFrom: tbeu <tbeu@users.noreply.github.com>\nDate: Sat, 6 Feb 2021 21:44:29 +0100\nSubject: [PATCH] Check success of H5Gget_info\n\n---\n src/mat.c   | 12 +++++++++---\n src/mat73.c | 26 +++++++++++++++-----------\n 2 files changed, 24 insertions(+), 14 deletions(-)\n\ndiff --git a/src/mat.c b/src/mat.c\nindex 8490cc1..2c035bf 100644\n--- a/src/mat.c\n+++ b/src/mat.c\n@@ -597,10 +597,16 @@ Mat_Open(const char *matname,int mode)\n \n         if ( -1 < *(hid_t*)mat->fp ) {\n             H5G_info_t group_info;\n+            herr_t herr;\n             memset(&group_info, 0, sizeof(group_info));\n-            H5Gget_info(*(hid_t*)mat->fp, &group_info);\n-            mat->num_datasets = (size_t)group_info.nlinks;\n-            mat->refs_id      = -1;\n+            herr = H5Gget_info(*(hid_t*)mat->fp, &group_info);\n+            if ( herr < 0 ) {\n+                Mat_Close(mat);\n+                mat = NULL;\n+            } else {\n+                mat->num_datasets = (size_t)group_info.nlinks;\n+                mat->refs_id = -1;\n+            }\n         }\n #else\n         mat->fp = NULL;\ndiff --git a/src/mat73.c b/src/mat73.c\nindex edcf21b..671a8bc 100644\n--- a/src/mat73.c\n+++ b/src/mat73.c\n@@ -894,13 +894,13 @@ Mat_H5ReadGroupInfo(mat_t *mat,matvar_t *matvar,hid_t dset_id)\n             return err;\n         }\n     } else {\n+        herr_t herr;\n         H5G_info_t group_info;\n         matvar->internal->num_fields = 0;\n         group_info.nlinks = 0;\n-        H5Gget_info(dset_id, &group_info);\n-        if ( group_info.nlinks > 0 ) {\n+        herr = H5Gget_info(dset_id, &group_info);\n+        if ( herr >= 0 && group_info.nlinks > 0 ) {\n             struct ReadGroupInfoIterData group_data = {0, NULL};\n-            herr_t herr;\n \n             /* First iteration to retrieve number of relevant links */\n             herr = H5Literate_by_name(dset_id, matvar->internal->hdf5_name, H5_INDEX_NAME,\n@@ -1375,18 +1375,22 @@ static int\n Mat_VarWriteRef(hid_t id, matvar_t* matvar, enum matio_compression compression, hid_t *refs_id, hobj_ref_t* ref)\n {\n     int err;\n+    herr_t herr;\n     char obj_name[64];\n     H5G_info_t group_info;\n \n     group_info.nlinks = 0;\n-    H5Gget_info(*refs_id, &group_info);\n-    sprintf(obj_name,\"%llu\", group_info.nlinks);\n-    if ( NULL != matvar )\n-        matvar->compression = compression;\n-    err = Mat_VarWriteNext73(*refs_id, matvar, obj_name, refs_id);\n-    sprintf(obj_name, \"/#refs#/%llu\", group_info.nlinks);\n-    H5Rcreate(ref, id, obj_name, H5R_OBJECT, -1);\n-\n+    herr = H5Gget_info(*refs_id, &group_info);\n+    if ( herr < 0) {\n+        err = MATIO_E_BAD_ARGUMENT;\n+    } else {\n+        sprintf(obj_name,\"%llu\", group_info.nlinks);\n+        if ( NULL != matvar )\n+            matvar->compression = compression;\n+        err = Mat_VarWriteNext73(*refs_id, matvar, obj_name, refs_id);\n+        sprintf(obj_name, \"/#refs#/%llu\", group_info.nlinks);\n+        H5Rcreate(ref, id, obj_name, H5R_OBJECT, -1);\n+    }\n     return err;\n }\n \n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42492490-vul",
+      "digest": "sha256:44d7987ded74fbbd89d79a38ddb225c2863dabc73f17e389408d24a5d66810d3"
+    },
+    "patched": {
+      "ref": "n132/arvo:42492490-fix",
+      "digest": "sha256:ff47b5c17c0486c2ad708cd52df28e228b26fca9f640c56620054dd2d316fcf9"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/hdf5-1.12.0/src/H5Gint.c:895",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/hdf5-1.12.0/src/H5Gint.c:895"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

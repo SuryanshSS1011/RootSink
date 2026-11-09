@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0372547409",
+  "chain": "CWE-416->CWE-125",
+  "project": "libxml2",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "372547409",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "bf3619c3282143fee564ca5ff0634559cce3923d",
+      "fix_commits": [
+        "bf3619c3282143fee564ca5ff0634559cce3923d"
+      ],
+      "repo": "https://gitlab.gnome.org/GNOME/libxml2.git"
+    },
+    "patch": "From bf3619c3282143fee564ca5ff0634559cce3923d Mon Sep 17 00:00:00 2001\nFrom: Nick Wellnhofer <wellnhofer@aevum.de>\nDate: Thu, 10 Oct 2024 12:14:47 +0200\nSubject: [PATCH] fuzz: Don't unlink DTD when replacing nodes\n\nOP_XML_REPLACE_NODE needs the same check as OP_XML_UNLINK_NODE.\n---\n fuzz/api.c | 14 ++++++++++++--\n 1 file changed, 12 insertions(+), 2 deletions(-)\n\ndiff --git a/fuzz/api.c b/fuzz/api.c\nindex 7134db2..49bebcb 100644\n--- a/fuzz/api.c\n+++ b/fuzz/api.c\n@@ -2287,7 +2287,7 @@ LLVMFuzzerTestOneInput(const char *data, size_t size) {\n \n             case OP_XML_REPLACE_NODE: {\n                 xmlNodePtr old, oldParent, node, oldNodeParent, result;\n-                xmlDocPtr oldNodeDoc;\n+                xmlDocPtr oldDoc, oldNodeDoc;\n \n                 startOp(\"xmlReplaceNode\");\n                 old = getNode(0);\n@@ -2296,8 +2296,18 @@ LLVMFuzzerTestOneInput(const char *data, size_t size) {\n                 /*\n                  * Unlinking DTD children can cause invalid references\n                  * which would be expensive to fix.\n+                 *\n+                 * Don't unlink DTD if it is the internal or external\n+                 * subset of the document.\n                  */\n-                if (isDtdChild(old))\n+                old = old ? old->parent : NULL;\n+                oldDoc = old ? old->doc : NULL;\n+                if (old != NULL &&\n+                    (isDtdChild(old) ||\n+                     (old->type == XML_DTD_NODE &&\n+                      oldDoc != NULL &&\n+                      ((xmlDtdPtr) old == oldDoc->intSubset ||\n+                       (xmlDtdPtr) old == oldDoc->extSubset))))\n                     old = NULL;\n                 if (old != NULL && !isValidChild(old->parent, node))\n                     node = NULL;\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:372547409-vul",
+      "digest": "sha256:9b4e768478799da4538f5293ad3b76beb85ad3e0ba159ae2ba2e83a13b4013d7"
+    },
+    "patched": {
+      "ref": "n132/arvo:372547409-fix",
+      "digest": "sha256:47eed975ebc958c5127e2fd5408e6b7e9ed0e498466de8f79c9b3bc38ce75edf"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/libxml2/valid.c:5992",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/libxml2/valid.c:5992"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

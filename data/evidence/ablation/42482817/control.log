@@ -1,0 +1,170 @@
+CF_BUILD_SECONDS 99
+CF_RUN_BEGIN 1
+Accepting input from '/tmp/poc'
+Usage for fuzzing: honggfuzz -P [flags] -- /out/client
+=================================================================
+==11484==ERROR: AddressSanitizer: heap-use-after-free on address 0x60f00002d560 at pc 0x000000613015 bp 0x7ffd80e52b20 sp 0x7ffd80e52b18
+WRITE of size 4 at 0x60f00002d560 thread T0
+SCARINESS: 46 (4-byte-write-heap-use-after-free)
+    #0 0x613014 in CRYPTO_DOWN_REF /src/openssl/include/internal/refcount.h:51:12
+    #1 0x612d35 in DH_free /src/openssl/crypto/dh/dh_lib.c:128:5
+    #2 0x6c766d in evp_pkey_free_it /src/openssl/crypto/evp/p_lib.c:878:9
+    #3 0x6c4a26 in EVP_PKEY_free /src/openssl/crypto/evp/p_lib.c:901:5
+    #4 0x572125 in tls_process_ske_dhe /src/openssl/ssl/statem/statem_clnt.c:2180:5
+    #5 0x56bc59 in tls_process_key_exchange /src/openssl/ssl/statem/statem_clnt.c:2288:14
+    #6 0x5606d0 in read_state_machine /src/openssl/ssl/statem/statem.c:637:19
+    #7 0x55ef07 in state_machine /src/openssl/ssl/statem/statem.c:435:21
+    #8 0x4ee180 in SSL_do_handshake /src/openssl/ssl/ssl_lib.c:3812:19
+    #9 0x4c9666 in FuzzerTestOneInput /src/openssl/fuzz/client.c:84:9
+    #10 0x4c9ba4 in HonggfuzzMain (/out/client+0x4c9ba4)
+    #11 0x7fa5d2d6982f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+    #12 0x41e048 in _start (/out/client+0x41e048)
+
+DEDUP_TOKEN: CRYPTO_DOWN_REF--DH_free--evp_pkey_free_it
+0x60f00002d560 is located 112 bytes inside of 176-byte region [0x60f00002d4f0,0x60f00002d5a0)
+freed by thread T0 here:
+    #0 0x4969ad in free /src/llvm-project/compiler-rt/lib/asan/asan_malloc_linux.cpp:123:3
+    #1 0x612ed1 in DH_free /src/openssl/crypto/dh/dh_lib.c:148:5
+    #2 0x57211d in tls_process_ske_dhe /src/openssl/ssl/statem/statem_clnt.c:2179:5
+    #3 0x56bc59 in tls_process_key_exchange /src/openssl/ssl/statem/statem_clnt.c:2288:14
+    #4 0x5606d0 in read_state_machine /src/openssl/ssl/statem/statem.c:637:19
+    #5 0x55ef07 in state_machine /src/openssl/ssl/statem/statem.c:435:21
+    #6 0x4ee180 in SSL_do_handshake /src/openssl/ssl/ssl_lib.c:3812:19
+    #7 0x4c9666 in FuzzerTestOneInput /src/openssl/fuzz/client.c:84:9
+    #8 0x4c9ba4 in HonggfuzzMain (/out/client+0x4c9ba4)
+
+DEDUP_TOKEN: free--DH_free--tls_process_ske_dhe
+previously allocated by thread T0 here:
+    #0 0x496c2d in malloc /src/llvm-project/compiler-rt/lib/asan/asan_malloc_linux.cpp:145:3
+    #1 0x6ed17c in CRYPTO_zalloc /src/openssl/crypto/mem.c:191:11
+    #2 0x6127c8 in dh_new_intern /src/openssl/crypto/dh/dh_lib.c:66:15
+    #3 0x571f29 in tls_process_ske_dhe /src/openssl/ssl/statem/statem_clnt.c:2103:10
+    #4 0x56bc59 in tls_process_key_exchange /src/openssl/ssl/statem/statem_clnt.c:2288:14
+    #5 0x5606d0 in read_state_machine /src/openssl/ssl/statem/statem.c:637:19
+    #6 0x55ef07 in state_machine /src/openssl/ssl/statem/statem.c:435:21
+    #7 0x4ee180 in SSL_do_handshake /src/openssl/ssl/ssl_lib.c:3812:19
+    #8 0x4c9666 in FuzzerTestOneInput /src/openssl/fuzz/client.c:84:9
+    #9 0x4c9ba4 in HonggfuzzMain (/out/client+0x4c9ba4)
+
+DEDUP_TOKEN: malloc--CRYPTO_zalloc--dh_new_intern
+SUMMARY: AddressSanitizer: heap-use-after-free /src/openssl/include/internal/refcount.h:51:12 in CRYPTO_DOWN_REF
+Shadow bytes around the buggy address:
+  0x0c1e7fffda50: fd fd fd fd fd fd fd fd fd fd fa fa fa fa fa fa
+  0x0c1e7fffda60: fa fa fd fd fd fd fd fd fd fd fd fd fd fd fd fd
+  0x0c1e7fffda70: fd fd fd fd fd fd fd fd fa fa fa fa fa fa fa fa
+  0x0c1e7fffda80: fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd
+  0x0c1e7fffda90: fd fd fd fd fd fd fa fa fa fa fa fa fa fa fd fd
+=>0x0c1e7fffdaa0: fd fd fd fd fd fd fd fd fd fd fd fd[fd]fd fd fd
+  0x0c1e7fffdab0: fd fd fd fd fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c1e7fffdac0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c1e7fffdad0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c1e7fffdae0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c1e7fffdaf0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+  Shadow gap:              cc
+==11484==ABORTING
+CF_RUN_END 1
+CF_RUN_SECONDS 1 0
+CF_RUN_BEGIN 2
+Accepting input from '/tmp/poc'
+Usage for fuzzing: honggfuzz -P [flags] -- /out/client
+=================================================================
+==11493==ERROR: AddressSanitizer: heap-use-after-free on address 0x60f00002d560 at pc 0x000000613015 bp 0x7ffc1024a300 sp 0x7ffc1024a2f8
+WRITE of size 4 at 0x60f00002d560 thread T0
+SCARINESS: 46 (4-byte-write-heap-use-after-free)
+    #0 0x613014 in CRYPTO_DOWN_REF /src/openssl/include/internal/refcount.h:51:12
+    #1 0x612d35 in DH_free /src/openssl/crypto/dh/dh_lib.c:128:5
+    #2 0x6c766d in evp_pkey_free_it /src/openssl/crypto/evp/p_lib.c:878:9
+    #3 0x6c4a26 in EVP_PKEY_free /src/openssl/crypto/evp/p_lib.c:901:5
+    #4 0x572125 in tls_process_ske_dhe /src/openssl/ssl/statem/statem_clnt.c:2180:5
+    #5 0x56bc59 in tls_process_key_exchange /src/openssl/ssl/statem/statem_clnt.c:2288:14
+    #6 0x5606d0 in read_state_machine /src/openssl/ssl/statem/statem.c:637:19
+    #7 0x55ef07 in state_machine /src/openssl/ssl/statem/statem.c:435:21
+    #8 0x4ee180 in SSL_do_handshake /src/openssl/ssl/ssl_lib.c:3812:19
+    #9 0x4c9666 in FuzzerTestOneInput /src/openssl/fuzz/client.c:84:9
+    #10 0x4c9ba4 in HonggfuzzMain (/out/client+0x4c9ba4)
+    #11 0x7f3791c7882f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+    #12 0x41e048 in _start (/out/client+0x41e048)
+
+DEDUP_TOKEN: CRYPTO_DOWN_REF--DH_free--evp_pkey_free_it
+0x60f00002d560 is located 112 bytes inside of 176-byte region [0x60f00002d4f0,0x60f00002d5a0)
+freed by thread T0 here:
+    #0 0x4969ad in free /src/llvm-project/compiler-rt/lib/asan/asan_malloc_linux.cpp:123:3
+    #1 0x612ed1 in DH_free /src/openssl/crypto/dh/dh_lib.c:148:5
+    #2 0x57211d in tls_process_ske_dhe /src/openssl/ssl/statem/statem_clnt.c:2179:5
+    #3 0x56bc59 in tls_process_key_exchange /src/openssl/ssl/statem/statem_clnt.c:2288:14
+    #4 0x5606d0 in read_state_machine /src/openssl/ssl/statem/statem.c:637:19
+    #5 0x55ef07 in state_machine /src/openssl/ssl/statem/statem.c:435:21
+    #6 0x4ee180 in SSL_do_handshake /src/openssl/ssl/ssl_lib.c:3812:19
+    #7 0x4c9666 in FuzzerTestOneInput /src/openssl/fuzz/client.c:84:9
+    #8 0x4c9ba4 in HonggfuzzMain (/out/client+0x4c9ba4)
+
+DEDUP_TOKEN: free--DH_free--tls_process_ske_dhe
+previously allocated by thread T0 here:
+    #0 0x496c2d in malloc /src/llvm-project/compiler-rt/lib/asan/asan_malloc_linux.cpp:145:3
+    #1 0x6ed17c in CRYPTO_zalloc /src/openssl/crypto/mem.c:191:11
+    #2 0x6127c8 in dh_new_intern /src/openssl/crypto/dh/dh_lib.c:66:15
+    #3 0x571f29 in tls_process_ske_dhe /src/openssl/ssl/statem/statem_clnt.c:2103:10
+    #4 0x56bc59 in tls_process_key_exchange /src/openssl/ssl/statem/statem_clnt.c:2288:14
+    #5 0x5606d0 in read_state_machine /src/openssl/ssl/statem/statem.c:637:19
+    #6 0x55ef07 in state_machine /src/openssl/ssl/statem/statem.c:435:21
+    #7 0x4ee180 in SSL_do_handshake /src/openssl/ssl/ssl_lib.c:3812:19
+    #8 0x4c9666 in FuzzerTestOneInput /src/openssl/fuzz/client.c:84:9
+    #9 0x4c9ba4 in HonggfuzzMain (/out/client+0x4c9ba4)
+
+DEDUP_TOKEN: malloc--CRYPTO_zalloc--dh_new_intern
+SUMMARY: AddressSanitizer: heap-use-after-free /src/openssl/include/internal/refcount.h:51:12 in CRYPTO_DOWN_REF
+Shadow bytes around the buggy address:
+  0x0c1e7fffda50: fd fd fd fd fd fd fd fd fd fd fa fa fa fa fa fa
+  0x0c1e7fffda60: fa fa fd fd fd fd fd fd fd fd fd fd fd fd fd fd
+  0x0c1e7fffda70: fd fd fd fd fd fd fd fd fa fa fa fa fa fa fa fa
+  0x0c1e7fffda80: fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd
+  0x0c1e7fffda90: fd fd fd fd fd fd fa fa fa fa fa fa fa fa fd fd
+=>0x0c1e7fffdaa0: fd fd fd fd fd fd fd fd fd fd fd fd[fd]fd fd fd
+  0x0c1e7fffdab0: fd fd fd fd fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c1e7fffdac0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c1e7fffdad0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c1e7fffdae0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c1e7fffdaf0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+  Shadow gap:              cc
+==11493==ABORTING
+CF_RUN_END 2
+CF_RUN_SECONDS 2 0
+CF_PEAK_MEM_BYTES 2731601920

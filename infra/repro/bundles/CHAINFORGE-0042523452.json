@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042523452",
+  "chain": "CWE-1285->CWE-787",
+  "project": "ffmpeg",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42523452",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "95a78c08c17b73a50ad64c1b82e47970a3f2bc41",
+      "fix_commits": [
+        "95a78c08c17b73a50ad64c1b82e47970a3f2bc41"
+      ],
+      "repo": "https://git.ffmpeg.org/ffmpeg.git"
+    },
+    "patch": "From 95a78c08c17b73a50ad64c1b82e47970a3f2bc41 Mon Sep 17 00:00:00 2001\nFrom: James Almer <jamrial@gmail.com>\nDate: Thu, 20 Apr 2023 10:12:47 -0300\nSubject: [PATCH] avcodec/hevcdec: further constrain some slice header field\n values\n\nnum_ref_idx_l0_active_minus1, num_ref_idx_l1_active_minus1,\nnum_ref_idx_l0_default_active_minus1, and num_ref_idx_l1_default_active_minus1\nare all in the range 0 to 14, inclusive.\n\nSigned-off-by: James Almer <jamrial@gmail.com>\n---\n libavcodec/hevc_ps.c | 10 ++++++++--\n libavcodec/hevcdec.c |  6 +++---\n 2 files changed, 11 insertions(+), 5 deletions(-)\n\ndiff --git a/libavcodec/hevc_ps.c b/libavcodec/hevc_ps.c\nindex 7401ea2..f29f783 100644\n--- a/libavcodec/hevc_ps.c\n+++ b/libavcodec/hevc_ps.c\n@@ -1762,8 +1762,14 @@ int ff_hevc_decode_nal_pps(GetBitContext *gb, AVCodecContext *avctx,\n \n     pps->cabac_init_present_flag = get_bits1(gb);\n \n-    pps->num_ref_idx_l0_default_active = get_ue_golomb_long(gb) + 1;\n-    pps->num_ref_idx_l1_default_active = get_ue_golomb_long(gb) + 1;\n+    pps->num_ref_idx_l0_default_active = get_ue_golomb_31(gb) + 1;\n+    pps->num_ref_idx_l1_default_active = get_ue_golomb_31(gb) + 1;\n+    if (pps->num_ref_idx_l0_default_active >= HEVC_MAX_REFS ||\n+        pps->num_ref_idx_l1_default_active >= HEVC_MAX_REFS) {\n+        av_log(avctx, AV_LOG_ERROR, \"Too many default refs in PPS: %d/%d.\\n\",\n+               pps->num_ref_idx_l0_default_active, pps->num_ref_idx_l1_default_active);\n+        goto err;\n+    }\n \n     pps->pic_init_qp_minus26 = get_se_golomb(gb);\n \ndiff --git a/libavcodec/hevcdec.c b/libavcodec/hevcdec.c\nindex 1a0beac..0fa4fdd 100644\n--- a/libavcodec/hevcdec.c\n+++ b/libavcodec/hevcdec.c\n@@ -773,11 +773,11 @@ static int hls_slice_header(HEVCContext *s)\n                 sh->nb_refs[L1] = s->ps.pps->num_ref_idx_l1_default_active;\n \n             if (get_bits1(gb)) { // num_ref_idx_active_override_flag\n-                sh->nb_refs[L0] = get_ue_golomb_long(gb) + 1;\n+                sh->nb_refs[L0] = get_ue_golomb_31(gb) + 1;\n                 if (sh->slice_type == HEVC_SLICE_B)\n-                    sh->nb_refs[L1] = get_ue_golomb_long(gb) + 1;\n+                    sh->nb_refs[L1] = get_ue_golomb_31(gb) + 1;\n             }\n-            if (sh->nb_refs[L0] > HEVC_MAX_REFS || sh->nb_refs[L1] > HEVC_MAX_REFS) {\n+            if (sh->nb_refs[L0] >= HEVC_MAX_REFS || sh->nb_refs[L1] >= HEVC_MAX_REFS) {\n                 av_log(s->avctx, AV_LOG_ERROR, \"Too many refs: %d/%d.\\n\",\n                        sh->nb_refs[L0], sh->nb_refs[L1]);\n                 return AVERROR_INVALIDDATA;\n-- \n2.55.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42523452-vul",
+      "digest": "sha256:2aed2b558907f99fc72b1cdc791145a14c73db4575e93ff5e11920a47f59c89c"
+    },
+    "patched": {
+      "ref": "n132/arvo:42523452-fix",
+      "digest": "sha256:3f9bb30d1f6dc1506eae2930827752dedf950c230bb11b062afc346fcde17a41"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/ffmpeg/libavcodec/hevc_ps.c:1365",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/ffmpeg/libavcodec/hevc_ps.c:1365"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042515416",
+  "chain": "CWE-20->CWE-787",
+  "project": "freetype2",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42515416",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "e6699596af5c5d6f0ae0ea06e19df87dce088df8",
+      "fix_commits": [
+        "e6699596af5c5d6f0ae0ea06e19df87dce088df8"
+      ],
+      "repo": "https://github.com/freetype/freetype2"
+    },
+    "patch": "diff --git a/ChangeLog b/ChangeLog\nindex 0b9c42b2f..bec432e5f 100644\n--- a/ChangeLog\n+++ b/ChangeLog\n@@ -1,3 +1,15 @@\n+2017-02-02  Werner Lemberg  <wl@gnu.org>\n+\n+\t[truetype] Fix MVAR post-action handling.\n+\n+\tReported as\n+\n+\t  https://bugs.chromium.org/p/oss-fuzz/issues/detail?id=509\n+\n+\t* src/truetype/ttobjs.c (tt_size_reset): Do nothing for CFF2.  This\n+\tis important to make `tt_size_reset_iterator' (called in\n+\t`tt_apply_mvar') always work.\n+\n 2017-02-02  Werner Lemberg  <wl@gnu.org>\n \n \tMake compilation with FT_CONFIG_OPTION_PIC work again.\ndiff --git a/src/truetype/ttobjs.c b/src/truetype/ttobjs.c\nindex 18aa48a93..00207bb46 100644\n--- a/src/truetype/ttobjs.c\n+++ b/src/truetype/ttobjs.c\n@@ -1212,10 +1212,14 @@\n     FT_Size_Metrics*  metrics;\n \n \n-    size->ttmetrics.valid = FALSE;\n-\n     face = (TT_Face)size->root.face;\n \n+    /* nothing to do for CFF2 */\n+    if ( face->isCFF2 )\n+      return FT_Err_Ok;\n+\n+    size->ttmetrics.valid = FALSE;\n+\n     metrics = &size->metrics;\n \n     /* copy the result from base layer */\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42515416-vul",
+      "digest": "sha256:d0efdf895d8f93904a17a3d090c6625751f3b83447a4ab2895983ab20d2b3af9"
+    },
+    "patched": {
+      "ref": "n132/arvo:42515416-fix",
+      "digest": "sha256:654ba12db72bad1e49fe7665e6e96edc69c5443dafb1e6eb0ff4d19e64b9971d"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/freetype2/src/truetype/ttobjs.c:1215",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/freetype2/src/truetype/ttobjs.c:1215"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

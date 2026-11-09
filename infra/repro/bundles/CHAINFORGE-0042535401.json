@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042535401",
+  "chain": "CWE-416->CWE-787",
+  "project": "quickjs",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42535401",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "11d076fac6691da27df021872cdb12ec44d022e6",
+      "fix_commits": [
+        "11d076fac6691da27df021872cdb12ec44d022e6"
+      ],
+      "repo": "https://github.com/bellard/quickjs"
+    },
+    "patch": "diff --git a/quickjs-opcode.h b/quickjs-opcode.h\nindex f20fb110e..e721e1707 100644\n--- a/quickjs-opcode.h\n+++ b/quickjs-opcode.h\n@@ -144,6 +144,7 @@ DEF( put_private_field, 1, 3, 0, none) /* obj value prop -> */\n DEF(define_private_field, 1, 3, 1, none) /* obj prop value -> obj */\n DEF(   get_array_el, 1, 2, 1, none)\n DEF(  get_array_el2, 1, 2, 2, none) /* obj prop -> obj value */\n+DEF(  get_array_el3, 1, 2, 3, none) /* obj prop -> obj prop1 value */\n DEF(   put_array_el, 1, 3, 0, none)\n DEF(get_super_value, 1, 3, 1, none) /* this obj prop -> value */\n DEF(put_super_value, 1, 4, 0, none) /* this obj prop value -> */\n@@ -189,7 +190,6 @@ DEF(      nip_catch, 1, 2, 1, none) /* catch ... a -> a */\n DEF(      to_object, 1, 1, 1, none)\n //DEF(      to_string, 1, 1, 1, none)\n DEF(     to_propkey, 1, 1, 1, none)\n-DEF(    to_propkey2, 1, 2, 2, none)\n \n DEF(   with_get_var, 10, 1, 0, atom_label_u8)     /* must be in the same order as scope_xxx */\n DEF(   with_put_var, 10, 2, 1, atom_label_u8)     /* must be in the same order as scope_xxx */\ndiff --git a/quickjs.c b/quickjs.c\nindex 2ea0bd92c..a73485cad 100644\n--- a/quickjs.c\n+++ b/quickjs.c\n@@ -18239,6 +18239,38 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,\n             }\n             BREAK;\n \n+        CASE(OP_get_array_el3):\n+            {\n+                JSValue val;\n+\n+                switch (JS_VALUE_GET_TAG(sp[-2])) {\n+                case JS_TAG_INT:\n+                case JS_TAG_STRING:\n+                case JS_TAG_SYMBOL:\n+                    /* undefined and null are tested in JS_GetPropertyValue() */\n+                    break;\n+                default:\n+                    /* must be tested nefore JS_ToPropertyKey */\n+                    if (unlikely(JS_IsUndefined(sp[-2]) || JS_IsNull(sp[-2]))) {\n+                        JS_ThrowTypeError(ctx, \"value has no property\");\n+                        goto exception;\n+                    }\n+                    sf->cur_pc = pc;\n+                    ret_val = JS_ToPropertyKey(ctx, sp[-1]);\n+                    if (JS_IsException(ret_val))\n+                        goto exception;\n+                    JS_FreeValue(ctx, sp[-1]);\n+                    sp[-1] = ret_val;\n+                    break;\n+                }\n+                sf->cur_pc = pc;\n+                val = JS_GetPropertyValue(ctx, sp[-2], JS_DupValue(ctx, sp[-1]));\n+                *sp++ = val;\n+                if (unlikely(JS_IsException(val)))\n+                    goto exception;\n+            }\n+            BREAK;\n+            \n         CASE(OP_get_ref_value):\n             {\n                 JSValue val;\n@@ -18966,27 +18998,6 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,\n             }\n             BREAK;\n \n-        CASE(OP_to_propkey2):\n-            /* must be tested first */\n-            if (unlikely(JS_IsUndefined(sp[-2]) || JS_IsNull(sp[-2]))) {\n-                JS_ThrowTypeError(ctx, \"value has no property\");\n-                goto exception;\n-            }\n-            switch (JS_VALUE_GET_TAG(sp[-1])) {\n-            case JS_TAG_INT:\n-            case JS_TAG_STRING:\n-            case JS_TAG_SYMBOL:\n-                break;\n-            default:\n-                sf->cur_pc = pc;\n-                ret_val = JS_ToPropertyKey(ctx, sp[-1]);\n-                if (JS_IsException(ret_val))\n-                    goto exception;\n-                JS_FreeValue(ctx, sp[-1]);\n-                sp[-1] = ret_val;\n-                break;\n-            }\n-            BREAK;\n #if 0\n         CASE(OP_to_string):\n             if (JS_VALUE_GET_TAG(sp[-1]) != JS_TAG_STRING) {\n@@ -24307,10 +24318,7 @@ static __exception int get_lvalue(JSParseState *s, int *popcode, int *pscope,\n             emit_u16(s, scope);\n             break;\n         case OP_get_array_el:\n-            /* XXX: replace by a single opcode ? */\n-            emit_op(s, OP_to_propkey2);\n-            emit_op(s, OP_dup2);\n-            emit_op(s, OP_get_array_el);\n+            emit_op(s, OP_get_array_el3);\n             break;\n         case OP_get_super_value:\n             emit_op(s, OP_to_propkey);\n@@ -24739,7 +24747,7 @@ static int js_parse_destructuring_element(JSParseState *s, int tok, int is_arg,\n                     continue;\n                 }\n                 if (prop_name == JS_ATOM_NULL) {\n-                    emit_op(s, OP_to_propkey2);\n+                    emit_op(s, OP_to_propkey);\n                     if (has_ellipsis) {\n                         /* define the property in excludeList */\n                         emit_op(s, OP_perm3);\n@@ -33334,9 +33342,8 @@ static __exception int resolve_labels(JSContext *ctx, JSFunctionDef *s)\n             goto no_change;\n \n         case OP_to_propkey:\n-        case OP_to_propkey2:\n             if (OPTIMIZE) {\n-                /* remove redundant to_propkey/to_propkey2 opcodes when storing simple data */\n+                /* remove redundant to_propkey opcodes when storing simple data */\n                 if (code_match(&cc, pos_next, M3(OP_get_loc, OP_get_arg, OP_get_var_ref), -1, OP_put_array_el, -1)\n                 ||  code_match(&cc, pos_next, M3(OP_push_i32, OP_push_const, OP_push_atom_value), OP_put_array_el, -1)\n                 ||  code_match(&cc, pos_next, M4(OP_undefined, OP_null, OP_push_true, OP_push_false), OP_put_array_el, -1)) {\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42535401-vul",
+      "digest": "sha256:996f7c51d5019ef44afe61f25a291a09563dfddcc475c3f5263ce76c3ea0c6e3"
+    },
+    "patched": {
+      "ref": "n132/arvo:42535401-fix",
+      "digest": "sha256:20adf3aa2fd3e1db1baa33199cc50a8a265bb69e0875ba0e6e6c1f9c08fe1c40"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "SEGV",
+        "direction": "READ",
+        "crash_site": "/src/quickjs/quickjs-libc.c:3491",
+        "implies_sink_cwe": 476
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "SEGV",
+        "direction": "READ",
+        "site": "/src/quickjs/quickjs-libc.c:3491"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

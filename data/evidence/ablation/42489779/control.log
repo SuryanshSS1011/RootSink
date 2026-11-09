@@ -1,0 +1,79 @@
+======================= INFO =========================
+This binary is built for AFL-fuzz.
+To run the target function on individual input(s) execute this:
+  /out/decompress_chunk_fuzzer < INPUT_FILE
+or
+  /out/decompress_chunk_fuzzer INPUT_FILE1 [INPUT_FILE2 ... ]
+To fuzz with afl-fuzz execute this:
+  afl-fuzz [afl-flags] /out/decompress_chunk_fuzzer [-N]
+afl-fuzz will run N iterations before re-spawning the process (default: 1000)
+======================================================
+Reading 78 bytes from /tmp/poc
+=================================================================
+==1751==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x60700000006e at pc 0x0000006e57f0 bp 0x7ffca9ed9890 sp 0x7ffca9ed9888
+READ of size 2 at 0x60700000006e thread T0
+SCARINESS: 14 (2-byte-read-heap-buffer-overflow)
+    #0 0x6e57ef in Lizard_decompress_LIZv1 /src/c-blosc2/internal-complibs/lizard-1.0/lizard_decompress_liz.h
+    #1 0x6e57ef in Lizard_decompress_generic /src/c-blosc2/internal-complibs/lizard-1.0/lizard_decompress.c:241:19
+    #2 0x6e57ef in Lizard_decompress_safe /src/c-blosc2/internal-complibs/lizard-1.0/lizard_decompress.c:269:12
+    #3 0x552656 in lizard_wrap_decompress /src/c-blosc2/blosc/blosc2.c:407:12
+    #4 0x552656 in blosc_d /src/c-blosc2/blosc/blosc2.c:1118:18
+    #5 0x5492ab in serial_blosc /src/c-blosc2/blosc/blosc2.c:1219:16
+    #6 0x5492ab in do_job /src/c-blosc2/blosc/blosc2.c:1377:15
+    #7 0x54f653 in blosc_run_decompression_with_context /src/c-blosc2/blosc/blosc2.c:2159:13
+    #8 0x54ff6e in blosc2_decompress /src/c-blosc2/blosc/blosc2.c:2227:12
+    #9 0x4fdc91 in LLVMFuzzerTestOneInput /src/c-blosc2/tests/fuzz/fuzz_decompress_chunk.c:34:5
+    #10 0x4fe16e in ExecuteFilesOnyByOne /src/libfuzzer/afl/afl_driver.cpp:207:5
+    #11 0x4fe16e in main /src/libfuzzer/afl/afl_driver.cpp:244:12
+    #12 0x7f672dd5f83f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2083f)
+    #13 0x44ff08 in _start (/out/decompress_chunk_fuzzer+0x44ff08)
+
+DEDUP_TOKEN: Lizard_decompress_LIZv1--Lizard_decompress_generic--Lizard_decompress_safe
+0x60700000006e is located 0 bytes to the right of 78-byte region [0x607000000020,0x60700000006e)
+allocated by thread T0 here:
+    #0 0x4fb15d in operator new(unsigned long) /src/llvm-project/compiler-rt/lib/asan/asan_new_delete.cpp:99:3
+    #1 0x4fe107 in __libcpp_operator_new<unsigned long> /usr/local/bin/../include/c++/v1/new:237:10
+    #2 0x4fe107 in __libcpp_allocate /usr/local/bin/../include/c++/v1/new:263:10
+    #3 0x4fe107 in allocate /usr/local/bin/../include/c++/v1/memory:1574:38
+    #4 0x4fe107 in allocate /usr/local/bin/../include/c++/v1/memory:1430:21
+    #5 0x4fe107 in __vallocate /usr/local/bin/../include/c++/v1/vector:993:37
+    #6 0x4fe107 in vector /usr/local/bin/../include/c++/v1/vector:1126:9
+    #7 0x4fe107 in ExecuteFilesOnyByOne /src/libfuzzer/afl/afl_driver.cpp:204:23
+    #8 0x4fe107 in main /src/libfuzzer/afl/afl_driver.cpp:244:12
+    #9 0x7f672dd5f83f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2083f)
+
+DEDUP_TOKEN: operator new(unsigned long)--__libcpp_operator_new<unsigned long>--__libcpp_allocate
+SUMMARY: AddressSanitizer: heap-buffer-overflow /src/c-blosc2/internal-complibs/lizard-1.0/lizard_decompress_liz.h in Lizard_decompress_LIZv1
+Shadow bytes around the buggy address:
+  0x0c0e7fff7fb0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c0e7fff7fc0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c0e7fff7fd0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c0e7fff7fe0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c0e7fff7ff0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x0c0e7fff8000: fa fa fa fa 00 00 00 00 00 00 00 00 00[06]fa fa
+  0x0c0e7fff8010: fa fa 00 00 00 00 00 00 00 00 00 06 fa fa fa fa
+  0x0c0e7fff8020: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c0e7fff8030: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c0e7fff8040: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c0e7fff8050: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+  Shadow gap:              cc
+==1751==ABORTING

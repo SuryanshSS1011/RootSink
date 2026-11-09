@@ -1,0 +1,75 @@
+======================= INFO =========================
+This binary is built for AFL-fuzz.
+To run the target function on individual input(s) execute this:
+  /out/libarchive_fuzzer < INPUT_FILE
+or
+  /out/libarchive_fuzzer INPUT_FILE1 [INPUT_FILE2 ... ]
+To fuzz with afl-fuzz execute this:
+  afl-fuzz [afl-flags] /out/libarchive_fuzzer [-N]
+afl-fuzz will run N iterations before re-spawning the process (default: 1000)
+======================================================
+Reading 524 bytes from /tmp/poc
+=================================================================
+==2164106==ERROR: AddressSanitizer: stack-buffer-overflow on address 0x14c70a95c834 at pc 0x0000004ec49d bp 0x7ffd18d3beb0 sp 0x7ffd18d3b660
+WRITE of size 7 at 0x14c70a95c834 thread T0
+SCARINESS: 55 (7-byte-write-stack-buffer-overflow)
+    #0 0x4ec49c in __asan_memset /src/llvm/projects/compiler-rt/lib/asan/asan_interceptors_memintrinsics.cc:27
+    #1 0x59969c in parse_tables /src/libarchive/libarchive/archive_read_support_format_rar5.c:2028:37
+    #2 0x598762 in process_block /src/libarchive/libarchive/archive_read_support_format_rar5.c:2826:19
+    #3 0x597c12 in do_uncompress_file /src/libarchive/libarchive/archive_read_support_format_rar5.c:3011:19
+    #4 0x597561 in uncompress_file /src/libarchive/libarchive/archive_read_support_format_rar5.c:3083:15
+    #5 0x592acf in rar5_read_data /src/libarchive/libarchive/archive_read_support_format_rar5.c:3284:11
+    #6 0x536ef1 in archive_read_data /src/libarchive/libarchive/archive_read.c:842:8
+    #7 0x531adb in LLVMFuzzerTestOneInput /src/libarchive_fuzzer.cc:49:17
+    #8 0x53282e in ExecuteFilesOnyByOne(int, char**) /src/libfuzzer/afl/afl_driver.cpp:301:5
+    #9 0x532d9e in main /src/libfuzzer/afl/afl_driver.cpp:339:12
+    #10 0x14c7098e782f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+    #11 0x41e618 in _start (/out/libarchive_fuzzer+0x41e618)
+
+DEDUP_TOKEN: __asan_memset--parse_tables--process_block
+Address 0x14c70a95c834 is located in stack of thread T0 at offset 52 in frame
+    #0 0x59943f in parse_tables /src/libarchive/libarchive/archive_read_support_format_rar5.c:1990
+
+DEDUP_TOKEN: parse_tables
+  This frame has 5 object(s):
+    [32, 52) 'bit_length' (line 1992) <== Memory access at offset 52 overflows this variable
+    [96, 526) 'table' (line 1992)
+    [592, 594) 'num' (line 2047)
+    [608, 610) 'n' (line 2065)
+    [624, 626) 'n128' (line 2094)
+HINT: this may be a false positive if your program uses some custom stack unwind mechanism, swapcontext or vfork
+      (longjmp and C++ exceptions *are* supported)
+SUMMARY: AddressSanitizer: stack-buffer-overflow /src/llvm/projects/compiler-rt/lib/asan/asan_interceptors_memintrinsics.cc:27 in __asan_memset
+Shadow bytes around the buggy address:
+  0x0299615238b0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0299615238c0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0299615238d0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0299615238e0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0299615238f0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x029961523900: f1 f1 f1 f1 00 00[04]f2 f2 f2 f2 f2 00 00 00 00
+  0x029961523910: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x029961523920: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x029961523930: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x029961523940: 00 06 f2 f2 f2 f2 f2 f2 f2 f2 f8 f2 f8 f2 f8 f3
+  0x029961523950: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+  Shadow gap:              cc
+==2164106==ABORTING

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042541510",
+  "chain": "CWE-20->CWE-125",
+  "project": "gdal",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42541510",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "ff3561ab4d24310397409963cdaf786b7cc46d4c",
+      "fix_commits": [
+        "ff3561ab4d24310397409963cdaf786b7cc46d4c"
+      ],
+      "repo": "https://github.com/OSGeo/gdal"
+    },
+    "patch": "diff --git a/gdal/gcore/overview.cpp b/gdal/gcore/overview.cpp\nindex c68b7a5124e0..8fba9a892a80 100644\n--- a/gdal/gcore/overview.cpp\n+++ b/gdal/gcore/overview.cpp\n@@ -774,10 +774,10 @@ GDALResampleChunk32R_Gauss( double dfXRatioDstToSrc, double dfYRatioDstToSrc,\n         }\n \n         int nYShiftGaussMatrix = 0;\n-        if(nSrcYOff < 0)\n+        if(nSrcYOff < nChunkYOff)\n         {\n-            nYShiftGaussMatrix = -nSrcYOff;\n-            nSrcYOff = 0;\n+            nYShiftGaussMatrix = -(nSrcYOff - nChunkYOff);\n+            nSrcYOff = nChunkYOff;\n         }\n \n         const float * const pafSrcScanline =\n@@ -796,6 +796,12 @@ GDALResampleChunk32R_Gauss( double dfXRatioDstToSrc, double dfYRatioDstToSrc,\n             int nSrcXOff2 =\n                 static_cast<int>(0.5 + (iDstPixel+1) * dfXRatioDstToSrc) + 1;\n \n+            if( nSrcXOff < nChunkXOff )\n+            {\n+                nSrcXOff = nChunkXOff;\n+                nSrcXOff2++;\n+            }\n+\n             const int iSizeX = nSrcXOff2 - nSrcXOff;\n             nSrcXOff = nSrcXOff + iSizeX/2 - nGaussMatrixDim/2;\n             nSrcXOff2 = nSrcXOff + nGaussMatrixDim;\n@@ -808,10 +814,10 @@ GDALResampleChunk32R_Gauss( double dfXRatioDstToSrc, double dfYRatioDstToSrc,\n             }\n \n             int nXShiftGaussMatrix = 0;\n-            if(nSrcXOff < 0)\n+            if(nSrcXOff < nChunkXOff)\n             {\n-                nXShiftGaussMatrix = -nSrcXOff;\n-                nSrcXOff = 0;\n+                nXShiftGaussMatrix = -(nSrcXOff - nChunkXOff);\n+                nSrcXOff = nChunkXOff;\n             }\n \n             if( poColorTable == nullptr )\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42541510-vul",
+      "digest": "sha256:cfa40dec7c616a9d31cd6d2401bb6fea64006ac908b3a211e83f21313a6b02f4"
+    },
+    "patched": {
+      "ref": "n132/arvo:42541510-fix",
+      "digest": "sha256:3e525acdec62a982356aa9e97666f5f3877ea94cadda6908b6a97808b74d8181"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/gdal/gdal/gcore/overview.cpp:828",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/gdal/gdal/gcore/overview.cpp:828"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

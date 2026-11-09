@@ -1,0 +1,76 @@
+======================= INFO =========================
+This binary is built for AFL-fuzz.
+To run the target function on individual input(s) execute this:
+  /out/libarchive_fuzzer < INPUT_FILE
+or
+  /out/libarchive_fuzzer INPUT_FILE1 [INPUT_FILE2 ... ]
+To fuzz with afl-fuzz execute this:
+  afl-fuzz [afl-flags] /out/libarchive_fuzzer [-N]
+afl-fuzz will run N iterations before re-spawning the process (default: 1000)
+======================================================
+Reading 357 bytes from /tmp/poc
+=================================================================
+==1572692==ERROR: AddressSanitizer: stack-buffer-overflow on address 0x15554faf7980 at pc 0x00000052fa4c bp 0x7ffc029ac6f0 sp 0x7ffc029ac6e8
+WRITE of size 1 at 0x15554faf7980 thread T0
+SCARINESS: 46 (1-byte-write-stack-buffer-overflow)
+    #0 0x52fa4b in parse_file_extra_owner /src/libarchive/libarchive/archive_read_support_format_rar5.c:1377:21
+    #1 0x52e0c9 in process_head_file_extra /src/libarchive/libarchive/archive_read_support_format_rar5.c:1441:9
+    #2 0x52d03a in process_head_file /src/libarchive/libarchive/archive_read_support_format_rar5.c:1618:19
+    #3 0x52c661 in process_head_service /src/libarchive/libarchive/archive_read_support_format_rar5.c:1670:15
+    #4 0x52ba93 in process_base_block /src/libarchive/libarchive/archive_read_support_format_rar5.c:1921:19
+    #5 0x52a954 in rar5_read_header /src/libarchive/libarchive/archive_read_support_format_rar5.c:2014:15
+    #6 0x4d1e23 in _archive_read_next_header2 /src/libarchive/libarchive/archive_read.c:649:7
+    #7 0x4d1c1d in _archive_read_next_header /src/libarchive/libarchive/archive_read.c:687:8
+    #8 0x4c8ce4 in LLVMFuzzerTestOneInput /src/libarchive_fuzzer.cc:48:10
+    #9 0x4caa0a in ExecuteFilesOnyByOne(int, char**) /src/libfuzzer/afl/afl_driver.cpp:156:5
+    #10 0x4cac71 in main /src/libfuzzer/afl/afl_driver.cpp:193:12
+    #11 0x15554ea9182f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+    #12 0x41f678 in _start (/out/libarchive_fuzzer+0x41f678)
+
+DEDUP_TOKEN: parse_file_extra_owner--process_head_file_extra--process_head_file
+Address 0x15554faf7980 is located in stack of thread T0 at offset 384 in frame
+    #0 0x52f2ef in parse_file_extra_owner /src/libarchive/libarchive/archive_read_support_format_rar5.c:1335
+
+DEDUP_TOKEN: parse_file_extra_owner
+  This frame has 5 object(s):
+    [32, 40) 'flags' (line 1336)
+    [64, 72) 'value_len' (line 1337)
+    [96, 104) 'id' (line 1339)
+    [128, 384) 'namebuf' (line 1340) <== Memory access at offset 384 overflows this variable
+    [448, 456) 'p' (line 1341)
+HINT: this may be a false positive if your program uses some custom stack unwind mechanism, swapcontext or vfork
+      (longjmp and C++ exceptions *are* supported)
+SUMMARY: AddressSanitizer: stack-buffer-overflow /src/libarchive/libarchive/archive_read_support_format_rar5.c:1377:21 in parse_file_extra_owner
+Shadow bytes around the buggy address:
+  0x02ab29f56ee0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x02ab29f56ef0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x02ab29f56f00: f1 f1 f1 f1 00 f2 f2 f2 00 f2 f2 f2 00 f2 f2 f2
+  0x02ab29f56f10: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x02ab29f56f20: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x02ab29f56f30:[f2]f2 f2 f2 f2 f2 f2 f2 00 f3 f3 f3 00 00 00 00
+  0x02ab29f56f40: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x02ab29f56f50: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x02ab29f56f60: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x02ab29f56f70: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x02ab29f56f80: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+  Shadow gap:              cc
+==1572692==ABORTING

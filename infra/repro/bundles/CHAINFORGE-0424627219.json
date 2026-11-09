@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0424627219",
+  "chain": "CWE-456->CWE-457",
+  "project": "libxml2",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "424627219",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "a3992815b3d4caa4a6709406ca085c9f93856809",
+      "fix_commits": [
+        "a3992815b3d4caa4a6709406ca085c9f93856809"
+      ],
+      "repo": "https://gitlab.gnome.org/GNOME/libxml2.git"
+    },
+    "patch": "From a3992815b3d4caa4a6709406ca085c9f93856809 Mon Sep 17 00:00:00 2001\nFrom: Nick Wellnhofer <wellnhofer@aevum.de>\nDate: Thu, 12 Jun 2025 13:51:37 +0200\nSubject: [PATCH] parser: Fix buffer overflow when parsing PublicIds\n\nRegressed with 8231c0366 and 30665ae4.\n---\n parser.c | 2 +-\n 1 file changed, 1 insertion(+), 1 deletion(-)\n\ndiff --git a/parser.c b/parser.c\nindex 9ca0945..f47f6b8 100644\n--- a/parser.c\n+++ b/parser.c\n@@ -4446,7 +4446,7 @@ xmlParsePubidLiteral(xmlParserCtxt *ctxt) {\n                 xmlFree(buf);\n                 return(NULL);\n             }\n-\t    tmp = xmlRealloc(buf, size);\n+\t    tmp = xmlRealloc(buf, newSize);\n \t    if (tmp == NULL) {\n \t\txmlErrMemory(ctxt);\n \t\txmlFree(buf);\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:424627219-vul",
+      "digest": "sha256:2337d75380411c3181b1c751ac8a04138d35c8c28019b033f4608165097c6606"
+    },
+    "patched": {
+      "ref": "n132/arvo:424627219-fix",
+      "digest": "sha256:bc298c91f7b46e116952878441749f41598fffe5dea573ebde61d138947c5232"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/libxml2/xmlstring.c:76",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/libxml2/xmlstring.c:76"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

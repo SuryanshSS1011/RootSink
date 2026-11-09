@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042499879",
+  "chain": "CWE-20->CWE-125",
+  "project": "net-snmp",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42499879",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "4f4a37ee1825d8e723364af6ec84c109594cd29c",
+      "fix_commits": [
+        "4f4a37ee1825d8e723364af6ec84c109594cd29c"
+      ],
+      "repo": "https://github.com/net-snmp/net-snmp"
+    },
+    "patch": "diff --git a/snmplib/read_config.c b/snmplib/read_config.c\nindex 95aae30489..89987fd205 100644\n--- a/snmplib/read_config.c\n+++ b/snmplib/read_config.c\n@@ -829,7 +829,7 @@ read_config(const char *filename,\n \n             linelen += strlen(line + linelen);\n \n-            if (line[linelen - 1] == '\\n') {\n+            if (linelen > 0 && line[linelen - 1] == '\\n') {\n               line[linelen - 1] = '\\0';\n               break;\n             }\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42499879-vul",
+      "digest": "sha256:d0bb221c088549dfd261f018965f5798086161bc113b771f54815ecfd18b54c0"
+    },
+    "patched": {
+      "ref": "n132/arvo:42499879-fix",
+      "digest": "sha256:4747965f959fc63a4e82f2cb6c220e1058d7326131a94be761a48c3a05a76ddd"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/net-snmp/snmplib/read_config.c:823",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/net-snmp/snmplib/read_config.c:823"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

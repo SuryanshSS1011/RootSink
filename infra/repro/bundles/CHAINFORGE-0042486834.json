@@ -1,0 +1,73 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042486834",
+  "chain": "CWE-416->CWE-125",
+  "project": "libzmq",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42486834",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "97f82741293c67cc0ba9c343456e9ea0dde00055\n9fe56b175dff42baaa55963117dac70e5a270272",
+      "fix_commits": [
+        "97f82741293c67cc0ba9c343456e9ea0dde00055",
+        "9fe56b175dff42baaa55963117dac70e5a270272"
+      ],
+      "repo": "https://github.com/zeromq/libzmq"
+    },
+    "patch": "diff --git a/src/options.cpp b/src/options.cpp\nindex 3edc5fcde5..83e3e91826 100644\n--- a/src/options.cpp\n+++ b/src/options.cpp\n@@ -276,13 +276,16 @@ int zmq::options_t::set_curve_key (uint8_t *destination_,\n             mechanism = ZMQ_CURVE;\n             return 0;\n \n-        case CURVE_KEYSIZE_Z85 + 1:\n-            if (zmq_z85_decode (destination_,\n-                                reinterpret_cast<const char *> (optval_))) {\n+        case CURVE_KEYSIZE_Z85 + 1: {\n+            const std::string s (static_cast<const char *> (optval_),\n+                                 optvallen_);\n+\n+            if (zmq_z85_decode (destination_, s.c_str ())) {\n                 mechanism = ZMQ_CURVE;\n                 return 0;\n             }\n             break;\n+        }\n \n         case CURVE_KEYSIZE_Z85:\n             char z85_key[CURVE_KEYSIZE_Z85 + 1];\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42486834-vul",
+      "digest": "sha256:47e8edccf4ee6a3aa4cfaa73dc89b410d5ee8bbf908de9eab34537d7969b4340"
+    },
+    "patched": {
+      "ref": "n132/arvo:42486834-fix",
+      "digest": "sha256:cbfddb02483725afae3da48b2525834ea43b909c629bfb8fdc814b741d698045"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/libzmq/src/zmq_utils.cpp:169",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/libzmq/src/zmq_utils.cpp:169"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

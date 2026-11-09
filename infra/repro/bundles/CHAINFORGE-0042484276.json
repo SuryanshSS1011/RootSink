@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042484276",
+  "chain": "CWE-456->CWE-457",
+  "project": "ndpi",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42484276",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "c793e16050df1de377e400eec6e2b34ccff6ca85",
+      "fix_commits": [
+        "c793e16050df1de377e400eec6e2b34ccff6ca85"
+      ],
+      "repo": "https://github.com/ntop/nDPI"
+    },
+    "patch": "From c793e16050df1de377e400eec6e2b34ccff6ca85 Mon Sep 17 00:00:00 2001\nFrom: Luca Deri <deri@ntop.org>\nDate: Sun, 31 May 2020 08:28:02 +0200\nSubject: [PATCH] Added extra TLS memory boundary checks\n\n---\n src/lib/protocols/tls.c | 124 +++++++++++++++++++++-------------------\n 1 file changed, 65 insertions(+), 59 deletions(-)\n\ndiff --git a/src/lib/protocols/tls.c b/src/lib/protocols/tls.c\nindex 816a08a..e2d1a57 100644\n--- a/src/lib/protocols/tls.c\n+++ b/src/lib/protocols/tls.c\n@@ -390,77 +390,83 @@ static void processCertificateElements(struct ndpi_detection_module_struct *ndpi\n \n       i += 3 /* skip the initial patten 55 1D 11 */;\n       i++; /* skip the first type, 0x04 == BIT STRING, and jump to it's length */\n-      i += (packet->payload[i] & 0x80) ? (packet->payload[i] & 0x7F) : 0; /* skip BIT STRING length */\n-      i += 2; /* skip the second type, 0x30 == SEQUENCE, and jump to it's length */\n-      i += (packet->payload[i] & 0x80) ? (packet->payload[i] & 0x7F) : 0; /* skip SEQUENCE length */\n-      i++;\n-\n-      while(i < packet->payload_packet_len) {\n-\tif(packet->payload[i] == 0x82) {\n-\t  if((i < (packet->payload_packet_len - 1))\n-\t     && ((i + packet->payload[i + 1] + 2) < packet->payload_packet_len)) {\n-\t    u_int8_t len = packet->payload[i + 1];\n-\t    char dNSName[256];\n-\n-\t    i += 2;\n-\n-\t    /* The check \"len > sizeof(dNSName) - 1\" will be always false. If we add it,\n-\t       the compiler is smart enough to detect it and throws a warning */\n-\t    if(len == 0 /* Looks something went wrong */)\n-\t      break;\n+      if(i < packet->payload_packet_len) {\n+\ti += (packet->payload[i] & 0x80) ? (packet->payload[i] & 0x7F) : 0; /* skip BIT STRING length */\n+\tif(i < packet->payload_packet_len) {\n+\t  i += 2; /* skip the second type, 0x30 == SEQUENCE, and jump to it's length */\n+\t  if(i < packet->payload_packet_len) {\n+\t    i += (packet->payload[i] & 0x80) ? (packet->payload[i] & 0x7F) : 0; /* skip SEQUENCE length */\n+\t    i++;\n+\n+\t    while(i < packet->payload_packet_len) {\n+\t      if(packet->payload[i] == 0x82) {\n+\t\tif((i < (packet->payload_packet_len - 1))\n+\t\t   && ((i + packet->payload[i + 1] + 2) < packet->payload_packet_len)) {\n+\t\t  u_int8_t len = packet->payload[i + 1];\n+\t\t  char dNSName[256];\n+\n+\t\t  i += 2;\n+\n+\t\t  /* The check \"len > sizeof(dNSName) - 1\" will be always false. If we add it,\n+\t\t     the compiler is smart enough to detect it and throws a warning */\n+\t\t  if(len == 0 /* Looks something went wrong */)\n+\t\t    break;\n \n-\t    strncpy(dNSName, (const char*)&packet->payload[i], len);\n-\t    dNSName[len] = '\\0';\n+\t\t  strncpy(dNSName, (const char*)&packet->payload[i], len);\n+\t\t  dNSName[len] = '\\0';\n \n-\t    cleanupServerName(dNSName, len);\n+\t\t  cleanupServerName(dNSName, len);\n \n #if DEBUG_TLS\n-\t    printf(\"[TLS] dNSName %s [%s]\\n\", dNSName, flow->protos.stun_ssl.ssl.client_requested_server_name);\n+\t\t  printf(\"[TLS] dNSName %s [%s]\\n\", dNSName, flow->protos.stun_ssl.ssl.client_requested_server_name);\n #endif\n-\t    if(matched_name == 0) {\n-\t      if((dNSName[0] == '*') && strstr(flow->protos.stun_ssl.ssl.client_requested_server_name, &dNSName[1]))\n-\t\tmatched_name = 1;\n-\t      else if(strcmp(flow->protos.stun_ssl.ssl.client_requested_server_name, dNSName) == 0)\n-\t\tmatched_name = 1;\n-\t    }\n+\t\t  if(matched_name == 0) {\n+\t\t    if((dNSName[0] == '*') && strstr(flow->protos.stun_ssl.ssl.client_requested_server_name, &dNSName[1]))\n+\t\t      matched_name = 1;\n+\t\t    else if(strcmp(flow->protos.stun_ssl.ssl.client_requested_server_name, dNSName) == 0)\n+\t\t      matched_name = 1;\n+\t\t  }\n \t    \n-\t    if(flow->protos.stun_ssl.ssl.server_names == NULL)\n-\t      flow->protos.stun_ssl.ssl.server_names = ndpi_strdup(dNSName),\n-\t\tflow->protos.stun_ssl.ssl.server_names_len = strlen(dNSName);\n-\t    else {\n-\t      u_int16_t dNSName_len = strlen(dNSName);\n-\t      u_int16_t newstr_len = flow->protos.stun_ssl.ssl.server_names_len + dNSName_len + 1;\n-\t      char *newstr = (char*)ndpi_realloc(flow->protos.stun_ssl.ssl.server_names,\n-\t\t\t\t\t\t flow->protos.stun_ssl.ssl.server_names_len+1, newstr_len+1);\n-\n-\t      if(newstr) {\n-\t\tflow->protos.stun_ssl.ssl.server_names = newstr;\n-\t\tflow->protos.stun_ssl.ssl.server_names[flow->protos.stun_ssl.ssl.server_names_len] = ',';\n-\t\tstrncpy(&flow->protos.stun_ssl.ssl.server_names[flow->protos.stun_ssl.ssl.server_names_len+1],\n-\t\t\tdNSName, dNSName_len+1);\n-\t\tflow->protos.stun_ssl.ssl.server_names[newstr_len] = '\\0';\n-\t\tflow->protos.stun_ssl.ssl.server_names_len = newstr_len;\n-\t      }\n-\t    }\n+\t\t  if(flow->protos.stun_ssl.ssl.server_names == NULL)\n+\t\t    flow->protos.stun_ssl.ssl.server_names = ndpi_strdup(dNSName),\n+\t\t      flow->protos.stun_ssl.ssl.server_names_len = strlen(dNSName);\n+\t\t  else {\n+\t\t    u_int16_t dNSName_len = strlen(dNSName);\n+\t\t    u_int16_t newstr_len = flow->protos.stun_ssl.ssl.server_names_len + dNSName_len + 1;\n+\t\t    char *newstr = (char*)ndpi_realloc(flow->protos.stun_ssl.ssl.server_names,\n+\t\t\t\t\t\t       flow->protos.stun_ssl.ssl.server_names_len+1, newstr_len+1);\n+\n+\t\t    if(newstr) {\n+\t\t      flow->protos.stun_ssl.ssl.server_names = newstr;\n+\t\t      flow->protos.stun_ssl.ssl.server_names[flow->protos.stun_ssl.ssl.server_names_len] = ',';\n+\t\t      strncpy(&flow->protos.stun_ssl.ssl.server_names[flow->protos.stun_ssl.ssl.server_names_len+1],\n+\t\t\t      dNSName, dNSName_len+1);\n+\t\t      flow->protos.stun_ssl.ssl.server_names[newstr_len] = '\\0';\n+\t\t      flow->protos.stun_ssl.ssl.server_names_len = newstr_len;\n+\t\t    }\n+\t\t  }\n \n-\t    if(!flow->l4.tcp.tls.subprotocol_detected)\n-\t      if(ndpi_match_hostname_protocol(ndpi_struct, flow, NDPI_PROTOCOL_TLS, dNSName, len))\n-\t\tflow->l4.tcp.tls.subprotocol_detected = 1;\n+\t\t  if(!flow->l4.tcp.tls.subprotocol_detected)\n+\t\t    if(ndpi_match_hostname_protocol(ndpi_struct, flow, NDPI_PROTOCOL_TLS, dNSName, len))\n+\t\t      flow->l4.tcp.tls.subprotocol_detected = 1;\n \n-\t    i += len;\n-\t  } else {\n+\t\t  i += len;\n+\t\t} else {\n #if DEBUG_TLS\n-\t    printf(\"[TLS] Leftover %u bytes\", packet->payload_packet_len - i);\n+\t\t  printf(\"[TLS] Leftover %u bytes\", packet->payload_packet_len - i);\n #endif\n-\t    break;\n+\t\t  break;\n+\t\t}\n+\t      } else {\n+\t\tbreak;\n+\t      }\n+\t    } /* while */\n+\n+\t    if(!matched_name)\n+\t      NDPI_SET_BIT(flow->risk, NDPI_TLS_CERTIFICATE_MISMATCH); /* Certificate mismatch */\n \t  }\n-\t} else {\n-\t  break;\n \t}\n-      } /* while */\n-\n-      if(!matched_name)\n-\tNDPI_SET_BIT(flow->risk, NDPI_TLS_CERTIFICATE_MISMATCH); /* Certificate mismatch */\n+      }\n     }\n   }\n \n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42484276-vul",
+      "digest": "sha256:6e7b18ad732d150bfdac5d3476c65c89328055ec4da5c6808894e72fc9059bd1"
+    },
+    "patched": {
+      "ref": "n132/arvo:42484276-fix",
+      "digest": "sha256:903f6d2dd038af6bf9d0c073c667dc53380bcc7fb912d86b80241bc5617de6aa"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/ndpi/src/lib/protocols/tls.c:395",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/ndpi/src/lib/protocols/tls.c:395"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

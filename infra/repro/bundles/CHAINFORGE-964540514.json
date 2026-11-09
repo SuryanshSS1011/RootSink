@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-964540514",
+  "chain": "CWE-456->CWE-457",
+  "project": "ffmpeg",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42537634",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://git.ffmpeg.org/gitweb/ffmpeg.git/commitdiff/c390234da2e3c7a8884f5592f0b9b4928c482b3e",
+      "fix_commits": [
+        "c390234da2e3c7a8884f5592f0b9b4928c482b3e"
+      ],
+      "repo": "https://git.ffmpeg.org/gitweb/ffmpeg.git/commitdiff"
+    },
+    "patch": "From c390234da2e3c7a8884f5592f0b9b4928c482b3e Mon Sep 17 00:00:00 2001\nFrom: Michael Niedermayer <michael@niedermayer.cc>\nDate: Wed, 7 Aug 2024 00:18:53 +0200\nSubject: [PATCH] avformat/wtvdec: Check length of read mpeg2_descriptor\n\nFixes: Use of uninitialized value\nFixes: 70900/clusterfuzz-testcase-minimized-ffmpeg_dem_WTV_fuzzer-6286909377150976\n\nFound-by: continuous fuzzing process https://github.com/google/oss-fuzz/tree/master/projects/ffmpeg\nReviewed-by: Peter Ross <pross@xvid.org>\nSigned-off-by: Michael Niedermayer <michael@niedermayer.cc>\n---\n libavformat/wtvdec.c | 3 ++-\n 1 file changed, 2 insertions(+), 1 deletion(-)\n\ndiff --git a/libavformat/wtvdec.c b/libavformat/wtvdec.c\nindex 1a6c4c3..730c7fc 100644\n--- a/libavformat/wtvdec.c\n+++ b/libavformat/wtvdec.c\n@@ -846,7 +846,8 @@ static int parse_chunks(AVFormatContext *s, int mode, int64_t seekts, int *len_p\n                 }\n \n                 buf_size = FFMIN(len - consumed, sizeof(buf));\n-                avio_read(pb, buf, buf_size);\n+                if (avio_read(pb, buf, buf_size) != buf_size)\n+                    return AVERROR_INVALIDDATA;\n                 consumed += buf_size;\n                 ff_parse_mpeg2_descriptor(s, st, 0, &pbuf, buf + buf_size, NULL, 0, 0, NULL);\n             }\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42537634-vul",
+      "digest": "sha256:8648f6fe3d10f38dd43c29d31b05f103d2607c8bd02ffc66232eb10d76f6d9b5"
+    },
+    "patched": {
+      "ref": "n132/arvo:42537634-fix",
+      "digest": "sha256:fe81f9983775edb3234f97b4b7af9fe26497038aa6437ad76fcde8d194307273"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/ffmpeg/libavformat/mpegts.c:1831",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/ffmpeg/libavformat/mpegts.c:1831"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

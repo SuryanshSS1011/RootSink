@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042485275",
+  "chain": "CWE-1284->CWE-125",
+  "project": "hoextdown",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42485275",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "7c7dc6ac9adce5413ab54dcd604db95a9b935b05",
+      "fix_commits": [
+        "7c7dc6ac9adce5413ab54dcd604db95a9b935b05"
+      ],
+      "repo": "https://github.com/kjdev/hoextdown"
+    },
+    "patch": "diff --git a/src/document.c b/src/document.c\nindex fcd1696..a504c2e 100644\n--- a/src/document.c\n+++ b/src/document.c\n@@ -1789,8 +1789,10 @@ is_codefence(uint8_t *data, size_t size, size_t *width, uint8_t *chr)\n \tif (data[2] == ' ') { i++; } } }\n \n \t/* looking at the hrule uint8_t */\n+\tif (i + 2 >= size)\n+\t\treturn 0;\n \tc = data[i];\n-\tif (i + 2 >= size || !(c=='~' || c=='`'))\n+\tif (!(c=='~' || c=='`'))\n \t\treturn 0;\n \n \t/* the fence must be that same character */\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42485275-vul",
+      "digest": "sha256:2a0f501f7863343b35ab13a5c3e0d64c7a978bdaa270fafa4f3b2ea499fca819"
+    },
+    "patched": {
+      "ref": "n132/arvo:42485275-fix",
+      "digest": "sha256:247b9562acbb7e23792b63421d08adebcb7b93e291299026ea1fe2b5284a63bd"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/hoextdown/src/document.c:1792",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/hoextdown/src/document.c:1792"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

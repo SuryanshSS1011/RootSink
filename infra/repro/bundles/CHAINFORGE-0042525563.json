@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042525563",
+  "chain": "CWE-20->CWE-125",
+  "project": "hunspell",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42525563",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "ab3825969d2a78f9871242c9ce89fcd34a3ddafe",
+      "fix_commits": [
+        "ab3825969d2a78f9871242c9ce89fcd34a3ddafe"
+      ],
+      "repo": "https://github.com/hunspell/hunspell"
+    },
+    "patch": "diff --git a/src/hunspell/affixmgr.cxx b/src/hunspell/affixmgr.cxx\nindex c193105af..a9e395eb7 100644\n--- a/src/hunspell/affixmgr.cxx\n+++ b/src/hunspell/affixmgr.cxx\n@@ -1675,12 +1675,21 @@ struct hentry* AffixMgr::compound_check(const std::string& word,\n         // compound words, overriding the effect of COMPOUNDPERMITFLAG\n         if ((rv) && compoundforbidflag &&\n                 TESTAFF(rv->astr, compoundforbidflag, rv->alen) && !hu_mov_rule) {\n-            // given the while conditions that continue jumps to, this situation\n-            // never ends\n-            if (!scpd && !onlycpdrule && simplifiedcpd) {\n+            bool would_continue = !onlycpdrule && simplifiedcpd;\n+            if (!scpd && would_continue) {\n+                // given the while conditions that continue jumps to, this situation\n+                // never ends\n                 HUNSPELL_WARNING(stderr, \"break infinite loop\\n\");\n                 break;\n             }\n+\n+            if (scpd > 0 && would_continue) {\n+                // under these conditions we loop again, but the assumption above\n+                // appears to be that cmin and cmax are the original values they\n+                // had in the outside loop\n+                cmin = oldcmin;\n+                cmax = oldcmax;\n+            }\n             continue;\n         }\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42525563-vul",
+      "digest": "sha256:e5c64953bc725cdbd3c4099bcb8731f34a7e35c1255c8397e270d7e7862cc070"
+    },
+    "patched": {
+      "ref": "n132/arvo:42525563-fix",
+      "digest": "sha256:4d9fd0257b083ec68b2b76ebc6077e245b4daa52d6ed191211c078077cfa8819"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/hunspell/src/hunspell/affixmgr.cxx:1612",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/hunspell/src/hunspell/affixmgr.cxx:1612"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

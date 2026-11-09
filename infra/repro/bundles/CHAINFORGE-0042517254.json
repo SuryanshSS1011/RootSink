@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042517254",
+  "chain": "CWE-416->CWE-125",
+  "project": "libxml2",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42517254",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "938105b572433e0772c507d434a8e7985e6cdf5d",
+      "fix_commits": [
+        "938105b572433e0772c507d434a8e7985e6cdf5d"
+      ],
+      "repo": "https://gitlab.gnome.org/GNOME/libxml2.git"
+    },
+    "patch": "From 938105b572433e0772c507d434a8e7985e6cdf5d Mon Sep 17 00:00:00 2001\nFrom: Nick Wellnhofer <wellnhofer@aevum.de>\nDate: Fri, 21 Oct 2022 15:56:12 +0200\nSubject: [PATCH] Revert \"xinclude: Fix regression with nested includes\"\n\nThis reverts commit 7f04e297318b1b908cec20711f74f75625afed7f which\ncaused memory errors.\n\nSee #424.\n---\n result/XInclude/issue424.xml     |  6 -----\n result/XInclude/issue424.xml.rdr | 17 ------------\n test/XInclude/docs/issue424.xml  |  5 ----\n xinclude.c                       | 46 +++++---------------------------\n 4 files changed, 7 insertions(+), 67 deletions(-)\n delete mode 100644 result/XInclude/issue424.xml\n delete mode 100644 result/XInclude/issue424.xml.rdr\n delete mode 100644 test/XInclude/docs/issue424.xml\n\ndiff --git a/result/XInclude/issue424.xml b/result/XInclude/issue424.xml\ndeleted file mode 100644\nindex dc497fa..0000000\n--- a/result/XInclude/issue424.xml\n+++ /dev/null\n@@ -1,6 +0,0 @@\n-<?xml version=\"1.0\"?>\n-<x xmlns:xinclude=\"http://www.w3.org/2001/XInclude\">\n-   <p>Something</p>\n-   <d xmlns:xinclude=\"http://www.w3.org/2001/XInclude\"><p>Something</p></d>\n-   <d xmlns:xinclude=\"http://www.w3.org/2001/XInclude\"><p>Something</p></d>\n-</x>\ndiff --git a/result/XInclude/issue424.xml.rdr b/result/XInclude/issue424.xml.rdr\ndeleted file mode 100644\nindex 39c3b82..0000000\n--- a/result/XInclude/issue424.xml.rdr\n+++ /dev/null\n@@ -1,17 +0,0 @@\n-0 1 x 0 0\n-1 14 #text 0 1 \n-   \n-1 1 p 0 0\n-2 3 #text 0 1 Something\n-1 15 p 0 0\n-1 14 #text 0 1 \n-   \n-1 1 d 0 0\n-2 1 xinclude:include 1 0\n-1 15 d 0 0\n-1 14 #text 0 1 \n-   \n-1 1 xinclude:include 1 0\n-1 14 #text 0 1 \n-\n-0 15 x 0 0\ndiff --git a/test/XInclude/docs/issue424.xml b/test/XInclude/docs/issue424.xml\ndeleted file mode 100644\nindex fc1cd6f..0000000\n--- a/test/XInclude/docs/issue424.xml\n+++ /dev/null\n@@ -1,5 +0,0 @@\n-<x xmlns:xinclude=\"http://www.w3.org/2001/XInclude\">\n-   <p>Something</p>\n-   <d xmlns:xinclude=\"http://www.w3.org/2001/XInclude\"><xinclude:include xpointer=\"xpointer(//p)\"/></d>\n-   <xinclude:include xpointer=\"xpointer(//d)\"/>\n-</x>\ndiff --git a/xinclude.c b/xinclude.c\nindex e14176c..93d7e52 100644\n--- a/xinclude.c\n+++ b/xinclude.c\n@@ -60,7 +60,6 @@ struct _xmlXIncludeRef {\n     xmlNodePtr            inc; /* the included copy */\n     int                   xml; /* xml or txt */\n     int                 count; /* how many refs use that specific doc */\n-    xmlXPathObjectPtr    xptr; /* the xpointer if needed */\n     int\t             fallback; /* fallback was loaded */\n     int\t\t      emptyFb; /* flag to show fallback empty */\n };\n@@ -212,8 +211,6 @@ xmlXIncludeFreeRef(xmlXIncludeRefPtr ref) {\n \txmlFree(ref->URI);\n     if (ref->fragment != NULL)\n \txmlFree(ref->fragment);\n-    if (ref->xptr != NULL)\n-\txmlXPathFreeObject(ref->xptr);\n     xmlFree(ref);\n }\n \n@@ -1471,7 +1468,7 @@ xmlXIncludeLoadDoc(xmlXIncludeCtxtPtr ctxt, const xmlChar *url, int nr) {\n      */\n     if ((URL[0] == 0) || (URL[0] == '#') ||\n \t((ctxt->doc != NULL) && (xmlStrEqual(URL, ctxt->doc->URL)))) {\n-\tdoc = NULL;\n+\tdoc = ctxt->doc;\n         goto loaded;\n     }\n \n@@ -1563,15 +1560,8 @@ loaded:\n \t/*\n \t * Add the top children list as the replacement copy.\n \t */\n-\tif (doc == NULL)\n-\t{\n-\t    /* Hopefully a DTD declaration won't be copied from\n-\t     * the same document */\n-\t    ctxt->incTab[nr]->inc = xmlCopyNodeList(ctxt->doc->children);\n-\t} else {\n-\t    ctxt->incTab[nr]->inc = xmlXIncludeCopyNodeList(ctxt, ctxt->doc,\n-\t\t                                       doc, doc->children);\n-\t}\n+\tctxt->incTab[nr]->inc = xmlXIncludeCopyNodeList(ctxt, ctxt->doc,\n+\t\t                                        doc, doc->children);\n     }\n #ifdef LIBXML_XPTR_ENABLED\n     else {\n@@ -1583,12 +1573,7 @@ loaded:\n \txmlXPathContextPtr xptrctxt;\n \txmlNodeSetPtr set;\n \n-\tif (doc == NULL) {\n-\t    xptrctxt = xmlXPtrNewContext(ctxt->doc, ctxt->incTab[nr]->ref,\n-\t\t                         NULL);\n-\t} else {\n-\t    xptrctxt = xmlXPtrNewContext(doc, NULL, NULL);\n-\t}\n+\txptrctxt = xmlXPtrNewContext(doc, NULL, NULL);\n \tif (xptrctxt == NULL) {\n \t    xmlXIncludeErr(ctxt, ctxt->incTab[nr]->ref,\n \t                   XML_XINCLUDE_XPTR_FAILED,\n@@ -1693,14 +1678,9 @@ loaded:\n \t\t}\n \t    }\n \t}\n-\tif (doc == NULL) {\n-\t    ctxt->incTab[nr]->xptr = xptr;\n-\t    ctxt->incTab[nr]->inc = NULL;\n-\t} else {\n-\t    ctxt->incTab[nr]->inc =\n-\t\txmlXIncludeCopyXPointer(ctxt, ctxt->doc, doc, xptr);\n-\t    xmlXPathFreeObject(xptr);\n-\t}\n+        ctxt->incTab[nr]->inc =\n+            xmlXIncludeCopyXPointer(ctxt, ctxt->doc, doc, xptr);\n+        xmlXPathFreeObject(xptr);\n \txmlXPathFreeContext(xptrctxt);\n \txmlFree(fragment);\n     }\n@@ -2222,17 +2202,6 @@ xmlXIncludeIncludeNode(xmlXIncludeCtxtPtr ctxt, int nr) {\n     if ((cur == NULL) || (cur->type == XML_NAMESPACE_DECL))\n \treturn(-1);\n \n-    /*\n-     * If we stored an XPointer a late computation may be needed\n-     */\n-    if ((ctxt->incTab[nr]->inc == NULL) &&\n-\t(ctxt->incTab[nr]->xptr != NULL)) {\n-\tctxt->incTab[nr]->inc =\n-\t    xmlXIncludeCopyXPointer(ctxt, ctxt->doc, ctxt->doc,\n-\t\t                    ctxt->incTab[nr]->xptr);\n-\txmlXPathFreeObject(ctxt->incTab[nr]->xptr);\n-\tctxt->incTab[nr]->xptr = NULL;\n-    }\n     list = ctxt->incTab[nr]->inc;\n     ctxt->incTab[nr]->inc = NULL;\n     ctxt->incTab[nr]->emptyFb = 0;\n@@ -2501,7 +2470,6 @@ xmlXIncludeDoProcess(xmlXIncludeCtxtPtr ctxt, xmlDocPtr doc, xmlNodePtr tree,\n      */\n     for (i = ctxt->incBase;i < ctxt->incNr; i++) {\n \tif ((ctxt->incTab[i]->inc != NULL) ||\n-            (ctxt->incTab[i]->xptr != NULL) ||\n \t    (ctxt->incTab[i]->emptyFb != 0))\t/* (empty fallback) */\n \t    xmlXIncludeIncludeNode(ctxt, i);\n     }\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42517254-vul",
+      "digest": "sha256:9f9edbb6931a036ba7e6c230d3bc913ba25a7ca700b64ef25d4a2ed28018dd72"
+    },
+    "patched": {
+      "ref": "n132/arvo:42517254-fix",
+      "digest": "sha256:20f09b582a8ca8d0b0a5ffda8a6354b426872077e2d35f330195aa9b4ec045fe"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/libxml2/xinclude.c:1162",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/libxml2/xinclude.c:1162"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

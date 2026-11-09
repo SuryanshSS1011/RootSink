@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042476741",
+  "chain": "CWE-416->CWE-125",
+  "project": "libspng",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42476741",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "58253922e84493e05d2cb18345da78614ab3c189",
+      "fix_commits": [
+        "58253922e84493e05d2cb18345da78614ab3c189"
+      ],
+      "repo": "https://gitlab.com/randy408/libspng.git"
+    },
+    "patch": "diff --git a/spng.c b/spng.c\nindex 6caf1ae3629822a5d38081dceefcf9f13019b76d..1ba0589168ec6fe02a704876518c5e379a14fb59 100644\n--- a/spng.c\n+++ b/spng.c\n@@ -313,6 +313,8 @@ static inline int read_data(spng_ctx *ctx, size_t bytes)\n     return 0;\n }\n \n+/* Read and check the current chunk's crc,\n+   returns -SPNG_CRC_DISCARD if the chunk should be discarded */\n static inline int read_and_check_crc(spng_ctx *ctx)\n {\n     if(ctx == NULL) return 1;\n@@ -332,7 +334,7 @@ static inline int read_and_check_crc(spng_ctx *ctx)\n         else\n         {\n             if(ctx->crc_action_ancillary == SPNG_CRC_USE) return 0;\n-            if(ctx->crc_action_ancillary == SPNG_CRC_DISCARD) return SPNG_CRC_DISCARD;\n+            if(ctx->crc_action_ancillary == SPNG_CRC_DISCARD) return -SPNG_CRC_DISCARD;\n         }\n \n         return SPNG_ECHUNK_CRC;\n@@ -352,7 +354,7 @@ static inline int read_header(spng_ctx *ctx, int *discard)\n     ret = read_and_check_crc(ctx);\n     if(ret)\n     {\n-        if(ret == SPNG_CRC_DISCARD)\n+        if(ret == -SPNG_CRC_DISCARD)\n         {\n             if(discard != NULL) *discard = 1;\n         }\n@@ -1069,7 +1071,7 @@ static int read_chunks_before_idat(spng_ctx *ctx)\n         ret = read_chunk_bytes(ctx, chunk.length);\n         if(ret) return ret;\n \n-        if(is_critical_chunk(&chunk)) /* Critical chunk */\n+        if(is_critical_chunk(&chunk))\n         {\n             if(!memcmp(chunk.type, type_plte, 4))\n             {\n@@ -1505,6 +1507,27 @@ static int read_chunks_after_idat(spng_ctx *ctx)\n \n         memcpy(&chunk, &ctx->current_chunk, sizeof(struct spng_chunk));\n \n+        if(is_critical_chunk(&chunk))\n+        {\n+            if(!memcmp(chunk.type, type_iend, 4))\n+            {\n+                if(chunk.length) return SPNG_ECHUNK_CRC;\n+\n+                ret = read_and_check_crc(ctx);\n+                if(ret == -SPNG_CRC_DISCARD) ret = 0;\n+\n+                return ret;\n+            }\n+            else if(!memcmp(chunk.type, type_idat, 4) && prev_was_idat)\n+            {/* ignore extra IDATs */\n+                ret = discard_chunk_bytes(ctx, chunk.length);\n+                if(ret) return ret;\n+\n+                continue;\n+            }\n+            else return SPNG_ECHUNK_POS; /* critical chunk after last IDAT that isn't IEND */\n+        }\n+\n         if(!chunk_fits_in_cache(ctx, &ctx->chunk_cache_usage))\n         {\n             ret = discard_chunk_bytes(ctx, chunk.length);\n@@ -1512,18 +1535,10 @@ static int read_chunks_after_idat(spng_ctx *ctx)\n             continue;\n         }\n \n-        data = ctx->data;\n-\n         ret = read_chunk_bytes(ctx, chunk.length);\n         if(ret) return ret;\n \n-        /* Critical chunk */\n-        if(is_critical_chunk(&chunk))\n-        {\n-            if(!memcmp(chunk.type, type_iend, 4)) return 0;\n-            else if(!memcmp(chunk.type, type_idat, 4) && prev_was_idat) continue; /* ignore extra IDATs */\n-            else return SPNG_ECHUNK_POS; /* critical chunk after last IDAT that isn't IEND */\n-        }\n+        data = ctx->data;\n \n         prev_was_idat = 0;\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42476741-vul",
+      "digest": "sha256:01fd50a690c788c4b6ffb828d806c89b47c7687cbbff74b89463cf716dd4fc98"
+    },
+    "patched": {
+      "ref": "n132/arvo:42476741-fix",
+      "digest": "sha256:57d7d51238f5b60b09a8744300d1c7af0d8be822cc7895fc41df87763bb7f91a"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/libspng/build/../spng.c:1560",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/libspng/build/../spng.c:1560"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

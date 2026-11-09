@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042486209",
+  "chain": "CWE-1284->CWE-787",
+  "project": "ffmpeg",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42486209",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "7577f8332a6bb2f227b876c83ec6fa45cc9670f9",
+      "fix_commits": [
+        "7577f8332a6bb2f227b876c83ec6fa45cc9670f9"
+      ],
+      "repo": "https://git.ffmpeg.org/ffmpeg.git"
+    },
+    "patch": "From 7577f8332a6bb2f227b876c83ec6fa45cc9670f9 Mon Sep 17 00:00:00 2001\nFrom: Michael Niedermayer <michael@niedermayer.cc>\nDate: Wed, 19 Aug 2020 23:21:21 +0200\nSubject: [PATCH] avcodec/tiff: Check the linearization table size\n\nFixes: out of array access\nFixes: 24604/clusterfuzz-testcase-minimized-ffmpeg_AV_CODEC_ID_TIFF_fuzzer-4843529818603520\n\nFound-by: continuous fuzzing process https://github.com/google/oss-fuzz/tree/master/projects/ffmpeg\nSigned-off-by: Michael Niedermayer <michael@niedermayer.cc>\n---\n libavcodec/tiff.c | 4 +++-\n 1 file changed, 3 insertions(+), 1 deletion(-)\n\ndiff --git a/libavcodec/tiff.c b/libavcodec/tiff.c\nindex 08dbca9..8c0b6f0 100644\n--- a/libavcodec/tiff.c\n+++ b/libavcodec/tiff.c\n@@ -1434,7 +1434,9 @@ static int tiff_decode_tag(TiffContext *s, AVFrame *frame)\n             s->sub_ifd = ff_tget(&s->gb, TIFF_LONG, s->le); /** Only get the first SubIFD */\n         break;\n     case DNG_LINEARIZATION_TABLE:\n-        for (int i = 0; i < FFMIN(count, 1 << s->bpp); i++)\n+        if (count > FF_ARRAY_ELEMS(s->dng_lut))\n+            return AVERROR_INVALIDDATA;\n+        for (int i = 0; i < count; i++)\n             s->dng_lut[i] = ff_tget(&s->gb, type, s->le);\n         break;\n     case DNG_BLACK_LEVEL:\n-- \n2.55.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42486209-vul",
+      "digest": "sha256:e76c9f23d7cc07e2b305524d5467ce6d536e6336b67e60e849d5ce41116fccbf"
+    },
+    "patched": {
+      "ref": "n132/arvo:42486209-fix",
+      "digest": "sha256:2ef171f116efefd7d798378fc7ba1378c4a32b9bf2ba6494576e0a71d02b7d7f"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/ffmpeg/libavcodec/tiff.c:1418",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/ffmpeg/libavcodec/tiff.c:1418"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

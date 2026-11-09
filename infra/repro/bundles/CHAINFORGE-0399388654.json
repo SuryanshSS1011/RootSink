@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0399388654",
+  "chain": "CWE-416->CWE-125",
+  "project": "ghostpdl",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "399388654",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "4c4dcc85ce4f3c7fe53f72dd0098cd7906312dbd",
+      "fix_commits": [
+        "4c4dcc85ce4f3c7fe53f72dd0098cd7906312dbd"
+      ],
+      "repo": "https://cgit.ghostscript.com/ghostpdl.git"
+    },
+    "patch": "From 4c4dcc85ce4f3c7fe53f72dd0098cd7906312dbd Mon Sep 17 00:00:00 2001\nFrom: Ken Sharp <Ken.Sharp@artifex.com>\nDate: Thu, 27 Feb 2025 09:58:15 +0000\nSubject: [PATCH] PDF interpreter - fix CFF font XUID parsing with an empty\n XUID\n\nOSS-fuzz #399388654\n\nThe fuzzed file has a font with an XUID, but the XUID has no bytes. This\ncaused us to allocate a byte array with nothing in it and, for reasons\nI haven't tracked down, causes memory corruption.\n\nOn OSS-fuzz this resulted in a heap-us-after-free but for me on both\nWindows and Linux it causes a signal 11 crash.\n\nThis commit simply sets the XUID to invalid id the length is 0.\n---\n pdf/pdf_font1C.c | 27 ++++++++++++++++-----------\n 1 file changed, 16 insertions(+), 11 deletions(-)\n\ndiff --git a/pdf/pdf_font1C.c b/pdf/pdf_font1C.c\nindex b874dac..b334d53 100644\n--- a/pdf/pdf_font1C.c\n+++ b/pdf/pdf_font1C.c\n@@ -920,18 +920,23 @@ pdfi_read_cff_dict(byte *p, byte *e, pdfi_gs_cff_font_priv *ptpriv, cff_font_off\n \n                 case 14: /* XUID */\n                 {\n-                    long *xvalues = (long *)gs_alloc_byte_array(font->pfont->memory, n, sizeof(long), \"pdfi_read_cff_dict\");\n-                    if (xvalues == NULL) {\n-                        uid_set_invalid(&ptpriv->UID);\n-                    }\n-                    else {\n-                        for (i = 1; i <= n; i++) {\n-                            xvalues[n - i] = args[i - 1].ival;\n+                    long *xvalues = NULL;\n+\n+                    if (n > 0) {\n+                        xvalues = (long *)gs_alloc_byte_array(font->pfont->memory, n, sizeof(long), \"pdfi_read_cff_dict\");\n+                        if (xvalues == NULL) {\n+                            uid_set_invalid(&ptpriv->UID);\n                         }\n-                        if (uid_is_XUID(&ptpriv->UID))\n-                            uid_free(&ptpriv->UID, font->pfont->memory, \"pdfi_read_cff_dict\");\n-                        uid_set_XUID(&ptpriv->UID, xvalues, n);\n-                    }\n+                        else {\n+                            for (i = 1; i <= n; i++) {\n+                                xvalues[n - i] = args[i - 1].ival;\n+                            }\n+                            if (uid_is_XUID(&ptpriv->UID))\n+                                uid_free(&ptpriv->UID, font->pfont->memory, \"pdfi_read_cff_dict\");\n+                            uid_set_XUID(&ptpriv->UID, xvalues, n);\n+                        }\n+                    } else\n+                        uid_set_invalid(&ptpriv->UID);\n                     break;\n                 }\n \n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:399388654-vul",
+      "digest": "sha256:f542610cd0c1eaeaac32b6365db5e89e76d058b480532ca8fd39bba976f53774"
+    },
+    "patched": {
+      "ref": "n132/arvo:399388654-fix",
+      "digest": "sha256:dc709e3fcd0d181d71e72219e6f6e47c4dfe27781dca7e6d4c995b22a4d978c4"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/ghostpdl/./psi/igc.c:1091",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/ghostpdl/./psi/igc.c:1091"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

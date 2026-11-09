@@ -1,0 +1,75 @@
+======================= INFO =========================
+This binary is built for AFL-fuzz.
+To run the target function on individual input(s) execute this:
+  /out/curl_fuzzer_rtsp < INPUT_FILE
+or
+  /out/curl_fuzzer_rtsp INPUT_FILE1 [INPUT_FILE2 ... ]
+To fuzz with afl-fuzz execute this:
+  afl-fuzz [afl-flags] /out/curl_fuzzer_rtsp [-N]
+afl-fuzz will run N iterations before re-spawning the process (default: 1000)
+======================================================
+Reading 60991 bytes from /tmp/poc
+=================================================================
+==34889==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x629000009211 at pc 0x0000004e1d9d bp 0x7fffb31b4380 sp 0x7fffb31b3b30
+READ of size 15022 at 0x629000009211 thread T0
+SCARINESS: 26 (multi-byte-read-heap-buffer-overflow)
+    #0 0x4e1d9c in __asan_memcpy /src/llvm/projects/compiler-rt/lib/asan/asan_interceptors_memintrinsics.cc:23
+    #1 0x5da975 in rtsp_rtp_readwrite /src/curl/lib/rtsp.c:716:5
+    #2 0x5adb34 in readwrite_data /src/curl/lib/transfer.c:810:16
+    #3 0x5ab1b0 in Curl_readwrite /src/curl/lib/transfer.c:1113:14
+    #4 0x53394c in multi_runsingle /src/curl/lib/multi.c:1897:16
+    #5 0x5321dd in curl_multi_perform /src/curl/lib/multi.c:2162:14
+    #6 0x51f40b in fuzz_handle_transfer(fuzz_data*) /src/curl_fuzzer/curl_fuzzer.cc:382:5
+    #7 0x51e6e0 in LLVMFuzzerTestOneInput /src/curl_fuzzer/curl_fuzzer.cc:93:3
+    #8 0x61f3df in ExecuteFilesOnyByOne(int, char**) /src/libfuzzer/afl/afl_driver.cpp:271:5
+    #9 0x61f97f in main /src/libfuzzer/afl/afl_driver.cpp:308:12
+    #10 0x7f70366a082f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+    #11 0x420278 in _start (/out/curl_fuzzer_rtsp+0x420278)
+
+DEDUP_TOKEN: __asan_memcpy--rtsp_rtp_readwrite--readwrite_data
+0x629000009211 is located 0 bytes to the right of 16401-byte region [0x629000005200,0x629000009211)
+allocated by thread T0 here:
+    #0 0x4e2db8 in __interceptor_malloc /src/llvm/projects/compiler-rt/lib/asan/asan_malloc_linux.cc:88
+    #1 0x526f63 in curl_domalloc /src/curl/lib/memdebug.c:175:9
+    #2 0x5722e1 in Curl_open /src/curl/lib/url.c:664:24
+    #3 0x523b79 in curl_easy_init /src/curl/lib/easy.c:358:12
+    #4 0x51e7a0 in fuzz_initialize_fuzz_data(fuzz_data*, unsigned char const*, unsigned long) /src/curl_fuzzer/curl_fuzzer.cc:138:16
+    #5 0x51e51c in LLVMFuzzerTestOneInput /src/curl_fuzzer/curl_fuzzer.cc:53:3
+    #6 0x61f3df in ExecuteFilesOnyByOne(int, char**) /src/libfuzzer/afl/afl_driver.cpp:271:5
+    #7 0x61f97f in main /src/libfuzzer/afl/afl_driver.cpp:308:12
+    #8 0x7f70366a082f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+
+DEDUP_TOKEN: __interceptor_malloc--curl_domalloc--Curl_open
+SUMMARY: AddressSanitizer: heap-buffer-overflow /src/llvm/projects/compiler-rt/lib/asan/asan_interceptors_memintrinsics.cc:23 in __asan_memcpy
+Shadow bytes around the buggy address:
+  0x0c527fff91f0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c527fff9200: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c527fff9210: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c527fff9220: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c527fff9230: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x0c527fff9240: 00 00[01]fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c527fff9250: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c527fff9260: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c527fff9270: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c527fff9280: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c527fff9290: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+==34889==ABORTING

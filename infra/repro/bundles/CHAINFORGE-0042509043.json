@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042509043",
+  "chain": "CWE-20->CWE-125",
+  "project": "yara",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42509043",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "7ed3cc413635b51ea34006cd6094a8cd8455b526",
+      "fix_commits": [
+        "7ed3cc413635b51ea34006cd6094a8cd8455b526"
+      ],
+      "repo": "https://github.com/VirusTotal/yara"
+    },
+    "patch": "diff --git a/libyara/modules/dotnet/dotnet.c b/libyara/modules/dotnet/dotnet.c\nindex f9474b61c4..112e6fb092 100644\n--- a/libyara/modules/dotnet/dotnet.c\n+++ b/libyara/modules/dotnet/dotnet.c\n@@ -438,6 +438,9 @@ void dotnet_parse_tilde_2(\n     if (!((yr_le64toh(tilde_header->Valid) >> bit_check) & 0x01))\n       continue;\n \n+    if (!fits_in_pe(pe, row_offset + matched_bits, sizeof(uint32_t)))\n+      return;\n+\n     num_rows = yr_le32toh(*(row_offset + matched_bits));\n \n     // Make sure that num_rows has a reasonable value. For example\n@@ -446,10 +449,6 @@ void dotnet_parse_tilde_2(\n     if (num_rows > 10000)\n       return;\n \n-    // Make sure that table_offset is within the bounds of the PE.\n-    if (!fits_in_pe(pe, table_offset, 1))\n-      return;\n-\n     // Those tables which exist, but that we don't care about must be\n     // skipped.\n     //\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42509043-vul",
+      "digest": "sha256:9599e0fdda8de3e35fae2fc9f1c1cb2d6ecddc18e08dddbcb19d3a2631550f31"
+    },
+    "patched": {
+      "ref": "n132/arvo:42509043-fix",
+      "digest": "sha256:5503a2be16e12e3b95df418f664611cf5f831fcc63df75e7f0d8a90ed2fc06a5"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/yara/libyara/modules/dotnet/dotnet.c:441",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/yara/libyara/modules/dotnet/dotnet.c:441"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

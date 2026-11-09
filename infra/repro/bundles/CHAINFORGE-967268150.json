@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-967268150",
+  "chain": "CWE-456->CWE-457",
+  "project": "imagemagick",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42478843",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/imagemagick/imagemagick/commit/83f0020c4091393cae3ba5627e3f76835eabf5b9",
+      "fix_commits": [
+        "83f0020c4091393cae3ba5627e3f76835eabf5b9"
+      ],
+      "repo": "https://github.com/imagemagick/imagemagick"
+    },
+    "patch": "diff --git a/coders/jpeg.c b/coders/jpeg.c\nindex ecb021ffb89..82299885d32 100644\n--- a/coders/jpeg.c\n+++ b/coders/jpeg.c\n@@ -805,26 +805,27 @@ static boolean ReadProfile(j_decompress_ptr jpeg_info)\n       p=GetStringInfoDatum(profile);\n       if ((length > 4) && (LocaleNCompare((char *) p,\"exif\",4) == 0))\n         (void) CopyMagickString(name,\"exif\",MagickPathExtent);\n-      else if ((length > XmpNamespaceExtent) &&\n-          (LocaleNCompare((char *) p,xmp_namespace,XmpNamespaceExtent-1) == 0))\n-        {\n-          ssize_t\n-            j;\n-\n-          /*\n-            Extract namespace from XMP profile.\n-          */\n-          p=GetStringInfoDatum(profile)+XmpNamespaceExtent;\n-          for (j=XmpNamespaceExtent; j < (ssize_t) GetStringInfoLength(profile); j++)\n+      else\n+        if ((length > XmpNamespaceExtent) &&\n+            (LocaleNCompare((char *) p,xmp_namespace,XmpNamespaceExtent-1) == 0))\n           {\n-            if (*p == '\\0')\n-              break;\n-            p++;\n+            ssize_t\n+              j;\n+\n+            /*\n+              Extract namespace from XMP profile.\n+            */\n+            p=GetStringInfoDatum(profile)+XmpNamespaceExtent;\n+            for (j=XmpNamespaceExtent; j < (ssize_t) GetStringInfoLength(profile); j++)\n+            {\n+              if (*p == '\\0')\n+                break;\n+              p++;\n+            }\n+            if (j < (ssize_t) GetStringInfoLength(profile))\n+              (void) DestroyStringInfo(SplitStringInfo(profile,(size_t) (j+1)));\n+            (void) CopyMagickString(name,\"xmp\",MagickPathExtent);\n           }\n-          if (j < (ssize_t) GetStringInfoLength(profile))\n-            (void) DestroyStringInfo(SplitStringInfo(profile,(size_t) (j+1)));\n-          (void) CopyMagickString(name,\"xmp\",MagickPathExtent);\n-        }\n     }\n   previous_profile=GetImageProfile(image,name);\n   if ((previous_profile != (const StringInfo *) NULL) &&\n@@ -842,6 +843,7 @@ static boolean ReadProfile(j_decompress_ptr jpeg_info)\n       (void) memcpy(GetStringInfoDatum(profile),\n         GetStringInfoDatum(previous_profile),\n         GetStringInfoLength(previous_profile));\n+      GetStringInfoDatum(profile)[GetStringInfoLength(profile)]='\\0';\n     }\n   status=SetImageProfile(image,name,profile,exception);\n   profile=DestroyStringInfo(profile);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42478843-vul",
+      "digest": "sha256:cc230ece448e134ed274b227090fdba20a5b8f8fa6ca317259e2d1df6631f9f9"
+    },
+    "patched": {
+      "ref": "n132/arvo:42478843-fix",
+      "digest": "sha256:cca8f8eef015ab92b9d8613716cd9f3297dc35f5a9c8b25baf5fd6bb80e80ea9"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/imagemagick/MagickCore/locale.c:1581",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/imagemagick/MagickCore/locale.c:1581"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042535828",
+  "chain": "CWE-456->CWE-457",
+  "project": "cpython3",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42535828",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "0ae8579b85f9b0cd3f287082ad6e194bdb025d88",
+      "fix_commits": [
+        "0ae8579b85f9b0cd3f287082ad6e194bdb025d88"
+      ],
+      "repo": "https://github.com/python/cpython"
+    },
+    "patch": "From 0ae8579b85f9b0cd3f287082ad6e194bdb025d88 Mon Sep 17 00:00:00 2001\nFrom: Carl Meyer <carl@oddbird.net>\nDate: Sun, 9 Jun 2024 22:23:30 -0400\nSubject: [PATCH] gh-119666: fix multiple class-scope comprehensions\n referencing __class__ (#120295)\n\n---\n Lib/test/test_listcomps.py                    | 25 +++++++++++++++++++\n ...-06-09-19-13-38.gh-issue-119666.S0G4rZ.rst |  1 +\n Python/symtable.c                             | 23 ++++++++---------\n 3 files changed, 36 insertions(+), 13 deletions(-)\n create mode 100644 Misc/NEWS.d/next/Core and Builtins/2024-06-09-19-13-38.gh-issue-119666.S0G4rZ.rst\n\ndiff --git a/Lib/test/test_listcomps.py b/Lib/test/test_listcomps.py\nindex ec2aac8..58b076e 100644\n--- a/Lib/test/test_listcomps.py\n+++ b/Lib/test/test_listcomps.py\n@@ -168,6 +168,31 @@ class ListComprehensionTest(unittest.TestCase):\n         \"\"\"\n         self._check_in_scopes(code, raises=NameError)\n \n+    def test_references___class___defined(self):\n+        code = \"\"\"\n+            __class__ = 2\n+            res = [__class__ for x in [1]]\n+        \"\"\"\n+        self._check_in_scopes(\n+                code, outputs={\"res\": [2]}, scopes=[\"module\", \"function\"])\n+        self._check_in_scopes(code, raises=NameError, scopes=[\"class\"])\n+\n+    def test_references___class___enclosing(self):\n+        code = \"\"\"\n+            __class__ = 2\n+            class C:\n+                res = [__class__ for x in [1]]\n+            res = C.res\n+        \"\"\"\n+        self._check_in_scopes(code, raises=NameError)\n+\n+    def test_super_and_class_cell_in_sibling_comps(self):\n+        code = \"\"\"\n+            [super for _ in [1]]\n+            [__class__ for _ in [1]]\n+        \"\"\"\n+        self._check_in_scopes(code, raises=NameError)\n+\n     def test_inner_cell_shadows_outer(self):\n         code = \"\"\"\n             items = [(lambda: i) for i in range(5)]\ndiff --git a/Misc/NEWS.d/next/Core and Builtins/2024-06-09-19-13-38.gh-issue-119666.S0G4rZ.rst b/Misc/NEWS.d/next/Core and Builtins/2024-06-09-19-13-38.gh-issue-119666.S0G4rZ.rst\nnew file mode 100644\nindex 0000000..09c1f55\n--- /dev/null\n+++ b/Misc/NEWS.d/next/Core and Builtins/2024-06-09-19-13-38.gh-issue-119666.S0G4rZ.rst\t\n@@ -0,0 +1 @@\n+Fix a compiler crash in the case where two comprehensions in class scope both reference ``__class__``.\ndiff --git a/Python/symtable.c b/Python/symtable.c\nindex 0ee8ca3..7e452cd 100644\n--- a/Python/symtable.c\n+++ b/Python/symtable.c\n@@ -781,22 +781,19 @@ inline_comprehension(PySTEntryObject *ste, PySTEntryObject *comp,\n         if (existing == NULL && PyErr_Occurred()) {\n             return 0;\n         }\n+        // __class__ is never allowed to be free through a class scope (see\n+        // drop_class_free)\n+        if (scope == FREE && ste->ste_type == ClassBlock &&\n+                _PyUnicode_EqualToASCIIString(k, \"__class__\")) {\n+            scope = GLOBAL_IMPLICIT;\n+            if (PySet_Discard(comp_free, k) < 0) {\n+                return 0;\n+            }\n+            remove_dunder_class = 1;\n+        }\n         if (!existing) {\n             // name does not exist in scope, copy from comprehension\n             assert(scope != FREE || PySet_Contains(comp_free, k) == 1);\n-            if (scope == FREE && ste->ste_type == ClassBlock &&\n-                _PyUnicode_EqualToASCIIString(k, \"__class__\")) {\n-                // if __class__ is unbound in the enclosing class scope and free\n-                // in the comprehension scope, it needs special handling; just\n-                // letting it be marked as free in class scope will break due to\n-                // drop_class_free\n-                scope = GLOBAL_IMPLICIT;\n-                only_flags &= ~DEF_FREE;\n-                if (PySet_Discard(comp_free, k) < 0) {\n-                    return 0;\n-                }\n-                remove_dunder_class = 1;\n-            }\n             PyObject *v_flags = PyLong_FromLong(only_flags);\n             if (v_flags == NULL) {\n                 return 0;\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42535828-vul",
+      "digest": "sha256:56773cee275b50e54788742a2c58931df66e83d72f09ffaf94064352c15136e8"
+    },
+    "patched": {
+      "ref": "n132/arvo:42535828-fix",
+      "digest": "sha256:72b27683295594fc71a5d8f9021677199ae4b64839db0aa2ed3e861bbfd47c49"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": "READ",
+        "crash_site": "/src/cpython3/Objects/codeobject.c:272",
+        "implies_sink_cwe": 476
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": "READ",
+        "site": "/src/cpython3/Objects/codeobject.c:272"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

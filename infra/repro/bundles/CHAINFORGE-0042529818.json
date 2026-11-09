@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042529818",
+  "chain": "CWE-456->CWE-457",
+  "project": "cryptofuzz",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42529818",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "ed5b4655ba6f1a641bc340322874d720f4494baf",
+      "fix_commits": [
+        "ed5b4655ba6f1a641bc340322874d720f4494baf"
+      ],
+      "repo": "https://github.com/MozillaSecurity/cryptofuzz"
+    },
+    "patch": "From ed5b4655ba6f1a641bc340322874d720f4494baf Mon Sep 17 00:00:00 2001\nFrom: Guido Vranken <guidovranken@gmail.com>\nDate: Sat, 4 Nov 2023 22:11:40 +0100\nSubject: [PATCH] libecc: Prevent calling fp_uninit on uninitialized fp\n\n---\n modules/libecc/module.cpp | 11 +++++++++--\n 1 file changed, 9 insertions(+), 2 deletions(-)\n\ndiff --git a/modules/libecc/module.cpp b/modules/libecc/module.cpp\nindex f16fb68..0fbe3ae 100644\n--- a/modules/libecc/module.cpp\n+++ b/modules/libecc/module.cpp\n@@ -441,6 +441,7 @@ std::optional<bool> libecc::OpECC_ValidatePubkey(operation::ECC_ValidatePubkey&\n         const auto ax_bin = util::DecToBin(op.pub.first.ToTrimmedString());\n         const auto ay_bin = util::DecToBin(op.pub.second.ToTrimmedString());\n         fp x, y;\n+        bool x_inited = false, y_inited = false;\n         u8 *pub_buff = NULL;\n         u16 coord_len = (u16)BYTECEIL(params.ec_fp.p_bitlen);\n \n@@ -448,11 +449,13 @@ std::optional<bool> libecc::OpECC_ValidatePubkey(operation::ECC_ValidatePubkey&\n             ret = false;\n             goto end1;\n         }\n+        x_inited = true;\n \n         if(fp_init_from_buf(&y, &(params.ec_fp), ay_bin->data(), ay_bin->size())){\n             ret = false;\n             goto end1;\n         }\n+        y_inited = true;\n \n         /* Allocate a buffer for our stringified public key */\n         pub_buff = util::malloc(coord_len * 2);\n@@ -482,8 +485,12 @@ end1:\n         if(pub_buff != NULL){\n             util::free(pub_buff);\n         }\n-        fp_uninit(&x);\n-        fp_uninit(&y);\n+        if ( x_inited == true ) {\n+            fp_uninit(&x);\n+        }\n+        if ( y_inited == true ) {\n+            fp_uninit(&y);\n+        }\n     }\n \n end:\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42529818-vul",
+      "digest": "sha256:c65eec4c4cbbafbdff819b055e660f77157213ce75bc7225f184a84ee670511d"
+    },
+    "patched": {
+      "ref": "n132/arvo:42529818-fix",
+      "digest": "sha256:08c880b23963a463ce9632b8d87d3dee0adc34a84de0583fbbf668551eb253a0"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/libecc/src/fp/fp.c:191",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/libecc/src/fp/fp.c:191"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,105 @@
+[    0.000000][    T0] Linux version 6.9.0-rc6-gf462ae0edd37 (sss6371@e5-cse-135-19.cse.psu.edu) (x86_64-linux-gcc (GCC) 13.2.0, GNU ld (GNU Binutils) 2.41) #1 SMP PREEMPT_DYNAMIC Sat Oct  3 15:45:37 EDT 2026
+[init] environment up, running reproducer
+[   11.885191][ T4638] ==================================================================
+[   11.886229][ T4638] BUG: KASAN: slab-use-after-free in __fput+0x9ef/0xaa0
+[   11.887104][ T4638] Read of size 8 at addr ffff888017b2c1e0 by task repro/4638
+[   11.888016][ T4638] 
+[   11.888330][ T4638] CPU: 2 PID: 4638 Comm: repro Not tainted 6.9.0-rc6-gf462ae0edd37 #1
+[   11.889331][ T4638] Hardware name: Red Hat KVM, BIOS 1.16.0-4.module+el8.9.0+19570+14a90618 04/01/2014
+[   11.890483][ T4638] Call Trace:
+[   11.890900][ T4638]  <TASK>
+[   11.891275][ T4638]  dump_stack_lvl+0x78/0xe0
+[   11.891862][ T4638]  print_report+0xc3/0x630
+[   11.892445][ T4638]  ? __virt_addr_valid+0x1e2/0x3c0
+[   11.893081][ T4638]  kasan_report+0xd7/0x110
+[   11.893643][ T4638]  ? __fput+0x9ef/0xaa0
+[   11.894162][ T4638]  ? __fput+0x9ef/0xaa0
+[   11.894685][ T4638]  __fput+0x9ef/0xaa0
+[   11.895190][ T4638]  task_work_run+0x116/0x200
+[   11.895767][ T4638]  ? __pfx_task_work_run+0x10/0x10
+[   11.896394][ T4638]  ? __do_sys_memfd_create+0x2a1/0x4e0
+[   11.897060][ T4638]  syscall_exit_to_user_mode+0x278/0x2a0
+[   11.897753][ T4638]  do_syscall_64+0xdb/0x260
+[   11.898315][ T4638]  entry_SYSCALL_64_after_hwframe+0x77/0x7f
+[   11.899061][ T4638] RIP: 0033:0x7f4fe123949d
+[   11.899627][ T4638] Code: ff c3 66 2e 0f 1f 84 00 00 00 00 00 90 f3 0f 1e fa 48 89 f8 48 89 f7 48 89 d6 48 89 ca 4d 89 c2 4d 89 c8 4c 8b 4c 24 08 0f 05 <48> 3d 01 f0 ff ff 73 01 c3 48 8b 0d bb 69 39 00 f7 d8 64 89 01 48
+[   11.902014][ T4638] RSP: 002b:00007f4fe1ce9ed8 EFLAGS: 00000293 ORIG_RAX: 00000000000000e8
+[   11.903057][ T4638] RAX: 0000000000000001 RBX: 0000000000602180 RCX: 00007f4fe123949d
+[   11.904048][ T4638] RDX: 0000000000000002 RSI: 00000000200000c0 RDI: 0000000000000005
+[   11.905062][ T4638] RBP: 0000000000602188 R08: 0000000000000000 R09: 0000000000000000
+[   11.906031][ T4638] R10: 00000000000000fa R11: 0000000000000293 R12: 6d64752f7665642f
+[   11.907018][ T4638] R13: 00007ffd8b3a497f R14: 00007ffd8b3a4a10 R15: 00007f4fe1ce9fc0
+[   11.908012][ T4638]  </TASK>
+[   11.908404][ T4638] 
+[   11.908695][ T4638] Allocated by task 4645:
+[   11.909238][ T4638]  kasan_save_stack+0x33/0x60
+[   11.909853][ T4638]  kasan_save_track+0x14/0x30
+[   11.910425][ T4638]  __kasan_slab_alloc+0x89/0x90
+[   11.911014][ T4638]  kmem_cache_alloc_lru+0x142/0x6f0
+[   11.911652][ T4638]  __d_alloc+0x2c/0x890
+[   11.912188][ T4638]  d_alloc_pseudo+0x11/0xb0
+[   11.912760][ T4638]  alloc_file_pseudo+0xcd/0x1d0
+[   11.913373][ T4638]  dma_buf_export+0x33d/0xab0
+[   11.913978][ T4638]  udmabuf_create+0x7a5/0xc40
+[   11.914575][ T4638]  udmabuf_ioctl+0x16d/0x290
+[   11.915154][ T4638]  __x64_sys_ioctl+0x12f/0x1a0
+[   11.915743][ T4638]  do_syscall_64+0xce/0x260
+[   11.916311][ T4638]  entry_SYSCALL_64_after_hwframe+0x77/0x7f
+[   11.917059][ T4638] 
+[   11.917358][ T4638] Freed by task 4638:
+[   11.917853][ T4638]  kasan_save_stack+0x33/0x60
+[   11.918441][ T4638]  kasan_save_track+0x14/0x30
+[   11.919034][ T4638]  kasan_save_free_info+0x3b/0x60
+[   11.919651][ T4638]  __kasan_slab_free+0x122/0x1a0
+[   11.920253][ T4638]  kmem_cache_free+0x126/0x380
+[   11.920862][ T4638]  __dentry_kill+0x3af/0x500
+[   11.921447][ T4638]  dput.part.0+0x31a/0x680
+[   11.921993][ T4638]  __fput+0x2fe/0xaa0
+[   11.922499][ T4638]  task_work_run+0x116/0x200
+[   11.923086][ T4638]  syscall_exit_to_user_mode+0x278/0x2a0
+[   11.923769][ T4638]  do_syscall_64+0xdb/0x260
+[   11.924319][ T4638]  entry_SYSCALL_64_after_hwframe+0x77/0x7f
+[   11.925058][ T4638] 
+[   11.925360][ T4638] The buggy address belongs to the object at ffff888017b2c178
+[   11.925360][ T4638]  which belongs to the cache dentry of size 312
+[   11.927022][ T4638] The buggy address is located 104 bytes inside of
+[   11.927022][ T4638]  freed 312-byte region [ffff888017b2c178, ffff888017b2c2b0)
+[   11.928708][ T4638] 
+[   11.928997][ T4638] The buggy address belongs to the physical page:
+[   11.929795][ T4638] page: refcount:1 mapcount:0 mapping:0000000000000000 index:0x0 pfn:0x17b2c
+[   11.930876][ T4638] head: order:1 entire_mapcount:0 nr_pages_mapped:0 pincount:0
+[   11.931808][ T4638] flags: 0xfff00000000840(slab|head|node=0|zone=1|lastcpupid=0x7ff)
+[   11.932798][ T4638] page_type: 0xffffffff()
+[   11.933358][ T4638] raw: 00fff00000000840 ffff8880146e1400 dead000000000122 0000000000000000
+[   11.934391][ T4638] raw: 0000000000000000 0000000080150015 00000001ffffffff 0000000000000000
+[   11.935457][ T4638] head: 00fff00000000840 ffff8880146e1400 dead000000000122 0000000000000000
+[   11.936528][ T4638] head: 0000000000000000 0000000080150015 00000001ffffffff 0000000000000000
+[   11.937614][ T4638] head: 00fff00000000001 ffffea00005ecb01 ffffea00005ecb48 00000000ffffffff
+[   11.938682][ T4638] head: 0000000200000000 0000000000000000 00000000ffffffff 0000000000000000
+[   11.939745][ T4638] page dumped because: kasan: bad access detected
+[   11.940541][ T4638] page_owner tracks the page as allocated
+[   11.941243][ T4638] page last allocated via order 1, migratetype Reclaimable, gfp_mask 0xd20d0(__GFP_IO|__GFP_FS|__GFP_NOWARN|__GFP_NORETRY|__GFP_COMP|__GFP_NOMEMALLOC|__GFP_RECLAIMABLE), pid 4640, tgid -1048918317 (repro), ts 4643, free_ts 0
+[   11.943901][ T4638]  post_alloc_hook+0x2ed/0x350
+[   11.944517][ T4638]  get_page_from_freelist+0x1391/0x3a50
+[   11.945217][ T4638]  __alloc_pages+0x22b/0x2460
+[   11.945809][ T4638]  new_slab+0xc9/0x3a0
+[   11.946336][ T4638]  ___slab_alloc+0x689/0x1840
+[   11.946919][ T4638]  __slab_alloc.isra.0+0x56/0xb0
+[   11.947537][ T4638]  kmem_cache_alloc_lru+0x372/0x6f0
+[   11.948182][ T4638]  __d_alloc+0x2c/0x890
+[   11.948704][ T4638]  d_alloc_pseudo+0x11/0xb0
+[   11.949272][ T4638]  alloc_file_pseudo+0xcd/0x1d0
+[   11.949891][ T4638]  __shmem_file_setup+0x1ab/0x290
+[   11.950509][ T4638]  __do_sys_memfd_create+0x2ca/0x4e0
+[   11.951153][ T4638]  do_syscall_64+0xce/0x260
+[   11.951722][ T4638]  entry_SYSCALL_64_after_hwframe+0x77/0x7f
+[   11.952455][ T4638] page_owner free stack trace missing
+[   11.953113][ T4638] 
+[   11.953408][ T4638] Memory state around the buggy address:
+[   11.954102][ T4638]  ffff888017b2c080: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+[   11.955095][ T4638]  ffff888017b2c100: 00 00 00 00 00 00 00 fc fc fc fc fc fc fc fc fa
+[   11.956086][ T4638] >ffff888017b2c180: fb fb fb fb fb fb fb fb fb fb fb fb fb fb fb fb
+[   11.957080][ T4638]                                                        ^
+[   11.957950][ T4638]  ffff888017b2c200: fb fb fb fb fb fb fb fb fb fb fb fb fb fb fb fb
+[   11.958934][ T4638]  ffff888017b2c280: fb fb fb fb fb fb fc fc fc fc fc fc fc fc fc fc
+[   11.959916][ T4638] ==================================================================

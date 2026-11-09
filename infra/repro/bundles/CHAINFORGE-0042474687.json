@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042474687",
+  "chain": "CWE-416->CWE-125",
+  "project": "lwan",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42474687",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "7e08e1f1fd8d220f16d347e5c351ddeb56ef5524",
+      "fix_commits": [
+        "7e08e1f1fd8d220f16d347e5c351ddeb56ef5524"
+      ],
+      "repo": "https://github.com/lpereira/lwan"
+    },
+    "patch": "diff --git a/fuzz/clusterfuzz-testcase-minimized-request_fuzzer-5717480481226752 b/fuzz/clusterfuzz-testcase-minimized-request_fuzzer-5717480481226752\nnew file mode 100644\nindex 000000000..a8fdd1492\nBinary files /dev/null and b/fuzz/clusterfuzz-testcase-minimized-request_fuzzer-5717480481226752 differ\ndiff --git a/src/lib/lwan-request.c b/src/lib/lwan-request.c\nindex 3c9fc9fe8..3bcd00d42 100644\n--- a/src/lib/lwan-request.c\n+++ b/src/lib/lwan-request.c\n@@ -503,11 +503,16 @@ identify_http_path(struct lwan_request *request, char *buffer)\n     return end_of_line + 1;\n }\n \n-#define HEADER(hdr)                                                            \\\n+#define HEADER_LENGTH(hdr)                                                     \\\n     ({                                                                         \\\n         if (UNLIKELY(end - sizeof(hdr) + 1 < p))                               \\\n             continue;                                                          \\\n-        p += sizeof(hdr) - 1;                                                  \\\n+        sizeof(hdr) - 1;                                                       \\\n+    })\n+\n+#define HEADER(hdr)                                                            \\\n+    ({                                                                         \\\n+        p += HEADER_LENGTH(hdr);                                               \\\n         if (UNLIKELY(string_as_int16(p) !=                                     \\\n                      MULTICHAR_CONSTANT_SMALL(':', ' ')))                      \\\n             continue;                                                          \\\n@@ -553,7 +558,7 @@ static bool parse_headers(struct lwan_request_parser_helper *helper,\n \n         STRING_SWITCH_L(p) {\n         case MULTICHAR_CONSTANT_L('A','c','c','e'):\n-            p += sizeof(\"Accept\") - 1;\n+            p += HEADER_LENGTH(\"Accept\");\n \n             STRING_SWITCH_L(p) {\n             case MULTICHAR_CONSTANT_L('-','E','n','c'):\n@@ -568,7 +573,7 @@ static bool parse_headers(struct lwan_request_parser_helper *helper,\n             helper->connection = HEADER(\"Connection\");\n             break;\n         case MULTICHAR_CONSTANT_L('C','o','n','t'):\n-            p += sizeof(\"Content\") - 1;\n+            p += HEADER_LENGTH(\"Content\");\n \n             STRING_SWITCH_L(p) {\n             case MULTICHAR_CONSTANT_L('-','T','y','p'):\n@@ -602,7 +607,7 @@ static bool parse_headers(struct lwan_request_parser_helper *helper,\n     return ret;\n }\n \n-#undef HEADER_RAW\n+#undef HEADER_LENGTH\n #undef HEADER\n \n static void\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42474687-vul",
+      "digest": "sha256:e8ad34ff58dcbfa851540f9d76821d3d1f4eca8b301a001aa5c5526c1436398b"
+    },
+    "patched": {
+      "ref": "n132/arvo:42474687-fix",
+      "digest": "sha256:cf43c3e60257fbe7c36040b0b7a7934bc8c8111601045bf435e2caea5f1a0329"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "global-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/lwan/src/lib/lwan.h:139",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "global-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/lwan/src/lib/lwan.h:139"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

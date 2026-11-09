@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042498085",
+  "chain": "CWE-416->CWE-125",
+  "project": "libjxl",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42498085",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "95eea7e89d0bf4303f6e30e8148b0fc309517d6b",
+      "fix_commits": [
+        "95eea7e89d0bf4303f6e30e8148b0fc309517d6b"
+      ],
+      "repo": "https://github.com/libjxl/libjxl"
+    },
+    "patch": "From 95eea7e89d0bf4303f6e30e8148b0fc309517d6b Mon Sep 17 00:00:00 2001\nFrom: Sami Boukortt <sboukortt@google.com>\nDate: Thu, 17 Jun 2021 19:49:58 +0200\nSubject: [PATCH] Pass `decoded->extra_channels()` and the corresponding Rects\n separately to PrepareBlending\n\nThis seems less error-prone than keeping pointers to the elements of a\ngrowing vector.\n---\n lib/jxl/blending.cc        | 27 ++++++++++++++-------------\n lib/jxl/blending.h         |  6 ++++--\n lib/jxl/blending_test.cc   |  2 +-\n lib/jxl/dec_reconstruct.cc | 11 ++++++-----\n 4 files changed, 25 insertions(+), 21 deletions(-)\n\ndiff --git a/lib/jxl/blending.cc b/lib/jxl/blending.cc\nindex 14875ba..6cf2502 100644\n--- a/lib/jxl/blending.cc\n+++ b/lib/jxl/blending.cc\n@@ -36,7 +36,8 @@ Status ImageBlender::PrepareBlending(\n     const std::vector<ExtraChannelInfo>* extra_channel_info,\n     const ColorEncoding& frame_color_encoding, const Rect& frame_rect,\n     Image3F* output, const Rect& output_rect,\n-    std::vector<std::pair<ImageF*, Rect>> output_extra_channels) {\n+    std::vector<ImageF>* output_extra_channels,\n+    std::vector<Rect> output_extra_channels_rects) {\n   const PassesSharedState& state = *dec_state->shared;\n   info_ = state.frame_header.blending_info;\n \n@@ -45,7 +46,8 @@ Status ImageBlender::PrepareBlending(\n   extra_channel_info_ = extra_channel_info;\n   output_ = output;\n   output_rect_ = output_rect;\n-  output_extra_channels_ = std::move(output_extra_channels);\n+  output_extra_channels_ = output_extra_channels;\n+  output_extra_channels_rects_ = std::move(output_extra_channels_rects);\n \n   size_t image_xsize = state.frame_header.nonserialized_metadata->xsize();\n   size_t image_ysize = state.frame_header.nonserialized_metadata->ysize();\n@@ -78,9 +80,9 @@ Status ImageBlender::PrepareBlending(\n     Image3F color(image_xsize, image_ysize);\n     ZeroFillImage(&color);\n     empty.SetFromImage(std::move(color), frame_color_encoding);\n-    if (!output_extra_channels_.empty()) {\n+    if (!output_extra_channels_->empty()) {\n       std::vector<ImageF> ec;\n-      for (size_t i = 0; i < output_extra_channels_.size(); ++i) {\n+      for (size_t i = 0; i < output_extra_channels_->size(); ++i) {\n         ImageF eci(image_xsize, image_ysize);\n         ZeroFillImage(&eci);\n         ec.push_back(std::move(eci));\n@@ -122,8 +124,8 @@ Status ImageBlender::PrepareBlending(\n     const auto& eci = (*ec_info_)[i];\n     const auto& src = *state.reference_frames[eci.source].frame;\n     if (src.xsize() == 0 && src.ysize() == 0) {\n-      ZeroFillPlane(output_extra_channels_[i].first,\n-                    output_extra_channels_[i].second);\n+      ZeroFillPlane(&(*output_extra_channels_)[i],\n+                    output_extra_channels_rects_[i]);\n     } else {\n       if (src.extra_channels()[i].xsize() < image_xsize ||\n           src.extra_channels()[i].ysize() < image_ysize || src.origin.x0 != 0 ||\n@@ -136,8 +138,8 @@ Status ImageBlender::PrepareBlending(\n             static_cast<size_t>(eci.source), image_xsize, image_ysize);\n       }\n       CopyImageTo(frame_rect, src.extra_channels()[i],\n-                  output_extra_channels_[i].second,\n-                  output_extra_channels_[i].first);\n+                  output_extra_channels_rects_[i],\n+                  &(*output_extra_channels_)[i]);\n     }\n   }\n \n@@ -234,11 +236,10 @@ ImageBlender::RectBlender ImageBlender::PrepareRect(\n     blender.fg_strides_.push_back(extra_channels[c].PixelsPerRow());\n     blender.bg_ptrs_.push_back(\n         cropbox_row\n-            .Translate(output_extra_channels_[c].second.x0(),\n-                       output_extra_channels_[c].second.y0())\n-            .Row(output_extra_channels_[c].first, 0));\n-    blender.bg_strides_.push_back(\n-        output_extra_channels_[c].first->PixelsPerRow());\n+            .Translate(output_extra_channels_rects_[c].x0(),\n+                       output_extra_channels_rects_[c].y0())\n+            .Row(&(*output_extra_channels_)[c], 0));\n+    blender.bg_strides_.push_back((*output_extra_channels_)[c].PixelsPerRow());\n   }\n \n   return blender;\ndiff --git a/lib/jxl/blending.h b/lib/jxl/blending.h\nindex 9aea2f5..5e60b14 100644\n--- a/lib/jxl/blending.h\n+++ b/lib/jxl/blending.h\n@@ -54,7 +54,8 @@ class ImageBlender {\n       const std::vector<ExtraChannelInfo>* extra_channel_info,\n       const ColorEncoding& frame_color_encoding, const Rect& frame_rect,\n       Image3F* output, const Rect& output_rect,\n-      std::vector<std::pair<ImageF*, Rect>> output_extra_channels);\n+      std::vector<ImageF>* output_extra_channels,\n+      std::vector<Rect> output_extra_channels_rects);\n   // rect is relative to the full decoded foreground.\n   // But foreground here can be a subset of the full foreground, and input_rect\n   // indicates where that rect is in that subset. For example, if rect =\n@@ -76,7 +77,8 @@ class ImageBlender {\n   // Destination, as well as background before DoBlending is called.\n   Image3F* output_;\n   Rect output_rect_;\n-  std::vector<std::pair<ImageF*, Rect>> output_extra_channels_;\n+  std::vector<ImageF>* output_extra_channels_;\n+  std::vector<Rect> output_extra_channels_rects_;\n   Rect cropbox_;\n   Rect overlap_;\n   bool done_ = false;\ndiff --git a/lib/jxl/blending_test.cc b/lib/jxl/blending_test.cc\nindex 7c5d514..4ce66c2 100644\n--- a/lib/jxl/blending_test.cc\n+++ b/lib/jxl/blending_test.cc\n@@ -68,7 +68,7 @@ TEST(BlendingTest, Offset) {\n       &dec_state, foreground_origin, foreground.xsize(), foreground.ysize(),\n       &nonserialized_metadata.m.extra_channel_info,\n       background.Main().c_current(), Rect(background), output.color(),\n-      Rect(*output.color()), {}));\n+      Rect(*output.color()), {}, {}));\n \n   static constexpr int kStep = 20;\n   for (size_t x0 = 0; x0 < foreground.xsize(); x0 += kStep) {\ndiff --git a/lib/jxl/dec_reconstruct.cc b/lib/jxl/dec_reconstruct.cc\nindex d32cd03..1a8956b 100644\n--- a/lib/jxl/dec_reconstruct.cc\n+++ b/lib/jxl/dec_reconstruct.cc\n@@ -1190,20 +1190,21 @@ Status FinalizeFrameDecoding(ImageBundle* decoded,\n     decoded->SetFromImage(Image3F(frame_header.nonserialized_metadata->xsize(),\n                                   frame_header.nonserialized_metadata->ysize()),\n                           foreground.c_current());\n-    std::vector<std::pair<ImageF*, Rect>> extra_channels;\n-    extra_channels.reserve(foreground.extra_channels().size());\n+    std::vector<Rect> extra_channels_rects;\n+    decoded->extra_channels().reserve(foreground.extra_channels().size());\n+    extra_channels_rects.reserve(foreground.extra_channels().size());\n     for (size_t i = 0; i < foreground.extra_channels().size(); ++i) {\n       decoded->extra_channels().emplace_back(\n           frame_header.nonserialized_metadata->xsize(),\n           frame_header.nonserialized_metadata->ysize());\n-      extra_channels.emplace_back(&decoded->extra_channels().back(),\n-                                  Rect(decoded->extra_channels().back()));\n+      extra_channels_rects.emplace_back(decoded->extra_channels().back());\n     }\n     JXL_RETURN_IF_ERROR(blender.PrepareBlending(\n         dec_state, foreground.origin, foreground.xsize(), foreground.ysize(),\n         &frame_header.nonserialized_metadata->m.extra_channel_info,\n         foreground.c_current(), Rect(*decoded->color()),\n-        /*output=*/decoded->color(), Rect(*decoded->color()), extra_channels));\n+        /*output=*/decoded->color(), Rect(*decoded->color()),\n+        &decoded->extra_channels(), std::move(extra_channels_rects)));\n \n     std::vector<Rect> rects_to_process;\n     for (size_t y = 0; y < frame_dim.ysize; y += kGroupDim) {\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42498085-vul",
+      "digest": "sha256:7e8ffd9a7757577ccb62b9079a64728deafc8093ff1983760e5c64ac597439a1"
+    },
+    "patched": {
+      "ref": "n132/arvo:42498085-fix",
+      "digest": "sha256:7d0e587da5e447d59e0f0e763525daf5861729fa725c31adb46711e13121e10e"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/libjxl/lib/jxl/image.h:90",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/libjxl/lib/jxl/image.h:90"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-964385631",
+  "chain": "CWE-456->CWE-457",
+  "project": "capstonenext",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42524722",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/aquynh/capstone/commit/3341c1a171494071ce12c75fca9a85135a616b96",
+      "fix_commits": [
+        "3341c1a171494071ce12c75fca9a85135a616b96"
+      ],
+      "repo": "https://github.com/aquynh/capstone"
+    },
+    "patch": "diff --git a/cs.c b/cs.c\nindex 1b7ba05f01..6f37b26ba1 100644\n--- a/cs.c\n+++ b/cs.c\n@@ -586,6 +586,7 @@ static void fill_insn(struct cs_struct *handle, cs_insn *insn, char *buffer, MCI\n \n #ifndef CAPSTONE_DIET\n \tmnem = insn->mnemonic;\n+\t// memset(mnem, 0, CS_MNEMONIC_SIZE);\n \tfor (sp = buffer; *sp; sp++) {\n \t\tif (*sp == ' '|| *sp == '\\t')\n \t\t\tbreak;\n@@ -896,7 +897,7 @@ size_t CAPSTONE_API cs_disasm(csh ud, const uint8_t *buffer, size_t size, uint64\n \tsize_org = size;\n \n \ttotal_size = sizeof(cs_insn) * cache_size;\n-\ttotal = cs_mem_malloc(total_size);\n+\ttotal = cs_mem_calloc(sizeof(cs_insn), cache_size);\n \tif (total == NULL) {\n \t\t// insufficient memory\n \t\thandle->errnum = CS_ERR_MEM;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42524722-vul",
+      "digest": "sha256:ba0c073fda0ba84364bfbcc844b155845f697b0581084921c123a7fe8a8dea39"
+    },
+    "patched": {
+      "ref": "n132/arvo:42524722-fix",
+      "digest": "sha256:bc57f9c74cdb5ae5f5ad73385ba8c67bcc15641bdea8a7e6338535d627fc4802"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/capstonenext/arch/PowerPC/PPCInstPrinter.c:83",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/capstonenext/arch/PowerPC/PPCInstPrinter.c:83"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-964303785",
+  "chain": "CWE-456->CWE-457",
+  "project": "simdjson",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42534862",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/simdjson/simdjson/commit/52406402ed1f8ff246b18ddcfced9d2f4e98ccc9",
+      "fix_commits": [
+        "52406402ed1f8ff246b18ddcfced9d2f4e98ccc9"
+      ],
+      "repo": "https://github.com/simdjson/simdjson"
+    },
+    "patch": "diff --git a/include/simdjson/arm64/simd.h b/include/simdjson/arm64/simd.h\nindex e728aab4a0..3b0fa844f4 100644\n--- a/include/simdjson/arm64/simd.h\n+++ b/include/simdjson/arm64/simd.h\n@@ -134,7 +134,7 @@ namespace {\n       tmp = vpaddq_u8(tmp, tmp);\n       return vgetq_lane_u16(vreinterpretq_u16_u8(tmp), 0);\n     }\n-    simdjson_inline bool any() const { return vmaxvq_u8(*this) != 0; }\n+    simdjson_inline bool any() const { return vmaxvq_u32(vreinterpretq_u32_u8(*this)) != 0; }\n   };\n \n   // Unsigned bytes\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42534862-vul",
+      "digest": "sha256:be68996dd0f03121bbaa2d5b9df9feddf1dd07a958de5c36d6c73c2f1c89c7a0"
+    },
+    "patched": {
+      "ref": "n132/arvo:42534862-fix",
+      "digest": "sha256:64a4d150f1d4ecc86e37d82345584b5c81c69d7834c117bb1f82fa820838c1aa"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/simdjson/fuzz/fuzz_padded.cpp:44",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/simdjson/fuzz/fuzz_padded.cpp:44"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

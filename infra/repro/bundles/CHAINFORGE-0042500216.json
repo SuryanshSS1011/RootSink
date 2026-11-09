@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042500216",
+  "chain": "CWE-1284->CWE-125",
+  "project": "libexif",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42500216",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "22799320cc1187868d9a572661d12f0c3f9939b5",
+      "fix_commits": [
+        "22799320cc1187868d9a572661d12f0c3f9939b5"
+      ],
+      "repo": "https://github.com/libexif/libexif"
+    },
+    "patch": "diff --git a/libexif/apple/exif-mnote-data-apple.c b/libexif/apple/exif-mnote-data-apple.c\nindex 54dff5df..c29af9f3 100644\n--- a/libexif/apple/exif-mnote-data-apple.c\n+++ b/libexif/apple/exif-mnote-data-apple.c\n@@ -230,15 +230,10 @@ exif_mnote_data_apple_get_value(ExifMnoteData *md, unsigned int i, char *val, un\n \n int\n exif_mnote_data_apple_identify(const ExifData *ed, const ExifEntry *e) {\n-    int variant;\n+    if (e->size < strlen(\"Apple iOS\")+1)\n+\treturn 0;\n \n-    if (!strcmp((const char *) e->data, \"Apple iOS\")) {\n-        variant = 1;\n-    } else {\n-        variant = 0;\n-    }\n-\n-    return variant;\n+    return !memcmp((const char *) e->data, \"Apple iOS\", strlen(\"Apple iOS\"));\n }\n \n ExifMnoteData *\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42500216-vul",
+      "digest": "sha256:541fa779f356028cdf06e1cbffba0d38b5a356699c2701bc2faa96c9c53cd3cb"
+    },
+    "patched": {
+      "ref": "n132/arvo:42500216-fix",
+      "digest": "sha256:c95ac2fb8aed647b4f56f10122d942f3fdfed27437c357b93eb66a3868b10f5c"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/libexif/libexif/apple/exif-mnote-data-apple.c:235",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/libexif/libexif/apple/exif-mnote-data-apple.c:235"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

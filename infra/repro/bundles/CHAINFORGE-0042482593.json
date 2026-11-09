@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042482593",
+  "chain": "CWE-456->CWE-457",
+  "project": "ndpi",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42482593",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "4ec3e6c064b56f1434bd4c887bd96d0916d07f2e",
+      "fix_commits": [
+        "4ec3e6c064b56f1434bd4c887bd96d0916d07f2e"
+      ],
+      "repo": "https://github.com/ntop/nDPI"
+    },
+    "patch": "From 4ec3e6c064b56f1434bd4c887bd96d0916d07f2e Mon Sep 17 00:00:00 2001\nFrom: Philippe Antoine <contact@catenacyber.fr>\nDate: Wed, 15 Apr 2020 15:42:54 +0200\nSubject: [PATCH] Adds bound check in TLS\n\n---\n src/lib/protocols/tls.c | 2 +-\n 1 file changed, 1 insertion(+), 1 deletion(-)\n\ndiff --git a/src/lib/protocols/tls.c b/src/lib/protocols/tls.c\nindex 77d69a6..ef2c0a8 100644\n--- a/src/lib/protocols/tls.c\n+++ b/src/lib/protocols/tls.c\n@@ -1069,7 +1069,7 @@ int processClientServerHello(struct ndpi_detection_module_struct *ndpi_struct,\n \t\ts_offset += 2;\n \t\ttot_alpn_len += s_offset;\n \n-\t\twhile(s_offset < tot_alpn_len) {\n+\t\twhile(s_offset < tot_alpn_len && s_offset < total_len) {\n \t\t  u_int8_t alpn_i, alpn_len = packet->payload[s_offset++];\n \n \t\t  if((s_offset + alpn_len) <= tot_alpn_len) {\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42482593-vul",
+      "digest": "sha256:c45400842a63005480410463ecdd60bf5093bb037223e6807916f0550ba73db9"
+    },
+    "patched": {
+      "ref": "n132/arvo:42482593-fix",
+      "digest": "sha256:0ecf4e90726eacbde55851492affbc0dcb50d999a0ce1bcfb0e61cb47a7b9cb0"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/ndpi/src/lib/protocols/tls.c:1075",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/ndpi/src/lib/protocols/tls.c:1075"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

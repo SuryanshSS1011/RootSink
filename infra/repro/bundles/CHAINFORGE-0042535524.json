@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042535524",
+  "chain": "CWE-456->CWE-457",
+  "project": "trafficserver",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42535524",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "4d07954652878700269140173a5630ad38c49fa2",
+      "fix_commits": [
+        "4d07954652878700269140173a5630ad38c49fa2"
+      ],
+      "repo": "https://github.com/apache/trafficserver"
+    },
+    "patch": "From 4d07954652878700269140173a5630ad38c49fa2 Mon Sep 17 00:00:00 2001\nFrom: Kit Chan <kichan@apache.org>\nDate: Tue, 4 Jun 2024 18:20:06 +0200\nSubject: [PATCH] Update Http3Frame.cc - fix Use-of-uninitialized-value error\n (#11400)\n\n* Update Http3Frame.cc\n\n* Update Http3Frame.cc\n\n* Update Http3Frame.cc\n\n* Update Http3Frame.cc\n\n* Update Http3Frame.cc\n\n* Update Http3Frame.cc\n---\n src/proxy/http3/Http3Frame.cc | 23 +++++++++++++++++------\n 1 file changed, 17 insertions(+), 6 deletions(-)\n\ndiff --git a/src/proxy/http3/Http3Frame.cc b/src/proxy/http3/Http3Frame.cc\nindex c429919..96c46f7 100644\n--- a/src/proxy/http3/Http3Frame.cc\n+++ b/src/proxy/http3/Http3Frame.cc\n@@ -277,13 +277,24 @@ Http3SettingsFrame::Http3SettingsFrame(const uint8_t *buf, size_t buf_len, uint3\n       break;\n     }\n \n-    size_t   id_len  = QUICVariableInt::size(buf + len);\n-    uint16_t id      = QUICIntUtil::read_QUICVariableInt(buf + len, buf_len - len);\n-    len             += id_len;\n+    size_t id_len = QUICVariableInt::size(buf + len);\n+    if ((len + id_len) >=\n+        buf_len) { // if the id is larger than the buffer or at the boundary of the buffer (i.e. no value), it is invalid\n+      this->_error_code   = Http3ErrorCode::H3_SETTINGS_ERROR;\n+      this->_error_reason = reinterpret_cast<const char *>(\"invalid SETTINGS frame\");\n+      break;\n+    }\n+    uint16_t id  = QUICIntUtil::read_QUICVariableInt(buf + len, buf_len - len);\n+    len         += id_len;\n \n-    size_t   value_len  = QUICVariableInt::size(buf + len);\n-    uint64_t value      = QUICIntUtil::read_QUICVariableInt(buf + len, buf_len - len);\n-    len                += value_len;\n+    size_t value_len = QUICVariableInt::size(buf + len);\n+    if ((len + value_len) > buf_len) {\n+      this->_error_code   = Http3ErrorCode::H3_SETTINGS_ERROR;\n+      this->_error_reason = reinterpret_cast<const char *>(\"invalid SETTINGS frame\");\n+      break;\n+    }\n+    uint64_t value  = QUICIntUtil::read_QUICVariableInt(buf + len, buf_len - len);\n+    len            += value_len;\n \n     // Ignore any SETTINGS identifier it does not understand.\n     bool ignore = true;\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42535524-vul",
+      "digest": "sha256:edf5641600ba1a7c649aba27fb56e12ddcfdaf0f67529cd5acc3ee06eed06058"
+    },
+    "patched": {
+      "ref": "n132/arvo:42535524-fix",
+      "digest": "sha256:3290d8cbe61dcbb8723650d9e97a7a5cd5a9bf57b7c64dda236bebea4f883ae8"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/trafficserver/src/iocore/net/quic/QUICIntUtil.cc:91",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/trafficserver/src/iocore/net/quic/QUICIntUtil.cc:91"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

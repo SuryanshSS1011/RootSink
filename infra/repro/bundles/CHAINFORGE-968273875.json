@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-968273875",
+  "chain": "CWE-456->CWE-457",
+  "project": "imagemagick",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42470856",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/imagemagick/imagemagick/commit/943c28d70cafc2ca929a939d72afa0db195f77b2",
+      "fix_commits": [
+        "943c28d70cafc2ca929a939d72afa0db195f77b2"
+      ],
+      "repo": "https://github.com/imagemagick/imagemagick"
+    },
+    "patch": "diff --git a/MagickCore/draw.c b/MagickCore/draw.c\nindex 58190521e0c..f203362bab1 100644\n--- a/MagickCore/draw.c\n+++ b/MagickCore/draw.c\n@@ -1589,17 +1589,25 @@ static Image *DrawClippingMask(Image *image,const DrawInfo *draw_info,\n   clone_info->clip_path=MagickTrue;\n   status=RenderMVGContent(clip_mask,clone_info,1,exception);\n   clone_info=DestroyDrawInfo(clone_info);\n-  separate_mask=SeparateImage(clip_mask,AlphaChannel,exception);\n-  if (separate_mask != (Image *) NULL)\n+  if (status != MagickFalse)\n     {\n-      clip_mask=DestroyImage(clip_mask);\n-      clip_mask=separate_mask;\n-      status=NegateImage(clip_mask,MagickFalse,exception);\n-      if (status == MagickFalse)\n-        clip_mask=DestroyImage(clip_mask);\n+      status=SetImageMask(clip_mask,CompositePixelMask,(Image *) NULL,\n+        exception);\n+      if (status != MagickFalse)\n+        {\n+          separate_mask=SeparateImage(clip_mask,AlphaChannel,exception);\n+          if (separate_mask != (Image *) NULL)\n+            {\n+              clip_mask=DestroyImage(clip_mask);\n+              clip_mask=separate_mask;\n+              status=NegateImage(clip_mask,MagickFalse,exception);\n+            }\n+        }\n     }\n   if (image->debug != MagickFalse)\n     (void) LogMagickEvent(DrawEvent,GetMagickModule(),\"end clip-path\");\n+  if (status == MagickFalse)\n+    clip_mask=DestroyImage(clip_mask);\n   return(clip_mask);\n }\n \f\n@@ -1679,17 +1687,25 @@ static Image *DrawCompositeMask(Image *image,const DrawInfo *draw_info,\n   clone_info->alpha=OpaqueAlpha;\n   status=RenderMVGContent(composite_mask,clone_info,1,exception);\n   clone_info=DestroyDrawInfo(clone_info);\n-  separate_mask=SeparateImage(composite_mask,AlphaChannel,exception);\n-  if (separate_mask != (Image *) NULL)\n+  if (status != MagickFalse)\n     {\n-      composite_mask=DestroyImage(composite_mask);\n-      composite_mask=separate_mask;\n-      status=NegateImage(composite_mask,MagickFalse,exception);\n-      if (status == MagickFalse)\n-        composite_mask=DestroyImage(composite_mask);\n+      status=SetImageMask(composite_mask,CompositePixelMask,(Image *) NULL,\n+        exception);\n+      if (status != MagickFalse)\n+        {\n+          separate_mask=SeparateImage(composite_mask,AlphaChannel,exception);\n+          if (separate_mask != (Image *) NULL)\n+            {\n+              composite_mask=DestroyImage(composite_mask);\n+              composite_mask=separate_mask;\n+              status=NegateImage(composite_mask,MagickFalse,exception);\n+            }\n+        }\n     }\n   if (image->debug != MagickFalse)\n     (void) LogMagickEvent(DrawEvent,GetMagickModule(),\"end mask-path\");\n+  if (status == MagickFalse)\n+    composite_mask=DestroyImage(composite_mask);\n   return(composite_mask);\n }\n \f\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42470856-vul",
+      "digest": "sha256:9efac0b898aa024a70b593ff172fc97dc02e2d985e455871212ae6239f118d0e"
+    },
+    "patched": {
+      "ref": "n132/arvo:42470856-fix",
+      "digest": "sha256:24339c31c97fbf83841144a4a59ba1603f4d4fe9e26bb2a901f05936e9d18d85"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/imagemagick/MagickCore/cache.c:3403",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/imagemagick/MagickCore/cache.c:3403"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

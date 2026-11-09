@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-964747833",
+  "chain": "CWE-456->CWE-457",
+  "project": "flac",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42511761",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/xiph/flac/commit/99cb7046f374c5cc31688662f4d0fa6f89d2bb46",
+      "fix_commits": [
+        "99cb7046f374c5cc31688662f4d0fa6f89d2bb46"
+      ],
+      "repo": "https://github.com/xiph/flac"
+    },
+    "patch": "diff --git a/src/libFLAC/bitreader.c b/src/libFLAC/bitreader.c\nindex 4796f3370b..df1182ba93 100644\n--- a/src/libFLAC/bitreader.c\n+++ b/src/libFLAC/bitreader.c\n@@ -158,6 +158,10 @@ static FLAC__bool bitreader_read_from_client_(FLAC__BitReader *br)\n \tuint32_t start, end;\n \tsize_t bytes;\n \tFLAC__byte *target;\n+#if WORDS_BIGENDIAN\n+#else\n+\tbrword preswap_backup;\n+#endif\n \n \t/* invalidate last seen framesync */\n \tbr->last_seen_framesync = -1;\n@@ -192,6 +196,7 @@ static FLAC__bool bitreader_read_from_client_(FLAC__BitReader *br)\n \t */\n #if WORDS_BIGENDIAN\n #else\n+\tpreswap_backup = br->buffer[br->words];\n \tif(br->bytes)\n \t\tbr->buffer[br->words] = SWAP_BE_WORD_TO_HOST(br->buffer[br->words]);\n #endif\n@@ -204,8 +209,16 @@ static FLAC__bool bitreader_read_from_client_(FLAC__BitReader *br)\n \t */\n \n \t/* read in the data; note that the callback may return a smaller number of bytes */\n-\tif(!br->read_callback(target, &bytes, br->client_data))\n+\tif(!br->read_callback(target, &bytes, br->client_data)){\n+\t\t/* Despite the read callback failing, the data in the target\n+\t\t * might be used later, when the buffer is rewound. Therefore\n+\t\t * we revert the swap that was just done */\n+#if WORDS_BIGENDIAN\n+#else\n+\t\tbr->buffer[br->words] = preswap_backup;\n+#endif\n \t\treturn false;\n+\t}\n \n \t/* after reading bytes 66 77 88 99 AA BB CC DD EE FF from the client:\n \t *   bitstream :  11 22 33 44 55 66 77 88 99 AA BB CC DD EE FF\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42511761-vul",
+      "digest": "sha256:d4fac73eb12c9f40680b3b3d40c45471e2224b9a07a5b3b52d896697ba89b273"
+    },
+    "patched": {
+      "ref": "n132/arvo:42511761-fix",
+      "digest": "sha256:3915d1f99ac9a8816142898a06da02cf38ccdac45633938a3c5819c41ff8e1b6"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/flac/src/libFLAC/crc.c:403",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/flac/src/libFLAC/crc.c:403"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

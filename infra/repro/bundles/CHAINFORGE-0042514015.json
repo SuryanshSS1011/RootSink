@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042514015",
+  "chain": "CWE-20->CWE-125",
+  "project": "ndpi",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42514015",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "8b6a00f84bff9c998643d823502ae9f924fce528",
+      "fix_commits": [
+        "8b6a00f84bff9c998643d823502ae9f924fce528"
+      ],
+      "repo": "https://github.com/ntop/nDPI"
+    },
+    "patch": "diff --git a/src/lib/protocols/softether.c b/src/lib/protocols/softether.c\nindex e7328c8d7ab..6afdebb4abd 100644\n--- a/src/lib/protocols/softether.c\n+++ b/src/lib/protocols/softether.c\n@@ -288,6 +288,11 @@ static int dissect_softether_ip_port(struct ndpi_flow_struct *flow,\n     return 1;\n   }\n \n+  if (ip_port_separator < (char const *)packet->payload + NDPI_STATICSTRING_LEN(\"IP=\"))\n+  {\n+    return 1;\n+  }\n+\n   ip_len = ndpi_min(sizeof(flow->protos.softether.ip) - 1,\n                     ip_port_separator - (char const *)packet->payload -\n                     NDPI_STATICSTRING_LEN(\"IP=\"));\n@@ -295,6 +300,12 @@ static int dissect_softether_ip_port(struct ndpi_flow_struct *flow,\n           ip_len);\n   flow->protos.softether.ip[ip_len] = '\\0';\n \n+  if (ip_port_separator < (char const *)packet->payload +\n+                          NDPI_STATICSTRING_LEN(\"IP=\") + NDPI_STATICSTRING_LEN(\",PORT=\"))\n+  {\n+    return 1;\n+  }\n+\n   port_len = ndpi_min(sizeof(flow->protos.softether.port) - 1,\n                       ip_port_separator - (char const *)packet->payload -\n                       NDPI_STATICSTRING_LEN(\"IP=\") - NDPI_STATICSTRING_LEN(\",PORT=\"));\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42514015-vul",
+      "digest": "sha256:8fa768e32fbf99c641be45f71e6e9745bd859357439b2bbd8f480b4a5ef64bee"
+    },
+    "patched": {
+      "ref": "n132/arvo:42514015-fix",
+      "digest": "sha256:b98af2af63f68a01379c496df1ff2248615c950809eff6fa13306d3926c00bff"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/ndpi/src/lib/protocols/softether.c:301",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/ndpi/src/lib/protocols/softether.c:301"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

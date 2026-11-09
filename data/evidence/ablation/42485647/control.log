@@ -1,0 +1,80 @@
+======================= INFO =========================
+This binary is built for AFL-fuzz.
+To run the target function on individual input(s) execute this:
+  /out/fuzzshark_ip < INPUT_FILE
+or
+  /out/fuzzshark_ip INPUT_FILE1 [INPUT_FILE2 ... ]
+To fuzz with afl-fuzz execute this:
+  afl-fuzz [afl-flags] /out/fuzzshark_ip [-N]
+afl-fuzz will run N iterations before re-spawning the process (default: 1000)
+======================================================
+oss-fuzzshark: disabling: udp
+oss-fuzzshark: disabling: udplite
+oss-fuzzshark: disabling: ospf
+oss-fuzzshark: disabling: bgp
+oss-fuzzshark: disabling: bootp
+oss-fuzzshark: disabling: json
+oss-fuzzshark: disabling: snort
+oss-fuzzshark: configured for dissector: ip
+Reading 4326 bytes from /tmp/poc
+=================================================================
+==11044==ERROR: AddressSanitizer: stack-buffer-overflow on address 0x7fc26209a820 at pc 0x000001a9ff29 bp 0x7ffd6f2bad30 sp 0x7ffd6f2bad28
+WRITE of size 1 at 0x7fc26209a820 thread T0
+SCARINESS: 46 (1-byte-write-stack-buffer-overflow)
+    #0 0x1a9ff28 in get_next_item /src/wireshark/epan/dissectors/packet-xcsl.c:122:14
+    #1 0x1a9ff28 in dissect_xcsl_tcp /src/wireshark/epan/dissectors/packet-xcsl.c:169
+    #2 0x1a9ff28 in dissect_xcsl_tcp_heur /src/wireshark/epan/dissectors/packet-xcsl.c:296
+    #3 0x565891 in dissector_try_heuristic /src/wireshark/epan/packet.c:2699:9
+    #4 0x17f7f08 in decode_tcp_ports /src/wireshark/epan/dissectors/packet-tcp.c:5730:13
+    #5 0x17fc9c6 in process_tcp_payload /src/wireshark/epan/dissectors/packet-tcp.c:5785:13
+    #6 0x17f8d60 in dissect_tcp_payload /src/wireshark/epan/dissectors/packet-tcp.c:5867:9
+    #7 0x1806172 in dissect_tcp /src/wireshark/epan/dissectors/packet-tcp.c:6696:13
+    #8 0x5607a4 in call_dissector_through_handle /src/wireshark/epan/packet.c:692:9
+    #9 0x5607a4 in call_dissector_work /src/wireshark/epan/packet.c:777
+    #10 0x5602bd in dissector_try_uint_new /src/wireshark/epan/packet.c:1359:8
+    #11 0xfeb1ea in ip_try_dissect /src/wireshark/epan/dissectors/packet-ip.c:1831:7
+    #12 0xfeb1ea in dissect_ip_v4 /src/wireshark/epan/dissectors/packet-ip.c:2287
+    #13 0xfe7c5a in dissect_ip /src/wireshark/epan/dissectors/packet-ip.c:2311:5
+    #14 0x5607a4 in call_dissector_through_handle /src/wireshark/epan/packet.c:692:9
+    #15 0x5607a4 in call_dissector_work /src/wireshark/epan/packet.c:777
+    #16 0x5686f5 in call_dissector_only /src/wireshark/epan/packet.c:3090:8
+    #17 0x5686f5 in call_all_postdissectors /src/wireshark/epan/packet.c:3465
+    #18 0xdbd7a6 in dissect_frame /src/wireshark/epan/dissectors/packet-frame.c:681:5
+    #19 0x5607a4 in call_dissector_through_handle /src/wireshark/epan/packet.c:692:9
+    #20 0x5607a4 in call_dissector_work /src/wireshark/epan/packet.c:777
+    #21 0x55d84b in call_dissector_only /src/wireshark/epan/packet.c:3090:8
+    #22 0x55d84b in call_dissector_with_data /src/wireshark/epan/packet.c:3103
+    #23 0x55d02d in dissect_record /src/wireshark/epan/packet.c:566:3
+    #24 0x551a57 in epan_dissect_run /src/wireshark/epan/epan.c:538:2
+    #25 0x52fc7c in LLVMFuzzerTestOneInput /src/wireshark/tools/oss-fuzzshark/fuzzshark.c:360:2
+    #26 0x530bef in ExecuteFilesOnyByOne(int, char**) /src/libfuzzer/afl/afl_driver.cpp:301:5
+    #27 0x53119e in main /src/libfuzzer/afl/afl_driver.cpp:339:12
+    #28 0x7fc260ffa82f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+    #29 0x41ef48 in _start (/out/fuzzshark_ip+0x41ef48)
+
+DEDUP_TOKEN: get_next_item--dissect_xcsl_tcp--dissect_xcsl_tcp_heur
+Address 0x7fc26209a820 is located in stack of thread T0 at offset 4128 in frame
+    #0 0x1a9f50f in dissect_xcsl_tcp_heur /src/wireshark/epan/dissectors/packet-xcsl.c:286
+
+DEDUP_TOKEN: dissect_xcsl_tcp_heur
+  This frame has 2 object(s):
+    [32, 4128) 'str.i' (line 139) <== Memory access at offset 4128 overflows this variable
+    [4256, 4257) 'result.i' (line 140)
+HINT: this may be a false positive if your program uses some custom stack unwind mechanism, swapcontext or vfork
+      (longjmp and C++ exceptions *are* supported)
+SUMMARY: AddressSanitizer: stack-buffer-overflow /src/wireshark/epan/dissectors/packet-xcsl.c:122:14 in get_next_item
+Shadow bytes around the buggy address:
+  0x0ff8cc40b4b0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0ff8cc40b4c0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0ff8cc40b4d0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0ff8cc40b4e0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0ff8cc40b4f0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x0ff8cc40b500: 00 00 00 00[f2]f2 f2 f2 f2 f2 f2 f2 f2 f2 f2 f2
+  0x0ff8cc40b510: f2 f2 f2 f2 01 f3 f3 f3 00 00 00 00 00 00 00 00
+  0x0ff8cc40b520: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0ff8cc40b530: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0ff8cc40b540: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0ff8cc40b550: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 

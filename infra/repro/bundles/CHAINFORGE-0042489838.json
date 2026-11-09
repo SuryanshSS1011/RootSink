@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042489838",
+  "chain": "CWE-456->CWE-457",
+  "project": "miniz",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42489838",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "864ecc8d14466bcdf04287cc42b0d7631ad4d831",
+      "fix_commits": [
+        "864ecc8d14466bcdf04287cc42b0d7631ad4d831"
+      ],
+      "repo": "https://github.com/richgel999/miniz"
+    },
+    "patch": "From 864ecc8d14466bcdf04287cc42b0d7631ad4d831 Mon Sep 17 00:00:00 2001\nFrom: Randy <randy408@protonmail.com>\nDate: Fri, 27 Nov 2020 02:28:21 +0100\nSubject: [PATCH] zip_fuzzer: omit file validation\n\nthis is an unbounded operation\n---\n tests/zip_fuzzer.c | 1 -\n 1 file changed, 1 deletion(-)\n\ndiff --git a/tests/zip_fuzzer.c b/tests/zip_fuzzer.c\nindex 7b8af0f..5737d89 100644\n--- a/tests/zip_fuzzer.c\n+++ b/tests/zip_fuzzer.c\n@@ -33,7 +33,6 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)\n         if(mz_zip_reader_is_file_a_directory(&zip, i)) continue;\n \n         mz_zip_validate_file(&zip, i, MZ_ZIP_FLAG_VALIDATE_HEADERS_ONLY);\n-        mz_zip_validate_file(&zip, i, 0);\n \n         if(mz_zip_reader_is_file_encrypted(&zip, i)) continue;\n \n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42489838-vul",
+      "digest": "sha256:f209e6f3d5f74ea7acd865b72223dcb7fe2811382a9b83fb1a026771e1e9b15d"
+    },
+    "patched": {
+      "ref": "n132/arvo:42489838-fix",
+      "digest": "sha256:662898217683d999bcfe78b6cd3f8e16c2b561bb04bab0b990a8a16a4d863e57"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/miniz/build/amalgamation/miniz.c:143",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/miniz/build/amalgamation/miniz.c:143"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

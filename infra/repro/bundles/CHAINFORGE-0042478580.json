@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042478580",
+  "chain": "CWE-416->CWE-125",
+  "project": "libxml2",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42478580",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "664f881008f40356c0502c8cc154e17e3c80e353",
+      "fix_commits": [
+        "664f881008f40356c0502c8cc154e17e3c80e353"
+      ],
+      "repo": "https://gitlab.gnome.org/GNOME/libxml2.git"
+    },
+    "patch": "From 664f881008f40356c0502c8cc154e17e3c80e353 Mon Sep 17 00:00:00 2001\nFrom: Nick Wellnhofer <wellnhofer@aevum.de>\nDate: Thu, 26 Sep 2019 11:01:58 +0200\nSubject: [PATCH] Fix use-after-free in xmlTextReaderFreeNodeList\n\nRecent commit 1fbcf40 caused a use-after-free read because it didn't\naccount for the fact that xmlTextReaderFreeDoc frees entities before\nfreeing entity references via xmlTextReaderFreeNodeList.\n\nFound by OSS-Fuzz.\n---\n xmlreader.c | 8 ++++----\n 1 file changed, 4 insertions(+), 4 deletions(-)\n\ndiff --git a/xmlreader.c b/xmlreader.c\nindex 9229c18..b505f16 100644\n--- a/xmlreader.c\n+++ b/xmlreader.c\n@@ -367,10 +367,10 @@ xmlTextReaderFreeNodeList(xmlTextReaderPtr reader, xmlNodePtr cur) {\n \treturn;\n     }\n     while (1) {\n-        while ((cur->children != NULL) &&\n-               (cur->children->parent == cur) &&\n-               (cur->type != XML_DTD_NODE) &&\n-               (cur->type != XML_ENTITY_REF_NODE)) {\n+        while ((cur->type != XML_DTD_NODE) &&\n+               (cur->type != XML_ENTITY_REF_NODE) &&\n+               (cur->children != NULL) &&\n+               (cur->children->parent == cur)) {\n             cur = cur->children;\n             depth += 1;\n         }\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42478580-vul",
+      "digest": "sha256:bd530ab37102136c6cff38a69910f4ed56c3bcdeaa7d7040b00f0ef1c155fcfc"
+    },
+    "patched": {
+      "ref": "n132/arvo:42478580-fix",
+      "digest": "sha256:2ee23b7c3e4eb7ec56d9d09426b625ecf83b8beea2e968150f11377aa351975b"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/libxml2/xmlreader.c:371",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/libxml2/xmlreader.c:371"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-964148854",
+  "chain": "CWE-456->CWE-457",
+  "project": "icu",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42480534",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/unicode-org/icu/commit/d7ec310436ce4bae87a94d912f1d8b5ece20f9c5",
+      "fix_commits": [
+        "d7ec310436ce4bae87a94d912f1d8b5ece20f9c5"
+      ],
+      "repo": "https://github.com/unicode-org/icu"
+    },
+    "patch": "diff --git a/icu4c/source/common/ustring.cpp b/icu4c/source/common/ustring.cpp\nindex de43d22ccca1..7ab2e1bf891d 100644\n--- a/icu4c/source/common/ustring.cpp\n+++ b/icu4c/source/common/ustring.cpp\n@@ -45,7 +45,7 @@ isMatchAtCPBoundary(const UChar *start, const UChar *match, const UChar *matchLi\n         /* the leading edge of the match is in the middle of a surrogate pair */\n         return FALSE;\n     }\n-    if(U16_IS_LEAD(*(matchLimit-1)) && match!=limit && U16_IS_TRAIL(*matchLimit)) {\n+    if(U16_IS_LEAD(*(matchLimit-1)) && matchLimit!=limit && U16_IS_TRAIL(*matchLimit)) {\n         /* the trailing edge of the match is in the middle of a surrogate pair */\n         return FALSE;\n     }\ndiff --git a/icu4c/source/test/cintltst/custrtst.c b/icu4c/source/test/cintltst/custrtst.c\nindex 6d9b067ee15b..70bdb1a10443 100644\n--- a/icu4c/source/test/cintltst/custrtst.c\n+++ b/icu4c/source/test/cintltst/custrtst.c\n@@ -962,6 +962,16 @@ TestSurrogateSearching() {\n     ) {\n         log_err(\"error: one of the u_str[str etc](\\\"aba\\\") incorrectly finds something\\n\");\n     }\n+    /* Regression test for ICU-20684 Use-of-uninitialized-value in isMatchAtCPBoundary\n+     * Condition: search the same string while the first char is not an\n+     * surrogate and the last char is the leading surragte.\n+     */\n+    {\n+        static const UChar s[]={ 0x0020, 0xD9C1 };\n+        if (u_strFindFirst(s, 2, s, 2) != s) {\n+            log_err(\"error: ending with a partial supplementary code point should match\\n\");\n+        }\n+    }\n }\n \n static void TestStringCopy()\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42480534-vul",
+      "digest": "sha256:842898af153ce2193f50f7c0e99aa32445b6e8cadf65820912a89873bf1f9198"
+    },
+    "patched": {
+      "ref": "n132/arvo:42480534-fix",
+      "digest": "sha256:77dd516d63502bbe7821a198c4e7aa4f72576f6ec81abb7f8f40b57da179272c"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/icu/icu4c/source/common/ustring.cpp:48",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/icu/icu4c/source/common/ustring.cpp:48"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

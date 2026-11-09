@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042518200",
+  "chain": "CWE-416->CWE-125",
+  "project": "wireshark",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42518200",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "b9a4bf297ece1f93e9caf5f2b1e3ee5f6e447d28",
+      "fix_commits": [
+        "b9a4bf297ece1f93e9caf5f2b1e3ee5f6e447d28"
+      ],
+      "repo": "https://github.com/wireshark/wireshark"
+    },
+    "patch": "From b9a4bf297ece1f93e9caf5f2b1e3ee5f6e447d28 Mon Sep 17 00:00:00 2001\nFrom: John Thacker <johnthacker@gmail.com>\nDate: Mon, 14 Nov 2022 21:37:42 -0500\nSubject: [PATCH] reassembly: Fix update to the fragment_add_single functions\n\nThese used fragment_head and fragment_items indistinguishably\nin a few ways. Fix up 4f3b028d941d727071\n\nFix #18639. Fix #18640.\n---\n epan/reassemble.c | 8 ++++++--\n 1 file changed, 6 insertions(+), 2 deletions(-)\n\ndiff --git a/epan/reassemble.c b/epan/reassemble.c\nindex 19ba265..1769470 100644\n--- a/epan/reassemble.c\n+++ b/epan/reassemble.c\n@@ -2394,7 +2394,7 @@ fragment_add_seq_single_work(reassembly_table *table, tvbuff_t *tvb,\n \t\tfor (frag_number=1; frag_number < max_frags; frag_number++) {\n \t\t\tnew_fh = lookup_fd_head(table, pinfo, id-frag_number, data, NULL);\n \t\t\tif (new_fh != NULL) {\n-\t\t\t\tprev_fd = new_fh->next;\n+\t\t\t\tprev_fd = NULL;\n \t\t\t\tnew_fh->frame = 0;\n \t\t\t\tfor (fd=new_fh->next; fd && fd->offset < frag_number; fd=fd->next) {\n \t\t\t\t\tprev_fd = fd;\n@@ -2404,6 +2404,8 @@ fragment_add_seq_single_work(reassembly_table *table, tvbuff_t *tvb,\n \t\t\t\t}\n \t\t\t\tif (prev_fd) {\n \t\t\t\t\tprev_fd->next = NULL;\n+\t\t\t\t} else {\n+\t\t\t\t\tnew_fh->next = NULL;\n \t\t\t\t}\n \t\t\t\tbreak;\n \t\t\t}\n@@ -2474,7 +2476,7 @@ fragment_add_seq_single_work(reassembly_table *table, tvbuff_t *tvb,\n \t}\n \tif (last) {\n \t\t/* Look for fragments past the end set by this Last fragment. */\n-\t\tprev_fd = fh->next;\n+\t\tprev_fd = NULL;\n \t\tfor (fd=fh->next; fd && fd->offset <= frag_number; fd=fd->next) {\n \t\t\tprev_fd = fd;\n \t\t}\n@@ -2488,6 +2490,8 @@ fragment_add_seq_single_work(reassembly_table *table, tvbuff_t *tvb,\n \t\tif (fd != NULL) {\n \t\t\tif (prev_fd) {\n \t\t\t\tprev_fd->next = NULL;\n+\t\t\t} else {\n+\t\t\t    fh->next = NULL;\n \t\t\t}\n \t\t\tfh->frame = 0;\n \t\t\tfor (prev_fd=fh->next; prev_fd; prev_fd=prev_fd->next) {\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42518200-vul",
+      "digest": "sha256:ea9550e5798f6e23bdc547cc1d5e54d0c22744e83f9be7a1a0b4d82d98c001fa"
+    },
+    "patched": {
+      "ref": "n132/arvo:42518200-fix",
+      "digest": "sha256:89c6e8854d9329fd3b084d2f9a9ff651a0bf32f89d1dcab536d8bab965cecc29"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/wireshark/epan/reassemble.c:1772",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/wireshark/epan/reassemble.c:1772"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

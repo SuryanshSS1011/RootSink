@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-958925935",
+  "chain": "CWE-129->CWE-125",
+  "project": "ffmpeg",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42475684",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://git.ffmpeg.org/gitweb/ffmpeg.git/commitdiff/54e1b62ee28f1588ca35d26eeb2df1fb59040de3",
+      "fix_commits": [
+        "54e1b62ee28f1588ca35d26eeb2df1fb59040de3"
+      ],
+      "repo": "https://git.ffmpeg.org/gitweb/ffmpeg.git/commitdiff"
+    },
+    "patch": "From 54e1b62ee28f1588ca35d26eeb2df1fb59040de3 Mon Sep 17 00:00:00 2001\nFrom: Michael Niedermayer <michael@niedermayer.cc>\nDate: Sat, 13 May 2017 15:30:28 +0200\nSubject: [PATCH] avcodec/h264_cavlc: Fix runtime error: index -1 out of bounds\n for type 'VLC [15]\n\nFixes: 1513/clusterfuzz-testcase-minimized-6246484833992704\n\nFound-by: continuous fuzzing process https://github.com/google/oss-fuzz/tree/master/targets/ffmpeg\nSigned-off-by: Michael Niedermayer <michael@niedermayer.cc>\n---\n libavcodec/h264_cavlc.c | 30 +++++++++++++++---------------\n 1 file changed, 15 insertions(+), 15 deletions(-)\n\ndiff --git a/libavcodec/h264_cavlc.c b/libavcodec/h264_cavlc.c\nindex 72dfaaa..c5d8103 100644\n--- a/libavcodec/h264_cavlc.c\n+++ b/libavcodec/h264_cavlc.c\n@@ -248,15 +248,15 @@ static VLC chroma422_dc_coeff_token_vlc;\n static VLC_TYPE chroma422_dc_coeff_token_vlc_table[8192][2];\n static const int chroma422_dc_coeff_token_vlc_table_size = 8192;\n \n-static VLC total_zeros_vlc[15];\n+static VLC total_zeros_vlc[15+1];\n static VLC_TYPE total_zeros_vlc_tables[15][512][2];\n static const int total_zeros_vlc_tables_size = 512;\n \n-static VLC chroma_dc_total_zeros_vlc[3];\n+static VLC chroma_dc_total_zeros_vlc[3+1];\n static VLC_TYPE chroma_dc_total_zeros_vlc_tables[3][8][2];\n static const int chroma_dc_total_zeros_vlc_tables_size = 8;\n \n-static VLC chroma422_dc_total_zeros_vlc[7];\n+static VLC chroma422_dc_total_zeros_vlc[7+1];\n static VLC_TYPE chroma422_dc_total_zeros_vlc_tables[7][32][2];\n static const int chroma422_dc_total_zeros_vlc_tables_size = 32;\n \n@@ -364,9 +364,9 @@ av_cold void ff_h264_decode_init_vlc(void){\n         av_assert0(offset == FF_ARRAY_ELEMS(coeff_token_vlc_tables));\n \n         for(i=0; i<3; i++){\n-            chroma_dc_total_zeros_vlc[i].table = chroma_dc_total_zeros_vlc_tables[i];\n-            chroma_dc_total_zeros_vlc[i].table_allocated = chroma_dc_total_zeros_vlc_tables_size;\n-            init_vlc(&chroma_dc_total_zeros_vlc[i],\n+            chroma_dc_total_zeros_vlc[i+1].table = chroma_dc_total_zeros_vlc_tables[i];\n+            chroma_dc_total_zeros_vlc[i+1].table_allocated = chroma_dc_total_zeros_vlc_tables_size;\n+            init_vlc(&chroma_dc_total_zeros_vlc[i+1],\n                      CHROMA_DC_TOTAL_ZEROS_VLC_BITS, 4,\n                      &chroma_dc_total_zeros_len [i][0], 1, 1,\n                      &chroma_dc_total_zeros_bits[i][0], 1, 1,\n@@ -374,9 +374,9 @@ av_cold void ff_h264_decode_init_vlc(void){\n         }\n \n         for(i=0; i<7; i++){\n-            chroma422_dc_total_zeros_vlc[i].table = chroma422_dc_total_zeros_vlc_tables[i];\n-            chroma422_dc_total_zeros_vlc[i].table_allocated = chroma422_dc_total_zeros_vlc_tables_size;\n-            init_vlc(&chroma422_dc_total_zeros_vlc[i],\n+            chroma422_dc_total_zeros_vlc[i+1].table = chroma422_dc_total_zeros_vlc_tables[i];\n+            chroma422_dc_total_zeros_vlc[i+1].table_allocated = chroma422_dc_total_zeros_vlc_tables_size;\n+            init_vlc(&chroma422_dc_total_zeros_vlc[i+1],\n                      CHROMA422_DC_TOTAL_ZEROS_VLC_BITS, 8,\n                      &chroma422_dc_total_zeros_len [i][0], 1, 1,\n                      &chroma422_dc_total_zeros_bits[i][0], 1, 1,\n@@ -384,9 +384,9 @@ av_cold void ff_h264_decode_init_vlc(void){\n         }\n \n         for(i=0; i<15; i++){\n-            total_zeros_vlc[i].table = total_zeros_vlc_tables[i];\n-            total_zeros_vlc[i].table_allocated = total_zeros_vlc_tables_size;\n-            init_vlc(&total_zeros_vlc[i],\n+            total_zeros_vlc[i+1].table = total_zeros_vlc_tables[i];\n+            total_zeros_vlc[i+1].table_allocated = total_zeros_vlc_tables_size;\n+            init_vlc(&total_zeros_vlc[i+1],\n                      TOTAL_ZEROS_VLC_BITS, 16,\n                      &total_zeros_len [i][0], 1, 1,\n                      &total_zeros_bits[i][0], 1, 1,\n@@ -570,13 +570,13 @@ static int decode_residual(const H264Context *h, H264SliceContext *sl,\n     else{\n         if (max_coeff <= 8) {\n             if (max_coeff == 4)\n-                zeros_left = get_vlc2(gb, (chroma_dc_total_zeros_vlc-1)[total_coeff].table,\n+                zeros_left = get_vlc2(gb, chroma_dc_total_zeros_vlc[total_coeff].table,\n                                       CHROMA_DC_TOTAL_ZEROS_VLC_BITS, 1);\n             else\n-                zeros_left = get_vlc2(gb, (chroma422_dc_total_zeros_vlc-1)[total_coeff].table,\n+                zeros_left = get_vlc2(gb, chroma422_dc_total_zeros_vlc[total_coeff].table,\n                                       CHROMA422_DC_TOTAL_ZEROS_VLC_BITS, 1);\n         } else {\n-            zeros_left= get_vlc2(gb, (total_zeros_vlc-1)[ total_coeff ].table, TOTAL_ZEROS_VLC_BITS, 1);\n+            zeros_left= get_vlc2(gb, total_zeros_vlc[ total_coeff ].table, TOTAL_ZEROS_VLC_BITS, 1);\n         }\n     }\n \n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42475684-vul",
+      "digest": "sha256:24a83291face4fec551cfd5cca9c0ed70f7dd97a3c20b715a1eac691f17c7a82"
+    },
+    "patched": {
+      "ref": "n132/arvo:42475684-fix",
+      "digest": "sha256:c6705c572ae19aec5c074cdd0b5729e00c3bbf006961fb44c0fafb3e4a9eaed3"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "crash_site": "/src/ffmpeg/libavcodec/h264_cavlc.c:579",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 129,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "site": "/src/ffmpeg/libavcodec/h264_cavlc.c:579"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

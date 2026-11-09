@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042494719",
+  "chain": "CWE-416->CWE-125",
+  "project": "graphicsmagick",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42494719",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "e4d8bf18397d53631cb29172b483b796c1bc625c",
+      "fix_commits": [
+        "e4d8bf18397d53631cb29172b483b796c1bc625c"
+      ],
+      "repo": "https://foss.heptapod.net/graphicsmagick/graphicsmagick"
+    },
+    "patch": "diff --git a/ChangeLog b/ChangeLog\nindex 16aa7474d44f3a5ab3c252a25815907a7f5b5ad9_Q2hhbmdlTG9n..e4d8bf18397d53631cb29172b483b796c1bc625c_Q2hhbmdlTG9n 100644\n--- a/ChangeLog\n+++ b/ChangeLog\n@@ -1,3 +1,10 @@\n+2021-03-24  Bob Friesenhahn  <bfriesen@simple.dallas.tx.us>\n+\n+        * coders/msl.c (ProcessMSLScript): Another attempt to properly fix\n+        oss-fuzz 32263 \"graphicsmagick:coder_MSL_fuzzer:\n+        Heap-use-after-free in ProcessMSLScript\" without causing new\n+        problems.\n+\n 2021-03-23  Bob Friesenhahn  <bfriesen@simple.dallas.tx.us>\n \n         * coders/msl.c (ProcessMSLScript): Fix oss-fuzz 32263\ndiff --git a/VisualMagick/installer/inc/version.isx b/VisualMagick/installer/inc/version.isx\nindex 16aa7474d44f3a5ab3c252a25815907a7f5b5ad9_VmlzdWFsTWFnaWNrL2luc3RhbGxlci9pbmMvdmVyc2lvbi5pc3g=..e4d8bf18397d53631cb29172b483b796c1bc625c_VmlzdWFsTWFnaWNrL2luc3RhbGxlci9pbmMvdmVyc2lvbi5pc3g= 100644\n--- a/VisualMagick/installer/inc/version.isx\n+++ b/VisualMagick/installer/inc/version.isx\n@@ -10,5 +10,5 @@\n \n #define public MagickPackageName \"GraphicsMagick\"\n #define public MagickPackageVersion \"1.4\"\n-#define public MagickPackageVersionAddendum \".020210323\"\n-#define public MagickPackageReleaseDate \"snapshot-20210323\"\n+#define public MagickPackageVersionAddendum \".020210324\"\n+#define public MagickPackageReleaseDate \"snapshot-20210324\"\ndiff --git a/coders/msl.c b/coders/msl.c\nindex 16aa7474d44f3a5ab3c252a25815907a7f5b5ad9_Y29kZXJzL21zbC5j..e4d8bf18397d53631cb29172b483b796c1bc625c_Y29kZXJzL21zbC5j 100644\n--- a/coders/msl.c\n+++ b/coders/msl.c\n@@ -4759,6 +4759,10 @@\n /* } */\n #endif\n \n+/*\n+  Note that if an image is passed in, that it is from the writer and\n+  should never be freed!\n+ */\n static unsigned int\n ProcessMSLScript(const ImageInfo *image_info,Image **image,\n                  ExceptionInfo *exception)\n@@ -4770,6 +4774,7 @@\n     message[MaxTextExtent];\n \n   Image\n+    *writer_image,\n     *msl_image;\n \n   long\n@@ -4802,6 +4807,7 @@\n   assert(image_info != (const ImageInfo *) NULL);\n   assert(image_info->signature == MagickSignature);\n   assert(image != (Image **) NULL);\n+  writer_image=*image; /* Non-null if writing */\n   (void) memset(&msl_info,0,sizeof(msl_info));\n   msl_image=AllocateImage(image_info);\n   status=OpenBlob(image_info,msl_image,ReadBinaryBlobMode,exception);\n@@ -4844,8 +4850,8 @@\n   msl_info.group_info[0].numImages=0;\n   /* the first slot is used to point to the MSL file image */\n   msl_info.image[0]=msl_image;\n-  if (*image != (Image *) NULL)\n-    MSLPushImage(&msl_info,*image);\n+  if (writer_image != (Image *) NULL)\n+    MSLPushImage(&msl_info,writer_image);\n   (void) xmlSubstituteEntitiesDefault(1);\n \n   (void) memset(&SAXModules,0,sizeof(SAXModules));\n@@ -4925,19 +4931,14 @@\n \n /*   printf(\"ProcessMSLScript(msl_info->n=%ld\\n\",msl_info.n); */\n \n-  if (*image == (Image *) NULL)\n-    *image=msl_info.image[0]; /* Was allocated as \"msl_image\" */\n-\n  msl_info_error:\n \n   /*\n     Capture any exception which might have been reported to MSL file\n     image.\n   */\n-  if ((msl_info.image != (Image **) NULL) &&\n-      (msl_info.image[0] != NULL) &&\n-      (msl_info.image[0]->exception.severity > exception->severity))\n-    CopyException(exception,&msl_info.image[0]->exception);\n+  if (msl_image->exception.severity > exception->severity)\n+    CopyException(exception,&msl_image->exception);\n \n   /*\n     Allocations from MSLPushImage().  MSLPopImage() should already do this.\n@@ -4946,8 +4947,16 @@\n     {\n       while (msl_info.n > 0)\n         {\n-          DestroyImage(msl_info.image[msl_info.n]);\n-          msl_info.image[msl_info.n]=(Image *) NULL;\n+          /*\n+            Do not destroy image which was passed in from the writer!\n+          */\n+          if (writer_image != msl_info.image[msl_info.n])\n+            {\n+              if (msl_info.image[msl_info.n]->exception.severity > exception->severity)\n+                CopyException(exception,&msl_info.image[msl_info.n]->exception);\n+              DestroyImage(msl_info.image[msl_info.n]);\n+              msl_info.image[msl_info.n]=(Image *) NULL;\n+            }\n \n           DestroyDrawInfo(msl_info.draw_info[msl_info.n]);\n           msl_info.draw_info[msl_info.n]=(DrawInfo *) NULL;\n@@ -4960,21 +4969,19 @@\n           msl_info.n--;\n         }\n     }\n-  else\n-    {\n-      /*\n-        FIXME: May also need to handle group destruction similar to in\n-        MSLEndElement.\n-      */\n-      DestroyDrawInfo(msl_info.draw_info[0]);\n-      msl_info.draw_info[0]=(DrawInfo *) NULL;\n-\n-      DestroyImage(msl_info.attributes[0]);\n-      msl_info.attributes[0]=(Image *) NULL;\n-\n-      DestroyImageInfo(msl_info.image_info[0]);\n-      msl_info.image_info[0]=(ImageInfo *) NULL;\n-    }\n+\n+  /*\n+    FIXME: May also need to handle group destruction similar to in\n+    MSLEndElement() if libxml2 does not process an end element.\n+  */\n+  DestroyDrawInfo(msl_info.draw_info[0]);\n+  msl_info.draw_info[0]=(DrawInfo *) NULL;\n+\n+  DestroyImage(msl_info.attributes[0]);\n+  msl_info.attributes[0]=(Image *) NULL;\n+\n+  DestroyImageInfo(msl_info.image_info[0]);\n+  msl_info.image_info[0]=(ImageInfo *) NULL;\n \n   MagickFreeMemory(msl_info.image_info);\n   MagickFreeMemory(msl_info.draw_info);\n@@ -4983,11 +4990,19 @@\n   MagickFreeMemory(msl_info.group_info);\n \n   CloseBlob(msl_image);\n-  if (*image != msl_image)\n+  /*\n+    If acting as writer, then destroy temporary msl_image, otherwise,\n+    return msl_image as the image which was read\n+  */\n+  if (writer_image != (Image *) NULL)\n     {\n       DestroyImage(msl_image);\n       msl_image=(Image *) NULL;\n     }\n+  else if (exception->severity < ErrorException)\n+    {\n+        *image=msl_image;\n+    }\n \n   /* FIXME: It is not clear what constitutes \"success\" for MSL */\n   return exception->severity < ErrorException ? MagickPass : MagickFail;\ndiff --git a/magick/version.h b/magick/version.h\nindex 16aa7474d44f3a5ab3c252a25815907a7f5b5ad9_bWFnaWNrL3ZlcnNpb24uaA==..e4d8bf18397d53631cb29172b483b796c1bc625c_bWFnaWNrL3ZlcnNpb24uaA== 100644\n--- a/magick/version.h\n+++ b/magick/version.h\n@@ -38,8 +38,8 @@\n #define MagickLibVersion  0x252200\n #define MagickLibVersionText  \"1.4\"\n #define MagickLibVersionNumber 25,22,0\n-#define MagickChangeDate   \"20210323\"\n-#define MagickReleaseDate  \"snapshot-20210323\"\n+#define MagickChangeDate   \"20210324\"\n+#define MagickReleaseDate  \"snapshot-20210324\"\n \n /*\n   The MagickLibInterfaceNewest and MagickLibInterfaceOldest defines\ndiff --git a/www/Changelog.html b/www/Changelog.html\nindex 16aa7474d44f3a5ab3c252a25815907a7f5b5ad9_d3d3L0NoYW5nZWxvZy5odG1s..e4d8bf18397d53631cb29172b483b796c1bc625c_d3d3L0NoYW5nZWxvZy5odG1s 100644\n--- a/www/Changelog.html\n+++ b/www/Changelog.html\n@@ -35,6 +35,12 @@\n <div class=\"document\">\n \n \n+<p>2021-03-24  Bob Friesenhahn  &lt;<a class=\"reference external\" href=\"mailto:bfriesen&#37;&#52;&#48;simple&#46;dallas&#46;tx&#46;us\">bfriesen<span>&#64;</span>simple<span>&#46;</span>dallas<span>&#46;</span>tx<span>&#46;</span>us</a>&gt;</p>\n+<blockquote>\n+* coders/msl.c (ProcessMSLScript): Another attempt to properly fix\n+oss-fuzz 32263 &quot;graphicsmagick:coder_MSL_fuzzer:\n+Heap-use-after-free in ProcessMSLScript&quot; without causing new\n+problems.</blockquote>\n <p>2021-03-23  Bob Friesenhahn  &lt;<a class=\"reference external\" href=\"mailto:bfriesen&#37;&#52;&#48;simple&#46;dallas&#46;tx&#46;us\">bfriesen<span>&#64;</span>simple<span>&#46;</span>dallas<span>&#46;</span>tx<span>&#46;</span>us</a>&gt;</p>\n <blockquote>\n * coders/msl.c (ProcessMSLScript): Fix oss-fuzz 32263\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42494719-vul",
+      "digest": "sha256:fbd37ca87f924392a9d0fa3be63491e6c4f245af81670d3c84a9815e460f1a90"
+    },
+    "patched": {
+      "ref": "n132/arvo:42494719-fix",
+      "digest": "sha256:3df53b1718bf6639bb72bd47fa7ff9ccc2bde98922dd9b8b3d0a30c72f65f66c"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/graphicsmagick/coders/msl.c:4978",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/graphicsmagick/coders/msl.c:4978"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

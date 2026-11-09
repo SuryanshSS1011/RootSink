@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042517385",
+  "chain": "CWE-20->CWE-787",
+  "project": "libraw",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42517385",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "dc0c984edfc9b36089f86f6068ee7805e9cd9efc",
+      "fix_commits": [
+        "dc0c984edfc9b36089f86f6068ee7805e9cd9efc"
+      ],
+      "repo": "https://github.com/libraw/libraw"
+    },
+    "patch": "diff --git a/src/decoders/kodak_decoders.cpp b/src/decoders/kodak_decoders.cpp\nindex 98f143eea..e4b1b3957 100644\n--- a/src/decoders/kodak_decoders.cpp\n+++ b/src/decoders/kodak_decoders.cpp\n@@ -177,6 +177,10 @@ void LibRaw::kodak_jpeg_load_raw()\n   cinfo.err = jpeg_std_error(&pub);\n   pub.error_exit = jpegErrorExit_k;\n \n+  if (INT64(data_size) >\n+          INT64(imgdata.rawparams.max_raw_memory_mb) * INT64(1024 * 1024))\n+\t  throw LIBRAW_EXCEPTION_TOOBIG;\n+\n   unsigned char *jpg_buf = (unsigned char *)malloc(data_size);\n   std::vector<uchar> pixel_buf(width * 3);\n   jpeg_create_decompress(&cinfo);\ndiff --git a/src/utils/thumb_utils.cpp b/src/utils/thumb_utils.cpp\nindex a9b05f6b0..a081b6960 100644\n--- a/src/utils/thumb_utils.cpp\n+++ b/src/utils/thumb_utils.cpp\n@@ -31,6 +31,9 @@ void LibRaw::kodak_thumb_loader()\n   if (INT64(T.theight) * INT64(T.twidth) < 64ULL)\n       throw LIBRAW_EXCEPTION_IO_CORRUPT;\n \n+  if(T.twidth < 16 || T.twidth > 8192 || T.theight < 16 || T.theight > 8192)\n+    throw LIBRAW_EXCEPTION_IO_CORRUPT;\n+\n   // some kodak cameras\n   ushort s_height = S.height, s_width = S.width, s_iwidth = S.iwidth,\n          s_iheight = S.iheight;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42517385-vul",
+      "digest": "sha256:8fcb02930ed47906b599f806536d12926b9532a61f007dc9c0b8b73861163a1b"
+    },
+    "patched": {
+      "ref": "n132/arvo:42517385-fix",
+      "digest": "sha256:9d210ab08adb9e2161fbe917a2d1ac60b4c3d6ab95d03f2be369b4c22997ea23"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/libraw/src/decoders/kodak_decoders.cpp:503",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/libraw/src/decoders/kodak_decoders.cpp:503"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

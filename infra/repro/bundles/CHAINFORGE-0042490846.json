@@ -1,0 +1,74 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042490846",
+  "chain": "CWE-20->CWE-125",
+  "project": "mdbtools",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42490846",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "4f10f09df8ed475b088d8e14b6ca666775f2c20c\n62f79ec3f3803eaead40935649d858fe9e7c4c3e\na1cda27a58adfbd7dc8c70bb48e12c1c669305f8",
+      "fix_commits": [
+        "4f10f09df8ed475b088d8e14b6ca666775f2c20c",
+        "62f79ec3f3803eaead40935649d858fe9e7c4c3e",
+        "a1cda27a58adfbd7dc8c70bb48e12c1c669305f8"
+      ],
+      "repo": "https://github.com/mdbtools/mdbtools"
+    },
+    "patch": "diff --git a/src/libmdb/data.c b/src/libmdb/data.c\nindex 928f85a9..4ed11c32 100644\n--- a/src/libmdb/data.c\n+++ b/src/libmdb/data.c\n@@ -1001,8 +1001,9 @@ char *mdb_col_to_string(MdbHandle *mdb, void *buf, int start, int datatype, int\n \t\t\tif (size<0) {\n \t\t\t\ttext = g_strdup(\"\");\n \t\t\t} else {\n-\t\t\t\ttext = g_malloc(size);\n+\t\t\t\ttext = g_malloc(size+1);\n \t\t\t\tmemcpy(text, (char*)buf+start, size);\n+\t\t\t\ttext[size] = '\\0';\n \t\t\t}\n \t\tbreak;\n \t\tcase MDB_TEXT:\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42490846-vul",
+      "digest": "sha256:1955e6badda91a008f80b4e88c81c5159c66f24d182af468b635f6b5681dd85e"
+    },
+    "patched": {
+      "ref": "n132/arvo:42490846-fix",
+      "digest": "sha256:d9dbe06573493d1eebd1633d9d6d6656fc9b6525cb418209f5066baa8750409b"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/mdbtools/src/libmdb/data.c:285",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/mdbtools/src/libmdb/data.c:285"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

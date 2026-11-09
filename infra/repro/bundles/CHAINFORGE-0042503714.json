@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042503714",
+  "chain": "CWE-20->CWE-125",
+  "project": "libbpf",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42503714",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "a383b3e200c72fd5fdc8b8539fb409942357fc5b",
+      "fix_commits": [
+        "a383b3e200c72fd5fdc8b8539fb409942357fc5b"
+      ],
+      "repo": "https://github.com/libbpf/libbpf"
+    },
+    "patch": "diff --git a/src/libbpf.c b/src/libbpf.c\nindex f836a1936..0dc646527 100644\n--- a/src/libbpf.c\n+++ b/src/libbpf.c\n@@ -3270,8 +3270,12 @@ static int bpf_object__elf_collect(struct bpf_object *obj)\n \t\t} else if (strcmp(name, MAPS_ELF_SEC) == 0) {\n \t\t\tobj->efile.btf_maps_shndx = idx;\n \t\t} else if (strcmp(name, BTF_ELF_SEC) == 0) {\n+\t\t\tif (sh->sh_type != SHT_PROGBITS)\n+\t\t\t\treturn -LIBBPF_ERRNO__FORMAT;\n \t\t\tbtf_data = data;\n \t\t} else if (strcmp(name, BTF_EXT_ELF_SEC) == 0) {\n+\t\t\tif (sh->sh_type != SHT_PROGBITS)\n+\t\t\t\treturn -LIBBPF_ERRNO__FORMAT;\n \t\t\tbtf_ext_data = data;\n \t\t} else if (sh->sh_type == SHT_SYMTAB) {\n \t\t\t/* already processed during the first pass above */\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42503714-vul",
+      "digest": "sha256:97858d1d47fac03363dcfec7f0dbdd623c17d41408d234eadefb664be280c686"
+    },
+    "patched": {
+      "ref": "n132/arvo:42503714-fix",
+      "digest": "sha256:2dc88f326349bc57ba23ca5e392a7e06f485c8eed90693b393e5797bb4c2683a"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "global-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/libbpf/src/btf.c:854",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "global-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/libbpf/src/btf.c:854"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042499550",
+  "chain": "CWE-456->CWE-457",
+  "project": "selinux",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42499550",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "05d1c66aaae2b1ce3eaac7d241f24be121fddb39",
+      "fix_commits": [
+        "05d1c66aaae2b1ce3eaac7d241f24be121fddb39"
+      ],
+      "repo": "https://github.com/SELinuxProject/selinux"
+    },
+    "patch": "From 05d1c66aaae2b1ce3eaac7d241f24be121fddb39 Mon Sep 17 00:00:00 2001\nFrom: James Carter <jwcart2@gmail.com>\nDate: Fri, 27 Aug 2021 10:12:42 -0400\nSubject: [PATCH] libsepol/cil: Properly check for parameter when inserting\n name\n\nFile names for typetransition rules are stored in their own datums.\nThis allows them to be passed as a parameter, but there needs to be\na check in __cil_insert_name() so that parameter names are not\nmistaken for file name strings. This check did not verify that a\nmatching parameter name had the flavor of CIL_NAME.\n\nCheck that the parameter flavor is CIL_NAME and that the paramter\nname matches the file name to be stored in the datum.\n\nThis bug was found by the secilc-fuzzer.\n\nSigned-off-by: James Carter <jwcart2@gmail.com>\n---\n libsepol/cil/src/cil_resolve_ast.c | 3 ++-\n 1 file changed, 2 insertions(+), 1 deletion(-)\n\ndiff --git a/libsepol/cil/src/cil_resolve_ast.c b/libsepol/cil/src/cil_resolve_ast.c\nindex 1800732..a4de1c7 100644\n--- a/libsepol/cil/src/cil_resolve_ast.c\n+++ b/libsepol/cil/src/cil_resolve_ast.c\n@@ -87,7 +87,8 @@ static struct cil_name * __cil_insert_name(struct cil_db *db, hashtab_key_t key,\n \tif (macro != NULL && macro->params != NULL) {\n \t\tstruct cil_list_item *item;\n \t\tcil_list_for_each(item, macro->params) {\n-\t\t\tif (((struct cil_param*)item->data)->str == key) {\n+\t\t\tstruct cil_param *param = item->data;\n+\t\t\tif (param->flavor == CIL_NAME && param->str == key) {\n \t\t\t\treturn NULL;\n \t\t\t}\n \t\t}\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42499550-vul",
+      "digest": "sha256:707cbc02660cf8c9f8fd7d28099b787c48c1d8fa9fb919f765a435ddbb791097"
+    },
+    "patched": {
+      "ref": "n132/arvo:42499550-fix",
+      "digest": "sha256:351667e576b5c5a611cc141a03c0197d23dafc75a12f3f00ee0bbd2d35972de2"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/selinux/libsepol/src/../cil/src/cil_resolve_ast.c:4320",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/selinux/libsepol/src/../cil/src/cil_resolve_ast.c:4320"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

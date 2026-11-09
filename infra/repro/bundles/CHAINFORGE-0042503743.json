@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042503743",
+  "chain": "CWE-1284->CWE-125",
+  "project": "gstreamer",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42503743",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://anongit.freedesktop.org/git/gstreamer/gstreamerd106390adce5cee837d2d0aab377d758a45a4b2d",
+      "fix_commits": [
+        "d106390adce5cee837d2d0aab377d758a45a4b2d"
+      ],
+      "repo": "https://anongit.freedesktop.org/git/gstreamer/gstreamer"
+    },
+    "patch": "From d106390adce5cee837d2d0aab377d758a45a4b2d Mon Sep 17 00:00:00 2001\nFrom: =?UTF-8?q?Tim-Philipp=20M=C3=BCller?= <tim@centricular.com>\nDate: Tue, 1 Aug 2017 11:06:32 +0100\nSubject: [PATCH] element: add gst_element_foreach_*pad()\n\nAdd convenience API that iterates over all pads, sink pads or\nsource pads and makes sure that the foreach function is called\nexactly once for each pad.\n\nThis is a KISS implementation. It doesn't use GstIterator and\ndoesn't try to do clever things like resync if pads are added\nor removed while the function is executing. We can still do that\nin future if we think it's needed, but in practice it will\nlikely make absolutely no difference whatsoever, since these\nthings will have to be handled properly elsewhere by the element\nanyway if they're important.\n\nAfter all, it's always possible that a pad is added or removed\njust after the iterator finishes iterating, but before the\nfunction returns.\n\nThis is also a replacement for gst_aggregator_iterate_sink_pads().\n\nhttps://bugzilla.gnome.org/show_bug.cgi?id=785679\n---\n docs/gst/gstreamer-sections.txt |   3 +\n gst/gstelement.c                | 115 ++++++++++++++++++++++++++++++\n gst/gstelement.h                |  29 ++++++++\n tests/check/gst/gstelement.c    | 119 ++++++++++++++++++++++++++++++++\n win32/common/libgstreamer.def   |   3 +\n 5 files changed, 269 insertions(+)\n\ndiff --git a/docs/gst/gstreamer-sections.txt b/docs/gst/gstreamer-sections.txt\nindex c30e6c9..e86c0f3 100644\n--- a/docs/gst/gstreamer-sections.txt\n+++ b/docs/gst/gstreamer-sections.txt\n@@ -886,6 +886,9 @@ gst_element_remove_pad\n gst_element_iterate_pads\n gst_element_iterate_sink_pads\n gst_element_iterate_src_pads\n+gst_element_foreach_pad\n+gst_element_foreach_sink_pad\n+gst_element_foreach_src_pad\n \n <SUBSECTION element-linking>\n gst_element_link\ndiff --git a/gst/gstelement.c b/gst/gstelement.c\nindex 4026009..80ecf44 100644\n--- a/gst/gstelement.c\n+++ b/gst/gstelement.c\n@@ -1247,6 +1247,121 @@ gst_element_iterate_sink_pads (GstElement * element)\n   return gst_element_iterate_pad_list (element, &element->sinkpads);\n }\n \n+static gboolean\n+gst_element_do_foreach_pad (GstElement * element,\n+    GstElementForeachPadFunc func, gpointer user_data,\n+    GList ** p_pads, guint16 * p_npads)\n+{\n+  gboolean ret = TRUE;\n+  GstPad **pads;\n+  guint n_pads, i;\n+  GList *l;\n+\n+  g_return_val_if_fail (GST_IS_ELEMENT (element), FALSE);\n+  g_return_val_if_fail (func != NULL, FALSE);\n+\n+  GST_OBJECT_LOCK (element);\n+  n_pads = *p_npads;\n+  pads = g_newa (GstPad *, n_pads + 1);\n+  for (l = *p_pads, i = 0; l != NULL; l = l->next) {\n+    g_assert (i < n_pads);\n+    pads[i++] = gst_object_ref (l->data);\n+  }\n+  GST_OBJECT_UNLOCK (element);\n+\n+  if (n_pads == 0)\n+    return FALSE;\n+\n+  for (i = 0; i < n_pads; ++i) {\n+    ret = func (element, pads[i], user_data);\n+    if (!ret)\n+      break;\n+  }\n+\n+  for (i = 0; i < n_pads; ++i)\n+    gst_object_unref (pads[i]);\n+\n+  return ret;\n+}\n+\n+/**\n+ * gst_element_foreach_sink_pad:\n+ * @element: a #GstElement to iterate sink pads of\n+ * @func: (scope call): function to call for each sink pad\n+ * @user_data: (closure): user data passed to @func\n+ *\n+ * Call @func with @user_data for each of @element's sink pads. @func will be\n+ * called exactly once for each sink pad that exists at the time of this call,\n+ * unless one of the calls to @func returns %FALSE in which case we will stop\n+ * iterating pads and return early. If new sink pads are added or sink pads\n+ * are removed while the sink pads are being iterated, this will not be taken\n+ * into account until next time this function is used.\n+ *\n+ * Returns: %FALSE if @element had no sink pads or if one of the calls to @func\n+ *   returned %FALSE.\n+ *\n+ * Since: 1.14\n+ */\n+gboolean\n+gst_element_foreach_sink_pad (GstElement * element,\n+    GstElementForeachPadFunc func, gpointer user_data)\n+{\n+  return gst_element_do_foreach_pad (element, func, user_data,\n+      &element->sinkpads, &element->numsinkpads);\n+}\n+\n+/**\n+ * gst_element_foreach_src_pad:\n+ * @element: a #GstElement to iterate source pads of\n+ * @func: (scope call): function to call for each source pad\n+ * @user_data: (closure): user data passed to @func\n+ *\n+ * Call @func with @user_data for each of @element's source pads. @func will be\n+ * called exactly once for each source pad that exists at the time of this call,\n+ * unless one of the calls to @func returns %FALSE in which case we will stop\n+ * iterating pads and return early. If new source pads are added or source pads\n+ * are removed while the source pads are being iterated, this will not be taken\n+ * into account until next time this function is used.\n+ *\n+ * Returns: %FALSE if @element had no source pads or if one of the calls\n+ *   to @func returned %FALSE.\n+ *\n+ * Since: 1.14\n+ */\n+gboolean\n+gst_element_foreach_src_pad (GstElement * element,\n+    GstElementForeachPadFunc func, gpointer user_data)\n+{\n+  return gst_element_do_foreach_pad (element, func, user_data,\n+      &element->srcpads, &element->numsrcpads);\n+}\n+\n+/**\n+ * gst_element_foreach_pad:\n+ * @element: a #GstElement to iterate pads of\n+ * @func: (scope call): function to call for each pad\n+ * @user_data: (closure): user data passed to @func\n+ *\n+ * Call @func with @user_data for each of @element's pads. @func will be called\n+ * exactly once for each pad that exists at the time of this call, unless\n+ * one of the calls to @func returns %FALSE in which case we will stop\n+ * iterating pads and return early. If new pads are added or pads are removed\n+ * while pads are being iterated, this will not be taken into account until\n+ * next time this function is used.\n+ *\n+ * Returns: %FALSE if @element had no pads or if one of the calls to @func\n+ *   returned %FALSE.\n+ *\n+ * Since: 1.14\n+ */\n+gboolean\n+gst_element_foreach_pad (GstElement * element, GstElementForeachPadFunc func,\n+    gpointer user_data)\n+{\n+  return gst_element_do_foreach_pad (element, func, user_data,\n+      &element->pads, &element->numpads);\n+}\n+\n /**\n  * gst_element_class_add_pad_template:\n  * @klass: the #GstElementClass to add the pad template to.\ndiff --git a/gst/gstelement.h b/gst/gstelement.h\nindex 781a21b..fab64a0 100644\n--- a/gst/gstelement.h\n+++ b/gst/gstelement.h\n@@ -909,6 +909,35 @@ GstIterator *           gst_element_iterate_src_pads    (GstElement * element);\n GST_EXPORT\n GstIterator *           gst_element_iterate_sink_pads   (GstElement * element);\n \n+/**\n+ * GstElementForeachPadFunc:\n+ * @element: the #GstElement\n+ * @pad: a #GstPad\n+ * @user_data: user data passed to the foreach function\n+ *\n+ * Function called for each pad when using gst_element_foreach_sink_pad(),\n+ * gst_element_foreach_src_pad(), or gst_element_foreach_pad().\n+ *\n+ * Returns: %FALSE to stop iterating pads, %TRUE to continue\n+ *\n+ * Since: 1.14\n+ */\n+typedef gboolean (*GstElementForeachPadFunc) (GstElement * element,\n+                                              GstPad     * pad,\n+                                              gpointer     user_data);\n+\n+GST_EXPORT\n+gboolean                gst_element_foreach_sink_pad    (GstElement * element,\n+                                                         GstElementForeachPadFunc func,\n+                                                         gpointer     user_data);\n+GST_EXPORT\n+gboolean                gst_element_foreach_src_pad     (GstElement * element,\n+                                                         GstElementForeachPadFunc func,\n+                                                         gpointer     user_data);\n+GST_EXPORT\n+gboolean                gst_element_foreach_pad         (GstElement * element,\n+                                                         GstElementForeachPadFunc func,\n+                                                         gpointer     user_data);\n /* event/query/format stuff */\n \n GST_EXPORT\ndiff --git a/tests/check/gst/gstelement.c b/tests/check/gst/gstelement.c\nindex d22471f..fa63ee6 100644\n--- a/tests/check/gst/gstelement.c\n+++ b/tests/check/gst/gstelement.c\n@@ -789,6 +789,124 @@ GST_START_TEST (test_request_pad_templates)\n \n GST_END_TEST;\n \n+static gboolean run_foreach_thread;\n+\n+/* thread function that just adds/removes pads while main thread iterates pads */\n+static gpointer\n+thread_add_remove_pads (GstElement * e)\n+{\n+  GPtrArray *pads;\n+  guint n, c = 0;\n+\n+  pads = g_ptr_array_new ();\n+\n+  THREAD_START ();\n+\n+  while (g_atomic_int_get (&run_foreach_thread)) {\n+    GstPad *p;\n+    gchar name[16];\n+\n+    /* add a new pad */\n+    g_snprintf (name, 16, \"pad_%u\", c++);\n+    p = gst_pad_new (name, g_random_boolean ()? GST_PAD_SRC : GST_PAD_SINK);\n+    g_ptr_array_add (pads, p);\n+    gst_element_add_pad (e, p);\n+\n+    THREAD_SWITCH ();\n+\n+    /* and remove a random pad */\n+    if (g_random_boolean () || pads->len > 100) {\n+      n = g_random_int_range (0, pads->len);\n+      p = g_ptr_array_remove_index (pads, n);\n+      gst_element_remove_pad (e, p);\n+    }\n+\n+    THREAD_SWITCH ();\n+  }\n+\n+  g_ptr_array_free (pads, TRUE);\n+  return NULL;\n+}\n+\n+typedef struct\n+{\n+  GQuark q;\n+  GstPadDirection dir;          /* GST_PAD_UNKNOWN = both are allowed */\n+  gboolean func_called;\n+} PadChecks;\n+\n+static gboolean\n+pad_foreach_func (GstElement * e, GstPad * pad, gpointer user_data)\n+{\n+  PadChecks *checks = user_data;\n+\n+  /* check we haven't visited this pad already */\n+  fail_if (g_object_get_qdata (G_OBJECT (pad), checks->q) != NULL);\n+\n+  g_object_set_qdata (G_OBJECT (pad), checks->q, GINT_TO_POINTER (1));\n+\n+  if (checks->dir != GST_PAD_UNKNOWN) {\n+    fail_unless_equals_int (checks->dir, GST_PAD_DIRECTION (pad));\n+  }\n+  checks->func_called = TRUE;\n+  return TRUE;\n+}\n+\n+GST_START_TEST (test_foreach_pad)\n+{\n+  PadChecks checks = { 0, GST_PAD_UNKNOWN, FALSE };\n+  GstElement *e;\n+  gint i;\n+\n+  e = gst_bin_new (\"testbin\");\n+\n+  /* function should not be called if there are no pads! */\n+  gst_element_foreach_pad (e, pad_foreach_func, &checks);\n+  fail_if (checks.func_called);\n+\n+  g_atomic_int_set (&run_foreach_thread, TRUE);\n+\n+  MAIN_INIT ();\n+  MAIN_START_THREAD_FUNCTION (0, thread_add_remove_pads, e);\n+  MAIN_SYNCHRONIZE ();\n+\n+  for (i = 0; i < 10000; ++i) {\n+    gchar num[32];\n+\n+    g_snprintf (num, 32, \"foreach-test-%u\", i);\n+\n+    checks.q = g_quark_from_string (num);\n+    checks.func_called = FALSE;\n+    if (g_random_boolean ()) {\n+      checks.dir = GST_PAD_UNKNOWN;\n+      gst_element_foreach_pad (e, pad_foreach_func, &checks);\n+    } else if (g_random_boolean ()) {\n+      checks.dir = GST_PAD_SRC;\n+      gst_element_foreach_src_pad (e, pad_foreach_func, &checks);\n+    } else {\n+      checks.dir = GST_PAD_SINK;\n+      gst_element_foreach_sink_pad (e, pad_foreach_func, &checks);\n+    }\n+\n+    THREAD_SWITCH ();\n+  }\n+\n+  g_atomic_int_set (&run_foreach_thread, FALSE);\n+\n+  MAIN_STOP_THREADS ();\n+\n+  /* function should be called if there are pads */\n+  checks.q = g_quark_from_string (\"fini\");\n+  checks.dir = GST_PAD_UNKNOWN;\n+  checks.func_called = FALSE;\n+  gst_element_foreach_pad (e, pad_foreach_func, &checks);\n+  fail_if (e->numpads > 0 && !checks.func_called);\n+\n+  gst_object_unref (e);\n+}\n+\n+GST_END_TEST;\n+\n static Suite *\n gst_element_suite (void)\n {\n@@ -804,6 +922,7 @@ gst_element_suite (void)\n   tcase_add_test (tc_chain, test_pad_templates);\n   tcase_add_test (tc_chain, test_property_notify_message);\n   tcase_add_test (tc_chain, test_request_pad_templates);\n+  tcase_add_test (tc_chain, test_foreach_pad);\n \n   return s;\n }\ndiff --git a/win32/common/libgstreamer.def b/win32/common/libgstreamer.def\nindex 40ae649..8fedefa 100644\n--- a/win32/common/libgstreamer.def\n+++ b/win32/common/libgstreamer.def\n@@ -531,6 +531,9 @@ EXPORTS\n \tgst_element_factory_list_is_type\n \tgst_element_factory_make\n \tgst_element_flags_get_type\n+\tgst_element_foreach_pad\n+\tgst_element_foreach_sink_pad\n+\tgst_element_foreach_src_pad\n \tgst_element_get_base_time\n \tgst_element_get_bus\n \tgst_element_get_clock\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42503743-vul",
+      "digest": "sha256:b5d26765edfa24f9d999eb011e8b40455d045722af2623b5cb1d3d28666afcfb"
+    },
+    "patched": {
+      "ref": "n132/arvo:42503743-fix",
+      "digest": "sha256:64ff4bf4d2af315a056ca387be7e22954986b82827d4ca33914c7115f6c15255"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/gst-plugins-base/gst/typefind/gsttypefindfunctions.c:4151",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/gst-plugins-base/gst/typefind/gsttypefindfunctions.c:4151"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

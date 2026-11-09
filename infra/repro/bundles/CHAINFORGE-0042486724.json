@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042486724",
+  "chain": "CWE-416->CWE-125",
+  "project": "open62541",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42486724",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "46a618acfbb3a71f3ccabcbc26cd620636300868",
+      "fix_commits": [
+        "46a618acfbb3a71f3ccabcbc26cd620636300868"
+      ],
+      "repo": "https://github.com/open62541/open62541"
+    },
+    "patch": "From 46a618acfbb3a71f3ccabcbc26cd620636300868 Mon Sep 17 00:00:00 2001\nFrom: cochicde <cabral@fortiss.org>\nDate: Mon, 24 Aug 2020 18:25:49 +0200\nSubject: [PATCH] refactor(server): Reset the original configuration in\n UA_Server_newWithConfig\n\n---\n include/open62541/server.h  | 2 +-\n plugins/ua_config_default.c | 7 +------\n src/server/ua_server.c      | 7 +++++--\n 3 files changed, 7 insertions(+), 9 deletions(-)\n\ndiff --git a/include/open62541/server.h b/include/open62541/server.h\nindex 3c208a0..15b1f7b 100644\n--- a/include/open62541/server.h\n+++ b/include/open62541/server.h\n@@ -311,7 +311,7 @@ UA_ServerConfig_setCustomHostname(UA_ServerConfig *config,\n /* Creates a new server. Moves the config into the server with a shallow copy.\n  * The config content is cleared together with the server. */\n UA_Server UA_EXPORT *\n-UA_Server_newWithConfig(const UA_ServerConfig *config);\n+UA_Server_newWithConfig(UA_ServerConfig *config);\n \n void UA_EXPORT UA_Server_delete(UA_Server *server);\n \ndiff --git a/plugins/ua_config_default.c b/plugins/ua_config_default.c\nindex f53c493..ba916c3 100644\n--- a/plugins/ua_config_default.c\n+++ b/plugins/ua_config_default.c\n@@ -51,12 +51,7 @@ UA_Server_new() {\n         return NULL;\n     }\n \n-    UA_Server *server = UA_Server_newWithConfig(&config);\n-    if(!server) {\n-        config.nodestore.clear(config.nodestore.context);\n-    }\n-\n-    return server;\n+    return UA_Server_newWithConfig(&config);\n }\n \n /*******************************/\ndiff --git a/src/server/ua_server.c b/src/server/ua_server.c\nindex 97233ce..af1cf3d 100644\n--- a/src/server/ua_server.c\n+++ b/src/server/ua_server.c\n@@ -345,13 +345,16 @@ UA_Server_init(UA_Server *server) {\n }\n \n UA_Server *\n-UA_Server_newWithConfig(const UA_ServerConfig *config) {\n+UA_Server_newWithConfig(UA_ServerConfig *config) {\n     if(!config)\n         return NULL;\n     UA_Server *server = (UA_Server *)UA_calloc(1, sizeof(UA_Server));\n-    if(!server)\n+    if(!server) {\n+        UA_ServerConfig_clean(config);\n         return NULL;\n+    }\n     server->config = *config;\n+    memset(config, 0, sizeof(UA_ServerConfig));\n     return UA_Server_init(server);\n }\n \n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42486724-vul",
+      "digest": "sha256:0ba07720ef9fe5d9f6adb215438bdc31e0151105cb44d12600c195029fda508d"
+    },
+    "patched": {
+      "ref": "n132/arvo:42486724-fix",
+      "digest": "sha256:e24a2a782be1d1dc448f9707ee887a64940e1660e01dbaaf3de8b8c91dbf2277"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/open62541/plugins/ua_nodestore_hashmap.c:447",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/open62541/plugins/ua_nodestore_hashmap.c:447"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

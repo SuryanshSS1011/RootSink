@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042516127",
+  "chain": "CWE-456->CWE-457",
+  "project": "MapServer",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42516127",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "e8a640d7fdccc41ab65c7d22896632bdb7ebf283",
+      "fix_commits": [
+        "e8a640d7fdccc41ab65c7d22896632bdb7ebf283"
+      ],
+      "repo": "https://github.com/MapServer/MapServer"
+    },
+    "patch": "From e8a640d7fdccc41ab65c7d22896632bdb7ebf283 Mon Sep 17 00:00:00 2001\nFrom: Even Rouault <even.rouault@spatialys.com>\nDate: Fri, 30 Sep 2022 16:45:16 +0200\nSubject: [PATCH] shapefuzzer: avoid too long processing time\n\nshould help for https://bugs.chromium.org/p/oss-fuzz/issues/detail?id=51551\nand on other broken files\n---\n fuzzers/shapefuzzer.c | 20 ++++++++++++++++++++\n 1 file changed, 20 insertions(+)\n\ndiff --git a/fuzzers/shapefuzzer.c b/fuzzers/shapefuzzer.c\nindex d148191..7a0e3c5 100644\n--- a/fuzzers/shapefuzzer.c\n+++ b/fuzzers/shapefuzzer.c\n@@ -1,6 +1,8 @@\n #include \"mapserver.h\"\n #include \"mapshape.h\"\n \n+#include \"cpl_vsi.h\"\n+\n #include <stdlib.h>\n #include <string.h>\n #include <stdbool.h>\n@@ -68,12 +70,26 @@ LLVMFuzzerTestOneInput(GByte *data, size_t size)\n   VSILFILE *dbf = SegmentFile(\"/vsimem/foo.dbf\", &data, &size);\n \n   shapefileObj file;\n+  errorObj *ms_error = msGetErrorObj();\n   if (msShapefileOpenVirtualFile(&file, \"/vsimem/foo.shp\", shp, shx, dbf, false) == 0) {\n+    if (file.numshapes > 100 * 1000 )\n+    {\n+        VSIStatBufL sStat;\n+        if( VSIStatL(\"/vsimem/foo.shx\", &sStat) == 0 &&\n+            sStat.st_size >= 100 &&\n+            file.numshapes > (int)(sStat.st_size - 100) / 8 )\n+        {\n+            file.numshapes = (int)(sStat.st_size - 100) / 8;\n+        }\n+    }\n     for (int i = 0; i < file.numshapes; ++i) {\n       shapeObj shape;\n       msInitShape(&shape);\n       msSHPReadShape(file.hSHP, i, &shape);\n       msFreeShape(&shape);\n+      // Give up as soon an error is triggered to avoid too long processing time.\n+      if( ms_error->code != MS_NOERR )\n+          break;\n     }\n \n     msShapefileClose(&file);\n@@ -81,5 +97,9 @@ LLVMFuzzerTestOneInput(GByte *data, size_t size)\n \n   msResetErrorList();\n \n+  VSIUnlink(\"/vsimem/foo.shp\");\n+  VSIUnlink(\"/vsimem/foo.shx\");\n+  VSIUnlink(\"/vsimem/foo.dbf\");\n+\n   return EXIT_SUCCESS;\n }\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42516127-vul",
+      "digest": "sha256:715ee5ec78fb308ffa77f31f9f59bcd3a242cb7d4c40dd387be6ae0311b6f4f9"
+    },
+    "patched": {
+      "ref": "n132/arvo:42516127-fix",
+      "digest": "sha256:90fbfac055d3c8162c7292c5a5851480653aa05f4a5f986241e85526dce74238"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/MapServer/mapshape.c:1254",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/MapServer/mapshape.c:1254"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

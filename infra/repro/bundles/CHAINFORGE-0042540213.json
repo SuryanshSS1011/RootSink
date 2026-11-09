@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042540213",
+  "chain": "CWE-1284->CWE-125",
+  "project": "graphicsmagick",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42540213",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "a4ee1abf87681a7cf41d14d0b842148695654964",
+      "fix_commits": [
+        "a4ee1abf87681a7cf41d14d0b842148695654964"
+      ],
+      "repo": "https://foss.heptapod.net/graphicsmagick/graphicsmagick"
+    },
+    "patch": "diff --git a/ChangeLog b/ChangeLog\nindex a01b3c84f641f6e920061e345635bbdbee1f0577_Q2hhbmdlTG9n..a4ee1abf87681a7cf41d14d0b842148695654964_Q2hhbmdlTG9n 100644\n--- a/ChangeLog\n+++ b/ChangeLog\n@@ -1,5 +1,10 @@\n 2018-05-31  Bob Friesenhahn  <bfriesen@simple.dallas.tx.us>\n \n+\t* coders/png.c (ReadMNGImage): Fix off-by-one in length validation\n+\tfor TERM chunk which allowed one byte heap read overflow.  Fixes\n+\toss-fuzz 8615 \"graphicsmagick/coder_MNG_fuzzer:\n+\tHeap-buffer-overflow in mng_get_long\". (Credit to OSS-Fuzz)\n+\n \t* coders/tiff.c (ReadTIFFImage): Reject files with excessive\n \tsamples-per-pixel or extra-samples. Avoids potential issues\n \tobserved in oss-fuzz 8634 \"graphicsmagick/coder_BIGTIFF_fuzzer:\ndiff --git a/coders/png.c b/coders/png.c\nindex a01b3c84f641f6e920061e345635bbdbee1f0577_Y29kZXJzL3BuZy5j..a4ee1abf87681a7cf41d14d0b842148695654964_Y29kZXJzL3BuZy5j 100644\n--- a/coders/png.c\n+++ b/coders/png.c\n@@ -4385,7 +4385,7 @@\n \n               if (length)\n                 repeat=p[0];\n-              if (repeat == 3 && length > 8)\n+              if (repeat == 3 && length > 9)\n                 {\n                   final_delay=(png_uint_32) mng_get_long(&p[2]);\n                   mng_iterations=(png_uint_32) mng_get_long(&p[6]);\ndiff --git a/www/Changelog.html b/www/Changelog.html\nindex a01b3c84f641f6e920061e345635bbdbee1f0577_d3d3L0NoYW5nZWxvZy5odG1s..a4ee1abf87681a7cf41d14d0b842148695654964_d3d3L0NoYW5nZWxvZy5odG1s 100644\n--- a/www/Changelog.html\n+++ b/www/Changelog.html\n@@ -38,6 +38,10 @@\n <p>2018-05-31  Bob Friesenhahn  &lt;<a class=\"reference external\" href=\"mailto:bfriesen&#37;&#52;&#48;simple&#46;dallas&#46;tx&#46;us\">bfriesen<span>&#64;</span>simple<span>&#46;</span>dallas<span>&#46;</span>tx<span>&#46;</span>us</a>&gt;</p>\n <blockquote>\n <ul class=\"simple\">\n+<li>coders/png.c (ReadMNGImage): Fix off-by-one in length validation\n+for TERM chunk which allowed one byte heap read overflow.  Fixes\n+oss-fuzz 8615 &quot;graphicsmagick/coder_MNG_fuzzer:\n+Heap-buffer-overflow in mng_get_long&quot;. (Credit to OSS-Fuzz)</li>\n <li>coders/tiff.c (ReadTIFFImage): Reject files with excessive\n samples-per-pixel or extra-samples. Avoids potential issues\n observed in oss-fuzz 8634 &quot;graphicsmagick/coder_BIGTIFF_fuzzer:\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42540213-vul",
+      "digest": "sha256:9672867ddb45b908b751e418e3e8047862f2b6e748ff3a11e65d7b0dc1c2bc14"
+    },
+    "patched": {
+      "ref": "n132/arvo:42540213-fix",
+      "digest": "sha256:fef68c17945f704a20ff81cec9c12e110a148914fac084de2f48d059144faf42"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/graphicsmagick/coders/png.c:1021",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/graphicsmagick/coders/png.c:1021"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

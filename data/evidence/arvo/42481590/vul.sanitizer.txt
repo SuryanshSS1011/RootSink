@@ -1,0 +1,92 @@
+======================= INFO =========================
+This binary is built for AFL-fuzz.
+To run the target function on individual input(s) execute this:
+  /out/ffmpeg_BSF_HEVC_METADATA_fuzzer < INPUT_FILE
+or
+  /out/ffmpeg_BSF_HEVC_METADATA_fuzzer INPUT_FILE1 [INPUT_FILE2 ... ]
+To fuzz with afl-fuzz execute this:
+  afl-fuzz [afl-flags] /out/ffmpeg_BSF_HEVC_METADATA_fuzzer [-N]
+afl-fuzz will run N iterations before re-spawning the process (default: 1000)
+======================================================
+Reading 4131 bytes from /tmp/poc
+=================================================================
+==7==ERROR: AddressSanitizer: stack-buffer-overflow on address 0x7f5c0a14f930 at pc 0x0000005680f6 bp 0x7ffc55685d70 sp 0x7ffc55685d68
+WRITE of size 4 at 0x7f5c0a14f930 thread T0
+SCARINESS: 51 (4-byte-write-stack-buffer-overflow)
+    #0 0x5680f5 in cbs_h265_read_st_ref_pic_set /src/ffmpeg/libavcodec/cbs_h265_syntax_template.c:599:33
+    #1 0x552f28 in cbs_h265_read_sps /src/ffmpeg/libavcodec/cbs_h265_syntax_template.c:883:9
+    #2 0x52605e in cbs_h265_read_nal_unit /src/ffmpeg/libavcodec/cbs_h2645.c:980:19
+    #3 0x4e7184 in cbs_read_fragment_content /src/ffmpeg/libavcodec/cbs.c:188:15
+    #4 0x4d34f7 in h265_metadata_filter /src/ffmpeg/libavcodec/h265_metadata_bsf.c:349:11
+    #5 0x4ca8f8 in LLVMFuzzerTestOneInput /src/ffmpeg/tools/target_bsf_fuzzer.c:135:19
+    #6 0x92836e in ExecuteFilesOnyByOne /src/libfuzzer/afl/afl_driver.cpp:216:5
+    #7 0x92836e in main /src/libfuzzer/afl/afl_driver.cpp:253:12
+    #8 0x7f5c090d782f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+    #9 0x41e958 in _start (/out/ffmpeg_BSF_HEVC_METADATA_fuzzer+0x41e958)
+
+DEDUP_TOKEN: cbs_h265_read_st_ref_pic_set--cbs_h265_read_sps--cbs_h265_read_nal_unit
+Address 0x7f5c0a14f930 is located in stack of thread T0 at offset 304 in frame
+    #0 0x565bef in cbs_h265_read_st_ref_pic_set /src/ffmpeg/libavcodec/cbs_h265_syntax_template.c:516
+
+DEDUP_TOKEN: cbs_h265_read_st_ref_pic_set
+  This frame has 24 object(s):
+    [32, 36) 'value' (line 520)
+    [48, 112) 'ref_delta_poc_s0' (line 528)
+    [144, 208) 'ref_delta_poc_s1' (line 528)
+    [240, 304) 'delta_poc_s0' (line 529) <== Memory access at offset 304 overflows this variable
+    [336, 400) 'delta_poc_s1' (line 529)
+    [432, 448) 'used_by_curr_pic_s0' (line 530)
+    [464, 480) 'used_by_curr_pic_s1' (line 530)
+    [496, 500) 'value18' (line 534)
+    [512, 516) 'value46' (line 542)
+    [528, 532) 'value62' (line 543)
+    [544, 548) 'value87' (line 548)
+    [560, 568) '.compoundliteral'
+    [592, 596) 'value110' (line 550)
+    [608, 616) '.compoundliteral112'
+    [640, 644) 'value433' (line 641)
+    [656, 660) 'value450' (line 642)
+    [672, 676) 'value476' (line 645)
+    [688, 696) '.compoundliteral478'
+    [720, 724) 'value499' (line 646)
+    [736, 744) '.compoundliteral501'
+    [768, 772) 'value531' (line 650)
+    [784, 792) '.compoundliteral533'
+    [816, 820) 'value554' (line 651)
+    [832, 840) '.compoundliteral556'
+HINT: this may be a false positive if your program uses some custom stack unwind mechanism, swapcontext or vfork
+      (longjmp and C++ exceptions *are* supported)
+SUMMARY: AddressSanitizer: stack-buffer-overflow /src/ffmpeg/libavcodec/cbs_h265_syntax_template.c:599:33 in cbs_h265_read_st_ref_pic_set
+Shadow bytes around the buggy address:
+  0x0fec01421ed0: f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5
+  0x0fec01421ee0: f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5
+  0x0fec01421ef0: f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5
+  0x0fec01421f00: f1 f1 f1 f1 f8 f2 00 00 00 00 00 00 00 00 f2 f2
+  0x0fec01421f10: f2 f2 00 00 00 00 00 00 00 00 f2 f2 f2 f2 00 00
+=>0x0fec01421f20: 00 00 00 00 00 00[f2]f2 f2 f2 00 00 00 00 00 00
+  0x0fec01421f30: 00 00 f2 f2 f2 f2 00 00 f2 f2 00 00 f2 f2 f8 f2
+  0x0fec01421f40: f8 f2 f8 f2 f8 f2 00 f2 f2 f2 f8 f2 00 f2 f2 f2
+  0x0fec01421f50: f8 f2 f8 f2 f8 f2 00 f2 f2 f2 f8 f2 00 f2 f2 f2
+  0x0fec01421f60: f8 f2 00 f2 f2 f2 f8 f2 00 f3 f3 f3 00 00 00 00
+  0x0fec01421f70: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+  Shadow gap:              cc
+==7==ABORTING

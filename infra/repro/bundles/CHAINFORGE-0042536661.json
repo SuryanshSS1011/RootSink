@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042536661",
+  "chain": "CWE-416->CWE-125",
+  "project": "libarchive",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42536661",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "e45b0aa7eebddaaec8139cb1f0a4058f3c1e5369",
+      "fix_commits": [
+        "e45b0aa7eebddaaec8139cb1f0a4058f3c1e5369"
+      ],
+      "repo": "https://github.com/libarchive/libarchive"
+    },
+    "patch": "From e45b0aa7eebddaaec8139cb1f0a4058f3c1e5369 Mon Sep 17 00:00:00 2001\nFrom: Tim Kientzle <kientzle@acm.org>\nDate: Fri, 5 Jul 2024 03:05:41 -0700\nSubject: [PATCH] Don't try to read rediculously long names (#2259)\n\nThe Rar5 reader would read the name size, then read the name, then check\nwhether the name size was beyond the maximum size allowed. This can\nresult in a very large memory allocation to read a name. Instead, check\nthe name size before trying to read the name in order to avoid excessive\nallocation.\n\nOSS-Fuzz Issue: 70017\n---\n libarchive/archive_read_support_format_rar5.c | 12 ++++++------\n 1 file changed, 6 insertions(+), 6 deletions(-)\n\ndiff --git a/libarchive/archive_read_support_format_rar5.c b/libarchive/archive_read_support_format_rar5.c\nindex bd5a021..8907fdb 100644\n--- a/libarchive/archive_read_support_format_rar5.c\n+++ b/libarchive/archive_read_support_format_rar5.c\n@@ -1448,9 +1448,6 @@ static int parse_file_extra_redir(struct archive_read* a,\n \t\treturn ARCHIVE_EOF;\n \t*extra_data_size -= target_size + 1;\n \n-\tif(!read_ahead(a, target_size, &p))\n-\t\treturn ARCHIVE_EOF;\n-\n \tif(target_size > (MAX_NAME_IN_CHARS - 1)) {\n \t\tarchive_set_error(&a->archive, ARCHIVE_ERRNO_FILE_FORMAT,\n \t\t    \"Link target is too long\");\n@@ -1463,6 +1460,9 @@ static int parse_file_extra_redir(struct archive_read* a,\n \t\treturn ARCHIVE_FATAL;\n \t}\n \n+\tif(!read_ahead(a, target_size, &p))\n+\t\treturn ARCHIVE_EOF;\n+\n \tmemcpy(target_utf8_buf, p, target_size);\n \ttarget_utf8_buf[target_size] = 0;\n \n@@ -1876,9 +1876,6 @@ static int process_head_file(struct archive_read* a, struct rar5* rar,\n \tif(!read_var_sized(a, &name_size, NULL))\n \t\treturn ARCHIVE_EOF;\n \n-\tif(!read_ahead(a, name_size, &p))\n-\t\treturn ARCHIVE_EOF;\n-\n \tif(name_size > (MAX_NAME_IN_CHARS - 1)) {\n \t\tarchive_set_error(&a->archive, ARCHIVE_ERRNO_FILE_FORMAT,\n \t\t\t\t\"Filename is too long\");\n@@ -1893,6 +1890,9 @@ static int process_head_file(struct archive_read* a, struct rar5* rar,\n \t\treturn ARCHIVE_FATAL;\n \t}\n \n+\tif(!read_ahead(a, name_size, &p))\n+\t\treturn ARCHIVE_EOF;\n+\n \tmemcpy(name_utf8_buf, p, name_size);\n \tname_utf8_buf[name_size] = 0;\n \tif(ARCHIVE_OK != consume(a, name_size)) {\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42536661-vul",
+      "digest": "sha256:e2d65e9b97ae468546624609f105b11cba45663507df5b6a51498d5103159e60"
+    },
+    "patched": {
+      "ref": "n132/arvo:42536661-fix",
+      "digest": "sha256:20fc83d95031a5fd0414a194fb379de725048bdc2947e587a5284649b853b8b0"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/libarchive/libarchive/archive_read.c:884",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/libarchive/libarchive/archive_read.c:884"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

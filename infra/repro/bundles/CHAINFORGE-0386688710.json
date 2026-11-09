@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0386688710",
+  "chain": "CWE-1285->CWE-125",
+  "project": "opencv",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "386688710",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "12963ea6995fa7dbf6a113038a6a6fd920b0e588",
+      "fix_commits": [
+        "12963ea6995fa7dbf6a113038a6a6fd920b0e588"
+      ],
+      "repo": "https://github.com/opencv/opencv"
+    },
+    "patch": "diff --git a/modules/imgcodecs/src/grfmt_png.cpp b/modules/imgcodecs/src/grfmt_png.cpp\nindex 32620fdbc0ec..eba0226d0ea7 100644\n--- a/modules/imgcodecs/src/grfmt_png.cpp\n+++ b/modules/imgcodecs/src/grfmt_png.cpp\n@@ -655,7 +655,7 @@ size_t PngDecoder::read_from_io(void* _Buffer, size_t _ElementSize, size_t _Elem\n     if (m_f)\n         return fread(_Buffer, _ElementSize, _ElementCount, m_f);\n \n-    if (m_buf_pos > m_buf.cols * m_buf.rows * m_buf.elemSize())\n+    if (m_buf_pos + _ElementSize > m_buf.cols * m_buf.rows * m_buf.elemSize())\n         CV_Error(Error::StsInternal, \"PNG input buffer is incomplete\");\n \n     memcpy( _Buffer, m_buf.ptr() + m_buf_pos, _ElementSize );\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:386688710-vul",
+      "digest": "sha256:55040b3181ef322c186b42c9db87eb23af1944e1e66d0229bbf0f96d5e5c0652"
+    },
+    "patched": {
+      "ref": "n132/arvo:386688710-fix",
+      "digest": "sha256:be549688b6f9a622114cef01f8ea560dc4476e02666699544ea4c15f003a6b86"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/opencv/modules/imgcodecs/src/grfmt_png.cpp:661",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/opencv/modules/imgcodecs/src/grfmt_png.cpp:661"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

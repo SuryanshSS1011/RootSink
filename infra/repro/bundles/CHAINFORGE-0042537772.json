@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042537772",
+  "chain": "CWE-456->CWE-457",
+  "project": "ffmpeg",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42537772",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "1b8d95da3a4a5c9441238928a36b653da693c286",
+      "fix_commits": [
+        "1b8d95da3a4a5c9441238928a36b653da693c286"
+      ],
+      "repo": "https://git.ffmpeg.org/ffmpeg.git"
+    },
+    "patch": "From 1b8d95da3a4a5c9441238928a36b653da693c286 Mon Sep 17 00:00:00 2001\nFrom: Michael Niedermayer <michael@niedermayer.cc>\nDate: Wed, 7 Aug 2024 00:18:52 +0200\nSubject: [PATCH] tools/target_dec_fuzzer: Use av_buffer_allocz() to avoid\n missing slices to have unpredictable content\n\nThis matches production code which also zeros these buffers\n\nFixes: use of uninitialized values\nFixes: 70885/clusterfuzz-testcase-minimized-ffmpeg_AV_CODEC_ID_VP6F_fuzzer-4610946029387776 (and likely others)\n\nFound-by: continuous fuzzing process https://github.com/google/oss-fuzz/tree/master/projects/ffmpeg\nSigned-off-by: Michael Niedermayer <michael@niedermayer.cc>\n---\n tools/target_dec_fuzzer.c | 2 +-\n 1 file changed, 1 insertion(+), 1 deletion(-)\n\ndiff --git a/tools/target_dec_fuzzer.c b/tools/target_dec_fuzzer.c\nindex d2d7e21..794b5b9 100644\n--- a/tools/target_dec_fuzzer.c\n+++ b/tools/target_dec_fuzzer.c\n@@ -129,7 +129,7 @@ static int fuzz_video_get_buffer(AVCodecContext *ctx, AVFrame *frame)\n \n     frame->extended_data = frame->data;\n     for (i = 0; i < 4 && size[i]; i++) {\n-        frame->buf[i] = av_buffer_alloc(size[i]);\n+        frame->buf[i] = av_buffer_allocz(size[i]);\n         if (!frame->buf[i])\n             goto fail;\n         frame->data[i] = frame->buf[i]->data;\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42537772-vul",
+      "digest": "sha256:87a8f55e21053e7ff37c06e8c8abdcf2d7d0c248a2c1c458805e39d5c74cfceb"
+    },
+    "patched": {
+      "ref": "n132/arvo:42537772-fix",
+      "digest": "sha256:829477c72e4ea73c37560c15dba07d090e42195186a5a4e7ff2067c96d2bb982"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/ffmpeg/./libavcodec/h26x/h2656_sao_template.c:73",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/ffmpeg/./libavcodec/h26x/h2656_sao_template.c:73"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

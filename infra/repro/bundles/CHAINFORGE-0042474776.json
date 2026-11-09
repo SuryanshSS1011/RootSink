@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042474776",
+  "chain": "CWE-456->CWE-457",
+  "project": "kimageformats",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42474776",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "6fea48c4eea0b8061a4ca5c3051073fc7dc644c7",
+      "fix_commits": [
+        "6fea48c4eea0b8061a4ca5c3051073fc7dc644c7"
+      ],
+      "repo": "https://invent.kde.org/frameworks/kimageformats.git"
+    },
+    "patch": "From 6fea48c4eea0b8061a4ca5c3051073fc7dc644c7 Mon Sep 17 00:00:00 2001\nFrom: Albert Astals Cid <aacid@kde.org>\nDate: Wed, 17 Apr 2019 20:09:17 +0200\nSubject: [PATCH] xcf: Fix uninitialized memory use on broken documents\n\noss-fuzz #14312\n---\n src/imageformats/xcf.cpp | 3 +++\n 1 file changed, 3 insertions(+)\n\ndiff --git a/src/imageformats/xcf.cpp b/src/imageformats/xcf.cpp\nindex d727867..d84ec48 100644\n--- a/src/imageformats/xcf.cpp\n+++ b/src/imageformats/xcf.cpp\n@@ -1078,6 +1078,9 @@ bool XCFImageFormat::loadLevel(QDataStream &xcf_io, Layer &layer, qint32 bpp)\n         for (uint j = 0; j < layer.nrows; j++) {\n             for (uint i = 0; i < layer.ncols; i++) {\n                 layer.image_tiles[j][i].fill(Qt::transparent);\n+                if (layer.type == GRAYA_GIMAGE || layer.type == INDEXEDA_GIMAGE) {\n+                    layer.alpha_tiles[j][i].fill(Qt::transparent);\n+                }\n             }\n         }\n         return true;\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42474776-vul",
+      "digest": "sha256:dc54b64a163d208ea871a4bd947752455f60904248fd434454f25a35f36f868d"
+    },
+    "patched": {
+      "ref": "n132/arvo:42474776-fix",
+      "digest": "sha256:3fbf6934b6dc17d8f1e55f71acfc838fd72313abb8c724fc0f47ea7dc6d64c75"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/kimageformats/src/imageformats/xcf.cpp:2285",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/kimageformats/src/imageformats/xcf.cpp:2285"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

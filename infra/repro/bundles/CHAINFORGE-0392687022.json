@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0392687022",
+  "chain": "CWE-476->CWE-787",
+  "project": "libxml2",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "392687022",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "8c8753ad5280ee13aee5eec9b0f6eee2ed920f57",
+      "fix_commits": [
+        "8c8753ad5280ee13aee5eec9b0f6eee2ed920f57"
+      ],
+      "repo": "https://gitlab.gnome.org/GNOME/libxml2.git"
+    },
+    "patch": "diff --git a/valid.c b/valid.c\nindex d63137fa088c37fcb39becae7328c91150c31e2f..6a8ae1fb471dc35e4f9edbd081488de5dc451a24 100644\n--- a/valid.c\n+++ b/valid.c\n@@ -4997,26 +4997,26 @@ xmlSnprintfElements(char *buf, int size, xmlNodePtr node, int glob) {\n \t    return;\n \t}\n         switch (cur->type) {\n-            case XML_ELEMENT_NODE:\n+            case XML_ELEMENT_NODE: {\n+                int qnameLen = xmlStrlen(cur->name);\n+\n+                if ((cur->ns != NULL) && (cur->ns->prefix != NULL))\n+                    qnameLen += xmlStrlen(cur->ns->prefix) + 1;\n+                if (size - len < qnameLen + 10) {\n+                    if ((size - len > 4) && (buf[len - 1] != '.'))\n+                        strcat(buf, \" ...\");\n+                    return;\n+                }\n \t\tif ((cur->ns != NULL) && (cur->ns->prefix != NULL)) {\n-\t\t    if (size - len < xmlStrlen(cur->ns->prefix) + 10) {\n-\t\t\tif ((size - len > 4) && (buf[len - 1] != '.'))\n-\t\t\t    strcat(buf, \" ...\");\n-\t\t\treturn;\n-\t\t    }\n \t\t    strcat(buf, (char *) cur->ns->prefix);\n \t\t    strcat(buf, \":\");\n \t\t}\n-                if (size - len < xmlStrlen(cur->name) + 10) {\n-\t\t    if ((size - len > 4) && (buf[len - 1] != '.'))\n-\t\t\tstrcat(buf, \" ...\");\n-\t\t    return;\n-\t\t}\n                 if (cur->name != NULL)\n \t            strcat(buf, (char *) cur->name);\n \t\tif (cur->next != NULL)\n \t\t    strcat(buf, \" \");\n \t\tbreak;\n+            }\n             case XML_TEXT_NODE:\n \t\tif (xmlIsBlankNode(cur))\n \t\t    break;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:392687022-vul",
+      "digest": "sha256:4c75143595ffdeef7284f2480718e309ed616e2760bc31ca44e10738e86be0b7"
+    },
+    "patched": {
+      "ref": "n132/arvo:392687022-fix",
+      "digest": "sha256:6691b23ec92d1243d3463e5ccb5c1378b759c4e47e4855b5a5adc549bc28eee2"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/libxml2/valid.c:5024",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 476,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/libxml2/valid.c:5024"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

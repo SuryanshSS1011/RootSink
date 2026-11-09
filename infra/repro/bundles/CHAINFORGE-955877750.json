@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-955877750",
+  "chain": "CWE-129->CWE-787",
+  "project": "wolfssl",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42522962",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/wolfssl/wolfssl/commit/865581704e856711ced7027f212aae88d332944e",
+      "fix_commits": [
+        "865581704e856711ced7027f212aae88d332944e"
+      ],
+      "repo": "https://github.com/wolfssl/wolfssl"
+    },
+    "patch": "diff --git a/wolfcrypt/src/tfm.c b/wolfcrypt/src/tfm.c\nindex aa4b441d8ab..fe8f5bffe9a 100644\n--- a/wolfcrypt/src/tfm.c\n+++ b/wolfcrypt/src/tfm.c\n@@ -1010,6 +1010,13 @@ void fp_mod_2d(fp_int *a, int b, fp_int *c)\n    }\n \n    bmax = ((unsigned int)b + DIGIT_BIT - 1) / DIGIT_BIT;\n+\n+   /* If a is negative and bmax is larger than FP_SIZE, then the\n+    * result can't fit within c. Just return. */\n+   if (c->sign == FP_NEG && bmax > FP_SIZE) {\n+      return;\n+   }\n+\n   /* zero digits above the last digit of the modulus */\n    for (x = bmax; x < (unsigned int)c->used; x++) {\n     c->dp[x] = 0;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42522962-vul",
+      "digest": "sha256:e59e3d6528666a019d0a00c56a8f2779441bb4fd44d8ea36a48572cc629a980b"
+    },
+    "patched": {
+      "ref": "n132/arvo:42522962-fix",
+      "digest": "sha256:7c892ba79485dc97b93c473410bc26bbe837c1720de28163808ce08357cde6b5"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "crash_site": "/src/wolfssl-fastmath/wolfcrypt/src/tfm.c:1016",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 129,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "site": "/src/wolfssl-fastmath/wolfcrypt/src/tfm.c:1016"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

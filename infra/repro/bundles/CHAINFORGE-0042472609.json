@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042472609",
+  "chain": "CWE-1284->CWE-125",
+  "project": "wireshark",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42472609",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "6fdf8eb5a92d51617203be1a712c15585b156497",
+      "fix_commits": [
+        "6fdf8eb5a92d51617203be1a712c15585b156497"
+      ],
+      "repo": "https://github.com/wireshark/wireshark"
+    },
+    "patch": "diff --git a/epan/dissectors/packet-dof.c b/epan/dissectors/packet-dof.c\nindex 811ea514fa8..ab48f6e9cb7 100644\n--- a/epan/dissectors/packet-dof.c\n+++ b/epan/dissectors/packet-dof.c\n@@ -3861,6 +3861,14 @@ typedef struct DOFObjectIDAttribute_t\n     const guint8 *data;                         /**< Attribute data. **/\n } DOFObjectIDAttribute;\n \n+/**\n+* Read variable-length value from buffer.\n+*\n+* @param maxSize   [in]        Maximum size of value to be read\n+* @param bufLength [in,out]    Input: size of buffer, output: size of value in buffer\n+* @param buffer    [in]        Actual buffer\n+* @return                      Uncompressed value if buffer size is valid (or 0 on error)\n+*/\n static guint32 OALMarshal_UncompressValue(guint8 maxSize, guint32 *bufLength, const guint8 *buffer)\n {\n     guint32 value = 0;\n@@ -3894,6 +3902,10 @@ static guint32 OALMarshal_UncompressValue(guint8 maxSize, guint32 *bufLength, co\n         break;\n     }\n \n+    /* Sanity check */\n+    if (size > *bufLength)\n+        return 0;\n+\n     value = buffer[used++] & mask;\n     while (used < size)\n         value = (value << 8) | buffer[used++];\n@@ -3902,20 +3914,15 @@ static guint32 OALMarshal_UncompressValue(guint8 maxSize, guint32 *bufLength, co\n     return (value);\n }\n \n-static guint32 DOFObjectID_GetClassSize_Bytes(const guint8 *pBytes)\n+static guint32 DOFObjectID_GetClassSize(DOFObjectID self)\n {\n-    guint32 size = 4;\n+    guint32 size = self->len;\n \n-    (void)OALMarshal_UncompressValue(DOFOBJECTID_MAX_CLASS_SIZE, &size, pBytes);\n+    (void)OALMarshal_UncompressValue(DOFOBJECTID_MAX_CLASS_SIZE, &size, self->oid);\n \n     return size;\n }\n \n-static guint32 DOFObjectID_GetClassSize(DOFObjectID self)\n-{\n-    return DOFObjectID_GetClassSize_Bytes(self->oid);\n-}\n-\n static guint32 DOFObjectID_GetDataSize(const DOFObjectID self)\n {\n     return ((*((const guint8 *)self->oid + DOFObjectID_GetClassSize(self))) & OID_DATA_LEN_MASK);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42472609-vul",
+      "digest": "sha256:7d96dc61cf98e55603161fd88563ce48b9177fd4b2a0bd94427cba0d78404e34"
+    },
+    "patched": {
+      "ref": "n132/arvo:42472609-fix",
+      "digest": "sha256:7c964348234de54a3f010b766d0d47adca8ce9bd8d33ee6a8de1772b39b677d2"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/wireshark/epan/dissectors/packet-dof.c:3899",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/wireshark/epan/dissectors/packet-dof.c:3899"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

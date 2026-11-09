@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042531940",
+  "chain": "CWE-416->CWE-125",
+  "project": "qpdf",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42531940",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "6e3b7982dbcf8087374694253e0e248fbc6c6e3e",
+      "fix_commits": [
+        "6e3b7982dbcf8087374694253e0e248fbc6c6e3e"
+      ],
+      "repo": "https://github.com/qpdf/qpdf"
+    },
+    "patch": "From 6e3b7982dbcf8087374694253e0e248fbc6c6e3e Mon Sep 17 00:00:00 2001\nFrom: m-holger <m-holger@kubitscheck.org>\nDate: Wed, 17 Jan 2024 10:39:06 +0000\nSubject: [PATCH] Fix incorrect handling of invalid negative object ids\n\nFix two errors introduced in #1110 and #1112. Since\n#1110, encountering the invalid indirect reference #1110\n-2147483648 n R produces an integer underflow which, if\n undetected, immediately trigger a logic error. Since\n #1112, object -1 0 R may be incorrectly identified as\n an earlier generation of itself and deleted,\n invalidating a live iterator.\n---\n fuzz/CMakeLists.txt        |   2 ++\n fuzz/qpdf_extra/65773.fuzz |   1 +\n fuzz/qpdf_extra/65777.fuzz | Bin 0 -> 67 bytes\n fuzz/qtest/fuzz.test       |   2 +-\n libqpdf/QPDF.cc            |   9 +++++----\n 5 files changed, 9 insertions(+), 5 deletions(-)\n create mode 100644 fuzz/qpdf_extra/65773.fuzz\n create mode 100644 fuzz/qpdf_extra/65777.fuzz\n\ndiff --git a/fuzz/CMakeLists.txt b/fuzz/CMakeLists.txt\nindex df1fa80..e4a8cf3 100644\n--- a/fuzz/CMakeLists.txt\n+++ b/fuzz/CMakeLists.txt\n@@ -111,6 +111,8 @@ set(CORPUS_OTHER\n   37740.fuzz\n   57639.fuzz\n   65681.fuzz\n+  65773.fuzz\n+  65777.fuzz\n )\n \n set(CORPUS_DIR ${CMAKE_CURRENT_BINARY_DIR}/qpdf_corpus)\ndiff --git a/fuzz/qpdf_extra/65773.fuzz b/fuzz/qpdf_extra/65773.fuzz\nnew file mode 100644\nindex 0000000..2d0aabf\n--- /dev/null\n+++ b/fuzz/qpdf_extra/65773.fuzz\n@@ -0,0 +1 @@\n+trailer<</Root<<[-2147483648 7 R 8 4 R]>>>>\n\\ No newline at end of file\ndiff --git a/fuzz/qpdf_extra/65777.fuzz b/fuzz/qpdf_extra/65777.fuzz\nnew file mode 100644\nindex 0000000000000000000000000000000000000000..066c960b11f99e6eecc3b4b9832b271aa1814b7e\nGIT binary patch\nliteral 67\nzcmY$eP%u!)Ps*~f(GSk7N>wn@52-9j)sF~DP16sLHdHWDFpRacD=sNYP0VFbP*7mt\nR(lvzWP)N;70cuqE4*+-p6H5R9\n\nliteral 0\nHcmV?d00001\n\ndiff --git a/fuzz/qtest/fuzz.test b/fuzz/qtest/fuzz.test\nindex adce995..7ca371f 100644\n--- a/fuzz/qtest/fuzz.test\n+++ b/fuzz/qtest/fuzz.test\n@@ -20,7 +20,7 @@ my @fuzzers = (\n     ['pngpredictor' => 1],\n     ['runlength' => 6],\n     ['tiffpredictor' => 1],\n-    ['qpdf' => 54],             # increment when adding new files\n+    ['qpdf' => 56],             # increment when adding new files\n     );\n \n my $n_tests = 0;\ndiff --git a/libqpdf/QPDF.cc b/libqpdf/QPDF.cc\nindex 89d4a0a..8cff3df 100644\n--- a/libqpdf/QPDF.cc\n+++ b/libqpdf/QPDF.cc\n@@ -709,10 +709,11 @@ QPDF::read_xref(qpdf_offset_t xref_offset)\n \n     // Make sure we keep only the highest generation for any object.\n     QPDFObjGen last_og{-1, 0};\n-    for (auto const& og: m->xref_table) {\n-        if (og.first.getObj() == last_og.getObj())\n+    for (auto const& item: m->xref_table) {\n+        auto id = item.first.getObj();\n+        if (id == last_og.getObj() && id > 0)\n             removeObject(last_og);\n-        last_og = og.first;\n+        last_og = item.first;\n     }\n }\n \n@@ -2405,7 +2406,7 @@ QPDF::getCompressibleObjGens()\n     while (!queue.empty()) {\n         auto obj = queue.back();\n         queue.pop_back();\n-        if (obj.isIndirect()) {\n+        if (obj.getObjectID() > 0) {\n             QPDFObjGen og = obj.getObjGen();\n             const size_t id = toS(og.getObj() - 1);\n             if (id >= max_obj)\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42531940-vul",
+      "digest": "sha256:50b528e8a11c9af4745705010ed706835cd6877f789edc87ffeff02f747645f9"
+    },
+    "patched": {
+      "ref": "n132/arvo:42531940-fix",
+      "digest": "sha256:eced6857894675cd1596aff1cdeed29ed377f9afd93250c0638a573d3f06b732"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/qpdf/libqpdf/QPDF.cc:715",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/qpdf/libqpdf/QPDF.cc:715"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

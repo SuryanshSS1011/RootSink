@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042493917",
+  "chain": "CWE-20->CWE-125",
+  "project": "lua",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42493917",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "901d76009346d76996679c02deee708bf225e91e",
+      "fix_commits": [
+        "901d76009346d76996679c02deee708bf225e91e"
+      ],
+      "repo": "https://github.com/lua/lua"
+    },
+    "patch": "diff --git a/ldo.c b/ldo.c\nindex 7135079b12..a410461bdb 100644\n--- a/ldo.c\n+++ b/ldo.c\n@@ -474,26 +474,16 @@ void luaD_poscall (lua_State *L, CallInfo *ci, int nres) {\n \n \n /*\n-** Prepare a function for a tail call, building its call info on top\n-** of the current call info. 'narg1' is the number of arguments plus 1\n-** (so that it includes the function itself).\n+** In a tail call, move function and parameters to previous call frame.\n+** (This is done only when no more errors can occur before entering the\n+** new function, to keep debug information always consistent.)\n */\n-void luaD_pretailcall (lua_State *L, CallInfo *ci, StkId func, int narg1) {\n-  Proto *p = clLvalue(s2v(func))->p;\n-  int fsize = p->maxstacksize;  /* frame size */\n-  int nfixparams = p->numparams;\n+static void moveparams (lua_State *L, StkId prevf, StkId func, int narg) {\n   int i;\n-  for (i = 0; i < narg1; i++)  /* move down function and arguments */\n-    setobjs2s(L, ci->func + i, func + i);\n-  checkstackGC(L, fsize);\n-  func = ci->func;  /* moved-down function */\n-  for (; narg1 <= nfixparams; narg1++)\n-    setnilvalue(s2v(func + narg1));  /* complete missing arguments */\n-  ci->top = func + 1 + fsize;  /* top for new function */\n-  lua_assert(ci->top <= L->stack_last);\n-  ci->u.l.savedpc = p->code;  /* starting point */\n-  ci->callstatus |= CIST_TAIL;\n-  L->top = func + narg1;  /* set top */\n+  narg++;  /* function itself will be moved, too */\n+  for (i = 0; i < narg; i++)  /* move down function and arguments */\n+    setobjs2s(L, prevf + i, func + i);\n+  L->top = prevf + narg;  /* correct top */\n }\n \n \n@@ -504,8 +494,12 @@ void luaD_pretailcall (lua_State *L, CallInfo *ci, StkId func, int narg1) {\n ** to be executed, if it was a Lua function. Otherwise (a C function)\n ** returns NULL, with all the results on the stack, starting at the\n ** original function position.\n+** For regular calls, 'delta1' is 0. For tail calls, 'delta1' is the\n+** 'delta' (correction of base for vararg functions) plus 1, so that it\n+** cannot be zero. Like 'moveparams', this correction can only be done\n+** when no more errors can occur in the call.\n */\n-CallInfo *luaD_precall (lua_State *L, StkId func, int nresults) {\n+CallInfo *luaD_precall (lua_State *L, StkId func, int nresults, int delta1) {\n   lua_CFunction f;\n  retry:\n   switch (ttypetag(s2v(func))) {\n@@ -542,12 +536,18 @@ CallInfo *luaD_precall (lua_State *L, StkId func, int nresults) {\n       int nfixparams = p->numparams;\n       int fsize = p->maxstacksize;  /* frame size */\n       checkstackGCp(L, fsize, func);\n-      L->ci = ci = next_ci(L);\n-      ci->nresults = nresults;\n+      if (delta1) {  /* tail call? */\n+        ci = L->ci;  /* reuse stack frame */\n+        ci->func -= delta1 - 1;  /* correct 'func' */\n+        moveparams(L, ci->func, func, narg);\n+      }\n+      else {  /* regular call */\n+        L->ci = ci = next_ci(L);  /* new frame */\n+        ci->func = func;\n+        ci->nresults = nresults;\n+      }\n       ci->u.l.savedpc = p->code;  /* starting point */\n       ci->top = func + 1 + fsize;\n-      ci->func = func;\n-      L->ci = ci;\n       for (; narg < nfixparams; narg++)\n         setnilvalue(s2v(L->top++));  /* complete missing arguments */\n       lua_assert(ci->top <= L->stack_last);\n@@ -572,7 +572,7 @@ static void ccall (lua_State *L, StkId func, int nResults, int inc) {\n   L->nCcalls += inc;\n   if (l_unlikely(getCcalls(L) >= LUAI_MAXCCALLS))\n     luaE_checkcstack(L);\n-  if ((ci = luaD_precall(L, func, nResults)) != NULL) {  /* Lua function? */\n+  if ((ci = luaD_precall(L, func, nResults, 0)) != NULL) {  /* Lua function? */\n     ci->callstatus = CIST_FRESH;  /* mark that it is a \"fresh\" execute */\n     luaV_execute(L, ci);  /* call it */\n   }\ndiff --git a/ldo.h b/ldo.h\nindex 6bf0ed86f7..6edc4450ac 100644\n--- a/ldo.h\n+++ b/ldo.h\n@@ -58,8 +58,8 @@ LUAI_FUNC int luaD_protectedparser (lua_State *L, ZIO *z, const char *name,\n LUAI_FUNC void luaD_hook (lua_State *L, int event, int line,\n                                         int fTransfer, int nTransfer);\n LUAI_FUNC void luaD_hookcall (lua_State *L, CallInfo *ci);\n-LUAI_FUNC void luaD_pretailcall (lua_State *L, CallInfo *ci, StkId func, int n);\n-LUAI_FUNC CallInfo *luaD_precall (lua_State *L, StkId func, int nResults);\n+LUAI_FUNC CallInfo *luaD_precall (lua_State *L, StkId func, int nresults,\n+                                                            int delta1);\n LUAI_FUNC void luaD_call (lua_State *L, StkId func, int nResults);\n LUAI_FUNC void luaD_callnoyield (lua_State *L, StkId func, int nResults);\n LUAI_FUNC void luaD_tryfuncTM (lua_State *L, StkId func);\ndiff --git a/lvm.c b/lvm.c\nindex e4b1903e70..485b9caa35 100644\n--- a/lvm.c\n+++ b/lvm.c\n@@ -1632,11 +1632,11 @@ void luaV_execute (lua_State *L, CallInfo *ci) {\n           L->top = ra + b;  /* top signals number of arguments */\n         /* else previous instruction set top */\n         savepc(L);  /* in case of errors */\n-        if ((newci = luaD_precall(L, ra, nresults)) == NULL)\n+        if ((newci = luaD_precall(L, ra, nresults, 0)) == NULL)\n           updatetrap(ci);  /* C call; nothing else to be done */\n         else {  /* Lua call: run function in this same C frame */\n           ci = newci;\n-          ci->callstatus = 0;  /* call re-uses 'luaV_execute' */\n+          ci->callstatus = 0;\n           goto startfunc;\n         }\n         vmbreak;\n@@ -1648,21 +1648,18 @@ void luaV_execute (lua_State *L, CallInfo *ci) {\n         int delta = (nparams1) ? ci->u.l.nextraargs + nparams1 : 0;\n         if (b != 0)\n           L->top = ra + b;\n-        else  /* previous instruction set top */\n-          b = cast_int(L->top - ra);\n+        /* else previous instruction set top */\n         savepc(ci);  /* several calls here can raise errors */\n         if (TESTARG_k(i)) {\n           luaF_closeupval(L, base);  /* close upvalues from current call */\n           lua_assert(L->tbclist < base);  /* no pending tbc variables */\n           lua_assert(base == ci->func + 1);\n         }\n-        while (!ttisfunction(s2v(ra))) {  /* not a function? */\n-          luaD_tryfuncTM(L, ra);  /* try '__call' metamethod */\n-          b++;  /* there is now one extra argument */\n-          checkstackGCp(L, 1, ra);\n+        if (luaD_precall(L, ra, LUA_MULTRET, delta + 1)) {  /* Lua function? */\n+          ci->callstatus |= CIST_TAIL;\n+          goto startfunc;  /* execute the callee */\n         }\n-        if (!ttisLclosure(s2v(ra))) {  /* C function? */\n-          luaD_precall(L, ra, LUA_MULTRET);  /* call it */\n+        else {  /* C function */\n           updatetrap(ci);\n           updatestack(ci);  /* stack may have been relocated */\n           ci->func -= delta;  /* restore 'func' (if vararg) */\n@@ -1670,9 +1667,6 @@ void luaV_execute (lua_State *L, CallInfo *ci) {\n           updatetrap(ci);  /* 'luaD_poscall' can change hooks */\n           goto ret;  /* caller returns after the tail call */\n         }\n-        ci->func -= delta;  /* restore 'func' (if vararg) */\n-        luaD_pretailcall(L, ci, ra, b);  /* prepare call frame */\n-        goto startfunc;  /* execute the callee */\n       }\n       vmcase(OP_RETURN) {\n         int n = GETARG_B(i) - 1;  /* number of results */\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42493917-vul",
+      "digest": "sha256:08d609029230125cb26296912e206ab8c467f7cd90191b4cce3d7d7648f43b01"
+    },
+    "patched": {
+      "ref": "n132/arvo:42493917-fix",
+      "digest": "sha256:c5797dffb7d47a056e5f360c740123f3ad5eb04b5fe388119d360e987f115bd6"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/lua/ldebug.c:88",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/lua/ldebug.c:88"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

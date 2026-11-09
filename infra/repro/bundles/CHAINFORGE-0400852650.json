@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0400852650",
+  "chain": "CWE-20->CWE-125",
+  "project": "qpid-proton",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "400852650",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "cfa3fb5c9daa8a652e71b14a8ed71e31eaa9d645",
+      "fix_commits": [
+        "cfa3fb5c9daa8a652e71b14a8ed71e31eaa9d645"
+      ],
+      "repo": "https://github.com/apache/qpid-proton"
+    },
+    "patch": "diff --git a/c/src/core/engine-internal.h b/c/src/core/engine-internal.h\nindex f10e6a8f0..36950de16 100644\n--- a/c/src/core/engine-internal.h\n+++ b/c/src/core/engine-internal.h\n@@ -420,6 +420,9 @@ void pn_transport_sasl_init(pn_transport_t *transport);\n \n void pn_condition_init(pn_condition_t *condition);\n void pn_condition_tini(pn_condition_t *condition);\n+\n+void pn_disposition_clear(pn_disposition_t *ds);\n+\n void pn_modified(pn_connection_t *connection, pn_endpoint_t *endpoint, bool emit);\n void pn_real_settle(pn_delivery_t *delivery);  // will free delivery if link is freed\n void pn_clear_tpwork(pn_delivery_t *delivery);\ndiff --git a/c/src/core/engine.c b/c/src/core/engine.c\nindex d7fb091d4..21b3fa453 100644\n--- a/c/src/core/engine.c\n+++ b/c/src/core/engine.c\n@@ -1680,7 +1680,7 @@ static void pn_disposition_init(pn_disposition_t *ds)\n   memset(ds, 0, sizeof(*ds));\n }\n \n-static void pn_disposition_clear(pn_disposition_t *ds)\n+void pn_disposition_clear(pn_disposition_t *ds)\n {\n   pn_disposition_finalize(ds);\n   pn_disposition_init(ds);\ndiff --git a/c/src/core/transport.c b/c/src/core/transport.c\nindex 98d015e63..24a2a4d6f 100644\n--- a/c/src/core/transport.c\n+++ b/c/src/core/transport.c\n@@ -1547,6 +1547,9 @@ static inline bool sequence_lte(pn_sequence_t a, pn_sequence_t b) {\n }\n \n static void pni_amqp_decode_disposition (uint64_t type, pn_bytes_t disp_data, pn_disposition_t *disp) {\n+  if (disp->type != PN_DISP_EMPTY) {\n+    pn_disposition_clear(disp);\n+  }\n   switch (type) {\n     case AMQP_DESC_RECEIVED: {\n       bool qnumber;\ndiff --git a/c/tests/fuzz/fuzz-connection-driver/crash/5209948879650816 b/c/tests/fuzz/fuzz-connection-driver/crash/5209948879650816\nnew file mode 100644\nindex 000000000..b6e18e3d7\nBinary files /dev/null and b/c/tests/fuzz/fuzz-connection-driver/crash/5209948879650816 differ\ndiff --git a/c/tests/fuzz/fuzz-connection-driver/crash/5876966427525120 b/c/tests/fuzz/fuzz-connection-driver/crash/5876966427525120\nnew file mode 100644\nindex 000000000..50b7b1326\nBinary files /dev/null and b/c/tests/fuzz/fuzz-connection-driver/crash/5876966427525120 differ\ndiff --git a/c/tests/fuzz/fuzz-connection-driver/crash/6709525558394880 b/c/tests/fuzz/fuzz-connection-driver/crash/6709525558394880\nnew file mode 100644\nindex 000000000..dfeb2931c\nBinary files /dev/null and b/c/tests/fuzz/fuzz-connection-driver/crash/6709525558394880 differ\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:400852650-vul",
+      "digest": "sha256:8c2786fda7e9b0a85a6f7bd185e014900861fae3a22dc6ee52c44430b0b55f7c"
+    },
+    "patched": {
+      "ref": "n132/arvo:400852650-fix",
+      "digest": "sha256:6873e784f9ad809979866d00b22388ec1a378a85dc09ed7c914fe87f8836b417"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/qpid-proton/c/src/core/transport.c:1535",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/qpid-proton/c/src/core/transport.c:1535"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

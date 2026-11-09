@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042525660",
+  "chain": "CWE-1284->CWE-125",
+  "project": "zeek",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42525660",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "9af7d830e7d1bceb28d210a3a251fdfdddbe1659",
+      "fix_commits": [
+        "9af7d830e7d1bceb28d210a3a251fdfdddbe1659"
+      ],
+      "repo": "https://github.com/zeek/zeek"
+    },
+    "patch": "diff --git a/src/packet_analysis/protocol/vlan/VLAN.cc b/src/packet_analysis/protocol/vlan/VLAN.cc\nindex e57d7810a7a..4d65ca06017 100644\n--- a/src/packet_analysis/protocol/vlan/VLAN.cc\n+++ b/src/packet_analysis/protocol/vlan/VLAN.cc\n@@ -38,7 +38,8 @@ bool VLANAnalyzer::AnalyzePacket(size_t len, const uint8_t* data, Packet* packet\n \t\tlen -= 4;\n \t\tdata += 4;\n \n-\t\tif ( len < protocol )\n+\t\t// Need at least two bytes to check the packet types below.\n+\t\tif ( len < 2 )\n \t\t\t{\n \t\t\tWeird(\"truncated_vlan_frame\", packet);\n \t\t\treturn false;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42525660-vul",
+      "digest": "sha256:f4c99ad9375f5a3159fcde705712fc038d62ddb184a468c2c41e61cfb53c7a7a"
+    },
+    "patched": {
+      "ref": "n132/arvo:42525660-fix",
+      "digest": "sha256:c30126f63a923e372bbbe3b82e23a62e9b26cefbbd3d35d770f14993e5d7c60c"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/zeek/src/packet_analysis/protocol/vlan/VLAN.cc:50",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/zeek/src/packet_analysis/protocol/vlan/VLAN.cc:50"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042537851",
+  "chain": "CWE-1285->CWE-125",
+  "project": "haproxy",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42537851",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "0982bfd9997d73bae1257da56413898f5f8d97fe",
+      "fix_commits": [
+        "0982bfd9997d73bae1257da56413898f5f8d97fe"
+      ],
+      "repo": "https://github.com/haproxy/haproxy"
+    },
+    "patch": "diff --git a/src/tools.c b/src/tools.c\nindex 220f3fec25b0..15756c880bd4 100644\n--- a/src/tools.c\n+++ b/src/tools.c\n@@ -6681,6 +6681,9 @@ char *fgets_from_mem(char* buf, int size, const char **position, const char *end\n \t\treturn NULL;\n \n \tsize--; /* keep fgets behaviour, reads at most one less than size */\n+\tif (size > end - *position)\n+\t\tsize = end - *position;\n+\n \tnew_pos = memchr(*position, '\\n', size);\n \tif (new_pos) {\n \t\t/* '+1' to grab and copy '\\n' at the end of line */\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42537851-vul",
+      "digest": "sha256:e63e7921a279073359f846dc4aee2f985790b0d5681ee66a3f84be3af132eee3"
+    },
+    "patched": {
+      "ref": "n132/arvo:42537851-fix",
+      "digest": "sha256:2aaed884d68a6cdb3c0d21d8d95697e43bcf69ea065474115ac2716124f0569a"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/haproxy/src/tools.c:6684",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/haproxy/src/tools.c:6684"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

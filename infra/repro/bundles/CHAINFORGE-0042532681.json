@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042532681",
+  "chain": "CWE-1285->CWE-125",
+  "project": "ntopng",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42532681",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "d758a2e20d3969cf1e60133d203b44494db77cc6",
+      "fix_commits": [
+        "d758a2e20d3969cf1e60133d203b44494db77cc6"
+      ],
+      "repo": "https://github.com/ntop/ntopng"
+    },
+    "patch": "diff --git a/src/NetworkInterface.cpp b/src/NetworkInterface.cpp\nindex 46d59427bbc8..f68dfc5eed80 100644\n--- a/src/NetworkInterface.cpp\n+++ b/src/NetworkInterface.cpp\n@@ -3275,8 +3275,8 @@ bool NetworkInterface::dissectPacket(int32_t if_index,\n     if (dstMac) dstMac->incRcvdStats(h->ts.tv_sec, 1, len_on_wire);\n #endif\n \n-    if ((eth_type == ETHERTYPE_ARP) &&\n-\t(h->caplen >= (sizeof(arp_header) + sizeof(struct ndpi_ethhdr)))) {\n+    if ((eth_type == ETHERTYPE_ARP)\n+\t&& (h->caplen >= (ip_offset + sizeof(arp_header)))) {\n       struct arp_header *arpp = (struct arp_header *)&packet[ip_offset];\n       u_int16_t arp_opcode = ntohs(arpp->ar_op);\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42532681-vul",
+      "digest": "sha256:e1e35860100e19600e56a6a7b4db3e8e794aa8f7a36601697f76aef1b4a97f4f"
+    },
+    "patched": {
+      "ref": "n132/arvo:42532681-fix",
+      "digest": "sha256:a69bf80804d6e302a96e8879ca598fffbdc5b3ea641342efd792a46af9026b22"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/ntopng/src/NetworkInterface.cpp:3093",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/ntopng/src/NetworkInterface.cpp:3093"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

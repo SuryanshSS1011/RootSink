@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042495376",
+  "chain": "CWE-416->CWE-787",
+  "project": "libvips",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42495376",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "f726edb7f71f05f2af6f08a7442354c1b70e9383",
+      "fix_commits": [
+        "f726edb7f71f05f2af6f08a7442354c1b70e9383"
+      ],
+      "repo": "https://github.com/libvips/libvips"
+    },
+    "patch": "diff --git a/libvips/foreign/libnsgif/libnsgif.c b/libvips/foreign/libnsgif/libnsgif.c\nindex 679522bd54..1c4bd00e57 100644\n--- a/libvips/foreign/libnsgif/libnsgif.c\n+++ b/libvips/foreign/libnsgif/libnsgif.c\n@@ -1106,14 +1106,6 @@ gif_result gif_initialise(gif_animation *gif, size_t size, unsigned char *data)\n                 }\n                 gif->frame_holders = 1;\n \n-                /* Initialise the bitmap header */\n-                assert(gif->bitmap_callbacks.bitmap_create);\n-                gif->frame_image = gif->bitmap_callbacks.bitmap_create(gif->width, gif->height);\n-                if (gif->frame_image == NULL) {\n-                        gif_finalise(gif);\n-                        return GIF_INSUFFICIENT_MEMORY;\n-                }\n-\n                 /* Remember we've done this now */\n                 gif->buffer_position = gif_data - gif->gif_data;\n         }\ndiff --git a/libvips/foreign/libnsgif/patches/delay-alloc.patch b/libvips/foreign/libnsgif/patches/delay-alloc.patch\nindex d7d5f97d55..21630f2b1b 100644\n--- a/libvips/foreign/libnsgif/patches/delay-alloc.patch\n+++ b/libvips/foreign/libnsgif/patches/delay-alloc.patch\n@@ -1,5 +1,5 @@\n---- libnsgif-orig.c\t2021-04-02 11:59:38.120048459 +0100\n-+++ libnsgif.c\t2021-04-02 11:59:44.439972362 +0100\n+--- libnsgif-orig.c\t2021-04-03 12:23:43.700260070 +0100\n++++ libnsgif.c\t2021-04-03 12:24:44.079567702 +0100\n @@ -79,34 +79,17 @@\n                        unsigned int width,\n                        unsigned int height)\n@@ -69,3 +69,18 @@\n          /* Decode the flags */\n          flags = gif_data[9];\n          colour_table_size = 2 << (flags & GIF_COLOUR_TABLE_SIZE_MASK);\n+@@ -1115,14 +1106,6 @@\n+                 }\n+                 gif->frame_holders = 1;\n+ \n+-                /* Initialise the bitmap header */\n+-                assert(gif->bitmap_callbacks.bitmap_create);\n+-                gif->frame_image = gif->bitmap_callbacks.bitmap_create(gif->width, gif->height);\n+-                if (gif->frame_image == NULL) {\n+-                        gif_finalise(gif);\n+-                        return GIF_INSUFFICIENT_MEMORY;\n+-                }\n+-\n+                 /* Remember we've done this now */\n+                 gif->buffer_position = gif_data - gif->gif_data;\n+         }\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42495376-vul",
+      "digest": "sha256:5d61d20391d651f750bb0bd510517df0e601b6caef4c2fdd83f0a163eff82132"
+    },
+    "patched": {
+      "ref": "n132/arvo:42495376-fix",
+      "digest": "sha256:0330b671012481c2ea710754cb71437367c55edde1de360c78004a75b23c1758"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/libvips/libvips/foreign/libnsgif/libnsgif.c:824",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/libvips/libvips/foreign/libnsgif/libnsgif.c:824"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

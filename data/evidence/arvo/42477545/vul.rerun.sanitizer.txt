@@ -1,0 +1,73 @@
+INFO: Seed: 973405794
+INFO: Loaded 1 modules   (9713 inline 8-bit counters): 9713 [0x83ee720, 0x83f0d11), 
+INFO: Loaded 1 PC tables (9713 PCs): 9713 [0x8388204,0x839b18c), 
+/out/hevc_dec_fuzzer: Running 1 inputs 1 time(s) each.
+Running: /tmp/poc
+=================================================================
+==8==ERROR: AddressSanitizer: heap-buffer-overflow on address 0xee803cc0 at pc 0x081e34f0 bp 0xffe3d048 sp 0xffe3d040
+READ of size 4 at 0xee803cc0 thread T0
+SCARINESS: 17 (4-byte-read-heap-buffer-overflow)
+    #0 0x81e34ef in ihevcd_parse_slice_data /src/libhevc/decoder/ihevcd_parse_slice.c:2701:35
+    #1 0x81bc059 in ihevcd_nal_unit /src/libhevc/decoder/ihevcd_nal.c:406:27
+    #2 0x81b81bd in ihevcd_decode /src/libhevc/decoder/ihevcd_decode.c:646:15
+    #3 0x81b385d in ihevcd_cxa_api_function /src/libhevc/decoder/ihevcd_api.c:3573:19
+    #4 0x81a31a9 in Codec::decodeFrame(unsigned char const*, unsigned int, unsigned int*) /src/libhevc/fuzzer/hevc_dec_fuzzer.cpp:290:9
+    #5 0x81a39f4 in LLVMFuzzerTestOneInput /src/libhevc/fuzzer/hevc_dec_fuzzer.cpp:334:18
+    #6 0x80a6c26 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned int) /src/llvm/projects/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:554:15
+    #7 0x8092f23 in fuzzer::RunOneTest(fuzzer::Fuzzer*, char const*, unsigned int) /src/llvm/projects/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:292:6
+    #8 0x8098638 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned int)) /src/llvm/projects/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:775:9
+    #9 0x80bcd77 in main /src/llvm/projects/compiler-rt/lib/fuzzer/FuzzerMain.cpp:19:10
+    #10 0xf49a7636 in __libc_start_main (/lib32/libc.so.6+0x18636)
+    #11 0x806de58 in _start (/out/hevc_dec_fuzzer+0x806de58)
+
+DEDUP_TOKEN: ihevcd_parse_slice_data--ihevcd_nal_unit--ihevcd_decode
+0xee803cc0 is located 0 bytes to the right of 192-byte region [0xee803c00,0xee803cc0)
+allocated by thread T0 here:
+    #0 0x816ca7a in memalign /src/llvm/projects/compiler-rt/lib/asan/asan_malloc_linux.cpp:178:3
+    #1 0x81a0f89 in iv_aligned_malloc(void*, int, int) /src/libhevc/fuzzer/hevc_dec_fuzzer.cpp:53:10
+    #2 0x81acbe4 in ihevcd_allocate_dynamic_bufs /src/libhevc/decoder/ihevcd_api.c:1898:14
+    #3 0x81b8568 in ihevcd_decode /src/libhevc/decoder/ihevcd_decode.c:712:19
+    #4 0x81b385d in ihevcd_cxa_api_function /src/libhevc/decoder/ihevcd_api.c:3573:19
+    #5 0x81a287d in Codec::decodeHeader(unsigned char const*, unsigned int) /src/libhevc/fuzzer/hevc_dec_fuzzer.cpp:247:11
+    #6 0x81a398b in LLVMFuzzerTestOneInput /src/libhevc/fuzzer/hevc_dec_fuzzer.cpp:327:10
+    #7 0x80a6c26 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned int) /src/llvm/projects/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:554:15
+    #8 0x8092f23 in fuzzer::RunOneTest(fuzzer::Fuzzer*, char const*, unsigned int) /src/llvm/projects/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:292:6
+    #9 0x8098638 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned int)) /src/llvm/projects/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:775:9
+    #10 0x80bcd77 in main /src/llvm/projects/compiler-rt/lib/fuzzer/FuzzerMain.cpp:19:10
+    #11 0xf49a7636 in __libc_start_main (/lib32/libc.so.6+0x18636)
+
+DEDUP_TOKEN: memalign--iv_aligned_malloc(void*, int, int)--ihevcd_allocate_dynamic_bufs
+SUMMARY: AddressSanitizer: heap-buffer-overflow /src/libhevc/decoder/ihevcd_parse_slice.c:2701:35 in ihevcd_parse_slice_data
+Shadow bytes around the buggy address:
+  0x3dd00740: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x3dd00750: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x3dd00760: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x3dd00770: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x3dd00780: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x3dd00790: 00 00 00 00 00 00 00 00[fa]fa fa fa fa fa fa fa
+  0x3dd007a0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x3dd007b0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x3dd007c0: 00 00 00 00 00 00 fa fa fa fa fa fa fa fa fa fa
+  0x3dd007d0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x3dd007e0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+  Shadow gap:              cc
+==8==ABORTING

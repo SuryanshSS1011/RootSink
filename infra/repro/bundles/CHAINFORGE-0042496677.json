@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042496677",
+  "chain": "CWE-1284->CWE-125",
+  "project": "fluent-bit",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42496677",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "0ec1a7b309ec29904d9f855c495dcd550da74d57",
+      "fix_commits": [
+        "0ec1a7b309ec29904d9f855c495dcd550da74d57"
+      ],
+      "repo": "https://github.com/fluent/fluent-bit"
+    },
+    "patch": "diff --git a/src/flb_record_accessor.c b/src/flb_record_accessor.c\nindex e877db01edf..fb9bc59a872 100644\n--- a/src/flb_record_accessor.c\n+++ b/src/flb_record_accessor.c\n@@ -455,10 +455,20 @@ static flb_sds_t ra_translate_keymap(struct flb_ra_parser *rp, flb_sds_t buf,\n     }\n     else if (v->type == FLB_RA_INT) {\n         len = snprintf(str, sizeof(str) - 1, \"%\" PRId64, v->val.i64);\n+        /* We need to check size is not above str length */\n+        if (len >= 32) {\n+            *found = FLB_FALSE;\n+            return buf;\n+        }\n         tmp = flb_sds_cat(buf, str, len);\n     }\n     else if (v->type == FLB_RA_FLOAT) {\n         len = snprintf(str, sizeof(str) - 1, \"%f\", v->val.f64);\n+        /* We need to check size is not above str length */\n+        if (len >= 32) {\n+            *found = FLB_FALSE;\n+            return buf;\n+        }\n         tmp = flb_sds_cat(buf, str, len);\n     }\n     else if (v->type == FLB_RA_STRING) {\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42496677-vul",
+      "digest": "sha256:3f0d306a9803892f4344e5f1499e735a3247d7eafeeb7246640ece5460560fe3"
+    },
+    "patched": {
+      "ref": "n132/arvo:42496677-fix",
+      "digest": "sha256:58ff73fc88f0545cd3138cbe5480dc0c8bf9e621a6650f016465532a449dd685"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/fluent-bit/src/flb_sds.c:132",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/fluent-bit/src/flb_sds.c:132"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

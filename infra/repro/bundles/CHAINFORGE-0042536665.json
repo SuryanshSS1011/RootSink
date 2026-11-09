@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042536665",
+  "chain": "CWE-1284->CWE-125",
+  "project": "libarchive",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42536665",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "a612bf62f86a6faa47bd57c52b94849f0a404d8c",
+      "fix_commits": [
+        "a612bf62f86a6faa47bd57c52b94849f0a404d8c"
+      ],
+      "repo": "https://github.com/libarchive/libarchive"
+    },
+    "patch": "diff --git a/Makefile.am b/Makefile.am\nindex e05fc6e901..0beb283b12 100644\n--- a/Makefile.am\n+++ b/Makefile.am\n@@ -522,6 +522,7 @@ libarchive_test_SOURCES= \\\n \tlibarchive/test/test_read_format_rar_encryption_header.c \\\n \tlibarchive/test/test_read_format_rar_filter.c \\\n \tlibarchive/test/test_read_format_rar_invalid1.c \\\n+\tlibarchive/test/test_read_format_rar_overflow.c \\\n \tlibarchive/test/test_read_format_rar5.c \\\n \tlibarchive/test/test_read_format_raw.c \\\n \tlibarchive/test/test_read_format_tar.c \\\n@@ -904,6 +905,7 @@ libarchive_test_EXTRA_DIST=\\\n \tlibarchive/test/test_read_format_rar_multivolume.part0004.rar.uu \\\n \tlibarchive/test/test_read_format_rar_newsub_huge.rar.uu \\\n \tlibarchive/test/test_read_format_rar_noeof.rar.uu \\\n+\tlibarchive/test/test_read_format_rar_overflow.rar.uu \\\n \tlibarchive/test/test_read_format_rar_ppmd_lzss_conversion.rar.uu \\\n \tlibarchive/test/test_read_format_rar_ppmd_use_after_free.rar.uu \\\n \tlibarchive/test/test_read_format_rar_ppmd_use_after_free2.rar.uu \\\ndiff --git a/libarchive/archive_read_support_format_rar.c b/libarchive/archive_read_support_format_rar.c\nindex 197469b976..923ae5c65e 100644\n--- a/libarchive/archive_read_support_format_rar.c\n+++ b/libarchive/archive_read_support_format_rar.c\n@@ -451,7 +451,7 @@ static int read_filter(struct archive_read *, int64_t *);\n static int rar_decode_byte(struct archive_read*, uint8_t *);\n static int execute_filter(struct archive_read*, struct rar_filter *,\n                           struct rar_virtual_machine *, size_t);\n-static int copy_from_lzss_window(struct archive_read *, void *, int64_t, int);\n+static int copy_from_lzss_window(struct archive_read *, uint8_t *, int64_t, int);\n static inline void vm_write_32(struct rar_virtual_machine*, size_t, uint32_t);\n static inline uint32_t vm_read_32(struct rar_virtual_machine*, size_t);\n \n@@ -2976,7 +2976,7 @@ expand(struct archive_read *a, int64_t *end)\n     }\n \n     if ((symbol = read_next_symbol(a, &rar->maincode)) < 0)\n-      return (ARCHIVE_FATAL);\n+      goto bad_data;\n \n     if (symbol < 256)\n     {\n@@ -3003,14 +3003,14 @@ expand(struct archive_read *a, int64_t *end)\n       else\n       {\n         if (parse_codes(a) != ARCHIVE_OK)\n-          return (ARCHIVE_FATAL);\n+          goto bad_data;\n         continue;\n       }\n     }\n     else if(symbol==257)\n     {\n       if (!read_filter(a, end))\n-          return (ARCHIVE_FATAL);\n+          goto bad_data;\n       continue;\n     }\n     else if(symbol==258)\n@@ -3095,7 +3095,7 @@ expand(struct archive_read *a, int64_t *end)\n           {\n             if ((lowoffsetsymbol =\n               read_next_symbol(a, &rar->lowoffsetcode)) < 0)\n-              return (ARCHIVE_FATAL);\n+              goto bad_data;\n             if(lowoffsetsymbol == 16)\n             {\n               rar->numlowoffsetrepeats = 15;\n@@ -3143,7 +3143,7 @@ expand(struct archive_read *a, int64_t *end)\n }\n \n static int\n-copy_from_lzss_window(struct archive_read *a, void *buffer,\n+copy_from_lzss_window(struct archive_read *a, uint8_t *buffer,\n                       int64_t startpos, int length)\n {\n   int windowoffs, firstpart;\n@@ -3158,7 +3158,7 @@ copy_from_lzss_window(struct archive_read *a, void *buffer,\n   }\n   if (firstpart < length) {\n     memcpy(buffer, &rar->lzss.window[windowoffs], firstpart);\n-    memcpy(buffer, &rar->lzss.window[0], length - firstpart);\n+    memcpy(buffer + firstpart, &rar->lzss.window[0], length - firstpart);\n   } else {\n     memcpy(buffer, &rar->lzss.window[windowoffs], length);\n   }\n@@ -3317,6 +3317,9 @@ parse_filter(struct archive_read *a, const uint8_t *bytes, uint16_t length, uint\n   else\n     blocklength = prog ? prog->oldfilterlength : 0;\n \n+  if (blocklength > rar->dictionary_size)\n+    return 0;\n+\n   registers[3] = PROGRAM_SYSTEM_GLOBAL_ADDRESS;\n   registers[4] = blocklength;\n   registers[5] = prog ? prog->usagecount : 0;\ndiff --git a/libarchive/test/CMakeLists.txt b/libarchive/test/CMakeLists.txt\nindex 76009a1b1f..210221574b 100644\n--- a/libarchive/test/CMakeLists.txt\n+++ b/libarchive/test/CMakeLists.txt\n@@ -164,6 +164,7 @@ IF(ENABLE_TEST)\n     test_read_format_rar_encryption_partially.c\n     test_read_format_rar_invalid1.c\n     test_read_format_rar_filter.c\n+    test_read_format_rar_overflow.c\n     test_read_format_rar5.c\n     test_read_format_raw.c\n     test_read_format_tar.c\ndiff --git a/libarchive/test/test_read_format_rar_overflow.c b/libarchive/test/test_read_format_rar_overflow.c\nnew file mode 100644\nindex 0000000000..b39ed6b2ba\n--- /dev/null\n+++ b/libarchive/test/test_read_format_rar_overflow.c\n@@ -0,0 +1,48 @@\n+/*-\n+ * Copyright (c) 2003-2025 Tim Kientzle\n+ * All rights reserved.\n+ *\n+ * Redistribution and use in source and binary forms, with or without\n+ * modification, are permitted provided that the following conditions\n+ * are met:\n+ * 1. Redistributions of source code must retain the above copyright\n+ *    notice, this list of conditions and the following disclaimer.\n+ * 2. Redistributions in binary form must reproduce the above copyright\n+ *    notice, this list of conditions and the following disclaimer in the\n+ *    documentation and/or other materials provided with the distribution.\n+ *\n+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR(S) ``AS IS'' AND ANY EXPRESS OR\n+ * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES\n+ * OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.\n+ * IN NO EVENT SHALL THE AUTHOR(S) BE LIABLE FOR ANY DIRECT, INDIRECT,\n+ * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT\n+ * NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,\n+ * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY\n+ * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT\n+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF\n+ * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.\n+ */\n+#include \"test.h\"\n+\n+DEFINE_TEST(test_read_format_rar_overflow)\n+{\n+    struct archive *a;\n+    struct archive_entry *ae;\n+    const char reffile[] = \"test_read_format_rar_overflow.rar\";\n+    const void *buff;\n+    size_t size;\n+    int64_t offset;\n+\n+    extract_reference_file(reffile);\n+    assert((a = archive_read_new()) != NULL);\n+    assertEqualIntA(a, ARCHIVE_OK, archive_read_support_filter_all(a));\n+    assertEqualIntA(a, ARCHIVE_OK, archive_read_support_format_all(a));\n+    assertEqualIntA(a, ARCHIVE_OK, archive_read_open_filename(a, reffile, 1024));\n+    assertEqualIntA(a, ARCHIVE_OK, archive_read_next_header(a, &ae));\n+    assertEqualInt(48, archive_entry_size(ae));\n+    /* The next call should reproduce Issue #2565 */\n+    assertEqualIntA(a, ARCHIVE_FATAL, archive_read_data_block(a, &buff, &size, &offset));\n+\n+    assertEqualIntA(a, ARCHIVE_OK, archive_read_close(a));\n+    assertEqualInt(ARCHIVE_OK, archive_read_free(a));\n+}\ndiff --git a/libarchive/test/test_read_format_rar_overflow.rar.uu b/libarchive/test/test_read_format_rar_overflow.rar.uu\nnew file mode 100644\nindex 0000000000..48fd3fd9cb\n--- /dev/null\n+++ b/libarchive/test/test_read_format_rar_overflow.rar.uu\n@@ -0,0 +1,11 @@\n+begin 644 test_read_format_rar_overflow.rar\n+M4F%R(1H'`,($=```(0`@`0``,`````(````````````S`0``````,`\"_B%_:\n+MZ?^[:7``?S!!,`@P,KB@,T@RN33)MTEB@5Z3<`DP`K35`.0P63@P<,Q&0?#,\n+MA##,,\",S,(@P,#,@##`&,#\":(3`!,#\"(`9HPS,,S13`P,#`P,*`PHPS,,S1A\n+M,!,!,#\",\"9H@S12D#$PP!C`P`*'F03\":,,T8H`@\\,/DPJS!/,\"30,#`3N%LP\n+MCQ6:S3\"!,#LP22<-,$5%B\"5B$S!)(&*>G#+@!`E`%0ODC])62=DO,)BYJX'P\n+M=/LPZ3!!008?%S`P,#`P,#`P,#`P,#`P,#`P,#`P2$PP,#`P03!(,#`P,#`&\n+M,`7),#`P,#`P,#`P,#`P,#`P,#`P,#`P,#`P,#`P,#`P,#`P,#`P,#`P,#`P\n+-,#`P,#`P,#`P,#`P,```\n+`\n+end\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42536665-vul",
+      "digest": "sha256:d851cb214814a4a9acc724696c344d48bf96e39bdc29196558c6f3c51ae61b5b"
+    },
+    "patched": {
+      "ref": "n132/arvo:42536665-fix",
+      "digest": "sha256:ed87dc79a2dca18a83f9bc9c9e895d734b4a748b8309cbba59e1b451251eb3a4"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/libarchive/libarchive/archive_read_support_format_rar.c:3428",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/libarchive/libarchive/archive_read_support_format_rar.c:3428"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

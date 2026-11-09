@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042483854",
+  "chain": "CWE-416->CWE-125",
+  "project": "ffmpeg",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42483854",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "4b2248594c7faf1530c43e662c4b80655240b269",
+      "fix_commits": [
+        "4b2248594c7faf1530c43e662c4b80655240b269"
+      ],
+      "repo": "https://git.ffmpeg.org/ffmpeg.git"
+    },
+    "patch": "From 4b2248594c7faf1530c43e662c4b80655240b269 Mon Sep 17 00:00:00 2001\nFrom: Michael Niedermayer <michael@niedermayer.cc>\nDate: Sun, 31 May 2020 12:49:50 +0200\nSubject: [PATCH] avcodec/jpeg2000dec: clear pointer which become stale in\n get_ppt()\n\nFixes: use after free\nFixes: 22484/clusterfuzz-testcase-minimized-ffmpeg_AV_CODEC_ID_JPEG2000_fuzzer-5671488765296640\n\nFound-by: continuous fuzzing process https://github.com/google/oss-fuzz/tree/master/projects/ffmpeg\nReviewed-by: Gautam Ramakrishnan <gautamramk@gmail.com>\nSigned-off-by: Michael Niedermayer <michael@niedermayer.cc>\n---\n libavcodec/jpeg2000dec.c | 1 +\n 1 file changed, 1 insertion(+)\n\ndiff --git a/libavcodec/jpeg2000dec.c b/libavcodec/jpeg2000dec.c\nindex 6555542..b776645 100644\n--- a/libavcodec/jpeg2000dec.c\n+++ b/libavcodec/jpeg2000dec.c\n@@ -928,6 +928,7 @@ static int get_ppt(Jpeg2000DecoderContext *s, int n)\n         tile->packed_headers = new;\n     } else\n         return AVERROR(ENOMEM);\n+    memset(&tile->packed_headers_stream, 0, sizeof(tile->packed_headers_stream));\n     memcpy(tile->packed_headers + tile->packed_headers_size,\n            s->g.buffer, n - 3);\n     tile->packed_headers_size += n - 3;\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42483854-vul",
+      "digest": "sha256:5287f040e332a623cdce644e928343800eb8151a5f042569fc26c546988dd450"
+    },
+    "patched": {
+      "ref": "n132/arvo:42483854-fix",
+      "digest": "sha256:bdb5c8bf7ded24d76f28db5f03e4ba921fe2d1bd8711c7b737505b163870b978"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/ffmpeg/libavcodec/bytestream.h:95",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/ffmpeg/libavcodec/bytestream.h:95"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

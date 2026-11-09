@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042536234",
+  "chain": "CWE-416->CWE-125",
+  "project": "libdwarf",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42536234",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "b3d86e3e2d33d2ba1ec7e0064531010553ef056a",
+      "fix_commits": [
+        "b3d86e3e2d33d2ba1ec7e0064531010553ef056a"
+      ],
+      "repo": "https://github.com/davea42/libdwarf-code"
+    },
+    "patch": "From b3d86e3e2d33d2ba1ec7e0064531010553ef056a Mon Sep 17 00:00:00 2001\nFrom: David Anderson <davea42@linuxmail.org>\nDate: Sat, 15 Jun 2024 11:00:44 -0700\nSubject: [PATCH] Remove debug printf (was #if 0 ... #endif) Fixed DW202406-001\n  ossfuzz 69639 and DW202406-002 ossfuzz 69641 The bug in reading DWARF5\n .debug_loclists was in the code for a couple weeks. \tmodified:  \n src/lib/libdwarf/dwarf_loclists.c\n\n---\n src/lib/libdwarf/dwarf_loclists.c | 118 +++++++++++++-----------------\n 1 file changed, 49 insertions(+), 69 deletions(-)\n\ndiff --git a/src/lib/libdwarf/dwarf_loclists.c b/src/lib/libdwarf/dwarf_loclists.c\nindex 5ceaaf5..0e19094 100644\n--- a/src/lib/libdwarf/dwarf_loclists.c\n+++ b/src/lib/libdwarf/dwarf_loclists.c\n@@ -73,7 +73,7 @@ dump_bytes(const char *msg,Dwarf_Small * start, long len)\n             printf(\"[0x%04lx] \",(unsigned long)full);\n         }\n         printf(\"%02x\", *cur);\n-        ++ct; \n+        ++ct;\n         if ( ct % 4 == 0) {\n             printf(\" \");\n         }\n@@ -86,9 +86,20 @@ dump_bytes(const char *msg,Dwarf_Small * start, long len)\n }\n #endif /*0*/\n \n+static void\n+free_loclists_context(Dwarf_Loclists_Context cx)\n+{\n+    if (cx) {\n+        free(cx->lc_offset_value_array);\n+        cx->lc_offset_value_array = 0;\n+        free(cx);\n+    }\n+}\n+\n /*  Used in case of error reading the\n     loclists headers (not referring to Dwarf_Loc_Head_c\n-    here), to clean up. */\n+    here), to clean up. The chain is of\n+    Dwarf_Loclists_Context items */\n static void\n free_loclists_chain(Dwarf_Debug dbg, Dwarf_Chain head)\n {\n@@ -101,7 +112,9 @@ free_loclists_chain(Dwarf_Debug dbg, Dwarf_Chain head)\n     for ( ;cur; cur = next) {\n         next = cur->ch_next;\n         if (cur->ch_item) {\n-            free(cur->ch_item);\n+            Dwarf_Loclists_Context cx =\n+                (Dwarf_Loclists_Context)cur->ch_item;\n+            free_loclists_context(cx);\n             cur->ch_item = 0;\n             dwarf_dealloc(dbg,cur,DW_DLA_CHAIN);\n         }\n@@ -340,14 +353,6 @@ read_single_lle_entry(Dwarf_Debug dbg,\n     return DW_DLV_OK;\n }\n \n-static void\n-free_loclists_context(Dwarf_Loclists_Context cx)\n-{\n-    free(cx->lc_offset_value_array);\n-    cx->lc_offset_value_array = 0;\n-    free(cx);\n-}\n-\n /*  Reads the header. Determines the\n     various offsets, including offset\n     of the next header. Does no memory\n@@ -452,47 +457,42 @@ _dwarf_internal_read_loclists_header(Dwarf_Debug dbg,\n         SIZEOFT32,error,end_data);\n     buildhere->lc_offset_entry_count = offset_entry_count;\n     data += SIZEOFT32;\n-    if (offset_entry_count ){\n-        buildhere->lc_offsets_array = data;\n-    }\n     if (offset_entry_count >= (sectionlength/offset_size)) {\n         _dwarf_error_string(dbg,error,DW_DLE_LOCLISTS_ERROR,\n             \"dbg,DW_DLE_LOCLISTS_ERROR: \"\n-            \" The debug_loclists offset table entry count exceeds the \"\n+            \" The debug_loclists offset table entry \"\n+            \"count exceeds the \"\n             \"section length, Corrupt dwarf\");\n         return DW_DLV_ERROR;\n     }\n-    buildhere->lc_offset_value_array = (Dwarf_Unsigned *)\n-        calloc(offset_entry_count, sizeof(Dwarf_Unsigned));\n-    if (!buildhere->lc_offset_value_array) {\n-        _dwarf_error_string(dbg,error, DW_DLE_ALLOC_FAIL,\n-            \"dbg,DW_DLE_ALLOC_CAIL: \"\n-            \" The debug_loclists offset table \"\n-            \"cannot be allocated.\");\n-        return DW_DLV_ERROR;\n-    }\n     localoff = data - startdata;\n-    for (tabentrynum = 0 ; tabentrynum < offset_entry_count;\n-        data += SIZEOFT32,++tabentrynum ) {\n-        Dwarf_Unsigned entry = 0;\n-        int res = 0;\n+    if (offset_entry_count) {\n+        buildhere->lc_offsets_array = data;\n+        buildhere->lc_offset_value_array = (Dwarf_Unsigned *)\n+            calloc(offset_entry_count, sizeof(Dwarf_Unsigned));\n+        if (!buildhere->lc_offset_value_array) {\n+            _dwarf_error_string(dbg,error, DW_DLE_ALLOC_FAIL,\n+                \"dbg,DW_DLE_ALLOC_CAIL: \"\n+                \" The debug_loclists offset table \"\n+                \"cannot be allocated.\");\n+            return DW_DLV_ERROR;\n+        }\n+        for (tabentrynum = 0 ; tabentrynum < offset_entry_count;\n+            data += SIZEOFT32,++tabentrynum ) {\n+            Dwarf_Unsigned entry = 0;\n+            int res = 0;\n \n-        res = _dwarf_read_unaligned_ck_wrapper(dbg,\n-            &entry,data,SIZEOFT32,end_data,error);\n-        if (res != DW_DLV_OK) {\n-            if (res == DW_DLV_ERROR) {\n-                free_loclists_context(buildhere);\n-                buildhere = 0;\n+            res = _dwarf_read_unaligned_ck_wrapper(dbg,\n+                &entry,data,SIZEOFT32,end_data,error);\n+            if (res != DW_DLV_OK) {\n+                free(buildhere->lc_offset_value_array);\n+                buildhere->lc_offset_value_array = 0;\n+                return res;\n             }\n-            return res;\n+            buildhere->lc_offset_value_array[tabentrynum] = entry;\n+            lists_len += SIZEOFT32;\n         }\n-#if 0\n-        READ_UNALIGNED_CK(dbg,entry,Dwarf_Unsigned,data,\n-          SIZEOFT32,error,end_data);\n-#endif\n-        buildhere->lc_offset_value_array[tabentrynum] = entry;\n-        lists_len += SIZEOFT32;\n-    }\n+    } /* else no offset table */\n \n     buildhere->lc_offsets_off_in_sect = offset+localoff;\n     buildhere->lc_first_loclist_offset = offset+localoff+\n@@ -549,9 +549,9 @@ internal_load_loclists_contexts(Dwarf_Debug dbg,\n             data,end_data,offset,\n             newcontext,&nextoffset,error);\n         if (res == DW_DLV_ERROR) {\n+            free_loclists_chain(dbg,head_chain);\n             free_loclists_context(newcontext);\n             newcontext = 0;\n-            free_loclists_chain(dbg,head_chain);\n             return DW_DLV_ERROR;\n         }\n         newcontext->lc_magic = LOCLISTS_MAGIC;\n@@ -666,10 +666,10 @@ _dwarf_dealloc_loclists_context(Dwarf_Debug dbg)\n     loccon = dbg->de_loclists_context;\n     for ( ; i < dbg->de_loclists_context_count; ++i) {\n         Dwarf_Loclists_Context con = loccon[i];\n+        free_loclists_context(con);\n         con->lc_offsets_array = 0;\n         con->lc_offset_entry_count = 0;\n         con->lc_magic = 0;\n-        free_loclists_context(con);\n         loccon[i] = 0;\n     }\n     free(dbg->de_loclists_context);\n@@ -693,16 +693,8 @@ dwarf_get_loclist_offset_index_value(Dwarf_Debug dbg,\n \n     CHECK_DBG(dbg,error,\"dwarf_get_loclist_offset_index_value()\");\n     if (!dbg->de_loclists_context_count) {\n-#if 0\n-printf(\"dadebug no context count %d %s\\n\",__LINE__,__FILE__);\n-        return DW_DLV_NO_ENTRY;\n-#endif\n     }\n     if (context_index >= dbg->de_loclists_context_count) {\n-#if 0\n-printf(\"dadebug bad index %lu context count %d %s\\n\",\n-(unsigned long)context_index,__LINE__,__FILE__);\n-#endif\n         return DW_DLV_NO_ENTRY;\n     }\n     con = dbg->de_loclists_context[context_index];\n@@ -805,10 +797,6 @@ int dwarf_get_loclist_head_basics(Dwarf_Loc_Head_c head,\n     *loclists_debug_addr_base_present = head->ll_cu_addr_base_present;\n     *loclists_debug_addr_base  = head->ll_cu_addr_base;\n     *loclists_offset_lle_set = head->ll_llearea_offset;\n-#if 0\n-printf(\"dadebug offset_lle_set 0x%lx   %d %s\\n\",\n-(unsigned long)head->ll_llearea_offset,__LINE__,__FILE__);\n-#endif\n     return DW_DLV_OK;\n }\n \n@@ -1113,7 +1101,6 @@ _dwarf_implicit_loclists_base(Dwarf_Debug dbg,\n     return DW_DLV_OK;\n }\n \n-\n /*  Read the group of loclists entries, and\n     finally build an array of Dwarf_Locdesc_c\n     records. Attach to rctx here.\n@@ -1254,9 +1241,9 @@ _dwarf_loclists_fill_in_lle_head(Dwarf_Debug dbg,\n     Dwarf_Unsigned   offset_in_loclists = 0;\n     Dwarf_Bool       is_loclistx = FALSE;\n     Dwarf_Half       theform = llhead->ll_attrform;\n-    Dwarf_Bool       loclists_base_present = \n+    Dwarf_Bool       loclists_base_present =\n         llhead->ll_at_loclists_base_present;\n-    Dwarf_Bool       loclists_base= \n+    Dwarf_Bool       loclists_base=\n         llhead->ll_at_loclists_base;\n     Dwarf_Unsigned   attr_val = 0;\n \n@@ -1278,7 +1265,7 @@ _dwarf_loclists_fill_in_lle_head(Dwarf_Debug dbg,\n         if (res != DW_DLV_OK) {\n             return res;\n         }\n-    } else { \n+    } else {\n         if (theform == DW_FORM_sec_offset) {\n             /*  DW_FORM_sec_offset is not formudata , often\n                 seen in in DW5 DW_AT_location etc */\n@@ -1339,8 +1326,8 @@ _dwarf_loclists_fill_in_lle_head(Dwarf_Debug dbg,\n     offsetsize = rctx->lc_offset_size;\n     enddata = rctx->lc_endaddr;\n \n-    if (is_loclistx) { \n-        if(attr_val >= entrycount) {\n+    if (is_loclistx) {\n+        if (attr_val >= entrycount) {\n             dwarfstring m;\n \n             dwarfstring_constructor(&m);\n@@ -1375,12 +1362,6 @@ _dwarf_loclists_fill_in_lle_head(Dwarf_Debug dbg,\n             table_entry,offsetsize,error,enddata);\n         lle_global_offset = rctx->lc_offsets_off_in_sect +\n             table_entryval;\n-#if 0\n-printf(\"dadebug table_entryval 0x%lx   %d %s\\n\",\n-(unsigned long)table_entryval,__LINE__,__FILE__);\n-printf(\"dadebug offset_lle_set 0x%lx   %d %s\\n\",\n-(unsigned long)lle_global_offset,__LINE__,__FILE__);\n-#endif\n     } else {\n         lle_global_offset = attr_val;\n     }\n@@ -1451,7 +1432,6 @@ _dwarf_free_loclists_limited_head_content(Dwarf_Loc_Head_c head)\n             next = cur->ld_next;\n             cur->ld_next = 0;\n             cur->ld_magic = 0;\n-/* FIXME? */\n             free(cur);\n         }\n         head->ll_first = 0;\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42536234-vul",
+      "digest": "sha256:89ee5879910c3c1bd9ac52aaef555515e6d5b8688896747a10a5180624fba78e"
+    },
+    "patched": {
+      "ref": "n132/arvo:42536234-fix",
+      "digest": "sha256:bcd9e33941a765784e359b54c674c72ffcf09fb76d7eb86ac7c730d6a2ff5836"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/libdwarf/src/lib/libdwarf/dwarf_loclists.c:346",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/libdwarf/src/lib/libdwarf/dwarf_loclists.c:346"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

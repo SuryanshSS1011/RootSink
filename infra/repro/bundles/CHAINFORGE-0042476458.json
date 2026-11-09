@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042476458",
+  "chain": "CWE-416->CWE-125",
+  "project": "imagemagick",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42476458",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "39f226a9c137f547e12afde972eeba7551124493",
+      "fix_commits": [
+        "39f226a9c137f547e12afde972eeba7551124493"
+      ],
+      "repo": "https://github.com/imagemagick/imagemagick"
+    },
+    "patch": "From 39f226a9c137f547e12afde972eeba7551124493 Mon Sep 17 00:00:00 2001\nFrom: Cristy <urban-warrior@imagemagick.org>\nDate: Thu, 18 Jul 2019 06:24:40 -0400\nSubject: [PATCH] https://github.com/ImageMagick/ImageMagick/issues/1641\n\n---\n ChangeLog     | 15 +++++++++++----\n coders/jpeg.c |  6 ++++--\n 2 files changed, 15 insertions(+), 6 deletions(-)\n\ndiff --git a/ChangeLog b/ChangeLog\nindex cba66b8..52dcc9b 100644\n--- a/ChangeLog\n+++ b/ChangeLog\n@@ -1,16 +1,23 @@\n+2019-07-18  7.0.8-55 Cristy  <quetzlzacatenango@image...>\n+  * Release ImageMagick version 7.0.8-55, GIT revision 15...\n+\n+2019-07-18  7.0.8-55 Cristy  <quetzlzacatenango@image...>\n+  * Heap-buffer overflow (reference\n+    https://github.com/ImageMagick/ImageMagick/issues/1641\n+\n 2019-07-16  7.0.8-54 Cristy  <quetzlzacatenango@image...>\n   * Release ImageMagick version 7.0.8-54, GIT revision 15916:e868e22:20190716.\n \n 2019-07-08  7.0.8-54 Cristy  <quetzlzacatenango@image...>\n-   * resolve division by zero  (reference\n+  * resolve division by zero  (reference\n      https://github.com/ImageMagick/ImageMagick/issues/1629).\n-   * introducing MagickLevelImageColors() MagickWand method.\n+  * introducing MagickLevelImageColors() MagickWand method.\n   * Transient problem with text placement with gravity (reference\n     https://github.com/ImageMagick/ImageMagick/issues/1633).\n   * Support TIM2 image format (reference\n     https://github.com/ImageMagick/ImageMagick/pull/1571).\n   * For -magnify option, specify an alternative scaling method with -define\n-\t  magnify:method=method, choose from these methods: eagle2X, eagle3X,\n+    magnify:method=method, choose from these methods: eagle2X, eagle3X,\n     eagle3XB, epb2X, fish2X, hq2X,  scale2X (default), scale3X, xbr2X.\n \n 2019-07-05  7.0.8-53 Cristy  <quetzlzacatenango@image...>\n@@ -1488,7 +1495,7 @@\n 2016-04-30  7.0.1-0 Cristy  <quetzlzacatenango@image...>\n   * New version 7.0.1-0, GIT revision 10716:b527bce:20160430.\n \n-2016-01-30  7.0.0-0 \tFahad-Alsaidi & ShamsaHamed\n+2016-01-30  7.0.0-0 Fahad-Alsaidi & ShamsaHamed\n   * Add support for languages that require complex text layout (reference\n     https://github.com/ImageMagick/ImageMagick/pull/88).\n \ndiff --git a/coders/jpeg.c b/coders/jpeg.c\nindex 275be95..087bf09 100644\n--- a/coders/jpeg.c\n+++ b/coders/jpeg.c\n@@ -564,6 +564,7 @@ static boolean ReadICCProfile(j_decompress_ptr jpeg_info)\n       break;\n     *p++=(unsigned char) c;\n   }\n+  error_manager->profile=NULL;\n   if (i != (ssize_t) length)\n     {\n       profile=DestroyStringInfo(profile);\n@@ -572,7 +573,6 @@ static boolean ReadICCProfile(j_decompress_ptr jpeg_info)\n         image->filename);\n       return(FALSE);\n     }\n-  error_manager->profile=NULL;\n   icc_profile=(StringInfo *) GetImageProfile(image,\"icc\");\n   if (icc_profile != (StringInfo *) NULL)\n     {\n@@ -698,7 +698,9 @@ static boolean ReadIPTCProfile(j_decompress_ptr jpeg_info)\n         image->filename);\n       return(FALSE);\n     }\n-  /* The IPTC profile is actually an 8bim */\n+  /*\n+    The IPTC profile is actually an 8bim.\n+  */\n   iptc_profile=(StringInfo *) GetImageProfile(image,\"8bim\");\n   if (iptc_profile != (StringInfo *) NULL)\n     {\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42476458-vul",
+      "digest": "sha256:9a7a40eeb5d441a109241ae29e2003985f6aa2e43ca9396324a8860d6c8631ef"
+    },
+    "patched": {
+      "ref": "n132/arvo:42476458-fix",
+      "digest": "sha256:08b32e6258e703fe9d600732233e1250e6364e82e1c64746a593c7b8b1ff0233"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/imagemagick/MagickCore/string.c:853",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/imagemagick/MagickCore/string.c:853"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

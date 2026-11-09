@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042481546",
+  "chain": "CWE-20->CWE-125",
+  "project": "gnutls",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42481546",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "ab0905f46d43b71228fa501d4981f419e710c7f1",
+      "fix_commits": [
+        "ab0905f46d43b71228fa501d4981f419e710c7f1"
+      ],
+      "repo": "https://gitlab.com/gnutls/gnutls.git"
+    },
+    "patch": "diff --git a/configure.ac b/configure.ac\nindex 2e73a904d6842e3129476cb067fed187b2567219..09acf8b22f77c59701d03ed9b11e278b57f8f1e1 100644\n--- a/configure.ac\n+++ b/configure.ac\n@@ -660,6 +660,15 @@ AC_CHECK_FUNCS([nettle_curve448_mul nettle_ed448_shake256_sign],\n LIBS=$save_LIBS\n AM_CONDITIONAL(NEED_CURVE448, test \"$have_curve448\" != \"yes\")\n \n+have_gostdsa=yes\n+save_LIBS=$LIBS\n+LIBS=\"$LIBS $HOGWEED_LIBS $NETTLE_LIBS\"\n+AC_CHECK_FUNCS([nettle_get_gost_gc256b nettle_get_gost_gc512a nettle_gostdsa_sign], [],\n+\t       have_gostdsa=no)\n+LIBS=$save_LIBS\n+AS_IF([test \"$have_gostdsa\" != \"yes\"], AC_DEFINE([NEED_GOSTDSA], 1, [Use backported GOST R 34.10 DSA support]))\n+AM_CONDITIONAL(NEED_GOSTDSA, [test \"$have_gostdsa\" != \"yes\"])\n+\n AC_MSG_CHECKING([whether to build libdane])\n AC_ARG_ENABLE(libdane,\n     AS_HELP_STRING([--disable-libdane],\ndiff --git a/lib/nettle/Makefile.am b/lib/nettle/Makefile.am\nindex 8c1a2d17ee6a171728bffeaef8513c7966fcb301..e4d9ad64efc324e90b77fef8174aee2443042f1a 100644\n--- a/lib/nettle/Makefile.am\n+++ b/lib/nettle/Makefile.am\n@@ -86,14 +86,19 @@ libcrypto_la_SOURCES += \\\n \tgost/pbkdf2-hmac-gosthash94.c gost/pbkdf2-hmac-streebog.c \\\n \tgost/pbkdf2-gost.h\n \n+if NEED_GOSTDSA\n libcrypto_la_SOURCES += \\\n \tgost/nettle-internal.h \\\n \tgost/ecc-gost256cpa.c gost/ecc-gost256cpa-32.h  gost/ecc-gost256cpa-64.h\\\n \tgost/ecc-gost512a.c gost/ecc-gost512a-32.h gost/ecc-gost512a-64.h \\\n \tgost/ecc-internal.h gost/gmp-glue.h \\\n \tgost/ecc-gostdsa-sign.c gost/ecc-gostdsa-verify.c \\\n-\tgost/gostdsa-mask.c gost/gostdsa-sign.c gost/gostdsa-verify.c gost/gostdsa-vko.c \\\n+\tgost/gostdsa-sign.c gost/gostdsa-verify.c \\\n \tgost/gostdsa.h gost/ecc-gost-curve.h gost/ecc-gost-hash.c\n+endif\n+\n+libcrypto_la_SOURCES += \\\n+\tgost/gostdsa-mask.c gost/gostdsa-vko.c gost/gostdsa2.h\n \n libcrypto_la_SOURCES += gost_keywrap.c\n endif\ndiff --git a/lib/nettle/gost/ecc-gost-curve.h b/lib/nettle/gost/ecc-gost-curve.h\nindex 9e972c76890dd3b03a1485fb836cc105f2cd03e5..a7979275d07caa78e6c5ddd9ff2cb2d1b1ee83b6 100644\n--- a/lib/nettle/gost/ecc-gost-curve.h\n+++ b/lib/nettle/gost/ecc-gost-curve.h\n@@ -49,10 +49,10 @@ struct ecc_curve;\n #endif\n #endif\n \n-#define nettle_get_gost_256cpa _gnutls_get_gost_256cpa\n-#define nettle_get_gost_512a _gnutls_get_gost_512a\n-const struct ecc_curve * NETTLE_PURE nettle_get_gost_256cpa(void);\n-const struct ecc_curve * NETTLE_PURE nettle_get_gost_512a(void);\n+#define nettle_get_gost_gc256b _gnutls_get_gost_gc256b\n+#define nettle_get_gost_gc512a _gnutls_get_gost_gc512a\n+const struct ecc_curve * NETTLE_PURE nettle_get_gost_gc256b(void);\n+const struct ecc_curve * NETTLE_PURE nettle_get_gost_gc512a(void);\n \n #ifdef __cplusplus\n }\ndiff --git a/lib/nettle/gost/ecc-gost256cpa.c b/lib/nettle/gost/ecc-gost256cpa.c\nindex 6d7fa51b3e677e24f815b9a5701a91f2c9305efe..74ea4d2685f175a337b95e94447d6c914ab3d2e4 100644\n--- a/lib/nettle/gost/ecc-gost256cpa.c\n+++ b/lib/nettle/gost/ecc-gost256cpa.c\n@@ -64,7 +64,7 @@\n #define ecc_256_modp ecc_mod\n #define ecc_256_modq ecc_mod\n \n-static const struct ecc_curve _gnutls_gost_256cpa =\n+static const struct ecc_curve _gnutls_gost_gc256b =\n {\n   {\n     256,\n@@ -140,7 +140,7 @@ static const struct ecc_curve _gnutls_gost_256cpa =\n   ecc_table\n };\n \n-const struct ecc_curve *nettle_get_gost_256cpa(void)\n+const struct ecc_curve *nettle_get_gost_gc256b(void)\n {\n-  return &_gnutls_gost_256cpa;\n+  return &_gnutls_gost_gc256b;\n }\ndiff --git a/lib/nettle/gost/ecc-gost512a.c b/lib/nettle/gost/ecc-gost512a.c\nindex 1bd4d1b7afaac8ec59b6cb33b53cc5b517ce71db..d77a41f4c08844f718343820f19be3771492f8d0 100644\n--- a/lib/nettle/gost/ecc-gost512a.c\n+++ b/lib/nettle/gost/ecc-gost512a.c\n@@ -64,7 +64,7 @@\n #define ecc_512_modp ecc_mod\n #define ecc_512_modq ecc_mod\n \n-static const struct ecc_curve _gnutls_gost_512a =\n+static const struct ecc_curve _gnutls_gost_gc512a =\n {\n   {\n     512,\n@@ -140,7 +140,7 @@ static const struct ecc_curve _gnutls_gost_512a =\n   ecc_table\n };\n \n-const struct ecc_curve *nettle_get_gost_512a(void)\n+const struct ecc_curve *nettle_get_gost_gc512a(void)\n {\n-  return &_gnutls_gost_512a;\n+  return &_gnutls_gost_gc512a;\n }\ndiff --git a/lib/nettle/gost/gostdsa-mask.c b/lib/nettle/gost/gostdsa-mask.c\nindex 49dc2f4569dfb58733d28c5bb759f2ee42765004..6654d386b21f7af56840d8bbf5509f93c73ab1a6 100644\n--- a/lib/nettle/gost/gostdsa-mask.c\n+++ b/lib/nettle/gost/gostdsa-mask.c\n@@ -37,7 +37,7 @@\n \n #include <stdlib.h>\n \n-#include \"gostdsa.h\"\n+#include \"gostdsa2.h\"\n #include \"ecc-internal.h\"\n \n #include \"gmp-glue.h\"\ndiff --git a/lib/nettle/gost/gostdsa-vko.c b/lib/nettle/gost/gostdsa-vko.c\nindex 89dff1cc452d5678321a563c759c77d934bc0063..4251930a8003b42a661a261e98fe746719a0a604 100644\n--- a/lib/nettle/gost/gostdsa-vko.c\n+++ b/lib/nettle/gost/gostdsa-vko.c\n@@ -38,7 +38,7 @@\n #include <stdlib.h>\n \n #include \"ecc-internal.h\"\n-#include \"gostdsa.h\"\n+#include \"gostdsa2.h\"\n \n int\n gostdsa_vko(const struct ecc_scalar *key,\ndiff --git a/lib/nettle/gost/gostdsa.h b/lib/nettle/gost/gostdsa.h\nindex 9e0375f2ce365d8372234d0e7714eb1073b54d88..d9b79ff3ce97f30f17fb9073f57b079d6b51dc91 100644\n--- a/lib/nettle/gost/gostdsa.h\n+++ b/lib/nettle/gost/gostdsa.h\n@@ -46,8 +46,6 @@ extern \"C\" {\n /* Name mangling */\n #define gostdsa_sign _gnutls_gostdsa_sign\n #define gostdsa_verify _gnutls_gostdsa_verify\n-#define gostdsa_unmask_key _gnutls_gostdsa_unmask_key\n-#define gostdsa_vko _gnutls_gostdsa_vko\n #define ecc_gostdsa_sign _gnutls_ecc_gostdsa_sign\n #define ecc_gostdsa_sign_itch _gnutls_ecc_gostdsa_sign_itch\n #define ecc_gostdsa_verify _gnutls_ecc_gostdsa_verify\n@@ -72,16 +70,6 @@ gostdsa_verify (const struct ecc_point *pub,\n \t        size_t length, const uint8_t *digest,\n \t        const struct dsa_signature *signature);\n \n-int\n-gostdsa_unmask_key (const struct ecc_curve *ecc,\n-\t\t    mpz_t key);\n-\n-int\n-gostdsa_vko(const struct ecc_scalar *key,\n-\t    const struct ecc_point *pub,\n-\t    size_t ukm_length, const uint8_t *ukm,\n-\t    size_t out_length, uint8_t *out);\n-\n /* Low-level GOSTDSA functions. */\n mp_size_t\n ecc_gostdsa_sign_itch (const struct ecc_curve *ecc);\ndiff --git a/lib/nettle/gost/gostdsa2.h b/lib/nettle/gost/gostdsa2.h\nnew file mode 100644\nindex 0000000000000000000000000000000000000000..a4b26ab49732c5bd7cf55c7da773254797b7daa3\n--- /dev/null\n+++ b/lib/nettle/gost/gostdsa2.h\n@@ -0,0 +1,62 @@\n+/* gostdsa.h\n+\n+   Copyright (C) 2015 Dmity Eremin-Solenikov\n+   Copyright (C) 2013 Niels M\u00f6ller\n+\n+   This file is part of GNU Nettle.\n+\n+   GNU Nettle is free software: you can redistribute it and/or\n+   modify it under the terms of either:\n+\n+     * the GNU Lesser General Public License as published by the Free\n+       Software Foundation; either version 3 of the License, or (at your\n+       option) any later version.\n+\n+   or\n+\n+     * the GNU General Public License as published by the Free\n+       Software Foundation; either version 2 of the License, or (at your\n+       option) any later version.\n+\n+   or both in parallel, as here.\n+\n+   GNU Nettle is distributed in the hope that it will be useful,\n+   but WITHOUT ANY WARRANTY; without even the implied warranty of\n+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU\n+   General Public License for more details.\n+\n+   You should have received copies of the GNU General Public License and\n+   the GNU Lesser General Public License along with this program.  If\n+   not, see https://www.gnu.org/licenses/.\n+*/\n+\n+/* Development of Nettle's ECC support was funded by the .SE Internet Fund. */\n+\n+#ifndef GNUTLS_LIB_NETTLE_GOST_GOSTDSA2_H\n+#define GNUTLS_LIB_NETTLE_GOST_GOSTDSA2_H\n+\n+#include <nettle/ecc.h>\n+\n+#ifdef __cplusplus\n+extern \"C\" {\n+#endif\n+\n+/* Name mangling */\n+#define gostdsa_unmask_key _gnutls_gostdsa_unmask_key\n+#define gostdsa_vko _gnutls_gostdsa_vko\n+\n+int\n+gostdsa_unmask_key (const struct ecc_curve *ecc,\n+\t\t    mpz_t key);\n+\n+int\n+gostdsa_vko(const struct ecc_scalar *key,\n+\t    const struct ecc_point *pub,\n+\t    size_t ukm_length, const uint8_t *ukm,\n+\t    size_t out_length, uint8_t *out);\n+\n+#ifdef __cplusplus\n+}\n+#endif\n+\n+#endif /* GNUTLS_LIB_NETTLE_GOST_GOSTDSA2_H */\ndiff --git a/lib/nettle/pk.c b/lib/nettle/pk.c\nindex 4be8dc7edaeb8def7eb787b3746bad61b36eafbf..f236cef3db66a96a7c1ac334b03330acb1313d98 100644\n--- a/lib/nettle/pk.c\n+++ b/lib/nettle/pk.c\n@@ -57,8 +57,13 @@\n #include <nettle/eddsa.h>\n #include <nettle/version.h>\n #if ENABLE_GOST\n+#if NEED_GOSTDSA\n #include \"gost/gostdsa.h\"\n #include \"gost/ecc-gost-curve.h\"\n+#else\n+#include <nettle/gostdsa.h>\n+#endif\n+#include \"gost/gostdsa2.h\"\n #endif\n #include \"int/ecdsa-compute-k.h\"\n #include \"int/dsa-compute-k.h\"\n@@ -1499,13 +1504,11 @@ static inline const struct ecc_curve *get_supported_gost_curve(int curve)\n \tswitch (curve) {\n #if ENABLE_GOST\n \tcase GNUTLS_ECC_CURVE_GOST256CPA:\n-\t\treturn nettle_get_gost_256cpa();\n \tcase GNUTLS_ECC_CURVE_GOST256CPXA:\n-\t\treturn nettle_get_gost_256cpa();\n-\tcase GNUTLS_ECC_CURVE_GOST512A:\n-\t\treturn nettle_get_gost_512a();\n \tcase GNUTLS_ECC_CURVE_GOST256B:\n-\t\treturn nettle_get_gost_256cpa();\n+\t\treturn nettle_get_gost_gc256b();\n+\tcase GNUTLS_ECC_CURVE_GOST512A:\n+\t\treturn nettle_get_gost_gc512a();\n #endif\n \tdefault:\n \t\treturn NULL;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42481546-vul",
+      "digest": "sha256:a2c71c81bbf230c6fb108bcfd256c6b4eb90d214b4641053740ccfb3350197d0"
+    },
+    "patched": {
+      "ref": "n132/arvo:42481546-fix",
+      "digest": "sha256:5aec8c973c12b2970b55d71bb28826633d7ca14942cebd0a19c41606c3bb5ff4"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "global-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/nettle/sec-tabselect.c:60",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "global-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/nettle/sec-tabselect.c:60"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

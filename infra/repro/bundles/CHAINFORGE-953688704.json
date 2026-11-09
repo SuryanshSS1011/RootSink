@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-953688704",
+  "chain": "CWE-129->CWE-125",
+  "project": "opensc",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42510793",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/OpenSC/OpenSC/commit/9035200bb931ef11a422854435079824fb9ae580",
+      "fix_commits": [
+        "9035200bb931ef11a422854435079824fb9ae580"
+      ],
+      "repo": "https://github.com/OpenSC/OpenSC"
+    },
+    "patch": "diff --git a/src/pkcs15init/pkcs15-epass2003.c b/src/pkcs15init/pkcs15-epass2003.c\nindex b845b95a05..91d406c022 100644\n--- a/src/pkcs15init/pkcs15-epass2003.c\n+++ b/src/pkcs15init/pkcs15-epass2003.c\n@@ -298,6 +298,8 @@ static int epass2003_pkcs15_key_reference(struct sc_profile *profile,\n \t\t\t\t\t  struct sc_pkcs15_prkey_info *prkey)\n {\n \tSC_FUNC_CALLED(p15card->card->ctx, SC_LOG_DEBUG_VERBOSE);\n+\tif (prkey->path.len == 0)\n+\t\tSC_FUNC_RETURN(p15card->card->ctx, SC_LOG_DEBUG_VERBOSE, SC_ERROR_INVALID_ARGUMENTS);\n \tprkey->key_reference = prkey->path.value[prkey->path.len - 1];\n \tSC_FUNC_RETURN(p15card->card->ctx, SC_LOG_DEBUG_VERBOSE, SC_SUCCESS);\n }\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42510793-vul",
+      "digest": "sha256:30b1a4699b2d68553f5ef7a4f99aef0303e631de091372f9b09b4203ab0547a2"
+    },
+    "patched": {
+      "ref": "n132/arvo:42510793-fix",
+      "digest": "sha256:dec15e103996e58e00cd03ce4d75d9d308a9b20f511b64332244414a99f3b9b0"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "crash_site": "/src/opensc/src/pkcs15init/pkcs15-epass2003.c:301",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 129,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "site": "/src/opensc/src/pkcs15init/pkcs15-epass2003.c:301"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

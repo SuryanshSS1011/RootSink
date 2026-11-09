@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042481590",
+  "chain": "CWE-20->CWE-787",
+  "project": "ffmpeg",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42481590",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "588114cea4ee434c9c61353ed91ffc817d2965f5",
+      "fix_commits": [
+        "588114cea4ee434c9c61353ed91ffc817d2965f5"
+      ],
+      "repo": "https://git.ffmpeg.org/ffmpeg.git"
+    },
+    "patch": "From 588114cea4ee434c9c61353ed91ffc817d2965f5 Mon Sep 17 00:00:00 2001\nFrom: Michael Niedermayer <michael@niedermayer.cc>\nDate: Sun, 5 Apr 2020 00:11:15 +0200\nSubject: [PATCH] avcodec/cbs_h265_syntax_template: Check\n num_negative/positive_pics when inter_ref_pic_set_prediction_flag is set\n\nFixes: out of array access\nFixes: 20446/clusterfuzz-testcase-minimized-ffmpeg_BSF_HEVC_METADATA_fuzzer-5707770718584832\n\nFound-by: continuous fuzzing process https://github.com/google/oss-fuzz/tree/master/projects/ffmpeg\nSigned-off-by: Michael Niedermayer <michael@niedermayer.cc>\n---\n libavcodec/cbs_h265_syntax_template.c | 4 ++++\n 1 file changed, 4 insertions(+)\n\ndiff --git a/libavcodec/cbs_h265_syntax_template.c b/libavcodec/cbs_h265_syntax_template.c\nindex 180a045..5f55319 100644\n--- a/libavcodec/cbs_h265_syntax_template.c\n+++ b/libavcodec/cbs_h265_syntax_template.c\n@@ -601,6 +601,8 @@ static int FUNC(st_ref_pic_set)(CodedBitstreamContext *ctx, RWContext *rw,\n             }\n         }\n \n+        if (i > 15)\n+            return AVERROR_INVALIDDATA;\n         infer(num_negative_pics, i);\n         for (i = 0; i < current->num_negative_pics; i++) {\n             infer(delta_poc_s0_minus1[i],\n@@ -630,6 +632,8 @@ static int FUNC(st_ref_pic_set)(CodedBitstreamContext *ctx, RWContext *rw,\n             }\n         }\n \n+        if (i + current->num_negative_pics > 15)\n+            return AVERROR_INVALIDDATA;\n         infer(num_positive_pics, i);\n         for (i = 0; i < current->num_positive_pics; i++) {\n             infer(delta_poc_s1_minus1[i],\n-- \n2.55.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42481590-vul",
+      "digest": "sha256:dbe89114ba7d6ff6cf6918c0b9a3213035d346fa2bbf70a14ca980f82b746bc1"
+    },
+    "patched": {
+      "ref": "n132/arvo:42481590-fix",
+      "digest": "sha256:37f68e390a1370e55e2094ab3f514bf7a29959f6f4b1cb16ee1ef988b99d152b"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/ffmpeg/libavcodec/cbs_h265_syntax_template.c:599",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/ffmpeg/libavcodec/cbs_h265_syntax_template.c:599"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

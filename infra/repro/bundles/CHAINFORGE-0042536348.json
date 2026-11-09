@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042536348",
+  "chain": "CWE-1284->CWE-125",
+  "project": "unit",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42536348",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "932b914618791b6c9648b1066e0cfe4ee6d25cff",
+      "fix_commits": [
+        "932b914618791b6c9648b1066e0cfe4ee6d25cff"
+      ],
+      "repo": "https://github.com/nginx/unit"
+    },
+    "patch": "diff --git a/src/nxt_sockaddr.c b/src/nxt_sockaddr.c\nindex 32941893d..4d1e723b7 100644\n--- a/src/nxt_sockaddr.c\n+++ b/src/nxt_sockaddr.c\n@@ -732,6 +732,11 @@ nxt_sockaddr_inet_parse(nxt_mp_t *mp, nxt_str_t *addr)\n         length = p - addr->start;\n     }\n \n+    if (length == 0) {\n+        nxt_thread_log_error(NXT_LOG_ERR, \"invalid address \\\"%V\\\"\", addr);\n+        return NULL;\n+    }\n+\n     inaddr = INADDR_ANY;\n \n     if (length != 1 || addr->start[0] != '*') {\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42536348-vul",
+      "digest": "sha256:abb80273eb8613d59787172004cdba2c7c1ea2bba18d11b5d4eb6dd3daf28d4e"
+    },
+    "patched": {
+      "ref": "n132/arvo:42536348-fix",
+      "digest": "sha256:c6727fc98355d3c9f57c5cc117401c7deb6051c1df781ced3304a9c28d75b417"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/unit/src/nxt_sockaddr.c:780",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/unit/src/nxt_sockaddr.c:780"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

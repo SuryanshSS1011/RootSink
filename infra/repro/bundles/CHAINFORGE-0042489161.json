@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042489161",
+  "chain": "CWE-416->CWE-125",
+  "project": "fluent-bit",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42489161",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "cadff53c093210404aed01c4cf586adb8caa07af",
+      "fix_commits": [
+        "cadff53c093210404aed01c4cf586adb8caa07af"
+      ],
+      "repo": "https://github.com/fluent/fluent-bit"
+    },
+    "patch": "diff --git a/src/flb_gzip.c b/src/flb_gzip.c\nindex 116c92bfbb2..54f868ea4a2 100644\n--- a/src/flb_gzip.c\n+++ b/src/flb_gzip.c\n@@ -77,8 +77,25 @@ int flb_gzip_compress(void *in_data, size_t in_len,\n     z_stream strm;\n     mz_ulong crc;\n \n-    out_size = in_len + 32;\n+\n+    /*\n+     * GZIP relies on an algorithm with worst-case expansion\n+     * of 5 bytes per 32KB data. This means we need to create a variable\n+     * length output, that depends on the input length.\n+     * See RFC 1951 for details.\n+     */\n+    int max_input_expansion = ((int)(in_len / 32000) + 1) * 5;\n+\n+    /*\n+     * Max compressed size is equal to sum of:\n+     *   10 byte header\n+     *   8 byte foot\n+     *   max input expansion\n+     *   size of input\n+     */\n+    out_size = 10 + 8 + max_input_expansion + in_len;\n     out_buf = flb_malloc(out_size);\n+\n     if (!out_buf) {\n         flb_errno();\n         flb_error(\"[gzip] could not allocate outgoing buffer\");\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42489161-vul",
+      "digest": "sha256:82ae51da1a5eaab341f7a9068c94a3dfb5c5e7986849ef1854a78c5965d8f0f8"
+    },
+    "patched": {
+      "ref": "n132/arvo:42489161-fix",
+      "digest": "sha256:162a032a4ada23d2e44baa19050399662abf0160055040305cda65c100add686"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/fluent-bit/src/flb_hash.c:375",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/fluent-bit/src/flb_hash.c:375"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

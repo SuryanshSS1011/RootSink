@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042492582",
+  "chain": "CWE-1285->CWE-125",
+  "project": "gdal",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42492582",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "b6da092a5e2163d7f389683babda1aa3c06493a2",
+      "fix_commits": [
+        "b6da092a5e2163d7f389683babda1aa3c06493a2"
+      ],
+      "repo": "https://github.com/OSGeo/gdal"
+    },
+    "patch": "diff --git a/gdal/frmts/grib/degrib18/degrib/degrib1.cpp b/gdal/frmts/grib/degrib18/degrib/degrib1.cpp\nindex 8e5436f36af7..9791b9ac3d4d 100644\n--- a/gdal/frmts/grib/degrib18/degrib/degrib1.cpp\n+++ b/gdal/frmts/grib/degrib18/degrib/degrib1.cpp\n@@ -813,6 +813,10 @@ static int ReadGrib1Sect2 (uChar *gds, uInt4 gribLen, uInt4 *curLoc,\n    int f_allOne;        /* Used to find out if the \"lat/lon\" extension part\n                          * is all 1 hence missing. */\n \n+   if( gribLen - *curLoc < 3 ) {\n+      errSprintf (\"Ran out of data in GDS (GRIB 1 Section 2)\\n\");\n+      return -1;\n+   }\n    sectLen = GRIB_UNSIGN_INT3 (*gds, gds[1], gds[2]);\n #ifdef DEBUG\n /*\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42492582-vul",
+      "digest": "sha256:e5e438e96d011fcbb34488039729ca52d564a540382197216f8ace688e3303eb"
+    },
+    "patched": {
+      "ref": "n132/arvo:42492582-fix",
+      "digest": "sha256:16becc536c64ca818b4d4ca32ac2a7bc50ae54b454c09301e8dd54d6d0dcd906"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/gdal/gdal/frmts/grib/degrib18/degrib/degrib1.cpp:809",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/gdal/gdal/frmts/grib/degrib18/degrib/degrib1.cpp:809"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

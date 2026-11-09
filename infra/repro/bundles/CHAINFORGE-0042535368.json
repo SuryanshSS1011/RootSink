@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042535368",
+  "chain": "CWE-456->CWE-457",
+  "project": "libpcap",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42535368",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "360f7fa620d2e1dcb1900d8245effede11bf79a9",
+      "fix_commits": [
+        "360f7fa620d2e1dcb1900d8245effede11bf79a9"
+      ],
+      "repo": "https://github.com/the-tcpdump-group/libpcap"
+    },
+    "patch": "From 360f7fa620d2e1dcb1900d8245effede11bf79a9 Mon Sep 17 00:00:00 2001\nFrom: Denis Ovsienko <denis@ovsienko.info>\nDate: Tue, 7 Jan 2025 19:28:18 +0000\nSubject: [PATCH] Initialize the scratch memory store to 0.\n\nOriginally raised by Michal Ruprich on tcpdump-workers, later reported\nby Richard Lloyd of Connect Internet Solutions as a warning from HP ANSI\nC compiler:\n\n\"./bpf_filter.c\", line 220: warning #2549-D: variable \"mem\" is used\n  before its value is set\n  \t\t\tA = mem[pc->k];\n---\n CHANGES      | 1 +\n bpf_filter.c | 2 +-\n 2 files changed, 2 insertions(+), 1 deletion(-)\n\ndiff --git a/CHANGES b/CHANGES\nindex 8eed16d..b86fb4f 100644\n--- a/CHANGES\n+++ b/CHANGES\n@@ -44,6 +44,7 @@ DayOfTheWeek, Month DD, YYYY / The Tcpdump Group\n       Eliminate trailing space in bpf_image() result.\n       Fix DECnet packet filtering on big-endian hosts.\n       Require \"vpi\" and \"vci\" values to be within valid ranges.\n+      Initialize the scratch memory store to 0.\n     rpcap:\n       Support user names and passwords in rpcap:// and rpcaps:// URLs.\n       Add a -t flag to rpcapd to specify the data channel port; from\ndiff --git a/bpf_filter.c b/bpf_filter.c\nindex 9b899bb..1a8ae8c 100644\n--- a/bpf_filter.c\n+++ b/bpf_filter.c\n@@ -94,7 +94,6 @@ pcapint_filter_with_aux_data(const struct bpf_insn *pc, const u_char *p,\n {\n \tregister uint32_t A, X;\n \tregister bpf_u_int32 k;\n-\tuint32_t mem[BPF_MEMWORDS];\n \n \tif (pc == 0)\n \t\t/*\n@@ -103,6 +102,7 @@ pcapint_filter_with_aux_data(const struct bpf_insn *pc, const u_char *p,\n \t\treturn (u_int)-1;\n \tA = 0;\n \tX = 0;\n+\tuint32_t mem[BPF_MEMWORDS] = {0};\n \t--pc;\n \tfor (;;) {\n \t\t++pc;\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42535368-vul",
+      "digest": "sha256:9d6185ba47d6734d0ccfb3fe06df9ab16bd57a1664e89902a3814cd5df9ac7f3"
+    },
+    "patched": {
+      "ref": "n132/arvo:42535368-fix",
+      "digest": "sha256:27c0d9a8c9660c52c17c7c385206c2f7ef5a43efcb6c83a63685acd7992928a3"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/libpcap/bpf_filter.c:188",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/libpcap/bpf_filter.c:188"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

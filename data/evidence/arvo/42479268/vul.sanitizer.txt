@@ -1,0 +1,76 @@
+======================= INFO =========================
+This binary is built for AFL-fuzz.
+To run the target function on individual input(s) execute this:
+  /out/patch_parse_fuzzer < INPUT_FILE
+or
+  /out/patch_parse_fuzzer INPUT_FILE1 [INPUT_FILE2 ... ]
+To fuzz with afl-fuzz execute this:
+  afl-fuzz [afl-flags] /out/patch_parse_fuzzer [-N]
+afl-fuzz will run N iterations before re-spawning the process (default: 1000)
+======================================================
+Reading 130 bytes from /tmp/poc
+=================================================================
+==7==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x60d0000000c2 at pc 0x0000004827b7 bp 0x7ffd5f3271c0 sp 0x7ffd5f326980
+READ of size 8 at 0x60d0000000c2 thread T0
+SCARINESS: 23 (8-byte-read-heap-buffer-overflow)
+    #0 0x4827b6 in strdup /src/llvm/projects/compiler-rt/lib/asan/asan_interceptors.cpp:450:5
+    #1 0x545f03 in stdalloc__strdup /src/libgit2/src/allocators/stdalloc.c:34:14
+    #2 0x4d6a23 in parse_hunk_body /src/libgit2/src/patch_parse.c:670:19
+    #3 0x4d3a23 in parse_patch_hunks /src/libgit2/src/patch_parse.c:887:13
+    #4 0x4cd63d in parse_patch_body /src/libgit2/src/patch_parse.c:905:10
+    #5 0x4cc01d in git_patch_parse /src/libgit2/src/patch_parse.c:1151:12
+    #6 0x4cded9 in git_patch_from_buffer /src/libgit2/src/patch_parse.c:1184:10
+    #7 0x4cacaf in LLVMFuzzerTestOneInput /src/libgit2/build/../fuzzers/patch_parse_fuzzer.c:33:3
+    #8 0x4c928e in ExecuteFilesOnyByOne /src/libfuzzer/afl/afl_driver.cpp:216:5
+    #9 0x4c928e in main /src/libfuzzer/afl/afl_driver.cpp:253:12
+    #10 0x7f324199482f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+    #11 0x41e708 in _start (/out/patch_parse_fuzzer+0x41e708)
+
+DEDUP_TOKEN: strdup--stdalloc__strdup--parse_hunk_body
+0x60d0000000c2 is located 0 bytes to the right of 130-byte region [0x60d000000040,0x60d0000000c2)
+allocated by thread T0 here:
+    #0 0x4c659d in operator new(unsigned long) /src/llvm/projects/compiler-rt/lib/asan/asan_new_delete.cpp:99:3
+    #1 0x4c9227 in __libcpp_allocate /usr/local/bin/../include/c++/v1/new:253:10
+    #2 0x4c9227 in allocate /usr/local/bin/../include/c++/v1/memory:1853:37
+    #3 0x4c9227 in allocate /usr/local/bin/../include/c++/v1/memory:1570:21
+    #4 0x4c9227 in __vallocate /usr/local/bin/../include/c++/v1/vector:994:37
+    #5 0x4c9227 in vector /usr/local/bin/../include/c++/v1/vector:1125:9
+    #6 0x4c9227 in ExecuteFilesOnyByOne /src/libfuzzer/afl/afl_driver.cpp:213:23
+    #7 0x4c9227 in main /src/libfuzzer/afl/afl_driver.cpp:253:12
+    #8 0x7f324199482f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+
+DEDUP_TOKEN: operator new(unsigned long)--__libcpp_allocate--allocate
+SUMMARY: AddressSanitizer: heap-buffer-overflow /src/llvm/projects/compiler-rt/lib/asan/asan_interceptors.cpp:450:5 in strdup
+Shadow bytes around the buggy address:
+  0x0c1a7fff7fc0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c1a7fff7fd0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c1a7fff7fe0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c1a7fff7ff0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c1a7fff8000: fa fa fa fa fa fa fa fa 00 00 00 00 00 00 00 00
+=>0x0c1a7fff8010: 00 00 00 00 00 00 00 00[02]fa fa fa fa fa fa fa
+  0x0c1a7fff8020: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c1a7fff8030: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c1a7fff8040: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c1a7fff8050: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c1a7fff8060: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+  Shadow gap:              cc
+==7==ABORTING

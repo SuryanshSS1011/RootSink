@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0432073014",
+  "chain": "CWE-456->CWE-457",
+  "project": "imagemagick",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "432073014",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "1ced145536456c8bb68cfefc7262a1ff53551f62",
+      "fix_commits": [
+        "1ced145536456c8bb68cfefc7262a1ff53551f62"
+      ],
+      "repo": "https://github.com/imagemagick/imagemagick"
+    },
+    "patch": "From 1ced145536456c8bb68cfefc7262a1ff53551f62 Mon Sep 17 00:00:00 2001\nFrom: Cristy <urban-warrior@imagemagick.org>\nDate: Tue, 15 Jul 2025 12:29:34 -0400\nSubject: [PATCH] check for EOF\n\n---\n coders/sf3.c | 47 ++++++++++++++++++++++++-----------------------\n 1 file changed, 24 insertions(+), 23 deletions(-)\n\ndiff --git a/coders/sf3.c b/coders/sf3.c\nindex df30aff..76f025a 100644\n--- a/coders/sf3.c\n+++ b/coders/sf3.c\n@@ -228,18 +228,9 @@ static Image *ReadSF3Image(const ImageInfo *image_info,ExceptionInfo *exception)\n   Image\n     *image;\n \n-  QuantumInfo\n-    *quantum_info;\n-\n-  QuantumType\n-    quantum_type;\n-\n   ssize_t\n-    count;\n+    count = 0;\n   \n-  size_t\n-    length;\n-\n   unsigned char\n     channels,\n     format;\n@@ -279,12 +270,23 @@ static Image *ReadSF3Image(const ImageInfo *image_info,ExceptionInfo *exception)\n     ThrowReaderException(CorruptImageError,\"NegativeOrZeroImageSize\");\n   channels=ReadBlobByte(image);\n   format=ReadBlobByte(image);\n-  quantum_info=(QuantumInfo *) NULL;\n   \n   for (unsigned int z=0; z<layers; ++z)\n     {\n+      QuantumInfo\n+        *quantum_info;\n+\n+      QuantumType\n+        quantum_type;\n+\n+      size_t\n+        length = 0;\n+\n+      ssize_t\n+        y;\n+\n       unsigned char\n-        *p;\n+        *pixels;\n \n       image->endian=LSBEndian;\n       image->compression=NoCompression;\n@@ -382,26 +384,25 @@ static Image *ReadSF3Image(const ImageInfo *image_info,ExceptionInfo *exception)\n         return(DestroyImageList(image));\n       }\n       length=image->columns*(format & 0xF)*(channels & 0xF);\n-      p=(unsigned char *) AcquireQuantumMemory(length, 1);\n-      if (p == (unsigned char *) NULL)\n+      pixels=GetQuantumPixels(quantum_info);\n+      for (y=0; y < (ssize_t) image->rows; ++y)\n         {\n-          quantum_info=DestroyQuantumInfo(quantum_info);\n-          ThrowReaderException(ResourceLimitError,\"MemoryAllocationFailed\");\n-        }\n-      *p='\\0';\n-      for (unsigned int y=0; y<image->rows; ++y)\n-        {\n-          count=ReadBlob(image,length,p);\n+          count=ReadBlob(image,length,pixels);\n           if (count != (ssize_t) length)\n             break;\n           (void) GetAuthenticPixels(image,0,y,image->columns,1,exception);\n           (void) ImportQuantumPixels(image,(CacheView *) NULL,\n-                                     quantum_info,quantum_type,p,exception);\n+                                    quantum_info,quantum_type,pixels,exception);\n           if (SyncAuthenticPixels(image,exception) == MagickFalse)\n             break;\n         }\n-      p=(unsigned char *) RelinquishMagickMemory(p);\n       quantum_info=DestroyQuantumInfo(quantum_info);\n+      if (y < (ssize_t) image->rows)\n+        {\n+          ThrowFileException(exception,CorruptImageError,\"UnexpectedEndOfFile\",\n+            image->filename);\n+          break;\n+        }\n       if (image_info->number_scenes != 0)\n         if (image->scene >= (image_info->scene+image_info->number_scenes-1))\n           break;\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:432073014-vul",
+      "digest": "sha256:516eaca2de564c7cb4d811e80f5ecf65c9380073e8d4d4d29e80a3e8173d7e32"
+    },
+    "patched": {
+      "ref": "n132/arvo:432073014-fix",
+      "digest": "sha256:4bc768daa92ab6084d4af4b232437f52b39f6dc59d06a2d8092b3df10cd56b07"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/libjxl/lib/jxl/enc_ans.h:56",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/libjxl/lib/jxl/enc_ans.h:56"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

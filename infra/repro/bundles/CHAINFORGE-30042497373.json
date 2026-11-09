@@ -1,0 +1,82 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-30042497373",
+  "chain": "CWE-1284->CWE-190->CWE-787",
+  "project": "mruby",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42497373",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "063b49ab8e6a10212c7f88e5b114b90fe59296f7",
+      "fix_commits": [
+        "063b49ab8e6a10212c7f88e5b114b90fe59296f7"
+      ],
+      "repo": "https://github.com/mruby/mruby"
+    },
+    "patch": "diff --git a/src/fmt_fp.c b/src/fmt_fp.c\nindex 807debe119..8a156b3d91 100644\n--- a/src/fmt_fp.c\n+++ b/src/fmt_fp.c\n@@ -180,13 +180,13 @@ mrb_format_float(mrb_float f, char *buf, size_t buf_size, char fmt, int prec, ch\n       dec = -1;\n       *s++ = first_dig;\n \n-      if (prec + e + 1 > buf_remaining) {\n-        prec = buf_remaining - e - 1;\n-      }\n-\n       if (org_fmt == 'g') {\n         prec += (e - 1);\n       }\n+      // truncate precision to prevent buffer overflow\n+      if (prec + 2 > buf_remaining) {\n+        prec = buf_remaining - 2;\n+      }\n       num_digits = prec;\n       if (num_digits || alt_form) {\n         *s++ = '.';\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42497373-vul",
+      "digest": "sha256:549c821a02f4113e2430417ceb0f4cce2df212d41c2f2fd54d43dcec61eba571"
+    },
+    "patched": {
+      "ref": "n132/arvo:42497373-fix",
+      "digest": "sha256:81a762805cdfb8b54e13b077d96f1ab83e83e048be912670178b7c6474302119"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/mruby/src/fmt_fp.c:200",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 190,
+      "role": "intermediate",
+      "witness": {
+        "method": "ubsan-rebuild",
+        "recipe": "SANITIZER=undefined compile && $ENTRYPOINT",
+        "ubsan_options": "print_stacktrace=1:halt_on_error=0:silence_unsigned_overflow=0:symbolize=1"
+      },
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/mruby/src/fmt_fp.c:200"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

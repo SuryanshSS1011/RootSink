@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042518471",
+  "chain": "CWE-456->CWE-457",
+  "project": "imagemagick",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42518471",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "af223b025da2ffb56a4e50160448e845f9b5e186",
+      "fix_commits": [
+        "af223b025da2ffb56a4e50160448e845f9b5e186"
+      ],
+      "repo": "https://github.com/imagemagick/imagemagick"
+    },
+    "patch": "From af223b025da2ffb56a4e50160448e845f9b5e186 Mon Sep 17 00:00:00 2001\nFrom: Cristy <urban-warrior@imagemagick.org>\nDate: Sun, 4 Feb 2018 15:02:15 -0500\nSubject: [PATCH] https://bugs.chromium.org/p/oss-fuzz/issues/detail?id=5365\n\n---\n MagickCore/property.c | 2 ++\n 1 file changed, 2 insertions(+)\n\ndiff --git a/MagickCore/property.c b/MagickCore/property.c\nindex 685eabe..b06d80b 100644\n--- a/MagickCore/property.c\n+++ b/MagickCore/property.c\n@@ -1742,6 +1742,8 @@ static MagickBooleanType GetXMPProperty(const Image *image,const char *property)\n   profile=GetImageProfile(image,\"xmp\");\n   if (profile == (StringInfo *) NULL)\n     return(MagickFalse);\n+  if (GetStringInfoLength(profile) < 17)\n+    return(MagickFalse);\n   if ((property == (const char *) NULL) || (*property == '\\0'))\n     return(MagickFalse);\n   xmp_profile=StringInfoToString(profile);\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42518471-vul",
+      "digest": "sha256:f433f2f75f8277a975bde9245998d1e2ebe5a812b7a599c86fd44c7665b8e7a7"
+    },
+    "patched": {
+      "ref": "n132/arvo:42518471-fix",
+      "digest": "sha256:2675e92deaee3b723a88c79091a0222190f2b2647399ab9021f69bb267289467"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/imagemagick/MagickCore/property.c:1750",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/imagemagick/MagickCore/property.c:1750"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

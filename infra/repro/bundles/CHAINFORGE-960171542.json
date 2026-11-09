@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-960171542",
+  "chain": "CWE-456->CWE-457",
+  "project": "kimageformats",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42474831",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://invent.kde.org/frameworks/kimageformats/-/commit/497b6b81bdf59afe1551b2ea38fcc45fe100057d",
+      "fix_commits": [
+        "497b6b81bdf59afe1551b2ea38fcc45fe100057d"
+      ],
+      "repo": "https://invent.kde.org/frameworks/kimageformats"
+    },
+    "patch": "diff --git a/src/imageformats/xcf.cpp b/src/imageformats/xcf.cpp\nindex fe16a838ab2d6bee1c2d10bbff355861be0ffa6a..5bf607716752387b27b5155c2a40ac67ccfc973c 100644\n--- a/src/imageformats/xcf.cpp\n+++ b/src/imageformats/xcf.cpp\n@@ -3179,7 +3179,7 @@ void XCFImageFormat::dissolveRGBPixels(QImage &image, int x, int y)\n         }\n \n         for (int k = 0; k < image.width(); k++) {\n-            int rand_val = rand_r(&next) & 0xff;\n+            int rand_val = RandomTable::rand_r(&next) & 0xff;\n             QRgb pixel = image.pixel(k, l);\n \n             if (rand_val > qAlpha(pixel)) {\n@@ -3211,7 +3211,7 @@ void XCFImageFormat::dissolveAlphaPixels(QImage &image, int x, int y)\n         }\n \n         for (int k = 0; k < image.width(); k++) {\n-            int rand_val = rand_r(&next) & 0xff;\n+            int rand_val = RandomTable::rand_r(&next) & 0xff;\n             uchar alpha = image.pixelIndex(k, l);\n \n             if (rand_val > alpha) {\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42474831-vul",
+      "digest": "sha256:d5b8a52163e11c43242a0f445e2b964ea860bde932b4498afef516bcad2ae1f2"
+    },
+    "patched": {
+      "ref": "n132/arvo:42474831-fix",
+      "digest": "sha256:d780b6cacd0708bed489764a37796f10269b641e59459ea60a0198f88c67d662"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/qtbase/src/gui/image/qimage.cpp:2376",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/qtbase/src/gui/image/qimage.cpp:2376"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

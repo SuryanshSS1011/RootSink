@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042518437",
+  "chain": "CWE-1285->CWE-125",
+  "project": "ghostpdl",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42518437",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "c745108a1b72b7b14899e048ee76b99ee49d9d80",
+      "fix_commits": [
+        "c745108a1b72b7b14899e048ee76b99ee49d9d80"
+      ],
+      "repo": "https://cgit.ghostscript.com/ghostpdl.git"
+    },
+    "patch": "From c745108a1b72b7b14899e048ee76b99ee49d9d80 Mon Sep 17 00:00:00 2001\nFrom: Ken Sharp <ken.sharp@artifex.com>\nDate: Tue, 22 Nov 2022 14:11:49 +0000\nSubject: [PATCH] GhostPDF - cgeck base space for Indexed colour spaces\n\nOSS-fuzz 53619\n\nThe fuzzed file has a /Indexed space with a base space which is an array\n[/Pattern]. Pattern spaces (and Indexed spaces) are not valid as the\nbase space for an Indexed space.\n\nCheck the base space and exit with an error if it is not a valid space.\n---\n pdf/pdf_colour.c | 8 ++++++--\n 1 file changed, 6 insertions(+), 2 deletions(-)\n\ndiff --git a/pdf/pdf_colour.c b/pdf/pdf_colour.c\nindex ebd95e1..fd873f9 100644\n--- a/pdf/pdf_colour.c\n+++ b/pdf/pdf_colour.c\n@@ -2092,9 +2092,13 @@ pdfi_create_indexed(pdf_context *ctx, pdf_array *color_array, int index,\n     if (code < 0)\n         goto exit;\n \n-    (void)pcs_base->type->install_cspace(pcs_base, ctx->pgs);\n-\n     base_type = gs_color_space_get_index(pcs_base);\n+    if (base_type == gs_color_space_index_Pattern || base_type == gs_color_space_index_Indexed) {\n+        code = gs_note_error(gs_error_typecheck);\n+        goto exit;\n+    }\n+\n+    (void)pcs_base->type->install_cspace(pcs_base, ctx->pgs);\n \n     code = pdfi_array_get(ctx, color_array, index + 3, &lookup);\n     if (code < 0)\n-- \n2.55.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42518437-vul",
+      "digest": "sha256:bfea9dd9d51c32c01777c0009d6524dc9c5740d882d82e0fe54e55e9a3d514bf"
+    },
+    "patched": {
+      "ref": "n132/arvo:42518437-fix",
+      "digest": "sha256:12acaf6d4cf532f028894ed70baf5ed684e47cd699fcfeb0d74ea810c3414567"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/ghostpdl/./base/stream.c:604",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/ghostpdl/./base/stream.c:604"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

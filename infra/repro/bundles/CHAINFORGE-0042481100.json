@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042481100",
+  "chain": "CWE-20->CWE-125",
+  "project": "wireshark",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42481100",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "71b59b18e4bb61d0e6da8bb2b26c87750570ae40",
+      "fix_commits": [
+        "71b59b18e4bb61d0e6da8bb2b26c87750570ae40"
+      ],
+      "repo": "https://github.com/wireshark/wireshark"
+    },
+    "patch": "diff --git a/epan/dissectors/packet-wassp.c b/epan/dissectors/packet-wassp.c\nindex 4a33d5ba5fc..47d5e6a6ee8 100644\n--- a/epan/dissectors/packet-wassp.c\n+++ b/epan/dissectors/packet-wassp.c\n@@ -4370,13 +4370,13 @@ static void wassp_defragment_init(void)\n \treassembly_table_init(&wassp_reassembled_table, &addresses_reassembly_table_functions);\n }\n \n-static const char* wassp_match_strval(WASSP_SUBTLV_DECODER_INFO_t *in_ptr, int in_type)\n+static const char* wassp_match_strval(const WASSP_SUBTLV_DECODER_INFO_t *in_ptr, int in_type)\n {\n \tif (in_ptr == NULL)\n \t{\n \t\treturn NULL;\n \t}\n-\tif (in_ptr->max_entry < in_type)\n+\tif (in_ptr->max_entry <= in_type)\n \t{\n \t\treturn NULL;\n \t}\n@@ -4742,11 +4742,11 @@ int dissect_wassp_sub_tlv(proto_tree *wassp_tree, tvbuff_t *tvb, packet_info *pi\n \tproto_item *tlvi;\n \tproto_item *ti;\n \tproto_tree *tmp_tree;\n-\tchar *label;\n+\tconst char *label;\n \tguint32 value;\n \tguint16 tlv_type = EID_PARSE_ERROR;\n \tguint16 length = 0, org_offset = offset;\n-\tWASSP_SUBTLV_DECODER_INFO_t *tmp_decr = NULL;\n+\tconst WASSP_SUBTLV_DECODER_INFO_t *tmp_decr = NULL;\n \tguint32 i, tableNo;\n \tint suboffset;\n \n@@ -4755,7 +4755,7 @@ int dissect_wassp_sub_tlv(proto_tree *wassp_tree, tvbuff_t *tvb, packet_info *pi\n \t\treturn offset;\n \t}\n \n-\ttmp_decr = (WASSP_SUBTLV_DECODER_INFO_t*)&wassp_decr_info[which_tab];\n+\ttmp_decr = &wassp_decr_info[which_tab];\n \n \tif (tvb_reported_length_remaining(tvb, offset) > 0)\n \t{\n@@ -4767,7 +4767,7 @@ int dissect_wassp_sub_tlv(proto_tree *wassp_tree, tvbuff_t *tvb, packet_info *pi\n \t\t{\n \t\t\ttlv_type = tvb_get_ntohs(tvb, offset + TLV_TYPE);\n \t\t\tlength = tvb_get_ntohs(tvb, offset + TLV_LENGTH);\n-\t\t\tif (tlv_type > WASSP_SUBTLV_GET_MAXENTRY(tmp_decr))\n+\t\t\tif (tlv_type >= WASSP_SUBTLV_GET_MAXENTRY(tmp_decr))\n \t\t\t{\n \t\t\t\tproto_tree_add_uint_format_value(tmp_tree, hf_wassp_tlv_unknown, tvb, offset, 4, tlv_type, \"Unknow Wassp TLV (%d)\", tlv_type);\n \t\t\t\tproto_tree_add_item(tmp_tree, hf_wassp_tlv_length, tvb, offset + TLV_LENGTH, 2, ENC_BIG_ENDIAN);\n@@ -4776,7 +4776,7 @@ int dissect_wassp_sub_tlv(proto_tree *wassp_tree, tvbuff_t *tvb, packet_info *pi\n \t\t\t\tcontinue;\n \t\t\t}\n \n-\t\t\tlabel = (char*)wassp_match_strval(tmp_decr, tlv_type);\n+\t\t\tlabel = wassp_match_strval(tmp_decr, tlv_type);\n \t\t\tlabel = (label == NULL) ? \"Unknown Type\" : label;\n \n \t\t\tif (length > value)\n@@ -4944,7 +4944,7 @@ int dissect_wassp_tlv(proto_tree *wassp_tree, tvbuff_t *tvb, packet_info *pinfo,\n \tguint32 value;\n \tint suboffset;\n \twassp_ru_msg_t ru_msg_type = rumsg_type;\n-\tchar *label;\n+\tconst char *label;\n \n \n \n@@ -4953,7 +4953,7 @@ int dissect_wassp_tlv(proto_tree *wassp_tree, tvbuff_t *tvb, packet_info *pinfo,\n \t{\n \t\ttlv_type = tvb_get_ntohs(tvb, offset + TLV_TYPE);\n \t\tlength = tvb_get_ntohs(tvb, offset + TLV_LENGTH);\n-\t\tlabel = (char*)try_val_to_str(tlv_type, wassp_tlv_types);\n+\t\tlabel = try_val_to_str(tlv_type, wassp_tlv_types);\n \t\tlabel = (label == NULL) ? \"Unknown Type\" : label;\n \n \t\tif (length > value)\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42481100-vul",
+      "digest": "sha256:4598826ff2a5aba5062fd53925fbd2115fd8d4f382f939fbc2727bc1fc8aba66"
+    },
+    "patched": {
+      "ref": "n132/arvo:42481100-fix",
+      "digest": "sha256:f7c024f0b3beec111ff97e58436acba832c8ad171c90f4c4738c140c41efd7a2"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "global-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/wireshark/epan/dissectors/packet-wassp.c:4384",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "global-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/wireshark/epan/dissectors/packet-wassp.c:4384"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

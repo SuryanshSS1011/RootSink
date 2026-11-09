@@ -1,0 +1,102 @@
+[    0.000000][    T0] Linux version 6.7.0-rc7-gfbafc3e621c3 (sss6371@e5-cse-135-19.cse.psu.edu) (x86_64-linux-gcc (GCC) 13.2.0, GNU ld (GNU Binutils) 2.41) #1 SMP PREEMPT_DYNAMIC Thu Oct  8 07:13:09 EDT 2026
+[init] environment up, running reproducer
+[   15.620184][ T4539] ==================================================================
+[   15.621014][ T4539] BUG: KASAN: slab-out-of-bounds in dns_resolver_preparse+0xa89/0xb70
+[   15.621858][ T4539] Read of size 1 at addr ffff88801b50584c by task repro/4539
+[   15.622748][ T4539] 
+[   15.623045][ T4539] CPU: 3 PID: 4539 Comm: repro Not tainted 6.7.0-rc7-gfbafc3e621c3 #1
+[   15.624014][ T4539] Hardware name: Red Hat KVM, BIOS 1.16.0-4.module+el8.9.0+19570+14a90618 04/01/2014
+[   15.624988][ T4539] Call Trace:
+[   15.625314][ T4539]  <TASK>
+[   15.625629][ T4539]  dump_stack_lvl+0x5c/0xb0
+[   15.626073][ T4539]  print_report+0xc4/0x630
+[   15.626532][ T4539]  kasan_report+0xd8/0x110
+[   15.626969][ T4539]  ? dns_resolver_preparse+0xa89/0xb70
+[   15.627495][ T4539]  ? dns_resolver_preparse+0xa89/0xb70
+[   15.628103][ T4539]  dns_resolver_preparse+0xa89/0xb70
+[   15.628759][ T4539]  ? lock_sync+0x190/0x190
+[   15.629243][ T4539]  ? rwsem_read_trylock+0x12a/0x250
+[   15.629740][ T4539]  ? dns_resolver_free_preparse+0x40/0x40
+[   15.630294][ T4539]  ? preempt_count_sub+0x160/0x160
+[   15.630779][ T4539]  ? down_read+0xc9/0x330
+[   15.631218][ T4539]  ? rwsem_down_read_slowpath+0xb20/0xb20
+[   15.631760][ T4539]  ? reacquire_held_locks+0x4c0/0x4c0
+[   15.632288][ T4539]  __key_create_or_update+0x3e0/0xc30
+[   15.632969][ T4539]  ? key_alloc+0x1170/0x1170
+[   15.633514][ T4539]  ? lookup_user_key+0x240/0xea0
+[   15.633990][ T4539]  ? join_session_keyring+0x2b0/0x2b0
+[   15.634568][ T4539]  ? __might_fault+0xbd/0x170
+[   15.635041][ T4539]  key_create_or_update+0xf/0x20
+[   15.635532][ T4539]  __do_sys_add_key+0x1be/0x310
+[   15.636001][ T4539]  ? get_instantiation_keyring+0x170/0x170
+[   15.636551][ T4539]  ? syscall_enter_from_user_mode+0x7f/0x120
+[   15.637246][ T4539]  do_syscall_64+0x41/0x110
+[   15.637802][ T4539]  entry_SYSCALL_64_after_hwframe+0x63/0x6b
+[   15.638392][ T4539] RIP: 0033:0x7f439fe3949d
+[   15.638819][ T4539] Code: ff c3 66 2e 0f 1f 84 00 00 00 00 00 90 f3 0f 1e fa 48 89 f8 48 89 f7 48 89 d6 48 89 ca 4d 89 c2 4d 89 c8 4c 8b 4c 24 08 0f 05 <48> 3d 01 f0 ff ff 73 01 c3 48 8b 0d bb 69 39 00 f7 d8 64 89 01 48
+[   15.640781][ T4539] RSP: 002b:00007ffcab75c748 EFLAGS: 00000217 ORIG_RAX: 00000000000000f8
+[   15.641732][ T4539] RAX: ffffffffffffffda RBX: 0000000000000000 RCX: 00007f439fe3949d
+[   15.642656][ T4539] RDX: 0000000020000080 RSI: 0000000000000000 RDI: 00000000200003c0
+[   15.643546][ T4539] RBP: 0000000000400710 R08: 0000000013b2e3f4 R09: 0000000000000000
+[   15.644307][ T4539] R10: 0000000000000004 R11: 0000000000000217 R12: 00000000004004c0
+[   15.645068][ T4539] R13: 00007ffcab75c820 R14: 0000000000000000 R15: 0000000000000000
+[   15.645900][ T4539]  </TASK>
+[   15.646278][ T4539] 
+[   15.646574][ T4539] Allocated by task 4539:
+[   15.647015][ T4539]  kasan_save_stack+0x33/0x50
+[   15.647477][ T4539]  kasan_set_track+0x25/0x30
+[   15.647922][ T4539]  __kasan_kmalloc+0xa2/0xb0
+[   15.648355][ T4539]  __kmalloc_node+0x60/0xd0
+[   15.648788][ T4539]  __do_sys_add_key+0x149/0x310
+[   15.649258][ T4539]  do_syscall_64+0x41/0x110
+[   15.649695][ T4539]  entry_SYSCALL_64_after_hwframe+0x63/0x6b
+[   15.650338][ T4539] 
+[   15.650635][ T4539] The buggy address belongs to the object at ffff88801b505848
+[   15.650635][ T4539]  which belongs to the cache kmalloc-8 of size 8
+[   15.652039][ T4539] The buggy address is located 0 bytes to the right of
+[   15.652039][ T4539]  allocated 4-byte region [ffff88801b505848, ffff88801b50584c)
+[   15.653427][ T4539] 
+[   15.653651][ T4539] The buggy address belongs to the physical page:
+[   15.654261][ T4539] page:ffffea00006d4140 refcount:1 mapcount:0 mapping:0000000000000000 index:0x0 pfn:0x1b505
+[   15.655337][ T4539] flags: 0xfff00000000800(slab|node=0|zone=1|lastcpupid=0x7ff)
+[   15.656108][ T4539] page_type: 0xffffffff()
+[   15.656524][ T4539] raw: 00fff00000000800 ffff888012042280 ffffea00041772c0 0000000000000002
+[   15.657475][ T4539] raw: 0000000000000000 0000000080660066 00000001ffffffff 0000000000000000
+[   15.658386][ T4539] page dumped because: kasan: bad access detected
+[   15.659015][ T4539] page_owner tracks the page as allocated
+[   15.659549][ T4539] page last allocated via order 0, migratetype Unmovable, gfp_mask 0x12c00(GFP_NOIO|__GFP_NOWARN|__GFP_NORETRY), pid 1, tgid 1 (swapper/0), ts 10477425739, free_ts 10415403423
+[   15.661196][ T4539]  post_alloc_hook+0x2e9/0x350
+[   15.661657][ T4539]  get_page_from_freelist+0x1391/0x39a0
+[   15.662193][ T4539]  __alloc_pages+0x22d/0x23d0
+[   15.662642][ T4539]  alloc_pages_mpol+0x175/0x4c0
+[   15.663099][ T4539]  new_slab+0x292/0x3c0
+[   15.663505][ T4539]  ___slab_alloc+0x992/0x16b0
+[   15.663947][ T4539]  __slab_alloc.isra.0+0x56/0xa0
+[   15.664427][ T4539]  __kmem_cache_alloc_node+0x131/0x310
+[   15.664937][ T4539]  kmalloc_trace+0x25/0x60
+[   15.665364][ T4539]  usb_control_msg+0xb2/0x470
+[   15.665831][ T4539]  hub_hub_status+0xcb/0x300
+[   15.666261][ T4539]  hub_probe+0x15bc/0x2d20
+[   15.666695][ T4539]  usb_probe_interface+0x279/0x820
+[   15.667181][ T4539]  really_probe+0x1bf/0xb30
+[   15.667628][ T4539]  __driver_probe_device+0x187/0x450
+[   15.668122][ T4539]  driver_probe_device+0x45/0x110
+[   15.668625][ T4539] page last free stack trace:
+[   15.669069][ T4539]  free_unref_page_prepare+0x50f/0xac0
+[   15.669593][ T4539]  free_unref_page+0x33/0x3f0
+[   15.670037][ T4539]  vfree+0x120/0x6e0
+[   15.670412][ T4539]  delayed_vfree_work+0x4a/0x70
+[   15.670877][ T4539]  process_one_work+0x78b/0x12b0
+[   15.671354][ T4539]  worker_thread+0x70e/0x12e0
+[   15.671809][ T4539]  kthread+0x294/0x360
+[   15.672192][ T4539]  ret_from_fork+0x2c/0x70
+[   15.672622][ T4539]  ret_from_fork_asm+0x11/0x20
+[   15.673082][ T4539] 
+[   15.673305][ T4539] Memory state around the buggy address:
+[   15.673841][ T4539]  ffff88801b505700: fc 00 fc fc fc fc 06 fc fc fc fc 05 fc fc fc fc
+[   15.674596][ T4539]  ffff88801b505780: fb fc fc fc fc 00 fc fc fc fc fb fc fc fc fc fb
+[   15.675352][ T4539] >ffff88801b505800: fc fc fc fc fb fc fc fc fc 04 fc fc fc fc 05 fc
+[   15.676153][ T4539]                                               ^
+[   15.676892][ T4539]  ffff88801b505880: fc fc fc fa fc fc fc fc 05 fc fc fc fc 05 fc fc
+[   15.677646][ T4539]  ffff88801b505900: fc fc 00 fc fc fc fc 05 fc fc fc fc 07 fc fc fc
+[   15.678408][ T4539] ==================================================================

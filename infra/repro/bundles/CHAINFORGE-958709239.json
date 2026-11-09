@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-958709239",
+  "chain": "CWE-129->CWE-787",
+  "project": "mruby",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42517443",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/mruby/mruby/commit/8a67a26104a70b666c5e209a5fb3b0733cfbb3d8",
+      "fix_commits": [
+        "8a67a26104a70b666c5e209a5fb3b0733cfbb3d8"
+      ],
+      "repo": "https://github.com/mruby/mruby"
+    },
+    "patch": "diff --git a/mrbgems/mruby-pack/src/pack.c b/mrbgems/mruby-pack/src/pack.c\nindex eb00c41b23..de667362fb 100644\n--- a/mrbgems/mruby-pack/src/pack.c\n+++ b/mrbgems/mruby-pack/src/pack.c\n@@ -704,9 +704,18 @@ pack_str(mrb_state *mrb, mrb_value src, mrb_value dst, mrb_int didx, int count,\n   return (int)(dptr - dptr0);\n }\n \n+#define CHECK_UNPACK_LEN(mrb, slen, ary) do {\\\n+  if ((slen) <= 0) {\\\n+    mrb_ary_push(mrb, ary, mrb_str_new(mrb, 0, 0));\\\n+    return 0;\\\n+  }\\\n+} while (0)\n+\n static int\n unpack_str(mrb_state *mrb, const void *src, int slen, mrb_value ary, int count, unsigned int flags)\n {\n+  CHECK_UNPACK_LEN(mrb, slen, ary);\n+\n   mrb_value dst;\n   const char *cp, *sptr;\n   int copylen;\n@@ -788,6 +797,8 @@ pack_hex(mrb_state *mrb, mrb_value src, mrb_value dst, mrb_int didx, int count,\n static int\n unpack_hex(mrb_state *mrb, const void *src, int slen, mrb_value ary, int count, unsigned int flags)\n {\n+  CHECK_UNPACK_LEN(mrb, slen, ary);\n+\n   mrb_value dst;\n   int a, ashift, b, bshift;\n   const char *sptr, *sptr0;\n@@ -901,6 +912,8 @@ pack_base64(mrb_state *mrb, mrb_value src, mrb_value dst, mrb_int didx, int coun\n static int\n unpack_base64(mrb_state *mrb, const void *src, int slen, mrb_value ary)\n {\n+  CHECK_UNPACK_LEN(mrb, slen, ary);\n+\n   mrb_value dst;\n   int dlen;\n   unsigned long l;\n@@ -1018,6 +1031,8 @@ pack_qenc(mrb_state *mrb, mrb_value src, mrb_value dst, mrb_int didx, int count)\n static int\n unpack_qenc(mrb_state *mrb, const void *src, int slen, mrb_value ary)\n {\n+  CHECK_UNPACK_LEN(mrb, slen, ary);\n+\n   mrb_value buf = mrb_str_new(mrb, 0, slen);\n   const char *s = (const char*)src, *ss = s;\n   const char *send = s + slen;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42517443-vul",
+      "digest": "sha256:49eeb8416a8e8f42fc2b348c1a35b7293b21c377725c7f756bb1907d8f08cd45"
+    },
+    "patched": {
+      "ref": "n132/arvo:42517443-fix",
+      "digest": "sha256:a3841576a50f21bf6f97bcabc756fa82b033c971f332c40fd3989a82e71c0902"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "crash_site": "/src/mruby/src/string.c:54",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 129,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "site": "/src/mruby/src/string.c:54"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

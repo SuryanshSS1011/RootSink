@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042497737",
+  "chain": "CWE-1285->CWE-125",
+  "project": "Simd",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42497737",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "f2af786d815e9c3bd5e257dff8cb1c252a7f5cd3",
+      "fix_commits": [
+        "f2af786d815e9c3bd5e257dff8cb1c252a7f5cd3"
+      ],
+      "repo": "https://github.com/ermig1979/Simd"
+    },
+    "patch": "diff --git a/docs/2025.html b/docs/2025.html\nindex de2a5344d5..59179cf763 100644\n--- a/docs/2025.html\n+++ b/docs/2025.html\n@@ -63,6 +63,7 @@ <h5>Bug fixing</h5>\n  <li>Error in AMX-BF16 optimizations of function DepthwiseConvolutionLargePad.</li>\n  <li>Error in Base implementation of class SynetMergedConvolution16bCdc.</li>\n  <li>Error in Base implementation of class SynetMergedConvolution16bCd.</li>\n+ <li>Error in class InputMemoryStream.</li>\n </ul>\n <h5>Removing</h5>\n <ul>\ndiff --git a/docs/index.html b/docs/index.html\nindex 83964a5db3..19194e3572 100644\n--- a/docs/index.html\n+++ b/docs/index.html\n@@ -75,6 +75,7 @@ <h3>Contributors</h3>\n   <p> 2024-2024 <a href=\"http://github.com/CC493\">Sergey Chezhin</a>.</p>\r\n   <p> 2024-2024 <a href=\"http://github.com/TareHimself\">Tare</a>.</p>\r\n   <p> 2024-2024 <a href=\"http://github.com/bmharper\">Ben Harper</a>.</p>\r\n+  <p> 2024-2024 <a href=\"http://github.com/T8902\">Ties Dirksen</a>.</p>\r\n  </td>\r\n </tr> </table>\r\n \r\ndiff --git a/src/Simd/SimdMemoryStream.h b/src/Simd/SimdMemoryStream.h\nindex e30232af5f..1acd7bafd3 100644\n--- a/src/Simd/SimdMemoryStream.h\n+++ b/src/Simd/SimdMemoryStream.h\n@@ -2,7 +2,8 @@\n * Simd Library (http://ermig1979.github.io/Simd).\r\n *\r\n * Copyright (c) 2011-2023 Yermalayeu Ihar,\r\n-*               2022-2022 Fabien Spindler.\r\n+*               2022-2022 Fabien Spindler,\r\n+*               2024-2024 Ties Dirksen.\r\n *\r\n * Permission is hereby granted, free of charge, to any person obtaining a copy\r\n * of this software and associated documentation files (the \"Software\"), to deal\r\n@@ -196,7 +197,7 @@ namespace Simd\n             if (!SkipGap())\r\n                 return false;\r\n             value = 0;\r\n-            while (!IsGap(_data[_pos]) && _pos < _size)\r\n+            while (_pos < _size && !IsGap(_data[_pos]))\r\n             {\r\n                 if (_data[_pos] >= '0' && _data[_pos] <= '9')\r\n                     value = value * 10 + Unsigned(_data[_pos] - '0');\r\n@@ -219,21 +220,21 @@ namespace Simd\n \r\n         SIMD_INLINE bool SkipValue(uint8_t value)\r\n         {\r\n-            while (_data[_pos] == value && _pos < _size)\r\n+            while (_pos < _size && _data[_pos] == value)\r\n                 _pos++;\r\n             return _pos < _size;\r\n         }\r\n \r\n         SIMD_INLINE bool SkipNotGap()\r\n         {\r\n-            while (!IsGap(_data[_pos]) && _pos < _size)\r\n+            while (_pos < _size && !IsGap(_data[_pos]))\r\n                 _pos++;\r\n             return _pos < _size;\r\n         }        \r\n         \r\n         SIMD_INLINE bool SkipGap()\r\n         {\r\n-            while (IsGap(_data[_pos]) && _pos < _size)\r\n+            while (_pos < _size && IsGap(_data[_pos]))\r\n                 _pos++;\r\n             return _pos < _size;\r\n         }\r\n@@ -278,7 +279,7 @@ namespace Simd\n         SIMD_INLINE void FillBits()\r\n         {\r\n             static const size_t canReadByte = (sizeof(_bitBuffer) - 1) * 8;\r\n-            while (_bitCount <= canReadByte && _pos < _size)\r\n+            while (_pos < _size && _bitCount <= canReadByte)\r\n             {\r\n                 _bitBuffer |= (size_t)_data[_pos++] << _bitCount;\r\n                 _bitCount += 8;\r\ndiff --git a/src/Test/TestSynetMergedConvolution16b.cpp b/src/Test/TestSynetMergedConvolution16b.cpp\nindex dd3e352481..2ef6a4a73b 100644\n--- a/src/Test/TestSynetMergedConvolution16b.cpp\n+++ b/src/Test/TestSynetMergedConvolution16b.cpp\n@@ -282,11 +282,10 @@ namespace Test\n         //result = result && SynetMergedConvolution16bForwardAutoTest(eps, Param(Shp(2, 512, 127, 127), Cnv(a0, 1, 1, 1024), Cnv(a1, 3, 1), Cnv(a2, 1, 1, 512), t, f32, f32), f1, f2);\r\n #endif\r\n #if 1\r\n-        result = result && SynetMergedConvolution16bForwardAutoTest(eps, Param(Shp(1, 512, 8, 6), Cnv(aSw, 1, 1, 512), Cnv(aId, 3, 1), b16, f32), f1, f2);\r\n+        result = result && SynetMergedConvolution16bForwardAutoTest(eps, Param(Shp(1, 512, 8, 6), Cnv(aSw, 1, 1, 512), Cnv(aSw, 3, 1), b16, f32), f1, f2);\r\n         result = result && SynetMergedConvolution16bForwardAutoTest(eps, Param(Shp(1, 512, 6, 8), Cnv(aSw, 1, 1, 512), Cnv(aSw, 3, 1), b16, f32), f1, f2);\r\n-        result = result && SynetMergedConvolution16bForwardAutoTest(eps, Param(Shp(1, 512, 12, 12), Cnv(aSw, 1, 1, 512), Cnv(aSw, 3, 1), b16, b16), f1, f2);\r\n-        result = result && SynetMergedConvolution16bForwardAutoTest(eps, Param(Shp(1, 128, 24, 24), Cnv(aSw, 1, 1, 128), Cnv(aSw, 3, 1), b16, b16), f1, f2);\r\n-        result = result && SynetMergedConvolution16bForwardAutoTest(eps, Param(Shp(1, 64, 48, 48), Cnv(aSw, 1, 1, 64), Cnv(aSw, 3, 1), b16, b16), f1, f2);\r\n+        result = result && SynetMergedConvolution16bForwardAutoTest(eps, Param(Shp(1, 512, 12, 4), Cnv(aSw, 1, 1, 512), Cnv(aSw, 3, 1), b16, f32), f1, f2);\r\n+        result = result && SynetMergedConvolution16bForwardAutoTest(eps, Param(Shp(1, 512, 4, 12), Cnv(aSw, 1, 1, 512), Cnv(aSw, 3, 1), b16, b16), f1, f2);\r\n #endif\r\n #else\r\n         {\r\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42497737-vul",
+      "digest": "sha256:a83937515a7685de56681d9bec13c0baab30a9b6e63f6ce84db3b10869cb28c6"
+    },
+    "patched": {
+      "ref": "n132/arvo:42497737-fix",
+      "digest": "sha256:7f595f2d01252cec081ad2d0e707551b3895ead47597ef1e37db383d78ca3c3c"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/Simd/prj/cmake/../../src/Simd/SimdMemoryStream.h:210",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/Simd/prj/cmake/../../src/Simd/SimdMemoryStream.h:210"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

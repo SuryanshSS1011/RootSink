@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0384549094",
+  "chain": "CWE-416->CWE-125",
+  "project": "clamav",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "384549094",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "f963dc2d9e2a3847df7502b42b8f30da08323708",
+      "fix_commits": [
+        "f963dc2d9e2a3847df7502b42b8f30da08323708"
+      ],
+      "repo": "https://github.com/Cisco-Talos/clamav"
+    },
+    "patch": "From f963dc2d9e2a3847df7502b42b8f30da08323708 Mon Sep 17 00:00:00 2001\nFrom: \"Val S.\" <micasnyd@cisco.com>\nDate: Mon, 30 Jun 2025 10:47:20 -0400\nSubject: [PATCH] Fix lzma-sdk xz bug (#1521)\n\nA use-after-free read is possible in the Xz decoder cleanup.\n\nThe fix is to set a pointer to NULL so it doesn't try to\ndereference it and free a second time.\n\nFixes https://issues.oss-fuzz.com/issues/384549094\n\nThis fix is also present in lzma-sdk version 18.01.\nRef: https://github.com/welovegit/LZMA-SDK/blame/main/C/XzDec.c#L508\n---\n libclamav/7z/XzDec.c | 4 +++-\n 1 file changed, 3 insertions(+), 1 deletion(-)\n\ndiff --git a/libclamav/7z/XzDec.c b/libclamav/7z/XzDec.c\nindex 00a2870..7e40d20 100644\n--- a/libclamav/7z/XzDec.c\n+++ b/libclamav/7z/XzDec.c\n@@ -343,8 +343,10 @@ void MixCoder_Free(CMixCoder *p)\n   for (i = 0; i < p->numCoders; i++)\n   {\n     IStateCoder *sc = &p->coders[i];\n-    if (p->alloc && sc->p)\n+    if (p->alloc && sc->p) {\n       sc->Free(sc->p, p->alloc);\n+      sc->p = NULL;\n+    }\n   }\n   p->numCoders = 0;\n   if (p->buf)\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:384549094-vul",
+      "digest": "sha256:94aeb164bf429ce1038c326c74f41cb4271e7b550a767af0bf0e9f764090c1c7"
+    },
+    "patched": {
+      "ref": "n132/arvo:384549094-fix",
+      "digest": "sha256:93981211c09c3c40522e469e84093a62225f2e93540abff03ca782aeb35e849e"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/clamav/libclamav/7z/LzmaDec.c:884",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/clamav/libclamav/7z/LzmaDec.c:884"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042510993",
+  "chain": "CWE-1284->CWE-125",
+  "project": "libredwg",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42510993",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "4e3f073be2453148af5f4da4d5d22ce9e6c2f7a5",
+      "fix_commits": [
+        "4e3f073be2453148af5f4da4d5d22ce9e6c2f7a5"
+      ],
+      "repo": "https://github.com/LibreDWG/libredwg"
+    },
+    "patch": "diff --git a/src/in_json.c b/src/in_json.c\nindex 420fa173d8..b493442f5c 100644\n--- a/src/in_json.c\n+++ b/src/in_json.c\n@@ -1006,6 +1006,8 @@ json_HEADER (Bit_Chain *restrict dat, Dwg_Data *restrict dwg,\n         {\n           double num = json_float (dat, tokens);\n           LOG_TRACE (\"%s: \" FORMAT_RD \" [%s]\\n\", key, num, f->type)\n+          if (f->size > sizeof(num))\n+            return DWG_ERR_INVALIDTYPE;\n           dwg_dynapi_header_set_value (dwg, key, &num, 0);\n         }\n       else if (t->type == JSMN_PRIMITIVE\n@@ -1018,6 +1020,8 @@ json_HEADER (Bit_Chain *restrict dat, Dwg_Data *restrict dwg,\n         {\n           long num = json_long (dat, tokens);\n           LOG_TRACE (\"%s: %ld [%s]\\n\", key, num, f->type)\n+          if (f->size > sizeof(num))\n+            return DWG_ERR_INVALIDTYPE;\n           dwg_dynapi_header_set_value (dwg, key, &num, 0);\n         }\n       else if (t->type == JSMN_STRING\n@@ -1035,6 +1039,8 @@ json_HEADER (Bit_Chain *restrict dat, Dwg_Data *restrict dwg,\n         {\n           BITCODE_3DPOINT pt;\n           json_3DPOINT (dat, tokens, name, key, f->type, &pt);\n+          if (f->size > sizeof(pt))\n+            return DWG_ERR_INVALIDTYPE;\n           dwg_dynapi_header_set_value (dwg, key, &pt, 1);\n         }\n       else if (t->type == JSMN_ARRAY\n@@ -1044,18 +1050,24 @@ json_HEADER (Bit_Chain *restrict dat, Dwg_Data *restrict dwg,\n         {\n           BITCODE_2DPOINT pt;\n           json_2DPOINT (dat, tokens, name, key, f->type, &pt);\n+          if (f->size > sizeof(pt))\n+            return DWG_ERR_INVALIDTYPE;\n           dwg_dynapi_header_set_value (dwg, key, &pt, 1);\n         }\n       else if (strEQc (f->type, \"TIMEBLL\") || strEQc (f->type, \"TIMERLL\"))\n         {\n           static BITCODE_TIMEBLL date = { 0, 0, 0 };\n           json_TIMEBLL (dat, tokens, key, &date);\n+          if (f->size > sizeof(date))\n+            return DWG_ERR_INVALIDTYPE;\n           dwg_dynapi_header_set_value (dwg, key, &date, 0);\n         }\n       else if (strEQc (f->type, \"CMC\"))\n         {\n           BITCODE_CMC color = { 0, 0, 0 };\n           json_CMC (dat, dwg, tokens, name, key, &color);\n+          if (f->size > sizeof(color))\n+            return DWG_ERR_INVALIDTYPE;\n           dwg_dynapi_header_set_value (dwg, key, &color, 0);\n         }\n       else if (t->type == JSMN_ARRAY && strEQc (f->type, \"H\"))\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42510993-vul",
+      "digest": "sha256:3f2cb6f526b46c34684404b04c35fb33b8984d35c9afba20da46b54b74b2db9a"
+    },
+    "patched": {
+      "ref": "n132/arvo:42510993-fix",
+      "digest": "sha256:9384efed40fc9afa95a32298e91b078793003047c098a21cc0001b28fe8b0ec0"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/libredwg/src/gen-dynapi.pl:3093",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/libredwg/src/gen-dynapi.pl:3093"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

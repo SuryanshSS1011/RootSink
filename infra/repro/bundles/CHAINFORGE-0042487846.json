@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042487846",
+  "chain": "CWE-20->CWE-787",
+  "project": "openh264",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42487846",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "f1bb6d3acb057785b4d89e8228e23cc4fc9caa12",
+      "fix_commits": [
+        "f1bb6d3acb057785b4d89e8228e23cc4fc9caa12"
+      ],
+      "repo": "https://github.com/cisco/openh264"
+    },
+    "patch": "diff --git a/codec/decoder/plus/src/welsDecoderExt.cpp b/codec/decoder/plus/src/welsDecoderExt.cpp\nindex 833ed2310d..77b43273d4 100644\n--- a/codec/decoder/plus/src/welsDecoderExt.cpp\n+++ b/codec/decoder/plus/src/welsDecoderExt.cpp\n@@ -811,6 +811,11 @@ DECODING_STATE CWelsDecoder::DecodeFrame2WithCtx (PWelsDecoderContext pDecContex\n       }\n       return dsErrorFree;\n     }\n+    if ((pDecContext->iErrorCode & (dsBitstreamError | dsDataErrorConcealed)) && pDecContext->eSliceType == B_SLICE) {\n+      ResetReorderingPictureBuffers (&m_sReoderingStatus, m_sPictInfoList, true);\n+      WelsResetRefPic (pDecContext);\n+      return dsErrorFree;\n+    }\n     //for AVC bitstream (excluding AVC with temporal scalability, including TP), as long as error occur, SHOULD notify upper layer key frame loss.\n     if ((IS_PARAM_SETS_NALS (eNalType) || NAL_UNIT_CODED_SLICE_IDR == eNalType) ||\n         (VIDEO_BITSTREAM_AVC == pDecContext->eVideoType)) {\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42487846-vul",
+      "digest": "sha256:9fdc75da56d31e7d3b0b6b2c1119982b9e44404c1fb6bfb946f8bcb462c117af"
+    },
+    "patched": {
+      "ref": "n132/arvo:42487846-fix",
+      "digest": "sha256:126998b612a9bcef6d05ac75e00cb61aa1cb5d51e9e1eb3aca0eaf4308f41d53"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/openh264/codec/decoder/core/src/mv_pred.cpp:840",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/openh264/codec/decoder/core/src/mv_pred.cpp:840"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

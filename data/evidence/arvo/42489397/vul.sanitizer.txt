@@ -1,0 +1,86 @@
+======================= INFO =========================
+This binary is built for AFL-fuzz.
+To run the target function on individual input(s) execute this:
+  /out/arrow-ipc-stream-fuzz < INPUT_FILE
+or
+  /out/arrow-ipc-stream-fuzz INPUT_FILE1 [INPUT_FILE2 ... ]
+To fuzz with afl-fuzz execute this:
+  afl-fuzz [afl-flags] /out/arrow-ipc-stream-fuzz [-N]
+afl-fuzz will run N iterations before re-spawning the process (default: 1000)
+======================================================
+Reading 2504 bytes from /tmp/poc
+=================================================================
+==2250551==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x61e000000a48 at pc 0x000000a8c71b bp 0x7ffc9d350820 sp 0x7ffc9d350818
+READ of size 8 at 0x61e000000a48 thread T0
+SCARINESS: 23 (8-byte-read-heap-buffer-overflow)
+    #0 0xa8c71a in SafeLoadAs<unsigned long> /src/arrow/cpp/src/arrow/util/ubsan.h:59:3
+    #1 0xa8c71a in load<unsigned long> /src/arrow/cpp/src/arrow/util/bitmap_ops.cc:192:36
+    #2 0xa8c71a in NextWord /src/arrow/cpp/src/arrow/util/bitmap_ops.cc:114:28
+    #3 0xa8c71a in void arrow::internal::TransferBitmap<(arrow::internal::TransferMode)0>(unsigned char const*, long, long, long, unsigned char*) /src/arrow/cpp/src/arrow/util/bitmap_ops.cc:313:26
+    #4 0x72e68d in arrow::ConcatenateBitmaps(std::__1::vector<arrow::Bitmap, std::__1::allocator<arrow::Bitmap> > const&, arrow::MemoryPool*, std::__1::shared_ptr<arrow::Buffer>*) /src/arrow/cpp/src/arrow/array/concatenate.cc:85:7
+    #5 0x72c50b in arrow::ConcatenateImpl::Concatenate(std::__1::shared_ptr<arrow::ArrayData>*) && /src/arrow/cpp/src/arrow/array/concatenate.cc:190:7
+    #6 0x7286a7 in arrow::Concatenate(std::__1::vector<std::__1::shared_ptr<arrow::Array>, std::__1::allocator<std::__1::shared_ptr<arrow::Array> > > const&, arrow::MemoryPool*) /src/arrow/cpp/src/arrow/array/concatenate.cc:423:3
+    #7 0xb4e750 in arrow::ipc::DictionaryMemo::Impl::ReifyDictionary(long, arrow::MemoryPool*) /src/arrow/cpp/src/arrow/ipc/dictionary.cc:202:7
+    #8 0xb4d60b in arrow::ipc::DictionaryMemo::GetDictionary(long, arrow::MemoryPool*) const /src/arrow/cpp/src/arrow/ipc/dictionary.cc:229:17
+    #9 0xb65cd2 in arrow::ipc::(anonymous namespace)::DictionaryResolver::VisitField(arrow::ipc::internal::FieldPosition, arrow::ArrayData*) /src/arrow/cpp/src/arrow/ipc/dictionary.cc:359:7
+    #10 0xb58353 in VisitChildren /src/arrow/cpp/src/arrow/ipc/dictionary.cc:344:9
+    #11 0xb58353 in arrow::ipc::ResolveDictionaries(std::__1::vector<std::__1::shared_ptr<arrow::ArrayData>, std::__1::allocator<std::__1::shared_ptr<arrow::ArrayData> > > const&, arrow::ipc::DictionaryMemo const&, arrow::MemoryPool*) /src/arrow/cpp/src/arrow/ipc/dictionary.cc:394:19
+    #12 0x5d463c in arrow::ipc::LoadRecordBatchSubset(org::apache::arrow::flatbuf::RecordBatch const*, std::__1::shared_ptr<arrow::Schema> const&, std::__1::vector<bool, std::__1::allocator<bool> > const*, arrow::ipc::DictionaryMemo const*, arrow::ipc::IpcReadOptions const&, arrow::ipc::MetadataVersion, arrow::Compression::type, arrow::io::RandomAccessFile*) /src/arrow/cpp/src/arrow/ipc/reader.cc:474:3
+    #13 0x5d9f90 in arrow::ipc::LoadRecordBatch(org::apache::arrow::flatbuf::RecordBatch const*, std::__1::shared_ptr<arrow::Schema> const&, std::__1::vector<bool, std::__1::allocator<bool> > const&, arrow::ipc::DictionaryMemo const*, arrow::ipc::IpcReadOptions const&, arrow::ipc::MetadataVersion, arrow::Compression::type, arrow::io::RandomAccessFile*) /src/arrow/cpp/src/arrow/ipc/reader.cc:500:12
+    #14 0x5e57d8 in arrow::ipc::ReadRecordBatchInternal(arrow::Buffer const&, std::__1::shared_ptr<arrow::Schema> const&, std::__1::vector<bool, std::__1::allocator<bool> > const&, arrow::ipc::DictionaryMemo const*, arrow::ipc::IpcReadOptions const&, arrow::io::RandomAccessFile*) /src/arrow/cpp/src/arrow/ipc/reader.cc:596:10
+    #15 0x6afbc8 in arrow::ipc::RecordBatchStreamReaderImpl::ReadNext(std::__1::shared_ptr<arrow::RecordBatch>*) /src/arrow/cpp/src/arrow/ipc/reader.cc:789:12
+    #16 0x63767d in arrow::ipc::internal::FuzzIpcStream(unsigned char const*, long) /src/arrow/cpp/src/arrow/ipc/reader.cc:1710:5
+    #17 0x5ca299 in LLVMFuzzerTestOneInput /src/arrow/cpp/src/arrow/ipc/stream_fuzz.cc:25:17
+    #18 0x5c892e in ExecuteFilesOnyByOne /src/libfuzzer/afl/afl_driver.cpp:217:5
+    #19 0x5c892e in main /src/libfuzzer/afl/afl_driver.cpp:254:12
+    #20 0x149e1836183f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2083f)
+    #21 0x519a28 in _start (/out/arrow-ipc-stream-fuzz+0x519a28)
+
+DEDUP_TOKEN: SafeLoadAs<unsigned long>--load<unsigned long>--NextWord
+0x61e000000a48 is located 0 bytes to the right of 2504-byte region [0x61e000000080,0x61e000000a48)
+allocated by thread T0 here:
+    #0 0x5c5c1d in operator new(unsigned long) /src/llvm-project/compiler-rt/lib/asan/asan_new_delete.cpp:99:3
+    #1 0x5c88c7 in __libcpp_allocate /usr/local/bin/../include/c++/v1/new:253:10
+    #2 0x5c88c7 in allocate /usr/local/bin/../include/c++/v1/memory:1789:34
+    #3 0x5c88c7 in allocate /usr/local/bin/../include/c++/v1/memory:1525:21
+    #4 0x5c88c7 in __vallocate /usr/local/bin/../include/c++/v1/vector:996:37
+    #5 0x5c88c7 in vector /usr/local/bin/../include/c++/v1/vector:1129:9
+    #6 0x5c88c7 in ExecuteFilesOnyByOne /src/libfuzzer/afl/afl_driver.cpp:214:23
+    #7 0x5c88c7 in main /src/libfuzzer/afl/afl_driver.cpp:254:12
+    #8 0x149e1836183f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2083f)
+
+DEDUP_TOKEN: operator new(unsigned long)--__libcpp_allocate--allocate
+SUMMARY: AddressSanitizer: heap-buffer-overflow /src/arrow/cpp/src/arrow/util/ubsan.h:59:3 in SafeLoadAs<unsigned long>
+Shadow bytes around the buggy address:
+  0x0c3c7fff80f0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c3c7fff8100: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c3c7fff8110: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c3c7fff8120: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c3c7fff8130: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x0c3c7fff8140: 00 00 00 00 00 00 00 00 00[fa]fa fa fa fa fa fa
+  0x0c3c7fff8150: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c3c7fff8160: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c3c7fff8170: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c3c7fff8180: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c3c7fff8190: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+  Shadow gap:              cc
+==2250551==ABORTING

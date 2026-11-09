@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042531525",
+  "chain": "CWE-1285->CWE-125",
+  "project": "ntopng",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42531525",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "c4686ad6880a906245577e685cb4569cf2eb90ae",
+      "fix_commits": [
+        "c4686ad6880a906245577e685cb4569cf2eb90ae"
+      ],
+      "repo": "https://github.com/ntop/ntopng"
+    },
+    "patch": "diff --git a/src/IEC104Stats.cpp b/src/IEC104Stats.cpp\nindex fbe4b73a5034..daa8e0418c05 100644\n--- a/src/IEC104Stats.cpp\n+++ b/src/IEC104Stats.cpp\n@@ -88,7 +88,7 @@ void IEC104Stats::processPacket(Flow *f, bool tx_direction,\n \n       switch (pdu_type) {\n         case 0x03: /* U */\n-        {\n+\t{\n           u_int8_t u_type = (payload[offset + 1] & 0xFC) >> 2;\n           const char *u_type_str;\n \n@@ -131,37 +131,38 @@ void IEC104Stats::processPacket(Flow *f, bool tx_direction,\n \n           snprintf(infobuf, sizeof(infobuf) - 1, \"%s U (%s)\",\n                    tx_direction ? \"->\" : \"<-\", u_type_str);\n-        } break;\n+        }\n+\tbreak;\n \n         case 0x01: /* S */\n-          if (len >= 4) {\n-            u_int16_t rx = ((((u_int16_t)payload[offset + 4]) << 8) +\n-                            payload[offset + 3]) >>\n-                           1;\n+\t  if((offset+4) < payload_len) {\n+\t    if (len >= 4) {\n+\t      u_int16_t rx = ((((u_int16_t)payload[offset + 4]) << 8) + payload[offset + 3]) >> 1;\n \n-            if (last_i_apdu.tv_sec != 0) {\n-              float ms = Utils::msTimevalDiff(packet_time, &last_i_apdu);\n+\t      if (last_i_apdu.tv_sec != 0) {\n+\t\tfloat ms = Utils::msTimevalDiff(packet_time, &last_i_apdu);\n \n #ifdef IEC60870_TRACE\n-              ntop->getTrace()->traceEvent(\n+\t\tntop->getTrace()->traceEvent(\n                   TRACE_NORMAL,\n                   \"A-PDU S [last I-TX: %u][S RX ack: %u][tdiff: %.2f msec]\",\n                   tx_seq_num, rx, ms);\n #endif\n-              /*\n-                In theory if all is in good shape\n-                (rx + 1) == tx_seq_num\n-              */\n+\t\t/*\n+\t\t  In theory if all is in good shape\n+\t\t  (rx + 1) == tx_seq_num\n+\t\t*/\n \n-              ndpi_data_add_value(i_s_apdu, ms);\n-            }\n+\t\tndpi_data_add_value(i_s_apdu, ms);\n+\t      }\n \n-            /* No rx and tx to be updated */\n-            snprintf(infobuf, sizeof(infobuf) - 1, \"%s S, RX %u\",\n-                     tx_direction ? \"->\" : \"<-\", rx);\n-          }\n+\t      /* No rx and tx to be updated */\n+\t      snprintf(infobuf, sizeof(infobuf) - 1, \"%s S, RX %u\",\n+\t\t       tx_direction ? \"->\" : \"<-\", rx);\n+\t    }\n \n-          stats.type_s++;\n+\t    stats.type_s++;\n+\t  }\n           break;\n       }\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42531525-vul",
+      "digest": "sha256:f0149dbeb80da0a2f03bb2ab97bda346851b1bcd1ca1f60f305093fe56a5cbbd"
+    },
+    "patched": {
+      "ref": "n132/arvo:42531525-fix",
+      "digest": "sha256:e86d7c7d6527dfd594172a91ce538bc3588aeb14cb481bfb8b2573adf442e3fe"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/ntopng/src/IEC104Stats.cpp:138",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/ntopng/src/IEC104Stats.cpp:138"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

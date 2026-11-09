@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042531645",
+  "chain": "CWE-20->CWE-125",
+  "project": "upx",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42531645",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "3dca1175e5899b54ac97e2ffab38dc5191cc4be4",
+      "fix_commits": [
+        "3dca1175e5899b54ac97e2ffab38dc5191cc4be4"
+      ],
+      "repo": "https://github.com/upx/upx"
+    },
+    "patch": "diff --git a/src/p_lx_elf.cpp b/src/p_lx_elf.cpp\nindex e092922280..4544b3e9fc 100644\n--- a/src/p_lx_elf.cpp\n+++ b/src/p_lx_elf.cpp\n@@ -2128,7 +2128,7 @@ PackLinuxElf32::invert_pt_dynamic(Elf32_Dyn const *dynp, u32_t headway)\n         unsigned const *const chains = &buckets[nbucket]; (void)chains;\n \n         unsigned const v_sym = !x_sym ? 0 : get_te32(&dynp0[-1+ x_sym].d_val);\n-        if ((unsigned)file_size <= nbucket/sizeof(*buckets)  // FIXME: weak\n+        if ((hashend - buckets) < nbucket\n         || !v_sym || (unsigned)file_size <= v_sym\n         || ((v_hsh < v_sym) && (v_sym - v_hsh) < sizeof(*buckets)*(2+ nbucket))\n         ) {\n@@ -2170,6 +2170,7 @@ PackLinuxElf32::invert_pt_dynamic(Elf32_Dyn const *dynp, u32_t headway)\n         unsigned     const *const buckets = (unsigned const *)&bitmask[n_bitmask];\n         unsigned     const *const hasharr = &buckets[n_bucket]; (void)hasharr;\n         if (!n_bucket || (1u<<31) <= n_bucket  /* fie on fuzzers */\n+        || (gashend - buckets) < n_bucket\n         || (void const *)&file_image[file_size] <= (void const *)hasharr) {\n             char msg[80]; snprintf(msg, sizeof(msg),\n                 \"bad n_bucket %#x\\n\", n_bucket);\n@@ -8014,7 +8015,7 @@ PackLinuxElf64::invert_pt_dynamic(Elf64_Dyn const *dynp, upx_uint64_t headway)\n         unsigned const *const chains = &buckets[nbucket]; (void)chains;\n \n         unsigned const v_sym = !x_sym ? 0 : get_te64(&dynp0[-1+ x_sym].d_val);  // UPX_RSIZE_MAX_MEM\n-        if ((unsigned)file_size <= nbucket/sizeof(*buckets)  // FIXME: weak\n+        if ((hashend - buckets) < nbucket\n         || !v_sym || (unsigned)file_size <= v_sym\n         || ((v_hsh < v_sym) && (v_sym - v_hsh) < sizeof(*buckets)*(2+ nbucket))\n         ) {\n@@ -8056,6 +8057,7 @@ PackLinuxElf64::invert_pt_dynamic(Elf64_Dyn const *dynp, upx_uint64_t headway)\n         unsigned     const *const buckets = (unsigned const *)&bitmask[n_bitmask];\n         unsigned     const *const hasharr = &buckets[n_bucket]; (void)hasharr;\n         if (!n_bucket || (1u<<31) <= n_bucket  /* fie on fuzzers */\n+        || (gashend - buckets) < n_bucket\n         || (void const *)&file_image[file_size] <= (void const *)hasharr) {\n             char msg[80]; snprintf(msg, sizeof(msg),\n                 \"bad n_bucket %#x\\n\", n_bucket);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42531645-vul",
+      "digest": "sha256:b7dc79c04f6603fdb8a6cd22f54c80b4bbc8ec34250ab9b9815cbf7c5c12961b"
+    },
+    "patched": {
+      "ref": "n132/arvo:42531645-fix",
+      "digest": "sha256:066e315b6d3e7d779dcccef4b21304cfbaa2f2cb8a9d29437a4b2c59f4173b75"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/upx/src/util/../bele.h:117",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/upx/src/util/../bele.h:117"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

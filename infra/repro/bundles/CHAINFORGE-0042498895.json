@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042498895",
+  "chain": "CWE-20->CWE-125",
+  "project": "sleuthkit",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42498895",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "4518aa4e2397957959c280e50010f843d6e6107e",
+      "fix_commits": [
+        "4518aa4e2397957959c280e50010f843d6e6107e"
+      ],
+      "repo": "https://github.com/sleuthkit/sleuthkit"
+    },
+    "patch": "diff --git a/tsk/fs/tsk_apfs.hpp b/tsk/fs/tsk_apfs.hpp\nindex 29a5e9acf1..db3ddf627f 100755\n--- a/tsk/fs/tsk_apfs.hpp\n+++ b/tsk/fs/tsk_apfs.hpp\n@@ -142,6 +142,12 @@ class APFSBtreeNodeIterator {\n     const auto &t = _node->_table_data.toc.variable[_index];\n     const auto key_data = _node->_table_data.koff + t.key_offset;\n     const auto val_data = _node->_table_data.voff - t.val_offset;\n+    if (key_data > _node->_storage.data()) {\n+      throw std::runtime_error(\"init_value: invalid key_offset\");\n+    }\n+    if (val_data < _node->_storage.data()) {\n+      throw std::runtime_error(\"init_value: invalid val_offset\");\n+    }\n \n     memory_view key{key_data, t.key_length};\n \n@@ -168,6 +174,12 @@ class APFSBtreeNodeIterator {\n     const auto &t = _node->_table_data.toc.fixed[_index];\n     const auto key_data = _node->_table_data.koff + t.key_offset;\n     const auto val_data = _node->_table_data.voff - t.val_offset;\n+    if (key_data > _node->_storage.data()) {\n+      throw std::runtime_error(\"init_value: invalid key_offset\");\n+    }\n+    if (val_data < _node->_storage.data()) {\n+      throw std::runtime_error(\"init_value: invalid val_offset\");\n+    }\n \n     if (_node->is_leaf()) {\n       _val = {(typename Node::key_type)key_data,\n@@ -1145,6 +1157,12 @@ inline void APFSBtreeNodeIterator<APFSJObjBtreeNode>::init_value<void>(int recur\n   const auto &t = _node->_table_data.toc.variable[_index];\n   const auto key_data = _node->_table_data.koff + t.key_offset;\n   const auto val_data = _node->_table_data.voff - t.val_offset;\n+  if (key_data > _node->_storage.data()) {\n+    throw std::runtime_error(\"APFSBtreeNodeIterator<APFSJObjBtreeNode>::init_value: invalid key_offset\");\n+  }\n+  if (val_data < _node->_storage.data()) {\n+    throw std::runtime_error(\"APFSBtreeNodeIterator<APFSJObjBtreeNode>::init_value: invalid val_offset\");\n+  }\n \n   memory_view key{key_data, t.key_length};\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42498895-vul",
+      "digest": "sha256:80e9303f1fdd1c50144236674c11bc0edb0f406e9dcd0241f3c6aee10b9c642a"
+    },
+    "patched": {
+      "ref": "n132/arvo:42498895-fix",
+      "digest": "sha256:0274fd02687529cee6a37881c581dc433124d40f9f4fb5b119d1dbeac367f45f"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/sleuthkit/tsk/pool/./../img/../fs/tsk_apfs.hpp:163",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/sleuthkit/tsk/pool/./../img/../fs/tsk_apfs.hpp:163"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

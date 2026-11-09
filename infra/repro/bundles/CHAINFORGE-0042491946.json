@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042491946",
+  "chain": "CWE-416->CWE-125",
+  "project": "libssh2",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42491946",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "c69f1f27dc003d445b85fe6cbcff644b11ee6a67",
+      "fix_commits": [
+        "c69f1f27dc003d445b85fe6cbcff644b11ee6a67"
+      ],
+      "repo": "https://github.com/libssh2/libssh2"
+    },
+    "patch": "diff --git a/src/kex.c b/src/kex.c\nindex 2b29f7ec56..2e86b65688 100644\n--- a/src/kex.c\n+++ b/src/kex.c\n@@ -1752,26 +1752,24 @@ static int ecdh_sha2_nistp(LIBSSH2_SESSION *session, libssh2_curve_type type,\n         /* parse INIT reply data */\n \n         /* host key K_S */\n-        unsigned char *s = data + 1; /* Advance past packet type */\n         unsigned char *server_public_key;\n         size_t server_public_key_len;\n-        size_t host_sig_len;\n+        struct string_buf buf;\n \n-        session->server_hostkey_len =\n-            _libssh2_ntohu32((const unsigned char *)s);\n-        s += 4;\n+        buf.data = data;\n+        buf.len = data_len;\n+        buf.dataptr = buf.data;\n+        buf.dataptr++; /* Advance past packet type */\n \n-        session->server_hostkey = LIBSSH2_ALLOC(session,\n-                                                session->server_hostkey_len);\n-        if(!session->server_hostkey) {\n-            ret = _libssh2_error(session, LIBSSH2_ERROR_ALLOC,\n-                                 \"Unable to allocate memory for a copy \"\n-                                 \"of the host key\");\n+         if(_libssh2_copy_string(session, &buf, &(session->server_hostkey),\n+                                &server_public_key_len)) {\n+             ret = _libssh2_error(session, LIBSSH2_ERROR_ALLOC,\n+                                  \"Unable to allocate memory for a copy \"\n+                                  \"of the host key\");\n             goto clean_exit;\n         }\n \n-        memcpy(session->server_hostkey, s, session->server_hostkey_len);\n-        s += session->server_hostkey_len;\n+        session->server_hostkey_len = (uint32_t)server_public_key_len;\n \n #if LIBSSH2_MD5\n         {\n@@ -1870,19 +1868,20 @@ static int ecdh_sha2_nistp(LIBSSH2_SESSION *session, libssh2_curve_type type,\n         }\n \n         /* server public key Q_S */\n-        server_public_key_len = _libssh2_ntohu32((const unsigned char *)s);\n-        s += 4;\n-\n-        server_public_key = s;\n-        s += server_public_key_len;\n+        if(_libssh2_get_string(&buf, &server_public_key,\n+                               &server_public_key_len)) {\n+            ret = _libssh2_error(session, LIBSSH2_ERROR_PROTO,\n+                                     \"Unexpected key length\");\n+            goto clean_exit;\n+        }\n \n         /* server signature */\n-        host_sig_len = _libssh2_ntohu32((const unsigned char *)s);\n-        s += 4;\n-\n-        exchange_state->h_sig = s;\n-        exchange_state->h_sig_len = host_sig_len;\n-        s += host_sig_len;\n+        if(_libssh2_get_string(&buf, &exchange_state->h_sig,\n+           &(exchange_state->h_sig_len))) {\n+            ret = _libssh2_error(session, LIBSSH2_ERROR_HOSTKEY_INIT,\n+                                 \"Unexpected ecdh server sig length\");\n+            goto clean_exit;\n+        }\n \n         /* Compute the shared secret K */\n         rc = _libssh2_ecdh_gen_k(&exchange_state->k, private_key,\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42491946-vul",
+      "digest": "sha256:b1c2fd77c0c0af911b5b1dce58c5e513069e7c5482d950c0619ade7efc67e00f"
+    },
+    "patched": {
+      "ref": "n132/arvo:42491946-fix",
+      "digest": "sha256:6612ce8fd38e0eafbb68929e073c5e751dd78afbcab5190d70a21ced0b839079"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/libssh2/src/kex.c:1773",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/libssh2/src/kex.c:1773"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

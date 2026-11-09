@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042535765",
+  "chain": "CWE-20->CWE-787",
+  "project": "wireshark",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42535765",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "6e89d99e0962fc4a2c69ad748b831a90bc77a78d",
+      "fix_commits": [
+        "6e89d99e0962fc4a2c69ad748b831a90bc77a78d"
+      ],
+      "repo": "https://github.com/wireshark/wireshark"
+    },
+    "patch": "diff --git a/epan/dissectors/packet-rtmpt.c b/epan/dissectors/packet-rtmpt.c\nindex 26ed7f4b2b4..68593bfbf36 100644\n--- a/epan/dissectors/packet-rtmpt.c\n+++ b/epan/dissectors/packet-rtmpt.c\n@@ -2521,7 +2521,22 @@ dissect_rtmpt_common(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, rtmpt_\n \n                 /* message length is a 3 byte number, never overflows an int */\n                 if (tp->alloc < tp->have + want) {\n-                        tp->alloc = MIN(tp->alloc*2, tp->want);\n+                        /* tp->want - how much data is supposedly in the entire\n+                         * unchunked packet, according to the header. Up to a\n+                         * 24-bit integer. Actually allocating this amount can\n+                         * cause memory exhaustion on fuzzed data.\n+                         * want - how much more data we are going to copy from the\n+                         * current tvbuff. No more than necessary to finish the\n+                         * current chunk, or what's actually in the tvbuff.\n+                         * Allocating this amount shouldn't cause memory exhaustion\n+                         * because it's present in the frame.\n+                         *\n+                         * We should have calculated those values so that the\n+                         * following assertion is true.\n+                         */\n+                        DISSECTOR_ASSERT_CMPINT(tp->have + want, <=, tp->want);\n+                        tp->alloc = MAX(tp->alloc*2, tp->have + want);\n+                        tp->alloc = MIN(tp->alloc, tp->want);\n                         tp->data.p = wmem_realloc(wmem_file_scope(), tp->data.p, tp->alloc);\n                 }\n                 tvb_memcpy(tvb, tp->data.p+tp->have, offset, want);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42535765-vul",
+      "digest": "sha256:7d36226b56e74bd0f24f2c6a638732e1df4668dcc7015e2e77fd14f76f0ce933"
+    },
+    "patched": {
+      "ref": "n132/arvo:42535765-fix",
+      "digest": "sha256:8ade0cde106bc7594c81df312a8aac455867018b0bd142fe93212ce3f75a8888"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/wireshark/epan/tvbuff.c:950",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/wireshark/epan/tvbuff.c:950"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,91 @@
+Reading 4 bytes from /tmp/poc
+======================= INFO =========================
+This binary is built for AFL-fuzz.
+To run the target function on individual input(s) execute this:
+  /out/fuzz_binary_message < INPUT_FILE
+or
+  /out/fuzz_binary_message INPUT_FILE1 [INPUT_FILE2 ... ]
+To fuzz with afl-fuzz execute this:
+  afl-fuzz [afl-flags] /out/fuzz_binary_message [-N]
+afl-fuzz will run N iterations before re-spawning the process (default: 1000)
+======================================================
+=================================================================
+==7==ERROR: AddressSanitizer: heap-use-after-free on address 0x60d000004ca8 at pc 0x0000004e551c bp 0x7ffd5aaa23f0 sp 0x7ffd5aaa23e8
+READ of size 8 at 0x60d000004ca8 thread T0
+SCARINESS: 51 (8-byte-read-heap-use-after-free)
+    #0 0x4e551b in String_clear /src/open62541/src/ua_types.c:136:24
+    #1 0x4e6a80 in clearStructure /src/open62541/src/ua_types.c:986:13
+    #2 0x4e2405 in UA_clear /src/open62541/src/ua_types.c:1037:5
+    #3 0x4e2405 in UA_Array_delete /src/open62541/src/ua_types.c:1104
+    #4 0x5df1f8 in deleteMembers_default /src/open62541/plugins/ua_accesscontrol_default.c:196:5
+    #5 0x51d992 in UA_ServerConfig_clean /src/open62541/src/server/ua_server_config.c:59:9
+    #6 0x50a66b in UA_Server_delete /src/open62541/src/server/ua_server.c:172:5
+    #7 0x4c7aee in LLVMFuzzerTestOneInput /src/open62541/tests/fuzz/fuzz_binary_message.cc:38:9
+    #8 0x5ed78a in ExecuteFilesOnyByOne /src/libfuzzer/afl/afl_driver.cpp:216:5
+    #9 0x5ed78a in main /src/libfuzzer/afl/afl_driver.cpp:253
+    #10 0x7fa13764c82f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+    #11 0x41e588 in _start (/out/fuzz_binary_message+0x41e588)
+
+DEDUP_TOKEN: String_clear--clearStructure--UA_clear
+0x60d000004ca8 is located 8 bytes inside of 144-byte region [0x60d000004ca0,0x60d000004d30)
+freed by thread T0 here:
+    #0 0x4963bd in __interceptor_free /src/llvm/projects/compiler-rt/lib/asan/asan_malloc_linux.cc:123:3
+    #1 0x5df1f8 in deleteMembers_default /src/open62541/plugins/ua_accesscontrol_default.c:196:5
+    #2 0x51d992 in UA_ServerConfig_clean /src/open62541/src/server/ua_server_config.c:59:9
+    #3 0x5d9c5c in UA_ServerConfig_setMinimalCustomBuffer /src/open62541/plugins/ua_config_default.c:257:9
+    #4 0x4c7ad6 in UA_ServerConfig_setMinimal(UA_ServerConfig*, unsigned short, UA_String const*) /src/open62541/plugins/include/open62541/server_config_default.h:56:12
+    #5 0x4c7ad6 in UA_ServerConfig_setDefault(UA_ServerConfig*) /src/open62541/plugins/include/open62541/server_config_default.h:78
+    #6 0x4c7ad6 in LLVMFuzzerTestOneInput /src/open62541/tests/fuzz/fuzz_binary_message.cc:36
+    #7 0x5ed78a in ExecuteFilesOnyByOne /src/libfuzzer/afl/afl_driver.cpp:216:5
+    #8 0x5ed78a in main /src/libfuzzer/afl/afl_driver.cpp:253
+    #9 0x7fa13764c82f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+
+DEDUP_TOKEN: __interceptor_free--deleteMembers_default--UA_ServerConfig_clean
+previously allocated by thread T0 here:
+    #0 0x4967b2 in calloc /src/llvm/projects/compiler-rt/lib/asan/asan_malloc_linux.cc:154:3
+    #1 0x5d2305 in UA_memoryManager_calloc /src/open62541/tests/fuzz/custom_memory_manager.c:142:18
+    #2 0x5dedaf in UA_AccessControl_default /src/open62541/plugins/ua_accesscontrol_default.c:266:9
+    #3 0x5da1c7 in setDefaultConfig /src/open62541/plugins/ua_config_default.c:155:28
+    #4 0x5d9956 in UA_ServerConfig_setMinimalCustomBuffer /src/open62541/plugins/ua_config_default.c:249:28
+    #5 0x4c7ad6 in UA_ServerConfig_setMinimal(UA_ServerConfig*, unsigned short, UA_String const*) /src/open62541/plugins/include/open62541/server_config_default.h:56:12
+    #6 0x4c7ad6 in UA_ServerConfig_setDefault(UA_ServerConfig*) /src/open62541/plugins/include/open62541/server_config_default.h:78
+    #7 0x4c7ad6 in LLVMFuzzerTestOneInput /src/open62541/tests/fuzz/fuzz_binary_message.cc:36
+    #8 0x5ed78a in ExecuteFilesOnyByOne /src/libfuzzer/afl/afl_driver.cpp:216:5
+    #9 0x5ed78a in main /src/libfuzzer/afl/afl_driver.cpp:253
+    #10 0x7fa13764c82f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+
+DEDUP_TOKEN: calloc--UA_memoryManager_calloc--UA_AccessControl_default
+SUMMARY: AddressSanitizer: heap-use-after-free /src/open62541/src/ua_types.c:136:24 in String_clear
+Shadow bytes around the buggy address:
+  0x0c1a7fff8940: fa fa fa fa fa fa fd fd fd fd fd fd fd fd fd fd
+  0x0c1a7fff8950: fd fd fd fd fd fd fd fd fa fa fa fa fa fa fa fa
+  0x0c1a7fff8960: fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd
+  0x0c1a7fff8970: fd fd fa fa fa fa fa fa fa fa fd fd fd fd fd fd
+  0x0c1a7fff8980: fd fd fd fd fd fd fd fd fd fd fd fd fa fa fa fa
+=>0x0c1a7fff8990: fa fa fa fa fd[fd]fd fd fd fd fd fd fd fd fd fd
+  0x0c1a7fff89a0: fd fd fd fd fd fd fa fa fa fa fa fa fa fa fa fa
+  0x0c1a7fff89b0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c1a7fff89c0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c1a7fff89d0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c1a7fff89e0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+  Shadow gap:              cc
+==7==ABORTING

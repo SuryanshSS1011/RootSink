@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042524017",
+  "chain": "CWE-456->CWE-457",
+  "project": "hdf5",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42524017",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "31f4d5aa4e1f174cef8163e4af40f7bea728cd0c",
+      "fix_commits": [
+        "31f4d5aa4e1f174cef8163e4af40f7bea728cd0c"
+      ],
+      "repo": "https://github.com/HDFGroup/hdf5"
+    },
+    "patch": "From 31f4d5aa4e1f174cef8163e4af40f7bea728cd0c Mon Sep 17 00:00:00 2001\nFrom: jhendersonHDF <jhenderson@hdfgroup.org>\nDate: Fri, 18 Aug 2023 16:00:10 -0500\nSubject: [PATCH] Fix valgrind warning about write of uninitialized bytes\n (#3389)\n\n---\n src/H5FScache.c | 17 ++++++++++++++---\n 1 file changed, 14 insertions(+), 3 deletions(-)\n\ndiff --git a/src/H5FScache.c b/src/H5FScache.c\nindex 28fe2a4..420582e 100644\n--- a/src/H5FScache.c\n+++ b/src/H5FScache.c\n@@ -1185,8 +1185,9 @@ done:\n static herr_t\n H5FS__cache_sinfo_serialize(const H5F_t *f, void *_image, size_t len, void *_thing)\n {\n-    H5FS_sinfo_t  *sinfo = (H5FS_sinfo_t *)_thing;   /* Pointer to the object */\n-    H5FS_iter_ud_t udata;                            /* User data for callbacks */\n+    H5FS_sinfo_t  *sinfo = (H5FS_sinfo_t *)_thing; /* Pointer to the object */\n+    H5FS_iter_ud_t udata;                          /* User data for callbacks */\n+    ptrdiff_t      gap_size;\n     uint8_t       *image        = (uint8_t *)_image; /* Pointer into raw data buffer */\n     uint8_t       *chksum_image = NULL;              /* Points to chksum location */\n     uint32_t       metadata_chksum;                  /* Computed metadata checksum value */\n@@ -1231,7 +1232,17 @@ H5FS__cache_sinfo_serialize(const H5F_t *f, void *_image, size_t len, void *_thi\n     /* Compute checksum */\n \n     /* There may be empty space between entries and chksum */\n-    chksum_image    = (uint8_t *)(_image) + len - H5FS_SIZEOF_CHKSUM;\n+    chksum_image = (uint8_t *)(_image) + len - H5FS_SIZEOF_CHKSUM;\n+\n+    /*\n+     * If there is any empty space between the entries and\n+     * checksum, make sure that the space is initialized\n+     * before serializing it\n+     */\n+    gap_size = chksum_image - image;\n+    if (gap_size > 0)\n+        memset(image, 0, (size_t)gap_size);\n+\n     metadata_chksum = H5_checksum_metadata(_image, (size_t)(chksum_image - (uint8_t *)_image), 0);\n     /* Metadata checksum */\n     UINT32ENCODE(chksum_image, metadata_chksum);\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42524017-vul",
+      "digest": "sha256:c5ac340c655ac4cac912add05a63666ef741559403f6820b937a4d4b03e4fb36"
+    },
+    "patched": {
+      "ref": "n132/arvo:42524017-fix",
+      "digest": "sha256:1c4c84546b1b675be255a057782356ae1853b9d793c9965311be1db9c474d9b1"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/hdf5/src/H5FDsec2.c:836",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/hdf5/src/H5FDsec2.c:836"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

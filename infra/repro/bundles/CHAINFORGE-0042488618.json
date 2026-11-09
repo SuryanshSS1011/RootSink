@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042488618",
+  "chain": "CWE-1284->CWE-125",
+  "project": "simdjson",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42488618",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "a8bf10ea5a0ea2553f07ac46744666c94d0085fc",
+      "fix_commits": [
+        "a8bf10ea5a0ea2553f07ac46744666c94d0085fc"
+      ],
+      "repo": "https://github.com/simdjson/simdjson"
+    },
+    "patch": "diff --git a/src/from_chars.cpp b/src/from_chars.cpp\nindex 188df44046..7250c47144 100644\n--- a/src/from_chars.cpp\n+++ b/src/from_chars.cpp\n@@ -75,11 +75,9 @@ decimal parse_decimal(const char *&p) noexcept {\n     ++p;\n   }\n   while (is_integer(*p)) {\n-    if (answer.num_digits + 1 < max_digits) {\n+    if (answer.num_digits < max_digits) {\n       answer.digits[answer.num_digits] = uint8_t(*p - '0');\n-    } else {\n-      answer.truncated = true;\n-    }\n+    } \n     answer.num_digits++;\n     ++p;\n   }\n@@ -95,11 +93,9 @@ decimal parse_decimal(const char *&p) noexcept {\n       }\n     }\n     while (is_integer(*p)) {\n-      if (answer.num_digits + 1 < max_digits) {\n+      if (answer.num_digits < max_digits) {\n         answer.digits[answer.num_digits] = uint8_t(*p - '0');\n-      } else {\n-        answer.truncated = true;\n-      }\n+      } \n       answer.num_digits++;\n       ++p;\n     }\n@@ -126,6 +122,10 @@ decimal parse_decimal(const char *&p) noexcept {\n     answer.decimal_point += (neg_exp ? -exp_number : exp_number);\n   }\n   answer.decimal_point += answer.num_digits;\n+  if(answer.num_digits > max_digits ) {\n+    answer.num_digits = max_digits;\n+    answer.truncated = true;\n+  }\n   return answer;\n }\n \ndiff --git a/tests/basictests.cpp b/tests/basictests.cpp\nindex eaab08fa57..4aeae99882 100644\n--- a/tests/basictests.cpp\n+++ b/tests/basictests.cpp\n@@ -48,6 +48,7 @@ namespace number_tests {\n   bool ground_truth() {\n     std::cout << __func__ << std::endl;\n     std::pair<std::string,double> ground_truth[] = {\n+      {\"9355950000000000000.00000000000000000000000000000000001844674407370955161600000184467440737095516161844674407370955161407370955161618446744073709551616000184467440737095516166000001844674407370955161618446744073709551614073709551616184467440737095516160001844674407370955161601844674407370955674451616184467440737095516140737095516161844674407370955161600018446744073709551616018446744073709551611616000184467440737095001844674407370955161600184467440737095516160018446744073709551168164467440737095516160001844073709551616018446744073709551616184467440737095516160001844674407536910751601611616000184467440737095001844674407370955161600184467440737095516160018446744073709551616184467440737095516160001844955161618446744073709551616000184467440753691075160018446744073709\",0x1.03ae05e8fca1cp+63}, \n       {\"2.2250738585072013e-308\",0x1p-1022},\n       {\"-92666518056446206563E3\", -0x1.39f764644154dp+76},\n       {\"-92666518056446206563E3\", -0x1.39f764644154dp+76},\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42488618-vul",
+      "digest": "sha256:54ee3413e6c7d5ff310161a0cfe502499433dff13e3770c91f5f627d068053b7"
+    },
+    "patched": {
+      "ref": "n132/arvo:42488618-fix",
+      "digest": "sha256:47041089c7bbbbe1097d3579764467da08beb5df071295b62c2de3d6bbd05f24"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/simdjson/build/../src/from_chars.cpp:337",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/simdjson/build/../src/from_chars.cpp:337"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

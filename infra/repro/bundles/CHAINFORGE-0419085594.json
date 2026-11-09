@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0419085594",
+  "chain": "CWE-416->CWE-125",
+  "project": "php-src",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "419085594",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "dd3a098a9bf967831e889d2e19e873d09c71c9b9",
+      "fix_commits": [
+        "dd3a098a9bf967831e889d2e19e873d09c71c9b9"
+      ],
+      "repo": "https://github.com/php/php-src"
+    },
+    "patch": "From dd3a098a9bf967831e889d2e19e873d09c71c9b9 Mon Sep 17 00:00:00 2001\nFrom: Niels Dossche <7771979+nielsdos@users.noreply.github.com>\nDate: Sat, 19 Jul 2025 13:08:21 +0200\nSubject: [PATCH] Disable error handler in fuzzer (#19183)\n\nThese are all the same root cause and it's known.\n---\n sapi/fuzzer/fuzzer-sapi.c | 2 +-\n 1 file changed, 1 insertion(+), 1 deletion(-)\n\ndiff --git a/sapi/fuzzer/fuzzer-sapi.c b/sapi/fuzzer/fuzzer-sapi.c\nindex 5014a51c..3cffacae 100644\n--- a/sapi/fuzzer/fuzzer-sapi.c\n+++ b/sapi/fuzzer/fuzzer-sapi.c\n@@ -45,7 +45,7 @@ static const char HARDCODED_INI[] =\n \t\"allow_url_include=0\\n\"\n \t\"allow_url_fopen=0\\n\"\n \t\"open_basedir=/tmp\\n\"\n-\t\"disable_functions=dl,mail,mb_send_mail\"\n+\t\"disable_functions=dl,mail,mb_send_mail,set_error_handler\"\n \t\",shell_exec,exec,system,proc_open,popen,passthru,pcntl_exec\"\n \t\",chdir,chgrp,chmod,chown,copy,file_put_contents,lchgrp,lchown,link,mkdir\"\n \t\",move_uploaded_file,rename,rmdir,symlink,tempname,touch,unlink,fopen\"\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:419085594-vul",
+      "digest": "sha256:0c236d2541977b674bc369f965047f2f064e8071d77895fc4fcfe0610c5e79ea"
+    },
+    "patched": {
+      "ref": "n132/arvo:419085594-fix",
+      "digest": "sha256:89fc9bab8a445f5055978b0893e747d32f34a43747a07e8d9ee2cd9a33289eb2"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/php-src/Zend/zend_types.h:553",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/php-src/Zend/zend_types.h:553"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

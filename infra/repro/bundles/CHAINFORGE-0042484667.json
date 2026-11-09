@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042484667",
+  "chain": "CWE-20->CWE-125",
+  "project": "opensc",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42484667",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "7ae74c524f1cc2912e8de1ecbf616b602424a830",
+      "fix_commits": [
+        "7ae74c524f1cc2912e8de1ecbf616b602424a830"
+      ],
+      "repo": "https://github.com/OpenSC/OpenSC"
+    },
+    "patch": "diff --git a/src/libopensc/card-piv.c b/src/libopensc/card-piv.c\nindex 2fcaceb21a..c5cf352ac7 100644\n--- a/src/libopensc/card-piv.c\n+++ b/src/libopensc/card-piv.c\n@@ -1021,7 +1021,7 @@ piv_cache_internal_data(sc_card_t *card, int enumtag)\n \t\ttag = sc_asn1_find_tag(card->ctx, body, bodylen, 0x71, &taglen);\n \t\t/* 800-72-1 not clear if this is 80 or 01 Sent comment to NIST for 800-72-2 */\n \t\t/* 800-73-3 says it is 01, keep dual test so old cards still work */\n-\t\tif (tag && (((*tag) & 0x80) || ((*tag) & 0x01)))\n+\t\tif (tag && taglen > 0 && (((*tag) & 0x80) || ((*tag) & 0x01)))\n \t\t\tcompressed = 1;\n \n \t\ttag = sc_asn1_find_tag(card->ctx, body, bodylen, 0x70, &taglen);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42484667-vul",
+      "digest": "sha256:131e478ba631480e753d657859dd3ab414510a6f630ea67512ba0f950e2627f2"
+    },
+    "patched": {
+      "ref": "n132/arvo:42484667-fix",
+      "digest": "sha256:6af878e5a63cbcc6986ba4fd0c4da2311d9af9677bcc89a6e6bd06b0540ae121"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/opensc/src/libopensc/card-piv.c:1064",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/opensc/src/libopensc/card-piv.c:1064"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

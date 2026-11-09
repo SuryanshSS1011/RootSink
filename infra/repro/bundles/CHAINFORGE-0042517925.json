@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042517925",
+  "chain": "CWE-20->CWE-787",
+  "project": "libraw",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42517925",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "b7771a8e4c01851f7674146e47f7a460633f5e99",
+      "fix_commits": [
+        "b7771a8e4c01851f7674146e47f7a460633f5e99"
+      ],
+      "repo": "https://github.com/libraw/libraw"
+    },
+    "patch": "diff --git a/src/decoders/fp_dng.cpp b/src/decoders/fp_dng.cpp\nindex 3f3048a3b..0566ad2ca 100644\n--- a/src/decoders/fp_dng.cpp\n+++ b/src/decoders/fp_dng.cpp\n@@ -604,6 +604,9 @@ void LibRaw::uncompressed_fp_dng_load_raw()\n \n     int bytesps = (ifd->bps + 7) >> 3; // round to upper value\n \n+\tif(bytesps < 1 || bytesps > 4)\n+      throw LIBRAW_EXCEPTION_DECODE_RAW;\n+\n     tile_stripe_data_t tiles;\n     tiles.init(ifd, imgdata.sizes, libraw_internal_data.unpacker_data, libraw_internal_data.unpacker_data.order,\n         libraw_internal_data.internal_data.input);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42517925-vul",
+      "digest": "sha256:b4c39b92d3c0e8030ca0304984dd9cabf68bee9f2141e43838fe19077c197d48"
+    },
+    "patched": {
+      "ref": "n132/arvo:42517925-fix",
+      "digest": "sha256:eb367520155d3dd1bf8d7affe2d94849081b8208f718685049046f87a26e85d1"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/libraw/src/libraw_datastream.cpp:372",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/libraw/src/libraw_datastream.cpp:372"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

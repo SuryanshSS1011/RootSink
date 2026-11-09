@@ -1,0 +1,66 @@
+======================= INFO =========================
+This binary is built for AFL-fuzz.
+To run the target function on individual input(s) execute this:
+  /out/gdal_translate_fuzzer < INPUT_FILE
+or
+  /out/gdal_translate_fuzzer INPUT_FILE1 [INPUT_FILE2 ... ]
+To fuzz with afl-fuzz execute this:
+  afl-fuzz [afl-flags] /out/gdal_translate_fuzzer [-N]
+afl-fuzz will run N iterations before re-spawning the process (default: 1000)
+======================================================
+Reading 97 bytes from /tmp/poc
+=================================================================
+==24386==ERROR: AddressSanitizer: global-buffer-overflow on address 0x00000635b65c at pc 0x0000018bf11c bp 0x7ffe8314d6d0 sp 0x7ffe8314d6c8
+WRITE of size 4 at 0x00000635b65c thread T0
+SCARINESS: 36 (4-byte-write-global-buffer-overflow)
+    #0 0x18bf11b in reduce /src/gdal/gdal/frmts/grib/degrib/g2clib/reduce.c:155:23
+    #1 0x18bb6fb in pack_gp /src/gdal/gdal/frmts/grib/degrib/g2clib/pack_gp.c:1420:2
+    #2 0x18b4422 in misspack /src/gdal/gdal/frmts/grib/degrib/g2clib/misspack.c:300:12
+    #3 0x12c898c in GRIB2Section567Writer::WriteComplexPacking(int) /src/gdal/gdal/frmts/grib/gribcreatecopy.cpp:1056:5
+    #4 0x12cf001 in WriteBand(_IO_FILE*, GDALDataset*, int, char**, int (*)(double, char const*, void*), void*) /src/gdal/gdal/frmts/grib/gribcreatecopy.cpp:2398:13
+    #5 0x12ce9fa in GRIBDataset::CreateCopy(char const*, GDALDataset*, int, char**, int (*)(double, char const*, void*), void*) /src/gdal/gdal/frmts/grib/gribcreatecopy.cpp:2498:14
+    #6 0xb6f67b in GDALDriver::CreateCopy(char const*, GDALDataset*, int, char**, int (*)(double, char const*, void*), void*) /src/gdal/gdal/gcore/gdaldriver.cpp:892:19
+    #7 0xb6fa95 in GDALCreateCopy /src/gdal/gdal/gcore/gdaldriver.cpp:939:9
+    #8 0xe226cb in GDALTranslate /src/gdal/gdal/apps/gdal_translate_lib.cpp:1815:18
+    #9 0x525e7a in LLVMFuzzerTestOneInput /src/gdal/gdal/./fuzzers/gdal_translate_fuzzer.cpp:155:47
+    #10 0x5262df in ExecuteFilesOnyByOne(int, char**) /src/libfuzzer/afl/afl_driver.cpp:271:5
+    #11 0x52687f in main /src/libfuzzer/afl/afl_driver.cpp:308:12
+    #12 0x7f2e2673482f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+    #13 0x4273d8 in _start (/out/gdal_translate_fuzzer+0x4273d8)
+
+DEDUP_TOKEN: reduce--pack_gp--misspack
+0x00000635b65c is located 4 bytes to the left of global variable 'ntotbt' defined in 'degrib/g2clib/reduce.c:37:9' (0x635b660) of size 124
+0x00000635b65c is located 56 bytes to the right of global variable 'lxn' defined in 'degrib/g2clib/reduce.c:32:43' (0x635b620) of size 4
+SUMMARY: AddressSanitizer: global-buffer-overflow /src/gdal/gdal/frmts/grib/degrib/g2clib/reduce.c:155:23 in reduce
+Shadow bytes around the buggy address:
+  0x000080c63670: f9 f9 f9 f9 04 f9 f9 f9 f9 f9 f9 f9 04 f9 f9 f9
+  0x000080c63680: f9 f9 f9 f9 04 f9 f9 f9 f9 f9 f9 f9 04 f9 f9 f9
+  0x000080c63690: f9 f9 f9 f9 04 f9 f9 f9 f9 f9 f9 f9 04 f9 f9 f9
+  0x000080c636a0: f9 f9 f9 f9 04 f9 f9 f9 f9 f9 f9 f9 04 f9 f9 f9
+  0x000080c636b0: f9 f9 f9 f9 04 f9 f9 f9 f9 f9 f9 f9 04 f9 f9 f9
+=>0x000080c636c0: f9 f9 f9 f9 04 f9 f9 f9 f9 f9 f9[f9]00 00 00 00
+  0x000080c636d0: 00 00 00 00 00 00 00 00 00 00 00 04 f9 f9 f9 f9
+  0x000080c636e0: 01 f9 f9 f9 f9 f9 f9 f9 00 00 00 f9 f9 f9 f9 f9
+  0x000080c636f0: 00 00 00 f9 f9 f9 f9 f9 00 00 00 f9 f9 f9 f9 f9
+  0x000080c63700: 00 00 00 f9 f9 f9 f9 f9 00 00 00 f9 f9 f9 f9 f9
+  0x000080c63710: 00 00 00 f9 f9 f9 f9 f9 00 00 00 f9 f9 f9 f9 f9
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+==24386==ABORTING

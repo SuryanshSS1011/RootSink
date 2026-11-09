@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042481412",
+  "chain": "CWE-416->CWE-125",
+  "project": "php-src",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42481412",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "8dd91f52a52f0804970fe65738fade9be4bafd54",
+      "fix_commits": [
+        "8dd91f52a52f0804970fe65738fade9be4bafd54"
+      ],
+      "repo": "https://github.com/php/php-src"
+    },
+    "patch": "From 8dd91f52a52f0804970fe65738fade9be4bafd54 Mon Sep 17 00:00:00 2001\nFrom: Nikita Popov <nikita.ppv@gmail.com>\nDate: Mon, 27 Jan 2020 16:13:36 +0100\nSubject: [PATCH] Remove state pointer argument from php_strip_tags\n\n---\n ext/filter/sanitizing_filters.c |  2 +-\n ext/standard/php_string.h       |  4 ++--\n ext/standard/string.c           | 22 ++++------------------\n 3 files changed, 7 insertions(+), 21 deletions(-)\n\ndiff --git a/ext/filter/sanitizing_filters.c b/ext/filter/sanitizing_filters.c\nindex cb1d3a10..25b2f39f 100644\n--- a/ext/filter/sanitizing_filters.c\n+++ b/ext/filter/sanitizing_filters.c\n@@ -194,7 +194,7 @@ void php_filter_string(PHP_INPUT_FILTER_PARAM_DECL)\n \tphp_filter_encode_html(value, enc);\n \n \t/* strip tags, implicitly also removes \\0 chars */\n-\tnew_len = php_strip_tags_ex(Z_STRVAL_P(value), Z_STRLEN_P(value), NULL, NULL, 0, 1);\n+\tnew_len = php_strip_tags_ex(Z_STRVAL_P(value), Z_STRLEN_P(value), NULL, 0, 1);\n \tZ_STRLEN_P(value) = new_len;\n \n \tif (new_len == 0) {\ndiff --git a/ext/standard/php_string.h b/ext/standard/php_string.h\nindex b7084d09..2c3953b9 100644\n--- a/ext/standard/php_string.h\n+++ b/ext/standard/php_string.h\n@@ -123,8 +123,8 @@ PHPAPI char *php_stristr(char *s, char *t, size_t s_len, size_t t_len);\n PHPAPI zend_string *php_str_to_str(const char *haystack, size_t length, const char *needle,\n \t\tsize_t needle_len, const char *str, size_t str_len);\n PHPAPI zend_string *php_trim(zend_string *str, char *what, size_t what_len, int mode);\n-PHPAPI size_t php_strip_tags(char *rbuf, size_t len, uint8_t *state, const char *allow, size_t allow_len);\n-PHPAPI size_t php_strip_tags_ex(char *rbuf, size_t len, uint8_t *stateptr, const char *allow, size_t allow_len, zend_bool allow_tag_spaces);\n+PHPAPI size_t php_strip_tags(char *rbuf, size_t len, const char *allow, size_t allow_len);\n+PHPAPI size_t php_strip_tags_ex(char *rbuf, size_t len, const char *allow, size_t allow_len, zend_bool allow_tag_spaces);\n PHPAPI void php_implode(const zend_string *delim, HashTable *arr, zval *return_value);\n PHPAPI void php_explode(const zend_string *delim, zend_string *str, zval *return_value, zend_long limit);\n \ndiff --git a/ext/standard/string.c b/ext/standard/string.c\nindex ffa05a96..6fb9683c 100644\n--- a/ext/standard/string.c\n+++ b/ext/standard/string.c\n@@ -4659,7 +4659,7 @@ PHP_FUNCTION(strip_tags)\n \t}\n \n \tbuf = zend_string_init(ZSTR_VAL(str), ZSTR_LEN(str), 0);\n-\tZSTR_LEN(buf) = php_strip_tags_ex(ZSTR_VAL(buf), ZSTR_LEN(str), NULL, allowed_tags, allowed_tags_len, 0);\n+\tZSTR_LEN(buf) = php_strip_tags_ex(ZSTR_VAL(buf), ZSTR_LEN(str), allowed_tags, allowed_tags_len, 0);\n \tsmart_str_free(&tags_ss);\n \tRETURN_NEW_STR(buf);\n }\n@@ -4869,9 +4869,9 @@ int php_tag_find(char *tag, size_t len, const char *set) {\n }\n /* }}} */\n \n-PHPAPI size_t php_strip_tags(char *rbuf, size_t len, uint8_t *stateptr, const char *allow, size_t allow_len) /* {{{ */\n+PHPAPI size_t php_strip_tags(char *rbuf, size_t len, const char *allow, size_t allow_len) /* {{{ */\n {\n-\treturn php_strip_tags_ex(rbuf, len, stateptr, allow, allow_len, 0);\n+\treturn php_strip_tags_ex(rbuf, len, allow, allow_len, 0);\n }\n /* }}} */\n \n@@ -4895,7 +4895,7 @@ PHPAPI size_t php_strip_tags(char *rbuf, size_t len, uint8_t *stateptr, const ch\n \tswm: Added ability to strip <?xml tags without assuming it PHP\n \tcode.\n */\n-PHPAPI size_t php_strip_tags_ex(char *rbuf, size_t len, uint8_t *stateptr, const char *allow, size_t allow_len, zend_bool allow_tag_spaces)\n+PHPAPI size_t php_strip_tags_ex(char *rbuf, size_t len, const char *allow, size_t allow_len, zend_bool allow_tag_spaces)\n {\n \tchar *tbuf, *tp, *rp, c, lc;\n \tconst char *buf, *p, *end;\n@@ -4920,18 +4920,6 @@ PHPAPI size_t php_strip_tags_ex(char *rbuf, size_t len, uint8_t *stateptr, const\n \t\ttbuf = tp = NULL;\n \t}\n \n-\tif (stateptr) {\n-\t\tstate = *stateptr;\n-\t\tswitch (state) {\n-\t\t\tcase 1: goto state_1;\n-\t\t\tcase 2: goto state_2;\n-\t\t\tcase 3: goto state_3;\n-\t\t\tcase 4: goto state_4;\n-\t\t\tdefault:\n-\t\t\t\tbreak;\n-\t\t}\n-\t}\n-\n state_0:\n \tif (p >= end) {\n \t\tgoto finish;\n@@ -5225,8 +5213,6 @@ finish:\n \tif (allow_free) {\n \t\tefree(allow_free);\n \t}\n-\tif (stateptr)\n-\t\t*stateptr = state;\n \n \treturn (size_t)(rp - rbuf);\n }\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42481412-vul",
+      "digest": "sha256:b290dd98241b80da5aa41c280f9ab8d192d3b08c04b5b94e426225345fc5ef65"
+    },
+    "patched": {
+      "ref": "n132/arvo:42481412-fix",
+      "digest": "sha256:0358327f81b45ad23eb0673f4e61e4aa29d72066ead4d93462b012e71666af35"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/php-src/oniguruma/src/regcomp.c:715",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/php-src/oniguruma/src/regcomp.c:715"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

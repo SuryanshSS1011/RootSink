@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042509411",
+  "chain": "CWE-456->CWE-457",
+  "project": "selinux",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42509411",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "dfc652f01ea22e367c39d132873735473608f8fa",
+      "fix_commits": [
+        "dfc652f01ea22e367c39d132873735473608f8fa"
+      ],
+      "repo": "https://github.com/SELinuxProject/selinux"
+    },
+    "patch": "From dfc652f01ea22e367c39d132873735473608f8fa Mon Sep 17 00:00:00 2001\nFrom: James Carter <jwcart2@gmail.com>\nDate: Mon, 14 Mar 2022 14:17:11 -0400\nSubject: [PATCH] libsepol: Use calloc when initializing bool_val_to_struct\n array\n\nUse calloc() instead of mallocarray() so that everything is\ninitialized to zero to prevent the use of unitialized memory when\nvalidating malformed binary policies.\n\nFound by oss-fuzz (#45493)\n\nSigned-off-by: James Carter <jwcart2@gmail.com>\n---\n libsepol/src/conditional.c | 2 +-\n 1 file changed, 1 insertion(+), 1 deletion(-)\n\ndiff --git a/libsepol/src/conditional.c b/libsepol/src/conditional.c\nindex f78b38a..a620451 100644\n--- a/libsepol/src/conditional.c\n+++ b/libsepol/src/conditional.c\n@@ -522,7 +522,7 @@ int cond_init_bool_indexes(policydb_t * p)\n \tif (p->bool_val_to_struct)\n \t\tfree(p->bool_val_to_struct);\n \tp->bool_val_to_struct = (cond_bool_datum_t **)\n-\t    mallocarray(p->p_bools.nprim, sizeof(cond_bool_datum_t *));\n+\t    calloc(p->p_bools.nprim, sizeof(cond_bool_datum_t *));\n \tif (!p->bool_val_to_struct)\n \t\treturn -1;\n \treturn 0;\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42509411-vul",
+      "digest": "sha256:467f0b7d2b8bb3248609ff1413060174a45ce192b28b7c31c1996c3405f59a0b"
+    },
+    "patched": {
+      "ref": "n132/arvo:42509411-fix",
+      "digest": "sha256:3154983671d33ca2f0c54a47f121bd233a01e47860f8a8e8226b8ec3b18abd18"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/selinux/libsepol/src/policydb_validate.c:671",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/selinux/libsepol/src/policydb_validate.c:671"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-959119835",
+  "chain": "CWE-129->CWE-787",
+  "project": "ndpi",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42513176",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/ntop/nDPI/commit/dfe6557e181afc5d4fb4d01241760920fd4b7b69",
+      "fix_commits": [
+        "dfe6557e181afc5d4fb4d01241760920fd4b7b69"
+      ],
+      "repo": "https://github.com/ntop/nDPI"
+    },
+    "patch": "diff --git a/src/lib/protocols/tftp.c b/src/lib/protocols/tftp.c\nindex f5aa32e6245..2366bbe1f96 100644\n--- a/src/lib/protocols/tftp.c\n+++ b/src/lib/protocols/tftp.c\n@@ -98,7 +98,8 @@ void ndpi_search_tftp(struct ndpi_detection_module_struct\n           {\n             ndpi_set_risk(ndpi_struct, flow, NDPI_MALFORMED_PACKET, \"Invalid TFTP RR/WR header: Source/Destination file missing\");\n           } else {\n-            memcpy(flow->protos.tftp.filename, &packet->payload[2], ndpi_min(filename_len, sizeof(flow->protos.tftp.filename) - 1));\n+            filename_len = ndpi_min(filename_len, sizeof(flow->protos.tftp.filename) - 1);\n+            memcpy(flow->protos.tftp.filename, &packet->payload[2], filename_len);\n             flow->protos.tftp.filename[filename_len] = '\\0';\n           }\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42513176-vul",
+      "digest": "sha256:7acc599a8871d57de3d475dbe5a9df80d6fd49f4d763f0d01167be32d734673b"
+    },
+    "patched": {
+      "ref": "n132/arvo:42513176-fix",
+      "digest": "sha256:f3be6bba9ee141d93f553ba50b17b33f32d675eb586834d42962123cbc10677a"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "crash_site": "/src/ndpi/src/lib/protocols/tftp.c:102",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 129,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "site": "/src/ndpi/src/lib/protocols/tftp.c:102"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

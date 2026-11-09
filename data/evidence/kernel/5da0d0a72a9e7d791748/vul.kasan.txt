@@ -1,0 +1,115 @@
+[    0.000000] Linux version 4.19.0+ (runner@runnervmxehtw) (gcc version 10.5.0 (GCC)) #1 SMP PREEMPT Tue Oct 20 01:19:52 UTC 2026
+[init] environment up, running reproducer
+[    8.736505] ==================================================================
+[    8.739002] BUG: KASAN: slab-out-of-bounds in sctp_getsockopt+0x640b/0x732c
+[    8.741279] Read of size 8 at addr ffff880118912c68 by task repro/3361
+[    8.743364] 
+[    8.743893] CPU: 2 PID: 3361 Comm: repro Not tainted 4.19.0+ #1
+[    8.745824] Hardware name: QEMU Standard PC (i440FX + PIIX, 1996), BIOS 1.16.3-debian-1.16.3-2 04/01/2014
+[    8.748931] Call Trace:
+[    8.749761]  dump_stack+0x172/0x233
+[    8.750935]  ? dump_stack_print_info.cold+0x1b/0x1b
+[    8.752496]  ? kmsg_dump_rewind_nolock+0xdf/0xdf
+[    8.754023]  ? rwlock_bug.part.0+0x90/0x90
+[    8.755361]  ? lock_release+0xd10/0xd10
+[    8.756613]  print_address_description.cold+0x57/0x21f
+[    8.758289]  kasan_report_error.cold+0x8a/0x215
+[    8.759807]  ? sctp_getsockopt+0x640b/0x732c
+[    8.761204]  __asan_report_load8_noabort+0x89/0x90
+[    8.762775]  ? sctp_getsockopt+0x640b/0x732c
+[    8.764169]  sctp_getsockopt+0x640b/0x732c
+[    8.765525]  ? print_usage_bug+0xd0/0xd0
+[    8.766830]  ? print_usage_bug+0xd0/0xd0
+[    8.768107]  ? sctp_getsockopt_peeloff_common+0x2e0/0x2e0
+[    8.769875]  ? __lock_acquire+0x5d4/0x4960
+[    8.771219]  ? mark_held_locks+0x100/0x100
+[    8.772560]  ? futex_wait+0x700/0x960
+[    8.773785]  ? futex_wait_setup+0x350/0x350
+[    8.775165]  ? kasan_check_write+0x14/0x20
+[    8.776505]  ? wake_up_q+0x98/0xe0
+[    8.777644]  ? __might_fault+0xf1/0x1b0
+[    8.778924]  ? __might_fault+0xf1/0x1b0
+[    8.780190]  ? __fget+0x3bb/0x5f0
+[    8.781289]  ? lock_downgrade+0x8b0/0x8b0
+[    8.782596]  ? rcu_is_watching+0xa8/0x1a0
+[    8.783946]  ? rcu_qs+0x110/0x110
+[    8.785057]  ? rcu_qs+0x110/0x110
+[    8.786150]  ? bdw_modeset_calc_cdclk+0x100/0x310
+[    8.787686]  ? aa_profile_af_perm+0x480/0x480
+[    8.789111]  ? syscall_return_slowpath+0x533/0x950
+[    8.790658]  ? aa_sk_perm+0x15a/0x6e0
+[    8.791888]  ? fget_raw+0x10/0x10
+[    8.792994]  ? aa_af_perm+0x560/0x560
+[    8.794188]  ? exit_to_usermode_loop+0x117/0x2e0
+[    8.795692]  sock_common_getsockopt+0x78/0xf0
+[    8.797114]  __sys_getsockopt+0x16e/0x3a0
+[    8.798414]  ? kernel_setsockopt+0x1e0/0x1e0
+[    8.799818]  ? lockdep_hardirqs_on+0x415/0x5d0
+[    8.801284]  ? do_syscall_64+0x71/0x240
+[    8.802537]  ? trace_hardirqs_on+0x77/0x280
+[    8.803923]  ? trace_hardirqs_off_caller+0x260/0x260
+[    8.805532]  ? trace_hardirqs_off_thunk+0x1a/0x1c
+[    8.807072]  __x64_sys_getsockopt+0xb9/0x140
+[    8.808463]  do_syscall_64+0x154/0x240
+[    8.809709]  ? syscall_return_slowpath+0x950/0x950
+[    8.811273]  ? trace_hardirqs_off_thunk+0x1a/0x1c
+[    8.812824]  entry_SYSCALL_64_after_hwframe+0x49/0xbe
+[    8.814462] RIP: 0033:0x415d6d
+[    8.815490] Code: b3 66 2e 0f 1f 84 00 00 00 00 00 66 90 f3 0f 1e fa 48 89 f8 48 89 f7 48 89 d6 48 89 ca 4d 89 c2 4d 89 c8 4c 8b 4c 24 08 0f 05 <48> 3d 01 f0 ff ff 73 01 c3 48 c7 c1 b8 ff ff ff f7 d8 64 89 01 48
+[    8.821460] RSP: 002b:00007f2ff818e228 EFLAGS: 00000203 ORIG_RAX: 0000000000000037
+[    8.823907] RAX: ffffffffffffffda RBX: 00000000004c8ba8 RCX: 0000000000415d6d
+[    8.826221] RDX: 0000000000000074 RSI: 0000000000000084 RDI: 0000000000000003
+[    8.828532] RBP: 00000000004c8ba0 R08: 0000000020000040 R09: 00007f2ff818ecdc
+[    8.830902] R10: 0000000020000080 R11: 0000000000000203 R12: 0000000000499028
+[    8.833323] R13: ffffffffffffffb8 R14: 000000000000006e R15: 00007ffcace9e600
+[    8.835832] 
+[    8.836400] Allocated by task 3360:
+[    8.837609]  save_stack+0x45/0xc0
+[    8.838867]  kasan_kmalloc+0xce/0xf0
+[    8.840106]  kmem_cache_alloc_trace+0x155/0x3d0
+[    8.841694]  sctp_stream_init_ext+0x48/0xf0
+[    8.843155]  sctp_sendmsg_to_asoc+0x10ca/0x17f0
+[    8.844702]  sctp_sendmsg+0x12ff/0x1fa0
+[    8.846067]  inet_sendmsg+0x155/0x5c0
+[    8.847338]  sock_sendmsg+0xb8/0xf0
+[    8.848551]  __sys_sendto+0x326/0x6d0
+[    8.849834]  __x64_sys_sendto+0xdc/0x1a0
+[    8.851166]  do_syscall_64+0x154/0x240
+[    8.852451]  entry_SYSCALL_64_after_hwframe+0x49/0xbe
+[    8.854212] 
+[    8.854752] Freed by task 3356:
+[    8.855849]  save_stack+0x45/0xc0
+[    8.857050]  __kasan_slab_free+0x100/0x150
+[    8.858483]  kasan_slab_free+0xe/0x10
+[    8.859778]  kfree+0xcd/0x220
+[    8.860831]  kzfree+0x29/0x30
+[    8.861870]  apparmor_file_free_security+0xfe/0x160
+[    8.863491]  security_file_free+0x40/0x70
+[    8.864908]  __fput+0x421/0xac0
+[    8.866051]  ____fput+0x9/0x10
+[    8.867123]  task_work_run+0x1a9/0x250
+[    8.868411]  exit_to_usermode_loop+0x257/0x2e0
+[    8.869957]  syscall_return_slowpath+0x533/0x950
+[    8.871525]  do_syscall_64+0x181/0x240
+[    8.872832]  entry_SYSCALL_64_after_hwframe+0x49/0xbe
+[    8.874578] 
+[    8.875138] The buggy address belongs to the object at ffff880118912c00
+[    8.875138]  which belongs to the cache kmalloc-96 of size 96
+[    8.879313] The buggy address is located 8 bytes to the right of
+[    8.879313]  96-byte region [ffff880118912c00, ffff880118912c60)
+[    8.883334] The buggy address belongs to the page:
+[    8.884951] page:ffffea0004624480 count:1 mapcount:0 mapping:ffff88011a0004c0 index:0x0
+[    8.887710] flags: 0x2fffc0000000200(slab)
+[    8.889093] raw: 02fffc0000000200 ffffea0004626f88 ffffea0004629288 ffff88011a0004c0
+[    8.891654] raw: 0000000000000000 ffff880118912000 0000000100000020 0000000000000000
+[    8.893268] repro (3358) used greatest stack depth: 20496 bytes left
+[    8.894591] page dumped because: kasan: bad access detected
+[    8.894594] 
+[    8.899606] Memory state around the buggy address:
+[    8.901167]  ffff880118912b00: fb fb fb fb fb fb fb fb fb fb fb fb fc fc fc fc
+[    8.903485]  ffff880118912b80: fb fb fb fb fb fb fb fb fb fb fb fb fc fc fc fc
+[    8.905822] >ffff880118912c00: 00 00 00 00 00 00 00 00 00 00 00 fc fc fc fc fc
+[    8.908215]                                                           ^
+[    8.910325]  ffff880118912c80: fb fb fb fb fb fb fb fb fb fb fb fb fc fc fc fc
+[    8.912630]  ffff880118912d00: fb fb fb fb fb fb fb fb fb fb fb fb fc fc fc fc
+[    8.914942] ==================================================================

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042512672",
+  "chain": "CWE-20->CWE-787",
+  "project": "ffmpeg",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42512672",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "cd847f86d31f87f0f7733ca6ab7a2c022a1398bd",
+      "fix_commits": [
+        "cd847f86d31f87f0f7733ca6ab7a2c022a1398bd"
+      ],
+      "repo": "https://git.ffmpeg.org/ffmpeg.git"
+    },
+    "patch": "From cd847f86d31f87f0f7733ca6ab7a2c022a1398bd Mon Sep 17 00:00:00 2001\nFrom: Michael Niedermayer <michael@niedermayer.cc>\nDate: Sun, 3 Jul 2022 00:43:21 +0200\nSubject: [PATCH] avcodec/qdrw: adjust max colors to array size\n\nFixes: out of array access\nFixes: 48429/clusterfuzz-testcase-minimized-ffmpeg_AV_CODEC_ID_QDRAW_fuzzer-4608329791438848\n\nFound-by: continuous fuzzing process https://github.com/google/oss-fuzz/tree/master/projects/ffmpeg\nReviewed-by: Paul B Mahol <onemda@gmail.com>\nSigned-off-by: Michael Niedermayer <michael@niedermayer.cc>\n---\n libavcodec/qdrw.c | 2 +-\n 1 file changed, 1 insertion(+), 1 deletion(-)\n\ndiff --git a/libavcodec/qdrw.c b/libavcodec/qdrw.c\nindex 849d4a5..ff8f977 100644\n--- a/libavcodec/qdrw.c\n+++ b/libavcodec/qdrw.c\n@@ -368,7 +368,7 @@ static int decode_frame(AVCodecContext *avctx, AVFrame *p,\n             bytestream2_skip(&gbc, 18);\n             colors = bytestream2_get_be16(&gbc);\n \n-            if (colors < 0 || colors > 256) {\n+            if (colors < 0 || colors > 255) {\n                 av_log(avctx, AV_LOG_ERROR,\n                        \"Error color count - %i(0x%X)\\n\", colors, colors);\n                 return AVERROR_INVALIDDATA;\n-- \n2.55.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42512672-vul",
+      "digest": "sha256:98a6f379379ede683398f6dc55a149f241dde78a3576a449206a5e85debee522"
+    },
+    "patched": {
+      "ref": "n132/arvo:42512672-fix",
+      "digest": "sha256:32a04d87195639c854bd3018080b8b1fcdee94afff6570e359017fafd6b62eae"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/ffmpeg/libavcodec/qdrw.c:70",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/ffmpeg/libavcodec/qdrw.c:70"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

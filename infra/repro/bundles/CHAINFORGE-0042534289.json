@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042534289",
+  "chain": "CWE-1284->CWE-125",
+  "project": "gpac",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42534289",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "38b8c96c4795bc1e1d5f9d7d25d550ab298bf6ee",
+      "fix_commits": [
+        "38b8c96c4795bc1e1d5f9d7d25d550ab298bf6ee"
+      ],
+      "repo": "https://github.com/gpac/gpac"
+    },
+    "patch": "From 38b8c96c4795bc1e1d5f9d7d25d550ab298bf6ee Mon Sep 17 00:00:00 2001\nFrom: Aurelien David <aurelien.david@telecom-paristech.fr>\nDate: Mon, 15 Apr 2024 12:28:59 +0200\nSubject: [PATCH] add some size checks to dump_udta_m2v()\n\nossfuzz issue 67891\n---\n src/filters/inspect.c | 21 ++++++++++++++++-----\n 1 file changed, 16 insertions(+), 5 deletions(-)\n\ndiff --git a/src/filters/inspect.c b/src/filters/inspect.c\nindex 3b44226..c4e7aa6 100644\n--- a/src/filters/inspect.c\n+++ b/src/filters/inspect.c\n@@ -553,19 +553,25 @@ static void dump_t35(FILE *dump, GF_BitStream *bs, u32 sei_size)\n \n static u32 dump_udta_m2v(FILE *dump, u8 *data, u32 sei_size)\n {\n-    u32 udta_id = GF_4CC(data[0], data[1], data[2], data[3]);\n+\n+    u32 udta_id = 0;\n+\tif (sei_size < 4)\n+\t\treturn 1;\n+\n+\tudta_id = GF_4CC(data[0], data[1], data[2], data[3]);\n     u32 udta_code = 0;\n \n \tinspect_printf(dump, \" udta_id=\\\"%s\\\"\", gf_4cc_to_str(udta_id));\n-\tif (udta_id==GF_4CC('G','A','9','4'))\n+\n+\tif (udta_id==GF_4CC('G','A','9','4') && sei_size >= 5)\n \t\tudta_code = data[4];\n-\telse if (udta_id==GF_4CC('D','T','G','1'))\n+\telse if (udta_id==GF_4CC('D','T','G','1') && sei_size >= 5)\n \t\tudta_code = data[4];\n \n \tif (udta_code)\n \t\tinspect_printf(dump, \" udta_code=\\\"0x%X\\\"\", udta_code);\n \n-\tif (udta_code == 3) {\n+\tif (udta_code == 3 && sei_size >= 7) {\n \t\tu32 i;\n \t\tdata+=5;\n \t\tinspect_printf(dump, \" em_data_flag=\\\"%d\\\"\\n\", (data[0] & 0x80) ? 1 : 0);\n@@ -575,8 +581,11 @@ static u32 dump_udta_m2v(FILE *dump, u8 *data, u32 sei_size)\n \t\tinspect_printf(dump, \" cc_count=\\\"%d\\\"\\n\", cc_count);\n \t\tinspect_printf(dump, \" em_data=\\\"%x\\\"\\n\", data[1]);\n \t\tdata+=2;\n+\t\tsei_size-=7;\n \t\tinspect_printf(dump, \" cc_data=\\\"[\");\n \t\tfor (i=0; i< cc_count; ++i) {\n+\t\t\tif (sei_size < 3)\n+\t\t\t\tbreak;\n \t\t\tu8 valid = (data[0]>>2) & 0x1;\n \t\t\tu8 type = data[0] & 0x3;\n \t\t\tu16 ccdata = (data[1]<<8) | data[2];\n@@ -586,6 +595,7 @@ static u32 dump_udta_m2v(FILE *dump, u8 *data, u32 sei_size)\n \t\t\t\telse\n \t\t\t\t\tinspect_printf(dump, \"skip\");\n \t\t\tdata+=3;\n+\t\t\tsei_size-=3;\n \t\t}\n \t\tinspect_printf(dump, \"]\\\"\");\n \t}\n@@ -2766,7 +2776,8 @@ static void inspect_dump_mpeg124(PidCtx *pctx, char *data, u32 size, FILE *dump)\n \t\t\t\tbreak;\n \t\t\tcase M2V_UDTA_START_CODE:\n \t\t\t\tstart = gf_m4v_get_object_start(m4v);\n-\t\t\t\tdump_udta_m2v(dump, data + start+4, (u32) (size-start-4));\n+\t\t\t\tif (size > start+4)\n+\t\t\t\t\tdump_udta_m2v(dump, data + start+4, (u32) (size-start-4));\n \t\t\t\tbreak;\n \t\t\tdefault:\n \t\t\t\tbreak;\n-- \n2.55.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42534289-vul",
+      "digest": "sha256:f58974ab53b9faa5cbc78ece893d0ed72d9b350ce9a40235dae78dadacab6c86"
+    },
+    "patched": {
+      "ref": "n132/arvo:42534289-fix",
+      "digest": "sha256:5faa5ffa39ddcd0552b905c6900ed7a8d360860fe0652f0f019e36e226a356a5"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/gpac/src/filters/inspect.c:565",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/gpac/src/filters/inspect.c:565"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

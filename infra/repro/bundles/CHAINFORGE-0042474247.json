@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042474247",
+  "chain": "CWE-416->CWE-125",
+  "project": "picotls",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42474247",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "75f9c33cef261046f75c6fe3a02f9912e55211ee",
+      "fix_commits": [
+        "75f9c33cef261046f75c6fe3a02f9912e55211ee"
+      ],
+      "repo": "https://github.com/h2o/picotls"
+    },
+    "patch": "diff --git a/lib/minicrypto-pem.c b/lib/minicrypto-pem.c\nindex f40d2255a..8e068d3f4 100644\n--- a/lib/minicrypto-pem.c\n+++ b/lib/minicrypto-pem.c\n@@ -106,7 +106,7 @@ size_t ptls_minicrypto_asn1_decode_private_key(ptls_asn1_pkcs8_private_key_t *pk\n         }\n     }\n \n-    if (last_byte1 < byte_index) {\n+    if (*decode_error == 0 && last_byte1 < byte_index) {\n         byte_index = ptls_asn1_error_message(\"Length larger than message\", bytes_max, byte_index, 0, log_ctx);\n         *decode_error = PTLS_ERROR_BER_EXCESSIVE_LENGTH;\n     }\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42474247-vul",
+      "digest": "sha256:4908ec7cd85e90b20f6453c766430bb4fd20b43fa9b3be991a344b3085a63bce"
+    },
+    "patched": {
+      "ref": "n132/arvo:42474247-fix",
+      "digest": "sha256:4322a6906dbf781fc0215e84038c2e8a9463b2b1336e2629ba9d468a91d52743"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/picotls/lib/asn1.c:86",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/picotls/lib/asn1.c:86"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

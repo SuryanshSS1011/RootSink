@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042474263",
+  "chain": "CWE-20->CWE-787",
+  "project": "ffmpeg",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42474263",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "013f71497ba51e8381a6a4521b9279ed502e7077",
+      "fix_commits": [
+        "013f71497ba51e8381a6a4521b9279ed502e7077"
+      ],
+      "repo": "https://git.ffmpeg.org/ffmpeg.git"
+    },
+    "patch": "From 013f71497ba51e8381a6a4521b9279ed502e7077 Mon Sep 17 00:00:00 2001\nFrom: Michael Niedermayer <michael@niedermayer.cc>\nDate: Sat, 23 Mar 2019 18:28:10 +0100\nSubject: [PATCH] avcodec/tiff: do not allow bpp 40 with undefined pixel\n formats\n\nFixes: Out of array access, assertion failure\nFixes: 13851/clusterfuzz-testcase-minimized-ffmpeg_AV_CODEC_ID_TIFF_fuzzer-5754570929602560\nFixes: 13869/clusterfuzz-testcase-minimized-ffmpeg_AV_CODEC_ID_TIFF_fuzzer-5695998313103360\nFixes: 13873/clusterfuzz-testcase-minimized-ffmpeg_AV_CODEC_ID_TIFF_fuzzer-5077273645940736\nFixes: 13874/clusterfuzz-testcase-minimized-ffmpeg_AV_CODEC_ID_TIFF_fuzzer-5756396757319680\nFixes: 13877/clusterfuzz-testcase-minimized-ffmpeg_AV_CODEC_ID_TIFF_fuzzer-5741026750234624\nFixes: 13880/clusterfuzz-testcase-minimized-ffmpeg_AV_CODEC_ID_TIFF_fuzzer-5649148809838592\n\nFound-by: continuous fuzzing process https://github.com/google/oss-fuzz/tree/master/projects/ffmpeg\nReviewed-by: Carl Eugen Hoyos <ceffmpeg@gmail.com>\nSigned-off-by: Michael Niedermayer <michael@niedermayer.cc>\n---\n libavcodec/tiff.c | 5 +++++\n 1 file changed, 5 insertions(+)\n\ndiff --git a/libavcodec/tiff.c b/libavcodec/tiff.c\nindex 29a80a6..3130eb8 100644\n--- a/libavcodec/tiff.c\n+++ b/libavcodec/tiff.c\n@@ -830,6 +830,11 @@ static int init_image(TiffContext *s, ThreadFrame *frame)\n     case 405:\n         if (s->photometric == TIFF_PHOTOMETRIC_SEPARATED)\n             s->avctx->pix_fmt = AV_PIX_FMT_RGBA;\n+        else {\n+            av_log(s->avctx, AV_LOG_ERROR,\n+                \"bpp=40 without PHOTOMETRIC_SEPARATED is unsupported\\n\");\n+            return AVERROR_PATCHWELCOME;\n+        }\n         break;\n     case 483:\n         s->avctx->pix_fmt = s->le ? AV_PIX_FMT_RGB48LE  : AV_PIX_FMT_RGB48BE;\n-- \n2.55.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42474263-vul",
+      "digest": "sha256:0ffb63503c840bf01851c0ff47b4ecf8f42725b8808fbe373d79c7b09777e63d"
+    },
+    "patched": {
+      "ref": "n132/arvo:42474263-fix",
+      "digest": "sha256:9314e65a2c7f89f7fcd5313d16dafa6881e8a55b15bc1e06dfee375e3450cf96"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/ffmpeg/libavcodec/lzw.c:184",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/ffmpeg/libavcodec/lzw.c:184"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

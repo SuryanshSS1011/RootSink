@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042537563",
+  "chain": "CWE-456->CWE-457",
+  "project": "ffmpeg",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42537563",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "2b5f000d3f6f9e737e918a5438e6c881f65e70e2",
+      "fix_commits": [
+        "2b5f000d3f6f9e737e918a5438e6c881f65e70e2"
+      ],
+      "repo": "https://git.ffmpeg.org/ffmpeg.git"
+    },
+    "patch": "From 2b5f000d3f6f9e737e918a5438e6c881f65e70e2 Mon Sep 17 00:00:00 2001\nFrom: =?UTF-8?q?Kacper=20Michaj=C5=82ow?= <kasper93@gmail.com>\nDate: Thu, 27 Jun 2024 02:40:37 +0200\nSubject: [PATCH] avformat/jpegxl_anim_dec: ensure input padding is zeroed\nMIME-Version: 1.0\nContent-Type: text/plain; charset=UTF-8\nContent-Transfer-Encoding: 8bit\n\nFixes use of uninitialized value, reported by MSAN.\n\nFound by OSS-Fuzz.\n\nSigned-off-by: Kacper Michaj\u0142ow <kasper93@gmail.com>\n\nFixes: 70837/clusterfuzz-testcase-minimized-ffmpeg_dem_JPEGXL_ANIM_fuzzer-5089407768526848\nSigned-off-by: Michael Niedermayer <michael@niedermayer.cc>\n---\n libavformat/jpegxl_anim_dec.c | 2 ++\n 1 file changed, 2 insertions(+)\n\ndiff --git a/libavformat/jpegxl_anim_dec.c b/libavformat/jpegxl_anim_dec.c\nindex ac95d3b..2338a2e 100644\n--- a/libavformat/jpegxl_anim_dec.c\n+++ b/libavformat/jpegxl_anim_dec.c\n@@ -124,6 +124,8 @@ static int jpegxl_anim_read_header(AVFormatContext *s)\n         }\n     }\n \n+    memset(head + headsize, 0, AV_INPUT_BUFFER_PADDING_SIZE);\n+\n     /* offset in bits of the animation header */\n     ret = ff_jpegxl_parse_codestream_header(head, headsize, &meta, 0);\n     if (ret < 0 || meta.animation_offset <= 0)\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42537563-vul",
+      "digest": "sha256:706cf7d687128a02e3d4706ecf5428f7856b7ef6cf0fdd36e6322a346e6e962d"
+    },
+    "patched": {
+      "ref": "n132/arvo:42537563-fix",
+      "digest": "sha256:0201bcca9e31ba489e1754fc36e90832a1793b131048a5b671f53a06295be8c6"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/ffmpeg/libavcodec/jpegxl_parse.c:40",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/ffmpeg/libavcodec/jpegxl_parse.c:40"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

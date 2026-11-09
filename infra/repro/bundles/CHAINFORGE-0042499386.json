@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042499386",
+  "chain": "CWE-20->CWE-125",
+  "project": "mruby",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42499386",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "9c43276eb51d81ed6f62ec1810c944580caebc40",
+      "fix_commits": [
+        "9c43276eb51d81ed6f62ec1810c944580caebc40"
+      ],
+      "repo": "https://github.com/mruby/mruby"
+    },
+    "patch": "diff --git a/mrbgems/mruby-compiler/core/codegen.c b/mrbgems/mruby-compiler/core/codegen.c\nindex 4aac984a34..c0d39dcb77 100644\n--- a/mrbgems/mruby-compiler/core/codegen.c\n+++ b/mrbgems/mruby-compiler/core/codegen.c\n@@ -488,11 +488,19 @@ gen_move(codegen_scope *s, uint16_t dst, uint16_t src, int nopeep)\n       s->pc = s->lastpc;\n       genop_2(s, data.insn, dst, data.b);\n       break;\n-    case OP_GETUPVAR: case OP_LOADI32:\n+    case OP_GETUPVAR:\n       if (nopeep || data.a != src || data.a < s->nlocals) goto normal;\n       s->pc = s->lastpc;\n       genop_3(s, data.insn, dst, data.b, data.c);\n       break;\n+    case OP_LOADI32:\n+      if (nopeep || data.a != src || data.a < s->nlocals) goto normal;\n+      else {\n+        uint32_t i = (uint32_t)data.b<<16|data.c;\n+        s->pc = s->lastpc;\n+        genop_2SS(s, data.insn, dst, i);\n+      }\n+      break;\n     default:\n       goto normal;\n     }\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42499386-vul",
+      "digest": "sha256:0a3e9e9393e1e23ddc74276bf0dffa9ed753b87210c9cbe1d515258169265dca"
+    },
+    "patched": {
+      "ref": "n132/arvo:42499386-fix",
+      "digest": "sha256:47e16eef68f8e45e6e85fd2dfe595be6bfefc9ee1affeb2cfea5905c049de7ca"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/mruby/src/vm.c:1140",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/mruby/src/vm.c:1140"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

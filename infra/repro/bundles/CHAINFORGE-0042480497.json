@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042480497",
+  "chain": "CWE-416->CWE-125",
+  "project": "samba",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42480497",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "66d12eb98aba10948f829d08b4144969ead5ddbb",
+      "fix_commits": [
+        "66d12eb98aba10948f829d08b4144969ead5ddbb"
+      ],
+      "repo": "https://gitlab.com/samba-team/samba"
+    },
+    "patch": "diff --git a/lib/fuzzing/fuzz_ndr_X.c b/lib/fuzzing/fuzz_ndr_X.c\nindex 5fc21dcef263b9f87a634cef62eaa3ac16bfb768..e8c3bb4cf769ff3b71cddbd8d82a64634ffbae5f 100644\n--- a/lib/fuzzing/fuzz_ndr_X.c\n+++ b/lib/fuzzing/fuzz_ndr_X.c\n@@ -251,6 +251,16 @@ int LLVMFuzzerTestOneInput(uint8_t *data, size_t size) {\n \t\t\tTALLOC_FREE(mem_ctx);\n \t\t\treturn 0;\n \t\t}\n+\n+\t\t/*\n+\t\t * We must initialise the buffer (even if we would\n+\t\t * prefer not to for the sake of eg valgrind) as\n+\t\t * otherwise the special handler for 'out pointer with\n+\t\t * [size_is()] refers to in value with [ref]' fails to\n+\t\t * trigger\n+\t\t */\n+\t\tmemset(st, '\\0', sizeof(st));\n+\n \t\tndr_pull->flags |= LIBNDR_FLAG_REF_ALLOC;\n \n \t\tif (type == TYPE_OUT) {\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42480497-vul",
+      "digest": "sha256:5f8eedc265deaf602cf055b66896114e44b5a47f9a66c42f1cf959acfe9b8874"
+    },
+    "patched": {
+      "ref": "n132/arvo:42480497-fix",
+      "digest": "sha256:f5db9966795d7c00ac45630fcf783945c9a954e35324a3f339a7440e4aa36e5f"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "dynamic-stack-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/samba/bin/default/../../lib/util/util.c:840",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "dynamic-stack-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/samba/bin/default/../../lib/util/util.c:840"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

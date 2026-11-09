@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042534816",
+  "chain": "CWE-456->CWE-457",
+  "project": "pcre2",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42534816",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "4c7cc9a0037c2ac4490fe7cf879c3957538541a0",
+      "fix_commits": [
+        "4c7cc9a0037c2ac4490fe7cf879c3957538541a0"
+      ],
+      "repo": "https://github.com/PCRE2Project/pcre2"
+    },
+    "patch": "From 4c7cc9a0037c2ac4490fe7cf879c3957538541a0 Mon Sep 17 00:00:00 2001\nFrom: Philip Hazel <Philip.Hazel@gmail.com>\nDate: Wed, 29 May 2024 16:46:30 +0100\nSubject: [PATCH] Tidy fuzz support code and reduce length of compiled patterns\n that are tested with JIT, to avoid oss-fuzz timeouts.\n\n---\n ChangeLog               |  6 ++++++\n src/pcre2_fuzzsupport.c | 37 ++++++++++++++++++++++++-------------\n 2 files changed, 30 insertions(+), 13 deletions(-)\n\ndiff --git a/ChangeLog b/ChangeLog\nindex acfa021..aec7b15 100644\n--- a/ChangeLog\n+++ b/ChangeLog\n@@ -31,6 +31,12 @@ example pattern is: /(((?<=123?456456|ABC)))(?<=\\2)/\n \n    (f) Limit the size of compiled patterns to 10MB (see 6 below).\n \n+   (g) Do not run JIT on patterns whose compiled length is greater than 200K\n+       bytes because this takes a long time, causing oss-fuzz to time out.\n+\n+   (h) Avoid compiling or matching twice with the same options (this could\n+       happen if the input didn't set any options).\n+\n 3. Increase the maximum length of a name for a group from 32 to 128 because\n there is a user for whom 32 is too small.\n \ndiff --git a/src/pcre2_fuzzsupport.c b/src/pcre2_fuzzsupport.c\nindex 806df0f..cd78435 100644\n--- a/src/pcre2_fuzzsupport.c\n+++ b/src/pcre2_fuzzsupport.c\n@@ -8,7 +8,7 @@ rather than a file name. This allows easy testing of short strings.\n \n Written by Philip Hazel, October 2016\n Updated February 2024 (Addison Crump added 16-bit/32-bit and JIT support)\n-Further updates March/April 2024 by PH\n+Further updates March/April/May 2024 by PH\n ***************************************************************************/\n \n #include <errno.h>\n@@ -23,7 +23,7 @@ Further updates March/April 2024 by PH\n #include <sys/resource.h>\n \n #define STACK_SIZE_MB 256\n-#define JIT_SIZE_LIMIT (500 * 1024)\n+#define JIT_SIZE_LIMIT (200 * 1024)\n \n #ifndef PCRE2_CODE_UNIT_WIDTH\n #define PCRE2_CODE_UNIT_WIDTH 8\n@@ -56,10 +56,17 @@ below that output them. */\n    PCRE2_NOTEMPTY_ATSTART|PCRE2_PARTIAL_HARD| \\\n    PCRE2_PARTIAL_SOFT)\n \n+#define BASE_MATCH_OPTIONS \\\n+  (PCRE2_NO_JIT|PCRE2_DISABLE_RECURSELOOP_CHECK)\n+\n+\n #if defined(SUPPORT_DIFF_FUZZ) || defined(STANDALONE)\n static void print_compile_options(FILE *stream, uint32_t compile_options)\n {\n-fprintf(stream, \"Compile options %.8x =\", compile_options);\n+fprintf(stream, \"Compile options %s%.8x =\",\n+  (compile_options == PCRE2_NEVER_BACKSLASH_C)? \"(base) \" : \"\",\n+  compile_options);\n+\n fprintf(stream, \"%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s\\n\",\n   ((compile_options & PCRE2_ALT_BSUX) != 0)? \" alt_bsux\" : \"\",\n   ((compile_options & PCRE2_ALT_CIRCUMFLEX) != 0)? \" alt_circumflex\" : \"\",\n@@ -93,9 +100,12 @@ fprintf(stream, \"%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s\\n\",\n \n static void print_match_options(FILE *stream, uint32_t match_options)\n {\n-fprintf(stream, \"Match options %.8x =\", match_options);\n-fprintf(stream, \"%s%s%s%s%s%s%s%s%s%s\\n\",\n+fprintf(stream, \"Match options %s%.8x =\",\n+  (match_options == BASE_MATCH_OPTIONS)? \"(base) \" : \"\", match_options);\n+\n+fprintf(stream, \"%s%s%s%s%s%s%s%s%s%s%s\\n\",\n   ((match_options & PCRE2_ANCHORED) != 0)? \" anchored\" : \"\",\n+  ((match_options & PCRE2_DISABLE_RECURSELOOP_CHECK) != 0)? \" disable_recurseloop_check\" : \"\",\n   ((match_options & PCRE2_ENDANCHORED) != 0)? \" endanchored\" : \"\",\n   ((match_options & PCRE2_NO_JIT) != 0)? \" no_jit\" : \"\",\n   ((match_options & PCRE2_NO_UTF_CHECK) != 0)? \" no_utf_check\" : \"\",\n@@ -417,8 +427,7 @@ because \\C in random patterns is highly likely to cause a crash. */\n compile_options = ((random_options >> 32) & ALLOWED_COMPILE_OPTIONS) |\n   PCRE2_NEVER_BACKSLASH_C;\n match_options = (((uint32_t)random_options) & ALLOWED_MATCH_OPTIONS) |\n-  PCRE2_NO_JIT |\n-  PCRE2_DISABLE_RECURSELOOP_CHECK;\n+  BASE_MATCH_OPTIONS;\n \n /* Discard partial matching if PCRE2_ENDANCHORED is set, because they are not\n allowed together and just give an immediate error return. */\n@@ -465,7 +474,7 @@ for (int i = 0; i < 2; i++)\n     if (((struct pcre2_real_code *)code)->blocksize <= JIT_SIZE_LIMIT)\n       {\n #ifdef STANDALONE\n-      printf(\"Calling JIT compile\\n\");\n+      printf(\"Compile succeeded; calling JIT compile\\n\");\n #endif\n       jit_ret = pcre2_jit_compile(code, PCRE2_JIT_COMPLETE);\n #ifdef STANDALONE\n@@ -621,14 +630,14 @@ with the interpreter. */\n         }\n #endif  /* SUPPORT_JIT */\n \n-      match_options = PCRE2_NO_JIT;  /* For second time */\n+      if (match_options == BASE_MATCH_OPTIONS) break;  /* Don't do same twice */\n+      match_options = BASE_MATCH_OPTIONS;              /* For second time */\n       }\n \n     /* Match with DFA twice, with and without options, but remove options that\n     are not allowed with DFA. */\n \n-    match_options =\n-      save_match_options & ~(PCRE2_NO_JIT|PCRE2_DISABLE_RECURSELOOP_CHECK);\n+    match_options = save_match_options & ~BASE_MATCH_OPTIONS;\n \n #ifdef STANDALONE\n     printf(\"\\n\");\n@@ -662,7 +671,8 @@ with the interpreter. */\n         print_error(stdout, errorcode, \"DFA match failed: error %d: \", errorcode);\n #endif\n \n-      match_options = 0;  /* For second time */\n+      if (match_options == 0) break;  /* No point doing same twice */\n+      match_options = 0;              /* For second time */\n       }\n \n     match_options = save_match_options;  /* Reset for the second compile */\n@@ -681,7 +691,8 @@ with the interpreter. */\n #endif\n     }\n \n-  compile_options = PCRE2_NEVER_BACKSLASH_C;  /* For second time */\n+  if (compile_options == PCRE2_NEVER_BACKSLASH_C) break;  /* Avoid same twice */\n+  compile_options = PCRE2_NEVER_BACKSLASH_C;              /* For second time */\n   }\n \n /* Tidy up before exiting */\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42534816-vul",
+      "digest": "sha256:70166205397713f940469f4ead6672eced3a6dce7e23913e2f6f60f67f4b733b"
+    },
+    "patched": {
+      "ref": "n132/arvo:42534816-fix",
+      "digest": "sha256:b0b4164a36ca04705fac3226183647c9d6a1e9f66d3a0b7b039ced49fdac6dd8"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/pcre2/src/pcre2_jit_compile.c:9888",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/pcre2/src/pcre2_jit_compile.c:9888"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

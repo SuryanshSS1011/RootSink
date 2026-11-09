@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042515073",
+  "chain": "CWE-20->CWE-787",
+  "project": "gdal",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42515073",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "089866ec8830246e005d345d3e9c85d4cc751402",
+      "fix_commits": [
+        "089866ec8830246e005d345d3e9c85d4cc751402"
+      ],
+      "repo": "https://github.com/OSGeo/gdal"
+    },
+    "patch": "diff --git a/gdal/frmts/gtiff/libgeotiff/geo_normalize.c b/gdal/frmts/gtiff/libgeotiff/geo_normalize.c\nindex 70628af0a446..59166aac2596 100644\n--- a/gdal/frmts/gtiff/libgeotiff/geo_normalize.c\n+++ b/gdal/frmts/gtiff/libgeotiff/geo_normalize.c\n@@ -1,5 +1,5 @@\n /******************************************************************************\n- * $Id: geo_normalize.c 2769 2017-06-08 12:32:59Z rouault $\n+ * $Id: geo_normalize.c 2804 2018-01-09 17:41:09Z rouault $\n  *\n  * Project:  libgeotiff\n  * Purpose:  Code to normalize PCS and other composite codes in a GeoTIFF file.\n@@ -260,10 +260,13 @@ double GTIFAngleToDD( double dfAngle, int nUOMAngle )\n {\n     if( nUOMAngle == 9110 )\t\t/* DDD.MMSSsss */\n     {\n-        char\tszAngleString[32];\n+        if( dfAngle > -999.9 && dfAngle < 999.9 )\n+        {\n+            char\tszAngleString[32];\n \n-        sprintf( szAngleString, \"%12.7f\", dfAngle );\n-        dfAngle = GTIFAngleStringToDD( szAngleString, nUOMAngle );\n+            sprintf( szAngleString, \"%12.7f\", dfAngle );\n+            dfAngle = GTIFAngleStringToDD( szAngleString, nUOMAngle );\n+        }\n     }\n     else if ( nUOMAngle != KvUserDefined )\n     {\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42515073-vul",
+      "digest": "sha256:55dfdcc818fe6195669998a6d7238a22076b59fd87cd495731ab94cb6869d0b2"
+    },
+    "patched": {
+      "ref": "n132/arvo:42515073-fix",
+      "digest": "sha256:56a22c0b72c10d5700dcef15a64d896fa1dec126b5594705313b0f8f82b3d5f7"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/gdal/gdal/port/cpl_string.cpp:1236",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/gdal/gdal/port/cpl_string.cpp:1236"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

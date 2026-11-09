@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-961858702",
+  "chain": "CWE-456->CWE-457",
+  "project": "libraw",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42510657",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/libraw/libraw/commit/ce2250c6645897d1ff6a44c8167dde76730a0372",
+      "fix_commits": [
+        "ce2250c6645897d1ff6a44c8167dde76730a0372"
+      ],
+      "repo": "https://github.com/libraw/libraw"
+    },
+    "patch": "diff --git a/src/decoders/load_mfbacks.cpp b/src/decoders/load_mfbacks.cpp\nindex 44e8db82d..b81d2150c 100644\n--- a/src/decoders/load_mfbacks.cpp\n+++ b/src/decoders/load_mfbacks.cpp\n@@ -230,6 +230,8 @@ int LibRaw::phase_one_correct()\n       data = get4();\n       save = ftell(ifp);\n       fseek(ifp, meta_offset + data, SEEK_SET);\n+      if (ifp->eof())\n+        return LIBRAW_DATA_ERROR;\n       if (tag == 0x0400)\n       { /* Sensor defects */\n         while ((len -= 8) >= 0)\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42510657-vul",
+      "digest": "sha256:1422286c57117420c9de8332301608049452377cf39d8ba14ce91d100ac2e5ea"
+    },
+    "patched": {
+      "ref": "n132/arvo:42510657-fix",
+      "digest": "sha256:b4e2a123d686a5e33c75031727aa0d6bf314d002e6b4f90897057078a3df548b"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/libraw/src/decoders/load_mfbacks.cpp:33",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/libraw/src/decoders/load_mfbacks.cpp:33"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

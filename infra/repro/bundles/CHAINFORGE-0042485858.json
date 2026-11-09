@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042485858",
+  "chain": "CWE-416->CWE-125",
+  "project": "skia",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42485858",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "db16c4845f5feca61664dc52801b43cb4b6a92aa",
+      "fix_commits": [
+        "db16c4845f5feca61664dc52801b43cb4b6a92aa"
+      ],
+      "repo": "https://skia.googlesource.com/skia.git"
+    },
+    "patch": "diff --git a/src/sksl/SkSLCompiler.cpp b/src/sksl/SkSLCompiler.cpp\nindex 4ae4e97..97603d0 100644\n--- a/src/sksl/SkSLCompiler.cpp\n+++ b/src/sksl/SkSLCompiler.cpp\n@@ -1452,6 +1452,21 @@\n                 // addition to being dead code, it's broken - since control flow can't reach it, no\n                 // prior variable definitions can reach it, and therefore variables might look to\n                 // have not been properly assigned. Kill it.\n+\n+                // We need to do this in two steps. For any variable declarations, the node list\n+                // will contain statement nodes for each VarDeclaration, and then a statement for\n+                // the VarDeclarationsStatement. When we replace the VDS with a Nop, we delete the\n+                // storage of the unique_ptr that the VD nodes are pointing to. So we remove those\n+                // from the node list entirely, first.\n+                b.fNodes.erase(\n+                        std::remove_if(b.fNodes.begin(), b.fNodes.end(),\n+                                       [](const BasicBlock::Node& node) {\n+                                           return node.fKind == BasicBlock::Node::kStatement_Kind &&\n+                                                  (*node.statement())->is<VarDeclaration>();\n+                                       }),\n+                        b.fNodes.end());\n+\n+                // Now replace any remaining statements in the block with Nops.\n                 for (BasicBlock::Node& node : b.fNodes) {\n                     if (node.fKind == BasicBlock::Node::kStatement_Kind &&\n                         !(*node.statement())->is<Nop>()) {\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42485858-vul",
+      "digest": "sha256:0939964d82c51e4404ba0e8c4f10e142a7c3e1402f86f565a6f89e5d89abef4a"
+    },
+    "patched": {
+      "ref": "n132/arvo:42485858-fix",
+      "digest": "sha256:42d78a367cb0183dd2acfdea9ecf071a8c7828f843b814d7573522cd05f674af"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/skia/out/Fuzz/../../src/sksl/SkSLCompiler.cpp:1407",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/skia/out/Fuzz/../../src/sksl/SkSLCompiler.cpp:1407"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

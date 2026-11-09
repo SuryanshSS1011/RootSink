@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-958836834",
+  "chain": "CWE-252->CWE-476",
+  "project": "c-ares",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42476048",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/c-ares/c-ares/commit/b949cc3ddfbeb1b3fba571fb53b186b645e66e9c",
+      "fix_commits": [
+        "b949cc3ddfbeb1b3fba571fb53b186b645e66e9c"
+      ],
+      "repo": "https://github.com/c-ares/c-ares"
+    },
+    "patch": "diff --git a/ares_parse_a_reply.c b/ares_parse_a_reply.c\nindex 850c39c0bf..b506f7218a 100644\n--- a/ares_parse_a_reply.c\n+++ b/ares_parse_a_reply.c\n@@ -71,7 +71,7 @@ int ares_parse_a_reply(const unsigned char *abuf, int alen,\n \n       if (naddrttls)\n         {\n-          *naddrttls = naddrs;\n+          *naddrttls = 0;\n         }\n \n       return status;\n@@ -162,7 +162,7 @@ int ares_parse_a_reply(const unsigned char *abuf, int alen,\n               memcpy(hostent->h_addr_list[i],\n                      &(((struct sockaddr_in *)next->ai_addr)->sin_addr),\n                      sizeof(struct in_addr));\n-              if (naddrttls)\n+              if (naddrttls && i < *naddrttls)\n                 {\n                   if (next->ai_ttl > cname_ttl)\n                     addrttls[i].ttl = cname_ttl;\n@@ -177,6 +177,10 @@ int ares_parse_a_reply(const unsigned char *abuf, int alen,\n             }\n           next = next->ai_next;\n         }\n+      if (i == 0)\n+        {\n+          ares_free(addrs);\n+        }\n     }\n \n   if (host)\ndiff --git a/ares_parse_aaaa_reply.c b/ares_parse_aaaa_reply.c\nindex c56279fa05..aca3f00141 100644\n--- a/ares_parse_aaaa_reply.c\n+++ b/ares_parse_aaaa_reply.c\n@@ -73,7 +73,7 @@ int ares_parse_aaaa_reply(const unsigned char *abuf, int alen,\n \n       if (naddrttls)\n         {\n-          *naddrttls = naddrs;\n+          *naddrttls = 0;\n         }\n \n       return status;\n@@ -164,7 +164,7 @@ int ares_parse_aaaa_reply(const unsigned char *abuf, int alen,\n               memcpy(hostent->h_addr_list[i],\n                      &(((struct sockaddr_in6 *)next->ai_addr)->sin6_addr),\n                      sizeof(struct ares_in6_addr));\n-              if (naddrttls)\n+              if (naddrttls && i < *naddrttls)\n                 {\n                     if(next->ai_ttl > cname_ttl)\n                       addrttls[i].ttl = cname_ttl;\n@@ -179,6 +179,11 @@ int ares_parse_aaaa_reply(const unsigned char *abuf, int alen,\n             }\n           next = next->ai_next;\n         }\n+\n+      if (i == 0)\n+        {\n+          ares_free(addrs);\n+        }\n     }\n \n   if (host)\ndiff --git a/test/fuzzcheck.sh b/test/fuzzcheck.sh\nindex 4c50ff21f9..3a137661e2 100755\n--- a/test/fuzzcheck.sh\n+++ b/test/fuzzcheck.sh\n@@ -1,4 +1,5 @@\n #!/bin/sh\n+set -e\n # Check that all of the base fuzzing corpus parse without errors\n ./aresfuzz fuzzinput/*\n ./aresfuzzname fuzznames/*\ndiff --git a/test/fuzzinput/clusterfuzz-5650695891451904 b/test/fuzzinput/clusterfuzz-5650695891451904\nnew file mode 100644\nindex 0000000000..1aba3b328d\nBinary files /dev/null and b/test/fuzzinput/clusterfuzz-5650695891451904 differ\ndiff --git a/test/fuzzinput/clusterfuzz-5651369832218624 b/test/fuzzinput/clusterfuzz-5651369832218624\nnew file mode 100644\nindex 0000000000..7e5184cf93\nBinary files /dev/null and b/test/fuzzinput/clusterfuzz-5651369832218624 differ\ndiff --git a/test/fuzzinput/clusterfuzz-5674462260756480 b/test/fuzzinput/clusterfuzz-5674462260756480\nnew file mode 100644\nindex 0000000000..c7b7c65d34\nBinary files /dev/null and b/test/fuzzinput/clusterfuzz-5674462260756480 differ\ndiff --git a/test/fuzzinput/clusterfuzz-5680630672654336 b/test/fuzzinput/clusterfuzz-5680630672654336\nnew file mode 100644\nindex 0000000000..7b5f9cbf31\nBinary files /dev/null and b/test/fuzzinput/clusterfuzz-5680630672654336 differ\ndiff --git a/test/fuzzinput/clusterfuzz-5683497160671232 b/test/fuzzinput/clusterfuzz-5683497160671232\nnew file mode 100644\nindex 0000000000..8d70a1780c\nBinary files /dev/null and b/test/fuzzinput/clusterfuzz-5683497160671232 differ\ndiff --git a/test/fuzzinput/clusterfuzz-5687310655422464 b/test/fuzzinput/clusterfuzz-5687310655422464\nnew file mode 100644\nindex 0000000000..cdb78175e0\nBinary files /dev/null and b/test/fuzzinput/clusterfuzz-5687310655422464 differ\ndiff --git a/test/fuzzinput/clusterfuzz-5695341573177344 b/test/fuzzinput/clusterfuzz-5695341573177344\nnew file mode 100644\nindex 0000000000..b96ddd47da\nBinary files /dev/null and b/test/fuzzinput/clusterfuzz-5695341573177344 differ\ndiff --git a/test/fuzzinput/clusterfuzz-5697835103682560 b/test/fuzzinput/clusterfuzz-5697835103682560\nnew file mode 100644\nindex 0000000000..f5ef00f695\nBinary files /dev/null and b/test/fuzzinput/clusterfuzz-5697835103682560 differ\ndiff --git a/test/fuzzinput/clusterfuzz-5728518081609728 b/test/fuzzinput/clusterfuzz-5728518081609728\nnew file mode 100644\nindex 0000000000..31f69570c3\nBinary files /dev/null and b/test/fuzzinput/clusterfuzz-5728518081609728 differ\ndiff --git a/test/fuzzinput/clusterfuzz-5732960017317888 b/test/fuzzinput/clusterfuzz-5732960017317888\nnew file mode 100644\nindex 0000000000..5596018c73\nBinary files /dev/null and b/test/fuzzinput/clusterfuzz-5732960017317888 differ\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42476048-vul",
+      "digest": "sha256:2d60a358dbecc4c0fe72672b7c04dafbdde1a762fbfb9146b2b18c275cd7ba3c"
+    },
+    "patched": {
+      "ref": "n132/arvo:42476048-fix",
+      "digest": "sha256:5161fe0ebf9166a784c721cc498d5f9f5eed740e57504a64612ad55879e436e5"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "undefined",
+        "bug_class": "SEGV",
+        "direction": "READ",
+        "crash_site": null,
+        "implies_sink_cwe": 476
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 252,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 476,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "undefined",
+        "bug_class": "SEGV",
+        "direction": "READ",
+        "site": null
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

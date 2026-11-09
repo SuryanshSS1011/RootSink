@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042534151",
+  "chain": "CWE-1284->CWE-787",
+  "project": "libxaac",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42534151",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "12e2e71b241cd7523ed69adb4ff7307f488fea8d",
+      "fix_commits": [
+        "12e2e71b241cd7523ed69adb4ff7307f488fea8d"
+      ],
+      "repo": "https://github.com/ittiam-systems/libxaac"
+    },
+    "patch": "diff --git a/decoder/ixheaacd_headerdecode.c b/decoder/ixheaacd_headerdecode.c\nindex 03fb0677..260ef0f9 100644\n--- a/decoder/ixheaacd_headerdecode.c\n+++ b/decoder/ixheaacd_headerdecode.c\n@@ -1127,19 +1127,12 @@ WORD32 ixheaacd_aac_headerdecode(\n             ixheaacd_latm_header_decode(aac_state_struct, &it_bit_buff,\n                                         bytes_consumed, pstr_samp_rate_info);\n         if (result != 0) {\n-          if ((result ==\n-               (WORD32)\n-                   IA_XHEAAC_DEC_EXE_NONFATAL_INSUFFICIENT_INPUT_BYTES) ||\n-              (result ==\n-               (WORD32)IA_XHEAAC_DEC_INIT_FATAL_STREAM_CHAN_GT_MAX)) {\n+          if ((result == (WORD32)IA_XHEAAC_DEC_EXE_NONFATAL_INSUFFICIENT_INPUT_BYTES) ||\n+              (result < 0)) {\n             bytes_taken += *bytes_consumed;\n             *bytes_consumed = bytes_taken;\n             return result;\n-          } else if (result == -1)\n-            return -1;\n-          else if (result == (WORD32)IA_FATAL_ERROR)\n-            return IA_FATAL_ERROR;\n-          else\n+          } else\n             bytes_taken += *bytes_consumed - 1;\n           continue;\n         }\ndiff --git a/decoder/ixheaacd_latmdemux.c b/decoder/ixheaacd_latmdemux.c\nindex 49f7d23d..30edaf67 100644\n--- a/decoder/ixheaacd_latmdemux.c\n+++ b/decoder/ixheaacd_latmdemux.c\n@@ -253,6 +253,8 @@ IA_ERRORCODE ixheaacd_latm_stream_mux_config(\n             }\n             break;\n \n+          case 1:\n+            latm_element->frame_length = ixheaacd_read_bits_buf(it_bit_buff, 9);\n           default:\n             return IA_XHEAAC_DEC_EXE_FATAL_INVALID_LOAS_HEADER;\n         }\ndiff --git a/fuzzer/xaac_dec_fuzzer.cpp b/fuzzer/xaac_dec_fuzzer.cpp\nindex 3cd67491..555ba290 100644\n--- a/fuzzer/xaac_dec_fuzzer.cpp\n+++ b/fuzzer/xaac_dec_fuzzer.cpp\n@@ -52,6 +52,13 @@\n \n #define MAX_MEM_ALLOCS 100\n \n+#define IA_MAX_OUTPUT_PCM_SIZE (3)\n+#define IA_MAX_USAC_CH (2)\n+#define IA_MAX_OUT_SAMPLES_PER_FRAME (4096)\n+\n+#define IA_DRC_DEC_IN_OUT_BUF_SIZE \\\n+  (IA_MAX_USAC_CH * IA_MAX_OUT_SAMPLES_PER_FRAME * IA_MAX_OUTPUT_PCM_SIZE)\n+\n class Codec {\n  public:\n   IA_ERRORCODE initDecoder(const uint8_t* data, size_t size, bool isADTS);\n@@ -396,10 +403,7 @@ IA_ERRORCODE Codec::initMPEGDDDrc() {\n                               pv_alloc_ptr);\n   }\n \n-  WORD32 ui_size;\n-  ui_size = 8192 * 2;\n-\n-  mDrcInBuf = (int8_t*)malloc(ui_size);\n+  mDrcInBuf = (int8_t*)malloc(IA_DRC_DEC_IN_OUT_BUF_SIZE);\n   if (mDrcInBuf == nullptr) {\n     return IA_FATAL_ERROR;\n   }\n@@ -408,7 +412,7 @@ IA_ERRORCODE Codec::initMPEGDDDrc() {\n   err_code =\n       ia_drc_dec_api(mMpegDDrcHandle, IA_API_CMD_SET_MEM_PTR, 2, mDrcInBuf);\n \n-  mDrcOutBuf = (int8_t*)malloc(ui_size);\n+  mDrcOutBuf = (int8_t*)malloc(IA_DRC_DEC_IN_OUT_BUF_SIZE);\n   if (mDrcOutBuf == nullptr) {\n     return IA_FATAL_ERROR;\n   }\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42534151-vul",
+      "digest": "sha256:4df35c336d9e1d9554b3b6707dc9715cb050a4fda627e7ad0ea2c39d055c321e"
+    },
+    "patched": {
+      "ref": "n132/arvo:42534151-fix",
+      "digest": "sha256:aacd78f825bf7ce3253af58d7d085cec05e517f7c412ae19af3edd80efd30fab"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/libxaac/fuzzer/xaac_dec_fuzzer.cpp:710",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/libxaac/fuzzer/xaac_dec_fuzzer.cpp:710"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

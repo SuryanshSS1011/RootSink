@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042480231",
+  "chain": "CWE-1284->CWE-125",
+  "project": "opensc",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42480231",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "4c67bbf3838aba9cf7e00697403d7b860bbae30b",
+      "fix_commits": [
+        "4c67bbf3838aba9cf7e00697403d7b860bbae30b"
+      ],
+      "repo": "https://github.com/OpenSC/OpenSC"
+    },
+    "patch": "diff --git a/src/libopensc/card-coolkey.c b/src/libopensc/card-coolkey.c\nindex c95a503589..f9a1a86178 100644\n--- a/src/libopensc/card-coolkey.c\n+++ b/src/libopensc/card-coolkey.c\n@@ -523,6 +523,9 @@ coolkey_v0_get_attribute_data(const u8 *attr, size_t buf_len, sc_cardctl_coolkey\n \tif (r < 0) {\n \t\treturn r;\n \t}\n+\tif (len + sizeof(coolkey_v0_attribute_header_t) > buf_len) {\n+\t\treturn SC_ERROR_CORRUPTED_DATA;\n+\t}\n \tif ((attr_type == CKA_CLASS) || (attr_type == CKA_CERTIFICATE_TYPE)\n \t\t\t\t\t\t\t\t\t || (attr_type == CKA_KEY_TYPE)) {\n \t\tif (len != 4) {\n@@ -532,7 +535,7 @@ coolkey_v0_get_attribute_data(const u8 *attr, size_t buf_len, sc_cardctl_coolkey\n \t}\n \t/* return the length and the data */\n \tattr_out->attribute_length = len;\n-\tattr_out->attribute_value = attr+sizeof(coolkey_v0_attribute_header_t);\n+\tattr_out->attribute_value = attr + sizeof(coolkey_v0_attribute_header_t);\n \treturn SC_SUCCESS;\n }\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42480231-vul",
+      "digest": "sha256:ab25a4c8e292803ad690e9620835565b145bb20a2d91ae9b0ff35f66b9b751a7"
+    },
+    "patched": {
+      "ref": "n132/arvo:42480231-fix",
+      "digest": "sha256:58402ff4c1eeb44348334d5caaa8e78036a30c107da07090cb132ac3df2bfae8"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/opensc/src/libopensc/pkcs15-coolkey.c:199",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/opensc/src/libopensc/pkcs15-coolkey.c:199"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042531899",
+  "chain": "CWE-456->CWE-457",
+  "project": "open62541",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42531899",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "b52793f9b872c1dc8452d504910ca6759bbef5c6",
+      "fix_commits": [
+        "b52793f9b872c1dc8452d504910ca6759bbef5c6"
+      ],
+      "repo": "https://github.com/open62541/open62541"
+    },
+    "patch": "From b52793f9b872c1dc8452d504910ca6759bbef5c6 Mon Sep 17 00:00:00 2001\nFrom: Stefan Profanter <Pro@users.noreply.github.com>\nDate: Wed, 28 Feb 2018 21:25:56 +0100\nSubject: [PATCH] Use node ID to make sure refcount is updated (#1618)\n\n* Use node ID to make sure refcount is updated\n\n* Readd copyChildNodes and add additional comment\n\n* Use node id directly\n\n* Fix use after free\n\nSee https://bugs.chromium.org/p/oss-fuzz/issues/detail?id=6574\n\nCredit to oss-fuzz\n---\n src/server/ua_services_nodemanagement.c | 71 ++++++++++++++++---------\n 1 file changed, 45 insertions(+), 26 deletions(-)\n\ndiff --git a/src/server/ua_services_nodemanagement.c b/src/server/ua_services_nodemanagement.c\nindex 00cbe03..a417411 100644\n--- a/src/server/ua_services_nodemanagement.c\n+++ b/src/server/ua_services_nodemanagement.c\n@@ -55,6 +55,19 @@ UA_Server_setNodeContext(UA_Server *server, UA_NodeId nodeId,\n /* Consistency Checks */\n /**********************/\n \n+\n+#define UA_PARENT_REFERENCES_COUNT 2\n+\n+const UA_NodeId parentReferences[UA_PARENT_REFERENCES_COUNT] = {\n+    {\n+        0, UA_NODEIDTYPE_NUMERIC, {UA_NS0ID_HASSUBTYPE}\n+    },\n+    {\n+        0, UA_NODEIDTYPE_NUMERIC, {UA_NS0ID_HASCOMPONENT}\n+    }\n+};\n+\n+\n /* Check if the requested parent node exists, has the right node class and is\n  * referenced with an allowed (hierarchical) reference type. For \"type\" nodes,\n  * only hasSubType references are allowed. */\n@@ -175,12 +188,11 @@ typeCheckVariableNode(UA_Server *server, UA_Session *session,\n     /* If variable node is created below BaseObjectType and has its default valueRank of -2,\n      * skip the test */\n     const UA_NodeId objectTypes = UA_NODEID_NUMERIC(0, UA_NS0ID_BASEOBJECTTYPE);\n-    UA_NodeId refs[2];\n-    refs[0] = UA_NODEID_NUMERIC(0, UA_NS0ID_HASSUBTYPE);\n-    refs[1] = UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT);\n+\n+    // TODO handle subtypes of parent reference types\n     if(node->valueRank != vt->valueRank &&\n        node->valueRank != UA_VariableAttributes_default.valueRank &&\n-       !isNodeInTree(&server->config.nodestore, parentNodeId, &objectTypes, refs, 2)) {\n+       !isNodeInTree(&server->config.nodestore, parentNodeId, &objectTypes, parentReferences, UA_PARENT_REFERENCES_COUNT)) {\n         /* Check valueRank against the vt */\n         if(!compatibleValueRanks(node->valueRank, vt->valueRank))\n             return UA_STATUSCODE_BADTYPEMISMATCH;\n@@ -422,7 +434,7 @@ static void deleteReferencesSubset(UA_Node *node, size_t referencesSkipSize, UA_\n \n \n static UA_StatusCode\n-addParentAndTypeRef(UA_Server *server, UA_Session *session, const UA_Node *node, const UA_NodeId *parentNodeId,\n+addParentAndTypeRef(UA_Server *server, UA_Session *session, const UA_NodeId *nodeId, const UA_NodeId *parentNodeId,\n                     const UA_NodeId *referenceTypeId, const UA_NodeId *typeDefinitionId);\n \n static UA_StatusCode\n@@ -501,8 +513,17 @@ copyChildNode(UA_Server *server, UA_Session *session,\n             return retval;\n         }\n \n+        /* Add all the children of this child to the new child node to make sure we take\n+        * the values from the nearest inherited object first.\n+        * The call to addNode_finish will then only add the children from the type and\n+        * thus skip the direct children of rd->nodeId.nodeId\n+        */\n+        copyChildNodes(server, session, &rd->nodeId.nodeId, &newNodeId);\n+\n         /* Add the parent reference */\n-        retval = addParentAndTypeRef(server, session, node, destinationNodeId,\n+        /* we pass the nodeId instead of node to make sure the refcount\n+         * is increased and other calls can not delete the node in the meantime */\n+        retval = addParentAndTypeRef(server, session, &newNodeId, destinationNodeId,\n                                      &rd->referenceTypeId, typeId);\n         if(retval != UA_STATUSCODE_GOOD) {\n             UA_Nodestore_delete(server, node);\n@@ -510,11 +531,6 @@ copyChildNode(UA_Server *server, UA_Session *session,\n             return retval;\n         }\n \n-        /* Add all the children of this child to the new child node to make sure we take\n-         * the values from the nearest inherited object first.\n-         */\n-        copyChildNodes(server, session, &rd->nodeId.nodeId, &newNodeId);\n-\n         /* Call addnode_finish, this recursively adds additional members, the type\n          * definition and so on of the base type of this child, if they are not yet\n          * in the destination */\n@@ -674,9 +690,13 @@ removeDeconstructedNode(UA_Server *server, UA_Session *session,\n static const UA_NodeId hasSubtype = {0, UA_NODEIDTYPE_NUMERIC, {UA_NS0ID_HASSUBTYPE}};\n \n static UA_StatusCode\n-addParentAndTypeRef(UA_Server *server, UA_Session *session, const UA_Node *node, const UA_NodeId *parentNodeId,\n+addParentAndTypeRef(UA_Server *server, UA_Session *session, const UA_NodeId *nodeId, const UA_NodeId *parentNodeId,\n                     const UA_NodeId *referenceTypeId, const UA_NodeId *typeDefinitionId) {\n \n+    const UA_Node *node = UA_Nodestore_get(server, nodeId);\n+    if (!node)\n+        return UA_STATUSCODE_BADNODEIDUNKNOWN;\n+\n     UA_StatusCode retval = UA_STATUSCODE_GOOD;\n     const UA_Node *type = NULL;\n \n@@ -704,8 +724,7 @@ addParentAndTypeRef(UA_Server *server, UA_Session *session, const UA_Node *node,\n     if(retval != UA_STATUSCODE_GOOD) {\n         UA_LOG_INFO_SESSION(server->config.logger, session,\n                             \"AddNodes: The parent reference is invalid\");\n-        UA_Server_deleteNode(server, node->nodeId, true);\n-        return retval;\n+        goto cleanup;\n     }\n \n     /* Replace empty typeDefinition with the most permissive default */\n@@ -778,11 +797,9 @@ addParentAndTypeRef(UA_Server *server, UA_Session *session, const UA_Node *node,\n                 const UA_NodeId variableTypes = UA_NODEID_NUMERIC(0, UA_NS0ID_BASEDATAVARIABLETYPE);\n                 /* A variable may be of an object type which again is below BaseObjectType */\n                 const UA_NodeId objectTypes = UA_NODEID_NUMERIC(0, UA_NS0ID_BASEOBJECTTYPE);\n-                UA_NodeId refs[2];\n-                refs[0] = UA_NODEID_NUMERIC(0, UA_NS0ID_HASSUBTYPE);\n-                refs[1] = UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT);\n-                if(!isNodeInTree(&server->config.nodestore, parentNodeId, &variableTypes, refs, 2) &&\n-                   !isNodeInTree(&server->config.nodestore, parentNodeId, &objectTypes, refs, 2)) {\n+                // TODO handle subtypes of parent reference types\n+                if(!isNodeInTree(&server->config.nodestore, parentNodeId, &variableTypes, parentReferences, UA_PARENT_REFERENCES_COUNT) &&\n+                   !isNodeInTree(&server->config.nodestore, parentNodeId, &objectTypes, parentReferences, UA_PARENT_REFERENCES_COUNT)) {\n                     UA_LOG_INFO_SESSION(server->config.logger, session,\n                                         \"AddNodes: Type of variable node must \"\n                                             \"be VariableType and not cannot be abstract\");\n@@ -796,10 +813,8 @@ addParentAndTypeRef(UA_Server *server, UA_Session *session, const UA_Node *node,\n             if(((const UA_ObjectTypeNode*)type)->isAbstract) {\n                 /* Object node created of an abstract ObjectType. Only allowed if within BaseObjectType folder */\n                 const UA_NodeId objectTypes = UA_NODEID_NUMERIC(0, UA_NS0ID_BASEOBJECTTYPE);\n-                UA_NodeId refs[2];\n-                refs[0] = UA_NODEID_NUMERIC(0, UA_NS0ID_HASSUBTYPE);\n-                refs[1] = UA_NODEID_NUMERIC(0, UA_NS0ID_HASCOMPONENT);\n-                if(!isNodeInTree(&server->config.nodestore, parentNodeId, &objectTypes, refs, 2)) {\n+                // TODO handle subtypes of parent reference types\n+                if(!isNodeInTree(&server->config.nodestore, parentNodeId, &objectTypes, parentReferences, UA_PARENT_REFERENCES_COUNT)) {\n                     UA_LOG_INFO_SESSION(server->config.logger, session,\n                                         \"AddNodes: Type of object node must \"\n                                             \"be ObjectType and not be abstract\");\n@@ -862,10 +877,11 @@ addParentAndTypeRef(UA_Server *server, UA_Session *session, const UA_Node *node,\n     }\n \n  cleanup:\n+    UA_Nodestore_release(server, node);\n     if(type)\n         UA_Nodestore_release(server, type);\n     if(retval != UA_STATUSCODE_GOOD)\n-        removeDeconstructedNode(server, session, node, true);\n+        UA_Server_deleteNode(server, *nodeId, UA_TRUE);\n     return retval;\n }\n \n@@ -951,12 +967,15 @@ Operation_addNode_begin(UA_Server *server, UA_Session *session, void *nodeContex\n         return retval;\n     }\n \n-    retval = addParentAndTypeRef(server, session, node, parentNodeId, referenceTypeId, &item->typeDefinition.nodeId);\n+    /* we pass the nodeId instead of node to make sure the refcount is\n+     * increased and other calls can not delete the node in the meantime */\n+    // TODO on multithreading `node` may already have been deleted\n+    retval = addParentAndTypeRef(server, session, &node->nodeId, parentNodeId, referenceTypeId, &item->typeDefinition.nodeId);\n     if(retval != UA_STATUSCODE_GOOD) {\n         UA_LOG_INFO_SESSION(server->config.logger, session,\n                             \"AddNodes: Node could add parent references with error code %s\",\n                             UA_StatusCode_name(retval));\n-        UA_Nodestore_delete(server, node);\n+        // the node is already deleted within addParentAndTypeRef\n     }\n \n     return retval;\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42531899-vul",
+      "digest": "sha256:1f2c99166f4345097d3412f28d6857c66497212e573d9dc5597be416f712c713"
+    },
+    "patched": {
+      "ref": "n132/arvo:42531899-fix",
+      "digest": "sha256:ed240f3efa617b2c5b1c079ba8df1ecceda0c8e2131a3a05d7c21d03b7b93d5f"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/open62541/src/ua_types.c:238",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/open62541/src/ua_types.c:238"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

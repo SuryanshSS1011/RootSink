@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-969671414",
+  "chain": "CWE-456->CWE-457",
+  "project": "libjpeg-turbo",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42489910",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/libjpeg-turbo/libjpeg-turbo/commit/c7ca521bc85b57d41d3ad4963c13fc0100481084",
+      "fix_commits": [
+        "c7ca521bc85b57d41d3ad4963c13fc0100481084"
+      ],
+      "repo": "https://github.com/libjpeg-turbo/libjpeg-turbo"
+    },
+    "patch": "diff --git a/ChangeLog.md b/ChangeLog.md\nindex 9084bee0f..d312f27fe 100644\n--- a/ChangeLog.md\n+++ b/ChangeLog.md\n@@ -7,6 +7,10 @@\n decompress certain progressive JPEG images with one or more component planes of\n width 8 or less caused a buffer overrun.\n \n+2. Fixed a regression introduced by 2.1 beta1[6(b)] whereby attempting to\n+decompress a specially-crafted malformed progressive JPEG image caused the\n+block smoothing algorithm to read from uninitialized memory.\n+\n \n 2.0.90 (2.1 beta1)\n ==================\ndiff --git a/jdcoefct.c b/jdcoefct.c\nindex a3c6d4e8c..15e6cded6 100644\n--- a/jdcoefct.c\n+++ b/jdcoefct.c\n@@ -406,6 +406,8 @@ smoothing_ok(j_decompress_ptr cinfo)\n     for (coefi = 1; coefi < SAVED_COEFS; coefi++) {\n       if (cinfo->input_scan_number > 1)\n         prev_coef_bits_latch[coefi] = prev_coef_bits[coefi];\n+      else\n+        prev_coef_bits_latch[coefi] = -1;\n       coef_bits_latch[coefi] = coef_bits[coefi];\n       if (coef_bits[coefi] != 0)\n         smoothing_useful = TRUE;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42489910-vul",
+      "digest": "sha256:f727ce3d7dd193d1806385cb169097377ef152a3d54ad77ae05396f6d1589c20"
+    },
+    "patched": {
+      "ref": "n132/arvo:42489910-fix",
+      "digest": "sha256:3dd693a2d74979251cb310814f27bbb126a5a5896d264f4d081764fe158664c9"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/libjpeg-turbo/jdcoefct.c:519",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/libjpeg-turbo/jdcoefct.c:519"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

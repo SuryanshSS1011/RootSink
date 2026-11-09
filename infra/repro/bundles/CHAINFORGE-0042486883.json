@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042486883",
+  "chain": "CWE-416->CWE-125",
+  "project": "libxml2",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42486883",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "ba589adc2f86c6be9ad7e0d771d4c9b09d059b89",
+      "fix_commits": [
+        "ba589adc2f86c6be9ad7e0d771d4c9b09d059b89"
+      ],
+      "repo": "https://gitlab.gnome.org/GNOME/libxml2.git"
+    },
+    "patch": "From ba589adc2f86c6be9ad7e0d771d4c9b09d059b89 Mon Sep 17 00:00:00 2001\nFrom: Nick Wellnhofer <wellnhofer@aevum.de>\nDate: Tue, 25 Aug 2020 23:50:39 +0200\nSubject: [PATCH] Fix double free in XML reader with XIncludes\n\nAn XInclude with empty fallback could lead to a double free in\nxmlTextReaderRead.\n\nFound by OSS-Fuzz.\n---\n xmlreader.c | 2 ++\n 1 file changed, 2 insertions(+)\n\ndiff --git a/xmlreader.c b/xmlreader.c\nindex 6ae6e92..1ab15ba 100644\n--- a/xmlreader.c\n+++ b/xmlreader.c\n@@ -1491,6 +1491,8 @@ get_next_node:\n             (reader->node->prev->type != XML_DTD_NODE)) {\n \t    xmlNodePtr tmp = reader->node->prev;\n \t    if ((tmp->extra & NODE_IS_PRESERVED) == 0) {\n+                if (oldnode == tmp)\n+                    oldnode = NULL;\n \t\txmlUnlinkNode(tmp);\n \t\txmlTextReaderFreeNode(reader, tmp);\n \t    }\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42486883-vul",
+      "digest": "sha256:238a12dcdd5a5aaeedc337cb9ab735d4064cac214097c7fb7d2186e6a418a5ff"
+    },
+    "patched": {
+      "ref": "n132/arvo:42486883-fix",
+      "digest": "sha256:02f88f0804a82d104452bb3483ac56253a0497e4b3a35ea4d656d4e4cb7291de"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/libxml2/xmlreader.c:1484",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/libxml2/xmlreader.c:1484"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

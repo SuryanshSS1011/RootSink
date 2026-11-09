@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042524514",
+  "chain": "CWE-1285->CWE-125",
+  "project": "libdwarf",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42524514",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "4017ab8b92195641e6876b388cebe2d3307634f5",
+      "fix_commits": [
+        "4017ab8b92195641e6876b388cebe2d3307634f5"
+      ],
+      "repo": "https://github.com/davea42/libdwarf-code"
+    },
+    "patch": "diff --git a/src/lib/libdwarf/dwarf_line_table_reader_common.h b/src/lib/libdwarf/dwarf_line_table_reader_common.h\nindex b4d24abfd..bed58b33a 100644\n--- a/src/lib/libdwarf/dwarf_line_table_reader_common.h\n+++ b/src/lib/libdwarf/dwarf_line_table_reader_common.h\n@@ -234,7 +234,9 @@ _dwarf_read_line_table_header(Dwarf_Debug dbg,\n     line_context->lc_section_offset = starting_line_ptr -\n         dbg->de_debug_line.dss_data;\n     /*  ASSERT: line_context->lc_length_field_length == line_ptr\n-        -line_context->lc_line_ptr_start; */\n+        -line_context->lc_line_ptr_start; \n+        The following test allows the == case too\n+        as that is normal for the last CUs line table. */\n     if (line_ptr_end > section_end) {\n         dwarfstring m;\n \n@@ -531,6 +533,7 @@ _dwarf_read_line_table_header(Dwarf_Debug dbg,\n     } else {\n         /* No old style directory entries. */\n     }\n+    /* Later tests will deal with the == case as required. */\n     if (line_ptr > line_ptr_end) {\n         _dwarf_error(dbg, err, DW_DLE_LINE_OFFSET_BAD);\n         return DW_DLV_ERROR;\n@@ -621,6 +624,7 @@ _dwarf_read_line_table_header(Dwarf_Debug dbg,\n     } else {\n         /* No old style filenames entries. */\n     }\n+    /* Later tests will deal with the == case as required. */\n     if (line_ptr > line_ptr_end) {\n         _dwarf_error(dbg, err, DW_DLE_LINE_OFFSET_BAD);\n         return DW_DLV_ERROR;\n@@ -654,6 +658,7 @@ _dwarf_read_line_table_header(Dwarf_Debug dbg,\n             line_ptr, local_length_size,err,line_ptr_end);\n         line_context->lc_actuals_table_offset = actuals_table_offset;\n         line_ptr += local_length_size;\n+        /* Later tests will deal with the == case as required. */\n         if (line_ptr > line_ptr_end) {\n             _dwarf_error(dbg, err, DW_DLE_LINE_OFFSET_BAD);\n             return DW_DLV_ERROR;\n@@ -786,6 +791,7 @@ _dwarf_read_line_table_header(Dwarf_Debug dbg,\n                     return DW_DLV_ERROR;\n                 }\n             }\n+            /* Later tests will deal with the == case as required. */\n             if (line_ptr > line_ptr_end) {\n                 free(format_values);\n                 format_values = 0;\n@@ -1060,7 +1066,8 @@ _dwarf_read_line_table_header(Dwarf_Debug dbg,\n         Dwarf_Unsigned j = 0;\n         int dres = 0;\n \n-        if (line_ptr > line_ptr_end) {\n+        /*  line_ptr_end is *after* the valid area */\n+        if (line_ptr >= line_ptr_end) {\n             _dwarf_error(dbg, err, DW_DLE_LINE_NUMBER_HEADER_ERROR);\n             return DW_DLV_ERROR;\n         }\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42524514-vul",
+      "digest": "sha256:103deedceb2f01af355f0b7b191df69ef718611449ed236e29f1cdde3509c41a"
+    },
+    "patched": {
+      "ref": "n132/arvo:42524514-fix",
+      "digest": "sha256:29ec9cde39391422c5d0c49a94a58d8746469e219f084d60deafcd571783e6bc"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/libdwarf/src/lib/libdwarf/dwarf_line_table_reader_common.h:970",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/libdwarf/src/lib/libdwarf/dwarf_line_table_reader_common.h:970"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

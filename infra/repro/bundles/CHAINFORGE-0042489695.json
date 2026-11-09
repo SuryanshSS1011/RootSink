@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042489695",
+  "chain": "CWE-416->CWE-125",
+  "project": "fluent-bit",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42489695",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "172f393e20dad1a69e9a79c3d6f8d4c78f921b2f",
+      "fix_commits": [
+        "172f393e20dad1a69e9a79c3d6f8d4c78f921b2f"
+      ],
+      "repo": "https://github.com/fluent/fluent-bit"
+    },
+    "patch": "From 172f393e20dad1a69e9a79c3d6f8d4c78f921b2f Mon Sep 17 00:00:00 2001\nFrom: DavidKorczynski <david@adalogics.com>\nDate: Tue, 23 Feb 2021 23:19:50 +0000\nSubject: [PATCH] pack: fix type confusion bugs. Amongst other OSS-Fuzz\n 5136174263566336 (#3115)\n\nSigned-off-by: davkor <david@adalogics.com>\n---\n src/flb_pack.c | 6 ++++++\n 1 file changed, 6 insertions(+)\n\ndiff --git a/src/flb_pack.c b/src/flb_pack.c\nindex 6c3e1a3..c1bc9b0 100644\n--- a/src/flb_pack.c\n+++ b/src/flb_pack.c\n@@ -840,6 +840,9 @@ flb_sds_t flb_pack_msgpack_to_json_format(const char *data, uint64_t bytes,\n     while (msgpack_unpack_next(&result, data, bytes, &off) == ok) {\n         /* Each array must have two entries: time and record */\n         root = result.data;\n+        if (root.type != MSGPACK_OBJECT_ARRAY) {\n+            continue;\n+        }\n         if (root.via.array.size != 2) {\n             continue;\n         }\n@@ -849,6 +852,9 @@ flb_sds_t flb_pack_msgpack_to_json_format(const char *data, uint64_t bytes,\n \n         /* Get the record/map */\n         map = root.via.array.ptr[1];\n+        if (map.type != MSGPACK_OBJECT_MAP) {\n+            continue;\n+        }\n         map_size = map.via.map.size;\n \n         if (date_key != NULL) {\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42489695-vul",
+      "digest": "sha256:8fa205ba4659cbd4e008b44c6d3f8c7933afd5e820db043d7ca0bbfbcb17d461"
+    },
+    "patched": {
+      "ref": "n132/arvo:42489695-fix",
+      "digest": "sha256:6090c82e852494919f664dafecd4c1c55e84c5162b4e7583dc063f491c0378c4"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/fluent-bit/src/flb_pack.c:867",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/fluent-bit/src/flb_pack.c:867"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,89 @@
+======================= INFO =========================
+This binary is built for AFL-fuzz.
+To run the target function on individual input(s) execute this:
+  /out/ffmpeg_AV_CODEC_ID_TIFF_fuzzer < INPUT_FILE
+or
+  /out/ffmpeg_AV_CODEC_ID_TIFF_fuzzer INPUT_FILE1 [INPUT_FILE2 ... ]
+To fuzz with afl-fuzz execute this:
+  afl-fuzz [afl-flags] /out/ffmpeg_AV_CODEC_ID_TIFF_fuzzer [-N]
+afl-fuzz will run N iterations before re-spawning the process (default: 1000)
+======================================================
+Reading 592 bytes from /tmp/poc
+=================================================================
+==7==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x61200000040f at pc 0x0000006b1507 bp 0x7fffd8b73380 sp 0x7fffd8b73378
+WRITE of size 1 at 0x61200000040f thread T0
+SCARINESS: 31 (1-byte-write-heap-buffer-overflow)
+    #0 0x6b1506 in ff_lzw_decode /src/ffmpeg/libavcodec/lzw.c:184:20
+    #1 0x5257f7 in tiff_unpack_strip /src/ffmpeg/libavcodec/tiff.c:601:22
+    #2 0x51a18d in decode_frame /src/ffmpeg/libavcodec/tiff.c:1488:24
+    #3 0x507515 in decode_simple_internal /src/ffmpeg/libavcodec/decode.c:433:15
+    #4 0x5071d5 in decode_simple_receive_frame /src/ffmpeg/libavcodec/decode.c:629:15
+    #5 0x4fd9ad in decode_receive_frame_internal /src/ffmpeg/libavcodec/decode.c:647:15
+    #6 0x4fd7b7 in avcodec_send_packet /src/ffmpeg/libavcodec/decode.c:705:15
+    #7 0x4fe31f in compat_decode /src/ffmpeg/libavcodec/decode.c:796:15
+    #8 0x4f545a in LLVMFuzzerTestOneInput /src/ffmpeg/tools/target_dec_fuzzer.c:245:23
+    #9 0x9766aa in ExecuteFilesOnyByOne(int, char**) /src/libfuzzer/afl/afl_driver.cpp:156:5
+    #10 0x976911 in main /src/libfuzzer/afl/afl_driver.cpp:193:12
+    #11 0x7f6ba20a882f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+    #12 0x41dcb8 in _start (/out/ffmpeg_AV_CODEC_ID_TIFF_fuzzer+0x41dcb8)
+
+DEDUP_TOKEN: ff_lzw_decode--tiff_unpack_strip--decode_frame
+0x61200000040f is located 0 bytes to the right of 207-byte region [0x612000000340,0x61200000040f)
+allocated by thread T0 here:
+    #0 0x4b13de in __interceptor_posix_memalign /src/llvm/projects/compiler-rt/lib/asan/asan_malloc_linux.cc:218
+    #1 0x91ef1b in av_malloc /src/ffmpeg/libavutil/mem.c:87:9
+    #2 0x8fe8bd in av_buffer_alloc /src/ffmpeg/libavutil/buffer.c:72:12
+    #3 0x8fe99b in av_buffer_allocz /src/ffmpeg/libavutil/buffer.c:85:24
+    #4 0x900121 in pool_alloc_buffer /src/ffmpeg/libavutil/buffer.c:313:26
+    #5 0x8ffe23 in av_buffer_pool_get /src/ffmpeg/libavutil/buffer.c:349:15
+    #6 0x503d78 in video_get_buffer /src/ffmpeg/libavcodec/decode.c:1634:23
+    #7 0x505ff8 in get_buffer_internal /src/ffmpeg/libavcodec/decode.c:1896:11
+    #8 0x505ca9 in ff_get_buffer /src/ffmpeg/libavcodec/decode.c:1921:15
+    #9 0x51522a in ff_thread_get_buffer /src/ffmpeg/libavcodec/pthread_frame.c:966:15
+    #10 0x5222fe in init_image /src/ffmpeg/libavcodec/tiff.c:874:16
+    #11 0x5198ab in decode_frame /src/ffmpeg/libavcodec/tiff.c:1428:16
+    #12 0x507515 in decode_simple_internal /src/ffmpeg/libavcodec/decode.c:433:15
+    #13 0x5071d5 in decode_simple_receive_frame /src/ffmpeg/libavcodec/decode.c:629:15
+    #14 0x4fd9ad in decode_receive_frame_internal /src/ffmpeg/libavcodec/decode.c:647:15
+    #15 0x4fd7b7 in avcodec_send_packet /src/ffmpeg/libavcodec/decode.c:705:15
+    #16 0x4fe31f in compat_decode /src/ffmpeg/libavcodec/decode.c:796:15
+    #17 0x4f545a in LLVMFuzzerTestOneInput /src/ffmpeg/tools/target_dec_fuzzer.c:245:23
+    #18 0x9766aa in ExecuteFilesOnyByOne(int, char**) /src/libfuzzer/afl/afl_driver.cpp:156:5
+    #19 0x976911 in main /src/libfuzzer/afl/afl_driver.cpp:193:12
+    #20 0x7f6ba20a882f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+
+DEDUP_TOKEN: __interceptor_posix_memalign--av_malloc--av_buffer_alloc
+SUMMARY: AddressSanitizer: heap-buffer-overflow /src/ffmpeg/libavcodec/lzw.c:184:20 in ff_lzw_decode
+Shadow bytes around the buggy address:
+  0x0c247fff8030: fa fa fa fa fa fa fa fa fd fd fd fd fd fd fd fd
+  0x0c247fff8040: fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd
+  0x0c247fff8050: fd fd fd fd fd fd fd fd fd fa fa fa fa fa fa fa
+  0x0c247fff8060: fa fa fa fa fa fa fa fa 00 00 00 00 00 00 00 00
+  0x0c247fff8070: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x0c247fff8080: 00[07]fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c247fff8090: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c247fff80a0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c247fff80b0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c247fff80c0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c247fff80d0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+  Shadow gap:              cc
+==7==ABORTING

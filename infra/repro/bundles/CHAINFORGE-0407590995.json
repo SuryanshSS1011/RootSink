@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0407590995",
+  "chain": "CWE-20->CWE-125",
+  "project": "icu",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "407590995",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "197be68a147938c38d227bd832fd3e23bec77283",
+      "fix_commits": [
+        "197be68a147938c38d227bd832fd3e23bec77283"
+      ],
+      "repo": "https://github.com/unicode-org/icu"
+    },
+    "patch": "diff --git a/icu4c/source/i18n/rematch.cpp b/icu4c/source/i18n/rematch.cpp\nindex 67c7875c8d8d..cac4b0e271ec 100644\n--- a/icu4c/source/i18n/rematch.cpp\n+++ b/icu4c/source/i18n/rematch.cpp\n@@ -4420,6 +4420,14 @@ void RegexMatcher::MatchChunkAt(int32_t startIdx, UBool toEnd, UErrorCode &statu\n                     }\n                 }\n \n+                // If the pattern string ends with an unpaired lead surrogate that\n+                // matched the lead surrogate of a valid pair in the input text,\n+                // this does not count as a match.\n+                if (success && U16_IS_LEAD(*(pInp-1)) &&\n+                        pInp < pInpLimit && U16_IS_TRAIL(*(pInp))) {\n+                    success = false;\n+                }\n+\n                 if (success) {\n                     fp->fInputIdx += stringLen;\n                 } else {\ndiff --git a/icu4c/source/test/intltest/regextst.cpp b/icu4c/source/test/intltest/regextst.cpp\nindex ec8b6746b51b..b0dd29d36e70 100644\n--- a/icu4c/source/test/intltest/regextst.cpp\n+++ b/icu4c/source/test/intltest/regextst.cpp\n@@ -28,6 +28,7 @@\n #include <stdlib.h>\n #include <stdio.h>\n #include <string.h>\n+#include <iterator>\n \n #include \"unicode/localpointer.h\"\n #include \"unicode/regex.h\"\n@@ -107,6 +108,7 @@ void RegexTest::runIndexedTest( int32_t index, UBool exec, const char* &name, ch\n     TESTCASE_AUTO(TestBug13632);\n     TESTCASE_AUTO(TestBug20359);\n     TESTCASE_AUTO(TestBug20863);\n+    TESTCASE_AUTO(TestBug23143);\n     TESTCASE_AUTO_END;\n }\n \n@@ -5815,6 +5817,32 @@ void RegexTest::TestBug20359() {\n }\n \n \n+void RegexTest::TestBug23143() {\n+    // Test pattern with unpaired surrogate matching against text\n+    // with a valid surrogate pair. Originally caused an assertion failure\n+    // in the implementation.\n+\n+    // Note: can't use normal C++ string literals because unpaired surrogates are illegal in them.\n+    const char16_t regex_array[] = {u'a', 0xD805, u'.', u'*', u'b'};\n+    UnicodeString regex(regex_array, std::size(regex_array));\n+\n+    const char16_t haystack_array[] = {u'a', 0xD805, 0xDF20};\n+    UnicodeString haystack(haystack_array, std::size(haystack_array));\n+\n+    UErrorCode status = U_ZERO_ERROR;\n+    std::unique_ptr<icu::RegexPattern> re(icu::RegexPattern::compile(regex, 0, status));\n+    if (!assertSuccess(WHERE, status)) {\n+        return;\n+    }\n+    // re->dumpPattern();\n+    std::unique_ptr<icu::RegexMatcher> regex_matcher(re->matcher(haystack, status));\n+    if (!assertSuccess(WHERE, status)) {\n+        return;\n+    }\n+    assertFalse(WHERE, regex_matcher->find(0, status));\n+    assertSuccess(WHERE, status);\n+}\n+\n void RegexTest::TestBug20863() {\n     // Test that patterns with a large number of named capture groups work correctly.\n     //\ndiff --git a/icu4c/source/test/intltest/regextst.h b/icu4c/source/test/intltest/regextst.h\nindex 5cb38cfb123d..1e99800c4dbb 100644\n--- a/icu4c/source/test/intltest/regextst.h\n+++ b/icu4c/source/test/intltest/regextst.h\n@@ -61,6 +61,7 @@ class RegexTest: public IntlTest {\n     virtual void TestBug13632();\n     virtual void TestBug20359();\n     virtual void TestBug20863();\n+    virtual void TestBug23143();\n \n     // The following functions are internal to the regexp tests.\n     virtual void assertUText(const char *expected, UText *actual, const char *file, int line);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:407590995-vul",
+      "digest": "sha256:1037852362ad7cd2edc5ae9fab6dab3e5457e6cf0f2d592709b3b0f8a45fe214"
+    },
+    "patched": {
+      "ref": "n132/arvo:407590995-fix",
+      "digest": "sha256:b9664497a4d9429e063f432d22fe7b2941e7dfee6e3b6013cf8c163e9da40e94"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/icu/icu4c/source/i18n/rematch.cpp:5664",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/icu/icu4c/source/i18n/rematch.cpp:5664"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

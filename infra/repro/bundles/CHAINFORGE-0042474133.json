@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042474133",
+  "chain": "CWE-416->CWE-125",
+  "project": "gdal",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42474133",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "4470ea897eda9272e9b5dd3edb00c2855b0b88e7",
+      "fix_commits": [
+        "4470ea897eda9272e9b5dd3edb00c2855b0b88e7"
+      ],
+      "repo": "https://github.com/OSGeo/gdal"
+    },
+    "patch": "From 4470ea897eda9272e9b5dd3edb00c2855b0b88e7 Mon Sep 17 00:00:00 2001\nFrom: Even Rouault <even.rouault@spatialys.com>\nDate: Fri, 15 Mar 2019 11:33:06 +0100\nSubject: [PATCH] VRT: fix error introduced in recent\n 977f2da59e46852f49534361860bb92f9c6ad1fd. Fixes\n https://bugs.chromium.org/p/oss-fuzz/issues/detail?id=13734. Credit to OSS\n Fuzz\n\n---\n autotest/gcore/vrt_read.py    | 21 +++++++++++++++++++++\n gdal/frmts/vrt/vrtsources.cpp |  8 +++++++-\n 2 files changed, 28 insertions(+), 1 deletion(-)\n\ndiff --git a/autotest/gcore/vrt_read.py b/autotest/gcore/vrt_read.py\nindex d8ca1b6..67f6361 100755\n--- a/autotest/gcore/vrt_read.py\n+++ b/autotest/gcore/vrt_read.py\n@@ -1287,3 +1287,24 @@ def test_vrt_shared_no_proxy_pool():\n \n     after = gdaltest.get_opened_files()\n     assert len(before) == len(after)\n+\n+\n+def test_vrt_shared_no_proxy_pool_error():\n+\n+    vrt_text = \"\"\"<VRTDataset rasterXSize=\"50\" rasterYSize=\"50\">\n+  <VRTRasterBand dataType=\"Byte\" band=\"1\">\n+    <SimpleSource>\n+      <SourceFilename>data/byte.tif</SourceFilename>\n+      <SourceBand>10</SourceBand>\n+    </SimpleSource>\n+  </VRTRasterBand>\n+  <VRTRasterBand dataType=\"Byte\" band=\"2\">\n+    <SimpleSource>\n+      <SourceFilename>data/byte.tif</SourceFilename>\n+      <SourceBand>11</SourceBand>\n+    </SimpleSource>\n+  </VRTRasterBand>\n+</VRTDataset>\"\"\"\n+    with gdaltest.error_handler():\n+        ds = gdal.Open(vrt_text)\n+    assert not ds\ndiff --git a/gdal/frmts/vrt/vrtsources.cpp b/gdal/frmts/vrt/vrtsources.cpp\nindex 313aed8..7f03f51 100644\n--- a/gdal/frmts/vrt/vrtsources.cpp\n+++ b/gdal/frmts/vrt/vrtsources.cpp\n@@ -663,6 +663,7 @@ CPLErr VRTSimpleSource::XMLInit( CPLXMLNode *psSrc, const char *pszVRTPath,\n         papszOpenOptions =\n             CSLSetNameValue(papszOpenOptions, \"ROOT_PATH\", pszVRTPath);\n \n+    bool bAddToMapIfOk = false;\n     GDALDataset *poSrcDS = nullptr;\n     if( nRasterXSize == 0 || nRasterYSize == 0 ||\n         eDataType == static_cast<GDALDataType>(-1) ||\n@@ -691,7 +692,7 @@ CPLErr VRTSimpleSource::XMLInit( CPLXMLNode *psSrc, const char *pszVRTPath,\n                         (const char* const* )papszOpenOptions, nullptr ) );\n                 if( poSrcDS )\n                 {\n-                    oMapSharedSources[pszSrcDSName] = poSrcDS;\n+                    bAddToMapIfOk = true;\n                 }\n             }\n         }\n@@ -761,6 +762,11 @@ CPLErr VRTSimpleSource::XMLInit( CPLXMLNode *psSrc, const char *pszVRTPath,\n         poSrcDS->ReleaseRef();\n         return CE_Failure;\n     }\n+    else if( bAddToMapIfOk )\n+    {\n+        oMapSharedSources[pszSrcDSName] = poSrcDS;\n+    }\n+\n     if( bGetMaskBand )\n     {\n         m_poMaskBandMainBand = m_poRasterBand;\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42474133-vul",
+      "digest": "sha256:982a9b4bf0f74ba5eae0f0a8d3e23c2133be7e6a9b38d0adf25e881de67ff4fe"
+    },
+    "patched": {
+      "ref": "n132/arvo:42474133-fix",
+      "digest": "sha256:5ab69ed250a767affb4952896799c7c84f5c1583c449390a1d0674c7d4aa63d0"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/gdal/gdal/gcore/gdaldataset.cpp:1329",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/gdal/gdal/gcore/gdaldataset.cpp:1329"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

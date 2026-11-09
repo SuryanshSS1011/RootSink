@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042534365",
+  "chain": "CWE-456->CWE-457",
+  "project": "librawspeed",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42534365",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "98d3ec824f0b4e498b175fb937b4217319d01450",
+      "fix_commits": [
+        "98d3ec824f0b4e498b175fb937b4217319d01450"
+      ],
+      "repo": "https://github.com/darktable-org/rawspeed"
+    },
+    "patch": "From 98d3ec824f0b4e498b175fb937b4217319d01450 Mon Sep 17 00:00:00 2001\nFrom: Roman Lebedev <lebedev.ri@gmail.com>\nDate: Sat, 10 Mar 2018 02:44:05 +0300\nSubject: [PATCH] LJpegDecompressor::decodeN(): and actually properly(C)\n sanitize the frame size\n\n---\n .../decompressors/LJpegDecompressor.cpp       | 22 ++++++++-----------\n .../decompressors/LJpegDecompressor.h         |  2 ++\n 2 files changed, 11 insertions(+), 13 deletions(-)\n\ndiff --git a/src/librawspeed/decompressors/LJpegDecompressor.cpp b/src/librawspeed/decompressors/LJpegDecompressor.cpp\nindex 30e0d35..f185587 100644\n--- a/src/librawspeed/decompressors/LJpegDecompressor.cpp\n+++ b/src/librawspeed/decompressors/LJpegDecompressor.cpp\n@@ -82,10 +82,11 @@ void LJpegDecompressor::decodeScan()\n   if ((mRaw->getCpp() * (mRaw->dim.x - offX)) < frame.cps)\n     ThrowRDE(\"Got less pixels than the components per sample\");\n \n-  const auto frameWidth = frame.cps * frame.w;\n-  if (frameWidth < w || frame.h < h) {\n+  assert((mRaw->getCpp() * w) % frame.cps == 0);\n+  wBlocks = (mRaw->getCpp() * w) / frame.cps;\n+  if (frame.w < wBlocks || frame.h < h) {\n     ThrowRDE(\"LJpeg frame (%u, %u) is smaller than expected (%u, %u)\",\n-             frameWidth, frame.h, w, h);\n+             frame.cps * frame.w, frame.h, w, h);\n   }\n \n   switch (frame.cps) {\n@@ -116,8 +117,6 @@ void LJpegDecompressor::decodeN()\n   assert(mRaw->dim.x >= N_COMP);\n   assert((mRaw->getCpp() * (mRaw->dim.x - offX)) >= N_COMP);\n \n-  assert((mRaw->getCpp() * w) % N_COMP == 0);\n-\n   auto ht = getHuffmanTables<N_COMP>();\n   auto pred = getInitialPredictors<N_COMP>();\n   auto predNext = pred.data();\n@@ -128,14 +127,11 @@ void LJpegDecompressor::decodeN()\n   // The tiles at the bottom and the right may extend beyond the dimension of\n   // the raw image buffer. The excessive content has to be ignored.\n \n-  const auto height = std::min(frame.h, h);\n-  assert(height == h);\n-  const auto wBlocks = (mRaw->getCpp() * w) / N_COMP;\n-  const auto width = std::min(frame.w, wBlocks);\n-  assert(width == wBlocks);\n+  assert(frame.h >= h);\n+  assert(frame.cps * frame.w >= mRaw->getCpp() * w);\n \n   // For y, we can simply stop decoding when we reached the border.\n-  for (unsigned y = 0; y < height; ++y) {\n+  for (unsigned y = 0; y < h; ++y) {\n     auto destY = offY + y;\n     auto dest =\n         reinterpret_cast<ushort16*>(mRaw->getDataUncropped(offX, destY));\n@@ -145,13 +141,13 @@ void LJpegDecompressor::decodeN()\n     predNext = dest;\n \n     // For x, we first process all pixels within the image buffer ...\n-    for (unsigned x = 0; x < width; ++x) {\n+    for (unsigned x = 0; x < wBlocks; ++x) {\n       unroll_loop<N_COMP>([&](int i) {\n         *dest++ = pred[i] += ht[i]->decodeNext(bitStream);\n       });\n     }\n     // ... and discard the rest.\n-    for (unsigned x = width; x < frame.w; ++x) {\n+    for (unsigned x = wBlocks; x < frame.w; ++x) {\n       unroll_loop<N_COMP>([&](int i) {\n         ht[i]->decodeNext(bitStream);\n       });\ndiff --git a/src/librawspeed/decompressors/LJpegDecompressor.h b/src/librawspeed/decompressors/LJpegDecompressor.h\nindex 8183067..41e51c1 100644\n--- a/src/librawspeed/decompressors/LJpegDecompressor.h\n+++ b/src/librawspeed/decompressors/LJpegDecompressor.h\n@@ -41,6 +41,8 @@ class LJpegDecompressor final : public AbstractLJpegDecompressor\n   uint32 w = 0;\n   uint32 h = 0;\n \n+  uint32 wBlocks = 0;\n+\n public:\n   LJpegDecompressor(const ByteStream& bs, const RawImage& img);\n \n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42534365-vul",
+      "digest": "sha256:307652df17e1d3902201f4669d6e39b9aab03c1ab6776c6769603220b706fc80"
+    },
+    "patched": {
+      "ref": "n132/arvo:42534365-fix",
+      "digest": "sha256:1946d16e4e8426eded27e5475eb9c8e211293e2d5ab2546bfe0f01188e8a532c"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/librawspeed/src/librawspeed/common/RawImage.cpp:174",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/librawspeed/src/librawspeed/common/RawImage.cpp:174"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

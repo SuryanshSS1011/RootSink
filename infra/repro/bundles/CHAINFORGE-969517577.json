@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-969517577",
+  "chain": "CWE-456->CWE-457",
+  "project": "skia",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42538654",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://skia.googlesource.com/skia.git/+/6209bfafad7d4ad57b105fe9fdfc90298ebd4a69%5E%21/",
+      "fix_commits": [
+        "6209bfafad7d4ad57b105fe9fdfc90298ebd4a69"
+      ],
+      "repo": "https://skia.googlesource.com/skia.git"
+    },
+    "patch": "From 6209bfafad7d4ad57b105fe9fdfc90298ebd4a69 Mon Sep 17 00:00:00 2001\nFrom: Mike Reed <reed@google.com>\nDate: Fri, 6 Apr 2018 14:27:27 -0400\nSubject: [PATCH] detect if makeOffset failed\n\nIf we don't detect this, this imagefilter might not write to all of the pixels\nit claims it will, resulting in uninitialized memory.\n\nBug: oss-fuzz:7209\nChange-Id: I6c53757046b4d6051da1b317310c89b8ec4752ca\nReviewed-on: https://skia-review.googlesource.com/119145\nReviewed-by: Mike Reed <reed@google.com>\nCommit-Queue: Mike Reed <reed@google.com>\n---\n src/effects/SkDisplacementMapEffect.cpp | 5 +++++\n 1 file changed, 5 insertions(+)\n\ndiff --git a/src/effects/SkDisplacementMapEffect.cpp b/src/effects/SkDisplacementMapEffect.cpp\nindex 1891023..5dd3ece 100644\n--- a/src/effects/SkDisplacementMapEffect.cpp\n+++ b/src/effects/SkDisplacementMapEffect.cpp\n@@ -269,6 +269,11 @@ sk_sp<SkSpecialImage> SkDisplacementMapEffect::onFilterImage(SkSpecialImage* sou\n     }\n \n     const SkIRect colorBounds = bounds.makeOffset(-colorOffset.x(), -colorOffset.y());\n+    // If the offset overflowed (saturated) then we have to abort, as we need their\n+    // dimensions to be equal. See https://bugs.chromium.org/p/oss-fuzz/issues/detail?id=7209\n+    if (colorBounds.size() != bounds.size()) {\n+        return nullptr;\n+    }\n \n     SkVector scale = SkVector::Make(fScale, fScale);\n     ctx.ctm().mapVectors(&scale, 1);\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42538654-vul",
+      "digest": "sha256:afc8a79febc0f1d6fe743a34989ad5046876bba90dd2bd266ad6c1d4bbe8817e"
+    },
+    "patched": {
+      "ref": "n132/arvo:42538654-fix",
+      "digest": "sha256:5b76907fa708745ec27bc4af50c7560dd60bdbd159413fb1c9259bc21039f03e"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/skia/out/Fuzz/../../src/opts/SkBlitRow_opts.h:83",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/skia/out/Fuzz/../../src/opts/SkBlitRow_opts.h:83"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

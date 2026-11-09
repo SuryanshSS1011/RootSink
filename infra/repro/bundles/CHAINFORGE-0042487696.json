@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042487696",
+  "chain": "CWE-1284->CWE-125",
+  "project": "opensc",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42487696",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "3ff059a74bcd10ead9a92cc67e5c8c006996e940",
+      "fix_commits": [
+        "3ff059a74bcd10ead9a92cc67e5c8c006996e940"
+      ],
+      "repo": "https://github.com/OpenSC/OpenSC"
+    },
+    "patch": "diff --git a/src/libopensc/pkcs15-oberthur.c b/src/libopensc/pkcs15-oberthur.c\nindex 0cc440b9ce..007a6182fd 100644\n--- a/src/libopensc/pkcs15-oberthur.c\n+++ b/src/libopensc/pkcs15-oberthur.c\n@@ -400,7 +400,7 @@ sc_oberthur_parse_containers (struct sc_pkcs15_card *p15card,\n \t\tContainers = next;\n \t}\n \n-\tfor (offs=0; offs < len;)  {\n+\tfor (offs=0; offs + 2 + 2+2+2 + 2+2+2 + 2+36 <= len;)  {\n \t\tstruct container *cont;\n \t\tunsigned char *ptr =  buff + offs + 2;\n \n@@ -451,7 +451,7 @@ sc_oberthur_parse_publicinfo (struct sc_pkcs15_card *p15card,\n \tint rv;\n \n \tLOG_FUNC_CALLED(ctx);\n-\tfor (ii=0; ii<len; ii+=5)   {\n+\tfor (ii=0; ii+5<=len; ii+=5)   {\n \t\tunsigned int file_id, size;\n \n \t\tif(*(buff+ii) != 0xFF)\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42487696-vul",
+      "digest": "sha256:7ebad502c80dc461b943e03c40ac8288efc2c6106ea51a24369cbfc5adf1e8f5"
+    },
+    "patched": {
+      "ref": "n132/arvo:42487696-fix",
+      "digest": "sha256:ef74dbf07b956cc4948eb2b5f61338d1a05ce9212bba8b4c8618d97661756222"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/opensc/src/libopensc/pkcs15-oberthur.c:458",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/opensc/src/libopensc/pkcs15-oberthur.c:458"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

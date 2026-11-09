@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-961989995",
+  "chain": "CWE-456->CWE-457",
+  "project": "ffmpeg",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42537608",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://git.ffmpeg.org/gitweb/ffmpeg.git/commitdiff/bfcee368e28823b1289240ae061ccc8ee28cf33e",
+      "fix_commits": [
+        "bfcee368e28823b1289240ae061ccc8ee28cf33e"
+      ],
+      "repo": "https://git.ffmpeg.org/gitweb/ffmpeg.git/commitdiff"
+    },
+    "patch": "From bfcee368e28823b1289240ae061ccc8ee28cf33e Mon Sep 17 00:00:00 2001\nFrom: Andreas Rheinhardt <andreas.rheinhardt@outlook.com>\nDate: Tue, 6 Aug 2024 19:47:49 +0200\nSubject: [PATCH] avcodec/cbs_sei: Always zero-initialize SEI payload\n\nFixes: Use-of-uninitialized value\nFixes: clusterfuzz-testcase-minimized-ffmpeg_BSF_H264_METADATA_fuzzer-5458626041413632\n\nReviewed-by: Michael Niedermayer <michael@niedermayer.cc>\nSigned-off-by: Andreas Rheinhardt <andreas.rheinhardt@outlook.com>\n---\n libavcodec/cbs_sei.c | 4 +---\n 1 file changed, 1 insertion(+), 3 deletions(-)\n\ndiff --git a/libavcodec/cbs_sei.c b/libavcodec/cbs_sei.c\nindex eefa07c..458751d 100644\n--- a/libavcodec/cbs_sei.c\n+++ b/libavcodec/cbs_sei.c\n@@ -41,7 +41,6 @@ int ff_cbs_sei_alloc_message_payload(SEIRawMessage *message,\n                                      const SEIMessageTypeDescriptor *desc)\n {\n     void (*free_func)(FFRefStructOpaque, void*);\n-    unsigned flags = 0;\n \n     av_assert0(message->payload     == NULL &&\n                message->payload_ref == NULL);\n@@ -53,10 +52,9 @@ int ff_cbs_sei_alloc_message_payload(SEIRawMessage *message,\n         free_func = &cbs_free_user_data_unregistered;\n     else {\n         free_func = NULL;\n-        flags = FF_REFSTRUCT_FLAG_NO_ZEROING;\n     }\n \n-    message->payload_ref = ff_refstruct_alloc_ext(desc->size, flags,\n+    message->payload_ref = ff_refstruct_alloc_ext(desc->size, 0,\n                                                   NULL, free_func);\n     if (!message->payload_ref)\n         return AVERROR(ENOMEM);\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42537608-vul",
+      "digest": "sha256:f4bcd8489e8688f5a984f82fec507bfa8f56c3e7e634b23e5a3f43a567860332"
+    },
+    "patched": {
+      "ref": "n132/arvo:42537608-fix",
+      "digest": "sha256:a030add5e3a347f1678b5ad5ecaec09c847c8d2fe77c3668b8b8b3462729cade"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/ffmpeg/libavcodec/cbs_h264_syntax_template.c:653",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/ffmpeg/libavcodec/cbs_h264_syntax_template.c:653"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

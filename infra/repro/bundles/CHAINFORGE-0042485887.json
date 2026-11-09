@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042485887",
+  "chain": "CWE-456->CWE-457",
+  "project": "matio",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42485887",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "d7455408ffc316929e87182334cec7f860a13d0f",
+      "fix_commits": [
+        "d7455408ffc316929e87182334cec7f860a13d0f"
+      ],
+      "repo": "https://github.com/tbeu/matio"
+    },
+    "patch": "From d7455408ffc316929e87182334cec7f860a13d0f Mon Sep 17 00:00:00 2001\nFrom: tbeu <tbeu@users.noreply.github.com>\nDate: Sat, 30 May 2020 22:45:28 +0200\nSubject: [PATCH] Check read success\n\n---\n src/mat5.c | 33 +++++++++++++++++++++++++--------\n 1 file changed, 25 insertions(+), 8 deletions(-)\n\ndiff --git a/src/mat5.c b/src/mat5.c\nindex 6812abe..0795794 100644\n--- a/src/mat5.c\n+++ b/src/mat5.c\n@@ -1106,12 +1106,12 @@ ReadNextCell( mat_t *mat, matvar_t *matvar )\n #endif\n \n     } else {\n-        mat_uint32_t buf[6];\n+        mat_uint32_t buf[6] = {0,};\n         mat_uint32_t nBytes;\n         mat_uint32_t array_flags;\n \n         for ( i = 0; i < nelems; i++ ) {\n-            int cell_bytes_read;\n+            size_t readresult;\n             mat_uint32_t name_len;\n             cells[i] = Mat_VarCalloc();\n             if ( !cells[i] ) {\n@@ -1120,12 +1120,17 @@ ReadNextCell( mat_t *mat, matvar_t *matvar )\n             }\n \n             /* Read variable tag for cell */\n-            cell_bytes_read = fread(buf,4,2,(FILE*)mat->fp);\n+            readresult = fread(buf,4,2,(FILE*)mat->fp);\n \n             /* Empty cells at the end of a file may cause an EOF */\n-            if ( !cell_bytes_read )\n+            if ( 0 == readresult )\n                 continue;\n-            bytesread += cell_bytes_read;\n+            bytesread += readresult;\n+            if ( 1 == readresult ) {\n+                Mat_VarFree(cells[i]);\n+                cells[i] = NULL;\n+                break;\n+            }\n             if ( mat->byteswap ) {\n                 (void)Mat_uint32Swap(buf);\n                 (void)Mat_uint32Swap(buf+1);\n@@ -1145,7 +1150,13 @@ ReadNextCell( mat_t *mat, matvar_t *matvar )\n             }\n \n             /* Read array flags and the dimensions tag */\n-            bytesread += fread(buf,4,6,(FILE*)mat->fp);\n+            readresult = fread(buf,4,6,(FILE*)mat->fp);\n+            bytesread += readresult;\n+            if ( 6 != readresult ) {\n+                Mat_VarFree(cells[i]);\n+                cells[i] = NULL;\n+                break;\n+            }\n             if ( mat->byteswap ) {\n                 (void)Mat_uint32Swap(buf);\n                 (void)Mat_uint32Swap(buf+1);\n@@ -1174,8 +1185,14 @@ ReadNextCell( mat_t *mat, matvar_t *matvar )\n                 nBytes -= nbytes;\n             }\n             /* Variable name tag */\n-            bytesread+=fread(buf,1,8,(FILE*)mat->fp);\n-            nBytes-=8;\n+            readresult = fread(buf,1,8,(FILE*)mat->fp);\n+            bytesread += readresult;\n+            if ( 8 != readresult ) {\n+                Mat_VarFree(cells[i]);\n+                cells[i] = NULL;\n+                break;\n+            }\n+            nBytes -= 8;\n             if ( mat->byteswap ) {\n                 (void)Mat_uint32Swap(buf);\n                 (void)Mat_uint32Swap(buf+1);\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42485887-vul",
+      "digest": "sha256:f8f6374d4956ba39115ebf767d1fd609fa0f92b8bdb263e7b8a9a3ea44e993b3"
+    },
+    "patched": {
+      "ref": "n132/arvo:42485887-fix",
+      "digest": "sha256:d6b07a1015b68460a2b8a60cdfdcd344931725c11e0dab8ba5c7f3dd8ffc7e86"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/matio/src/mat5.c:1659",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/matio/src/mat5.c:1659"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

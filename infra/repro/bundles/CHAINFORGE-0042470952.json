@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042470952",
+  "chain": "CWE-456->CWE-457",
+  "project": "openvswitch",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42470952",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "2e38f13d70a9c049497a8cab681fe7b1f443c8b1",
+      "fix_commits": [
+        "2e38f13d70a9c049497a8cab681fe7b1f443c8b1"
+      ],
+      "repo": "https://github.com/openvswitch/ovs"
+    },
+    "patch": "From 2e38f13d70a9c049497a8cab681fe7b1f443c8b1 Mon Sep 17 00:00:00 2001\nFrom: Yifeng Sun <pkusunyifeng@gmail.com>\nDate: Thu, 17 Jan 2019 10:22:12 -0800\nSubject: [PATCH] odp-util: Fix a bug in parse_odp_push_nsh_action\n\nIn this piece of code, 'struct ofpbuf b' should always point to\nmetadata so that metadata can be filled with values through ofpbuf\noperations, like ofpbuf_put_hex and ofpbuf_push_zeros. However,\nofpbuf_push_zeros may change the data pointer of 'struct ofpbuf b'\nand therefore, metadata will not contain the expected values.\n\nThis patch fixes it by changing ofpbuf_push_zeros to\nofpbuf_put_zeros.\n\nReported-at: https://bugs.chromium.org/p/oss-fuzz/issues/detail?id=10863\nSigned-off-by: Yifeng Sun <pkusunyifeng@gmail.com>\nSigned-off-by: Ben Pfaff <blp@ovn.org>\n---\n lib/odp-util.c | 2 +-\n 1 file changed, 1 insertion(+), 1 deletion(-)\n\ndiff --git a/lib/odp-util.c b/lib/odp-util.c\nindex 0491bed..a1c3e5b 100644\n--- a/lib/odp-util.c\n+++ b/lib/odp-util.c\n@@ -2118,7 +2118,7 @@ parse_odp_push_nsh_action(const char *s, struct ofpbuf *actions)\n                 /* Pad metadata to 4 bytes. */\n                 padding = PAD_SIZE(mdlen, 4);\n                 if (padding > 0) {\n-                    ofpbuf_push_zeros(&b, padding);\n+                    ofpbuf_put_zeros(&b, padding);\n                 }\n                 md_size = mdlen + padding;\n                 ofpbuf_uninit(&b);\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42470952-vul",
+      "digest": "sha256:a22c1ab2702b9e67f48bdcbc18d3507f08163b31b26037c12c7881206fe2aac1"
+    },
+    "patched": {
+      "ref": "n132/arvo:42470952-fix",
+      "digest": "sha256:96032f3adffbfe2912125349cc152c17967f00ecb22eb9b9d46e7db17155461f"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/openvswitch/lib/dynamic-string.c:373",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/openvswitch/lib/dynamic-string.c:373"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042495506",
+  "chain": "CWE-456->CWE-457",
+  "project": "libjpeg-turbo",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42495506",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "b1079002ad451aab896617098b6bcbaae1d967e4",
+      "fix_commits": [
+        "b1079002ad451aab896617098b6bcbaae1d967e4"
+      ],
+      "repo": "https://github.com/libjpeg-turbo/libjpeg-turbo"
+    },
+    "patch": "From b1079002ad451aab896617098b6bcbaae1d967e4 Mon Sep 17 00:00:00 2001\nFrom: DRC <information@libjpeg-turbo.org>\nDate: Wed, 7 Apr 2021 15:51:05 -0500\nSubject: [PATCH] rdppm.c: Fix innocuous MSan error\n\nA fuzzing test case that was effectively a 1-pixel PGM file with a\nmaximum value of 1 and an actual value of 8 caused an uninitialized\nmember of the rescale[] array to be accessed in get_gray_rgb_row() or\nget_gray_cmyk_row().  Since, for performance reasons, those functions do\nnot perform bounds checking on the PPM values, we need to ensure that\nunused members of the rescale[] array are initialized.\n---\n rdppm.c | 2 ++\n 1 file changed, 2 insertions(+)\n\ndiff --git a/rdppm.c b/rdppm.c\nindex 6ac8fdb..d4378dd 100644\n--- a/rdppm.c\n+++ b/rdppm.c\n@@ -727,6 +727,8 @@ start_input_ppm(j_compress_ptr cinfo, cjpeg_source_ptr sinfo)\n       (*cinfo->mem->alloc_small) ((j_common_ptr)cinfo, JPOOL_IMAGE,\n                                   (size_t)(((long)MAX(maxval, 255) + 1L) *\n                                            sizeof(JSAMPLE)));\n+    MEMZERO(source->rescale, (size_t)(((long)MAX(maxval, 255) + 1L) *\n+                                      sizeof(JSAMPLE)));\n     half_maxval = maxval / 2;\n     for (val = 0; val <= (long)maxval; val++) {\n       /* The multiplication here must be done in 32 bits to avoid overflow */\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42495506-vul",
+      "digest": "sha256:41dd4fb76f0eb9334efa393755a45747e7a7ef94cd44757bb953b59840e3d5a2"
+    },
+    "patched": {
+      "ref": "n132/arvo:42495506-fix",
+      "digest": "sha256:a36e0e7e8e12a3d5c83401bb3e313a9e297bfeaa52b00b3afaf2988aa3edaef1"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/libjpeg-turbo/jccolext.c:61",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/libjpeg-turbo/jccolext.c:61"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

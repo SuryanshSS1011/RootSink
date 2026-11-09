@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042475786",
+  "chain": "CWE-1284->CWE-125",
+  "project": "wireshark",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42475786",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "45a3d0787f3c9f6f5fb5b53a8c29771b3f28e406",
+      "fix_commits": [
+        "45a3d0787f3c9f6f5fb5b53a8c29771b3f28e406"
+      ],
+      "repo": "https://github.com/wireshark/wireshark"
+    },
+    "patch": "diff --git a/epan/asn1.c b/epan/asn1.c\nindex bf30529cc61..1faef845ee1 100644\n--- a/epan/asn1.c\n+++ b/epan/asn1.c\n@@ -234,6 +234,9 @@ double asn1_get_real(const guint8 *real_ptr, gint len) {\n       DISSECTOR_ASSERT_NOT_REACHED();\n     }\n \n+    /* Ensure the buffer len and its content are coherent */\n+    DISSECTOR_ASSERT(lenE < len - 1);\n+\n     Eneg = (*p) & 0x80 ? TRUE : FALSE;\n     for (i = 0; i < lenE; i++) {\n       if(Eneg) {\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42475786-vul",
+      "digest": "sha256:981fbfbc1b1948acf22f12196f67ec6c2d8c0b8530375b4e88b91c22554bfd5c"
+    },
+    "patched": {
+      "ref": "n132/arvo:42475786-fix",
+      "digest": "sha256:6fef6e3036b0024dfb63e7b76d1b489dbd4f48cdbec50a90a69c11e056f63762"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/wireshark/epan/dissectors/packet-ber.c:2091",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/wireshark/epan/dissectors/packet-ber.c:2091"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

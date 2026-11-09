@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042517790",
+  "chain": "CWE-1285->CWE-125",
+  "project": "oniguruma",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42517790",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "34eac8830181bc348dab845932ae3368d1bcf3ff",
+      "fix_commits": [
+        "34eac8830181bc348dab845932ae3368d1bcf3ff"
+      ],
+      "repo": "https://github.com/kkos/oniguruma"
+    },
+    "patch": "diff --git a/harnesses/base.c b/harnesses/base.c\nindex 949c0e09..de77e4b6 100644\n--- a/harnesses/base.c\n+++ b/harnesses/base.c\n@@ -361,8 +361,11 @@ exec(OnigEncoding enc, OnigOptionType options, OnigSyntaxType* syntax,\n   }\n   REGEX_SUCCESS_COUNT++;\n \n-  r = search(reg, data_pattern, data_pattern_end, options, backward, sl);\n-  if (r == -2) return -2;\n+  if (data_pattern == pattern ||\n+      onigenc_is_valid_mbc_string(enc, data_pattern, data_pattern_end) != 0) {\n+    r = search(reg, data_pattern, data_pattern_end, options, backward, sl);\n+    if (r == -2) return -2;\n+  }\n \n   if (onigenc_is_valid_mbc_string(enc, str, end) != 0) {\n     VALID_STRING_COUNT++;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42517790-vul",
+      "digest": "sha256:ca18f63571acc9e7e8c690483f9d910f51801c1b0e617c0e4ef62f5d6f02611d"
+    },
+    "patched": {
+      "ref": "n132/arvo:42517790-fix",
+      "digest": "sha256:be242031db8d51865507ad76e8203114e465856be995c594278eb880c99e3221"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/oniguruma/src/gb18030.c:85",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/oniguruma/src/gb18030.c:85"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

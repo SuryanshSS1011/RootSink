@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042487711",
+  "chain": "CWE-416->CWE-787",
+  "project": "arrow",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42487711",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "571d48e007718321bca8adb5f100555fed0e1957",
+      "fix_commits": [
+        "571d48e007718321bca8adb5f100555fed0e1957"
+      ],
+      "repo": "https://github.com/apache/arrow"
+    },
+    "patch": "diff --git a/cpp/src/parquet/arrow/schema.cc b/cpp/src/parquet/arrow/schema.cc\nindex c9723e01a19d..16d0e1f3d518 100644\n--- a/cpp/src/parquet/arrow/schema.cc\n+++ b/cpp/src/parquet/arrow/schema.cc\n@@ -834,9 +834,6 @@ Status SchemaManifest::Make(const SchemaDescriptor* schema,\n                             const std::shared_ptr<const KeyValueMetadata>& metadata,\n                             const ArrowReaderProperties& properties,\n                             SchemaManifest* manifest) {\n-  RETURN_NOT_OK(\n-      GetOriginSchema(metadata, &manifest->schema_metadata, &manifest->origin_schema));\n-\n   SchemaTreeContext ctx;\n   ctx.manifest = manifest;\n   ctx.properties = properties;\n@@ -844,6 +841,16 @@ Status SchemaManifest::Make(const SchemaDescriptor* schema,\n   const GroupNode& schema_node = *schema->group_node();\n   manifest->descr = schema;\n   manifest->schema_fields.resize(schema_node.field_count());\n+\n+  // Try to deserialize original Arrow schema\n+  RETURN_NOT_OK(\n+      GetOriginSchema(metadata, &manifest->schema_metadata, &manifest->origin_schema));\n+  // Ignore original schema if it's not compatible with the Parquet schema\n+  if (manifest->origin_schema != nullptr &&\n+      manifest->origin_schema->num_fields() != schema_node.field_count()) {\n+    manifest->origin_schema = nullptr;\n+  }\n+\n   for (int i = 0; i < static_cast<int>(schema_node.field_count()); ++i) {\n     SchemaField* out_field = &manifest->schema_fields[i];\n     RETURN_NOT_OK(NodeToSchemaField(*schema_node.field(i), LevelInfo(), &ctx,\n@@ -856,6 +863,7 @@ Status SchemaManifest::Make(const SchemaDescriptor* schema,\n     if (manifest->origin_schema == nullptr) {\n       continue;\n     }\n+\n     auto origin_field = manifest->origin_schema->field(i);\n     RETURN_NOT_OK(ApplyOriginalMetadata(*origin_field, out_field));\n   }\ndiff --git a/cpp/src/parquet/column_reader.cc b/cpp/src/parquet/column_reader.cc\nindex 89e72ba339a2..44a6dcf68393 100644\n--- a/cpp/src/parquet/column_reader.cc\n+++ b/cpp/src/parquet/column_reader.cc\n@@ -235,8 +235,9 @@ class SerializedPageReader : public PageReader {\n \n   void InitDecryption();\n \n-  std::shared_ptr<Buffer> DecompressPage(int compressed_len, int uncompressed_len,\n-                                         const uint8_t* page_buffer);\n+  std::shared_ptr<Buffer> DecompressIfNeeded(std::shared_ptr<Buffer> page_buffer,\n+                                             int compressed_len, int uncompressed_len,\n+                                             int levels_byte_len = 0);\n \n   std::shared_ptr<ArrowInputStream> stream_;\n \n@@ -352,10 +353,15 @@ std::shared_ptr<Page> SerializedPageReader::NextPage() {\n \n     int compressed_len = current_page_header_.compressed_page_size;\n     int uncompressed_len = current_page_header_.uncompressed_page_size;\n+    if (compressed_len < 0 || uncompressed_len < 0) {\n+      throw ParquetException(\"Invalid page header\");\n+    }\n+\n     if (crypto_ctx_.data_decryptor != nullptr) {\n       UpdateDecryption(crypto_ctx_.data_decryptor, encryption::kDictionaryPage,\n                        data_page_aad_);\n     }\n+\n     // Read the compressed data page.\n     PARQUET_ASSIGN_OR_THROW(auto page_buffer, stream_->Read(compressed_len));\n     if (page_buffer->size() != compressed_len) {\n@@ -374,10 +380,6 @@ std::shared_ptr<Page> SerializedPageReader::NextPage() {\n \n       page_buffer = decryption_buffer_;\n     }\n-    // Uncompress it if we need to\n-    if (decompressor_ != nullptr) {\n-      page_buffer = DecompressPage(compressed_len, uncompressed_len, page_buffer->data());\n-    }\n \n     const PageType::type page_type = LoadEnumSafe(&current_page_header_.type);\n \n@@ -391,6 +393,10 @@ std::shared_ptr<Page> SerializedPageReader::NextPage() {\n         throw ParquetException(\"Invalid page header (negative number of values)\");\n       }\n \n+      // Uncompress if needed\n+      page_buffer =\n+          DecompressIfNeeded(std::move(page_buffer), compressed_len, uncompressed_len);\n+\n       return std::make_shared<DictionaryPage>(page_buffer, dict_header.num_values,\n                                               LoadEnumSafe(&dict_header.encoding),\n                                               is_sorted);\n@@ -404,6 +410,10 @@ std::shared_ptr<Page> SerializedPageReader::NextPage() {\n       EncodedStatistics page_statistics = ExtractStatsFromHeader(header);\n       seen_num_rows_ += header.num_values;\n \n+      // Uncompress if needed\n+      page_buffer =\n+          DecompressIfNeeded(std::move(page_buffer), compressed_len, uncompressed_len);\n+\n       return std::make_shared<DataPageV1>(page_buffer, header.num_values,\n                                           LoadEnumSafe(&header.encoding),\n                                           LoadEnumSafe(&header.definition_level_encoding),\n@@ -424,6 +434,15 @@ std::shared_ptr<Page> SerializedPageReader::NextPage() {\n       EncodedStatistics page_statistics = ExtractStatsFromHeader(header);\n       seen_num_rows_ += header.num_values;\n \n+      // Uncompress if needed\n+      int levels_byte_len;\n+      if (AddWithOverflow(header.definition_levels_byte_length,\n+                          header.repetition_levels_byte_length, &levels_byte_len)) {\n+        throw ParquetException(\"Levels size too large (corrupt file?)\");\n+      }\n+      page_buffer = DecompressIfNeeded(std::move(page_buffer), compressed_len,\n+                                       uncompressed_len, levels_byte_len);\n+\n       return std::make_shared<DataPageV2>(\n           page_buffer, header.num_values, header.num_nulls, header.num_rows,\n           LoadEnumSafe(&header.encoding), header.definition_levels_byte_length,\n@@ -438,34 +457,29 @@ std::shared_ptr<Page> SerializedPageReader::NextPage() {\n   return std::shared_ptr<Page>(nullptr);\n }\n \n-std::shared_ptr<Buffer> SerializedPageReader::DecompressPage(int compressed_len,\n-                                                             int uncompressed_len,\n-                                                             const uint8_t* page_buffer) {\n+std::shared_ptr<Buffer> SerializedPageReader::DecompressIfNeeded(\n+    std::shared_ptr<Buffer> page_buffer, int compressed_len, int uncompressed_len,\n+    int levels_byte_len) {\n+  if (decompressor_ == nullptr) {\n+    return page_buffer;\n+  }\n   // Grow the uncompressed buffer if we need to.\n   if (uncompressed_len > static_cast<int>(decompression_buffer_->size())) {\n     PARQUET_THROW_NOT_OK(decompression_buffer_->Resize(uncompressed_len, false));\n   }\n \n-  if (current_page_header_.type != format::PageType::DATA_PAGE_V2) {\n-    PARQUET_THROW_NOT_OK(\n-        decompressor_->Decompress(compressed_len, page_buffer, uncompressed_len,\n-                                  decompression_buffer_->mutable_data()));\n-  } else {\n-    // The levels are not compressed in V2 format\n-    const auto& header = current_page_header_.data_page_header_v2;\n-    int32_t levels_length =\n-        header.repetition_levels_byte_length + header.definition_levels_byte_length;\n+  if (levels_byte_len > 0) {\n+    // First copy the levels as-is\n     uint8_t* decompressed = decompression_buffer_->mutable_data();\n-    memcpy(decompressed, page_buffer, levels_length);\n-    decompressed += levels_length;\n-    const uint8_t* compressed_values = page_buffer + levels_length;\n-\n-    // Decompress the values\n-    PARQUET_THROW_NOT_OK(\n-        decompressor_->Decompress(compressed_len - levels_length, compressed_values,\n-                                  uncompressed_len - levels_length, decompressed));\n+    memcpy(decompressed, page_buffer->data(), levels_byte_len);\n   }\n \n+  // Decompress the values\n+  PARQUET_THROW_NOT_OK(decompressor_->Decompress(\n+      compressed_len - levels_byte_len, page_buffer->data() + levels_byte_len,\n+      uncompressed_len - levels_byte_len,\n+      decompression_buffer_->mutable_data() + levels_byte_len));\n+\n   return decompression_buffer_;\n }\n \ndiff --git a/testing b/testing\nindex d4aa70abcd18..ec74f03496ba 160000\n--- a/testing\n+++ b/testing\n@@ -1 +1 @@\n-Subproject commit d4aa70abcd18c169194bd2355028625c871d138c\n+Subproject commit ec74f03496ba100fd8497ad660909bb0261a3405\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42487711-vul",
+      "digest": "sha256:0a42165ea77abc3cba4593da334c43d4d39cc02da65ddd7beef79dbf3827ed70"
+    },
+    "patched": {
+      "ref": "n132/arvo:42487711-fix",
+      "digest": "sha256:8511b664dc4455fe034c2bc51d12be4c1518a3f35b984f1c9760bd10fa02cbb9"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "global-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/arrow/cpp/src/arrow/util/compression_brotli.cc:189",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "global-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/arrow/cpp/src/arrow/util/compression_brotli.cc:189"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

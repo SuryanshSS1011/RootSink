@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042534463",
+  "chain": "CWE-1284->CWE-787",
+  "project": "lcms",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42534463",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "fe8d3839799adbaf2783ebf27f1433ff8d5abd69",
+      "fix_commits": [
+        "fe8d3839799adbaf2783ebf27f1433ff8d5abd69"
+      ],
+      "repo": "https://github.com/mm2/Little-CMS"
+    },
+    "patch": "diff --git a/src/cmscgats.c b/src/cmscgats.c\nindex 0a1905c3..657e76e1 100644\n--- a/src/cmscgats.c\n+++ b/src/cmscgats.c\n@@ -1206,6 +1206,7 @@ void* AllocChunk(cmsIT8* it8, cmsUInt32Number size)\n     cmsUInt8Number* ptr;\n \n     size = _cmsALIGNMEM(size);\n+    if (size == 0) return NULL;\n \n     if (size > Free) {\n \n@@ -1598,22 +1599,26 @@ cmsInt32Number satoi(const char* b)\n static\n cmsBool AllocateDataFormat(cmsIT8* it8)\n {\n+    cmsUInt32Number size;\n+\n     TABLE* t = GetTable(it8);\n \n-    if (t -> DataFormat) return TRUE;    // Already allocated\n+    if (t->DataFormat) return TRUE;    // Already allocated\n \n-    t -> nSamples  = satoi(cmsIT8GetProperty(it8, \"NUMBER_OF_FIELDS\"));\n+    t->nSamples = satoi(cmsIT8GetProperty(it8, \"NUMBER_OF_FIELDS\"));\n \n-    if (t -> nSamples <= 0) {\n+    if (t->nSamples <= 0 || t->nSamples > 0x7ffe) {\n \n-        SynError(it8, \"AllocateDataFormat: Unknown NUMBER_OF_FIELDS\");\n-        return FALSE;        \n-        }\n+        SynError(it8, \"Wrong NUMBER_OF_FIELDS\");\n+        return FALSE;\n+    }\n+\n+    size = ((cmsUInt32Number)t->nSamples + 1) * sizeof(char*);\n \n-    t -> DataFormat = (char**) AllocChunk (it8, ((cmsUInt32Number) t->nSamples + 1) * sizeof(char *));\n+    t->DataFormat = (char**)AllocChunk(it8, size);\n     if (t->DataFormat == NULL) {\n \n-        SynError(it8, \"AllocateDataFormat: Unable to allocate dataFormat array\");\n+        SynError(it8, \"Unable to allocate dataFormat array\");\n         return FALSE;\n     }\n \n@@ -1642,7 +1647,7 @@ cmsBool SetDataFormat(cmsIT8* it8, int n, const char *label)\n             return FALSE;\n     }\n \n-    if (n > t -> nSamples) {\n+    if (n >= t -> nSamples) {\n         SynError(it8, \"More than NUMBER_OF_FIELDS fields.\");\n         return FALSE;\n     }\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42534463-vul",
+      "digest": "sha256:424ef86f994a0de92793c2475a3ae26358cc5445e0d1a6cf9af68859ca5c3dc9"
+    },
+    "patched": {
+      "ref": "n132/arvo:42534463-fix",
+      "digest": "sha256:eef85f6b81b03df8109d65f7b012405f3525ac26c2ceaac3e7729ff3b7dab4ab"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/lcms/src/cmscgats.c:1561",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/lcms/src/cmscgats.c:1561"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

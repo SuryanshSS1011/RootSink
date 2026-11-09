@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042503090",
+  "chain": "CWE-1285->CWE-125",
+  "project": "opensips",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42503090",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "66898d8208d158d95a27f1a76078a29bd1e08d7e",
+      "fix_commits": [
+        "66898d8208d158d95a27f1a76078a29bd1e08d7e"
+      ],
+      "repo": "https://github.com/OpenSIPS/opensips"
+    },
+    "patch": "diff --git a/parser/parse_hname2.c b/parser/parse_hname2.c\nindex 4f003b110ce..32c9fdad70f 100644\n--- a/parser/parse_hname2.c\n+++ b/parser/parse_hname2.c\n@@ -239,7 +239,7 @@ char* parse_hname2(char* begin, char* end, struct hdr_field* hdr)\n \tif (p>=end)\n \t\tgoto error;\n \tp = skip_ws(p, end);\n-\tif (*p != ':')\n+\tif (p >= end || *p != ':')\n \t\tgoto error;\n \t/* hdr type, name should be already set at this point */\n \treturn (p+1);\n@@ -259,7 +259,7 @@ char* parse_hname2(char* begin, char* end, struct hdr_field* hdr)\n \t\tcase '\\t':\n \t\t\t/* consume spaces to the end of name */\n \t\t\tp = skip_ws( p+1, end);\n-\t\t\tif (*p != ':')\n+\t\t\tif (p >= end || *p != ':')\n \t\t\t\tgoto error;\n \t\t\treturn (p+1);\n \t\t/* default: it seems the hdr name continues, fall to \"other\" */\n@@ -280,7 +280,7 @@ char* parse_hname2(char* begin, char* end, struct hdr_field* hdr)\n \t\t\tcase '\\t':\n \t\t\t\thdr->name.len = p - hdr->name.s;\n \t\t\t\tp = skip_ws(p+1, end);\n-\t\t\t\tif (*p != ':')\n+\t\t\t\tif (p >= end || *p != ':')\n \t\t\t\t\tgoto error;\n \t\t\t\treturn (p+1);\n \t\t}\ndiff --git a/parser/test/test_parser.c b/parser/test/test_parser.c\nindex 49b310b6f94..30105c4de03 100644\n--- a/parser/test/test_parser.c\n+++ b/parser/test/test_parser.c\n@@ -143,10 +143,40 @@ void test_parse_uri(void)\n \tok(str_match(&u.pn_purr_val, const_str(\"t\")), \"puri-43\");\n }\n \n+static const struct tts {\n+\tconst unsigned char tmsg[32];\n+\tint tres;\n+} tset[] = {\n+\t{\n+\t\t/* test for read overflows on EoH parsing */\n+\t\t{'e', ' ', 255, 255, 255, 255, ' ', ' ', ' ', ' ', ' ', 255, '\\n', 255, 255, ' ', ' '},\n+\t\t-1,\n+\t},\n+\n+\t{{0}, 0},\n+};\n+\n+void test_parse_msg(void)\n+{\n+\tint i;\n+\n+\tfor (i = 0; tset[i].tmsg[0]; i++) {\n+\t\tstruct sip_msg msg;\n+\n+\t\tmemset(&msg, 0, sizeof msg);\n+\t\tmsg.buf = (char *)tset[i].tmsg;\n+\t\tmsg.len = strlen(msg.buf);\n+\n+\t\tok(parse_msg(msg.buf, msg.len, &msg) == tset[i].tres, \"parse-msg-0\");\n+\t}\n+}\n+\n+\n void test_parser(void)\n {\n+\ttest_parse_uri();\n+\ttest_parse_msg();\n \ttest_parse_qop_val();\n \ttest_parse_fcaps();\n-\ttest_parse_uri();\n \ttest_parse_authenticate_body();\n }\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42503090-vul",
+      "digest": "sha256:0f66c7452d3c25973d470b988d3414b83f8f7e1802a3a933652a5d637893f4a7"
+    },
+    "patched": {
+      "ref": "n132/arvo:42503090-fix",
+      "digest": "sha256:61d746ba5cd99a6450367a1c63cc777a430de796c62a9081f0e6550fc2831291"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/opensips/parser/parse_hname2.c:251",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/opensips/parser/parse_hname2.c:251"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042485712",
+  "chain": "CWE-456->CWE-457",
+  "project": "ots",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42485712",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "3b6632375b8cf06dddf561edab8103ae5a80d333",
+      "fix_commits": [
+        "3b6632375b8cf06dddf561edab8103ae5a80d333"
+      ],
+      "repo": "https://github.com/khaledhosny/ots"
+    },
+    "patch": "diff --git a/src/ots.cc b/src/ots.cc\nindex eaab8b4f..575ed1f3 100644\n--- a/src/ots.cc\n+++ b/src/ots.cc\n@@ -1015,10 +1015,15 @@ bool Font::IsVariationTable(uint32_t tag) const {\n \n void Font::DropVariations() {\n   file->context->Message(0, \"Dropping all Variation tables\");\n-  for (const std::pair<uint32_t, Table*> entry : m_tables) {\n-    if (IsVariationTable(entry.first)) {\n-      entry.second->Drop(\"Discarding Variations table\");\n+  std::map<uint32_t, Table*>::iterator it = m_tables.begin();\n+  while (it != m_tables.end()) {\n+    if (!IsVariationTable(it->first)) {\n+      it++;\n+      continue;\n     }\n+\n+    it->second->Drop(\"Discarding Variations table\");\n+    it = m_tables.erase(it);\n   }\n   dropped_variations = true;\n }\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42485712-vul",
+      "digest": "sha256:bc8e2fb22142ba3176a136e75f9aed14c4f9be03557768d9c8895d53d00d0e33"
+    },
+    "patched": {
+      "ref": "n132/arvo:42485712-fix",
+      "digest": "sha256:8b5064c30e2d6adc3afb0dceacc4fae4def587eeb56eb9f121d9bef27741d3fa"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": null,
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": null
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

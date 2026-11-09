@@ -1,0 +1,48 @@
+diff --git a/src/core/ddsi/src/ddsi_typewrap.c b/src/core/ddsi/src/ddsi_typewrap.c
+index 2e20e92f40..9301282d01 100644
+--- a/src/core/ddsi/src/ddsi_typewrap.c
++++ b/src/core/ddsi/src/ddsi_typewrap.c
+@@ -665,12 +702,13 @@ static dds_return_t xt_valid_enum_values (struct ddsi_domaingv *gv, const struct
+     {
+       GVTRACE ("duplicate enum value %"PRIi32"\n", values[n]);
+       ret = DDS_RETCODE_BAD_PARAMETER;
+-      goto err;
++      goto failed_duplicate;
+     }
+   }
+ 
+-err:
++failed_duplicate:
+   ddsrt_free (values);
++failed:
+   return ret;
+ }
+ 
+diff --git a/src/core/ddsi/src/ddsi_typewrap.c b/src/core/ddsi/src/ddsi_typewrap.c
+index 2e20e92f40..9301282d01 100644
+--- a/src/core/ddsi/src/ddsi_typewrap.c
++++ b/src/core/ddsi/src/ddsi_typewrap.c
+@@ -654,8 +676,23 @@ static dds_return_t xt_valid_enum_values (struct ddsi_domaingv *gv, const struct
+ {
+   assert (ddsi_xt_is_resolved (t) && t->_d == DDS_XTypes_TK_ENUM);
+   dds_return_t ret = DDS_RETCODE_OK;
++
+   uint32_t cnt = t->_u.enum_type.literals.length;
++  if (cnt == 0)
++  {
++    GVTRACE ("enum has no members\n");
++    ret = DDS_RETCODE_BAD_PARAMETER;
++    goto failed;
++  }
++
+   int32_t *values = ddsrt_malloc (cnt * sizeof (*values));
++  if (values == NULL)
++  {
++    GVTRACE ("out-of-memory while checking enum values\n");
++    ret = DDS_RETCODE_OUT_OF_RESOURCES;
++    goto failed;
++  }
++
+   for (uint32_t n = 0; n < cnt; n++)
+     values[n] = t->_u.enum_type.literals.seq[n].value;
+   qsort (values, cnt, sizeof (*values), xt_enum_value_cmp);

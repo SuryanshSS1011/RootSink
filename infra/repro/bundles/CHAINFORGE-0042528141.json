@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042528141",
+  "chain": "CWE-20->CWE-125",
+  "project": "mbedtls",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42528141",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "1c7223bda2f7e734088eb81e031f1e05b348c850",
+      "fix_commits": [
+        "1c7223bda2f7e734088eb81e031f1e05b348c850"
+      ],
+      "repo": "https://github.com/Mbed-TLS/mbedtls"
+    },
+    "patch": "diff --git a/tests/suites/test_suite_x509write.function b/tests/suites/test_suite_x509write.function\nindex 26988ce69ef..727afeec860 100644\n--- a/tests/suites/test_suite_x509write.function\n+++ b/tests/suites/test_suite_x509write.function\n@@ -704,21 +704,21 @@ void mbedtls_x509_string_to_names(char *name, char *parsed_name, int result\n     c = buf + sizeof(buf);\n \n     ret = mbedtls_x509_string_to_names(&names, name);\n-    TEST_ASSERT(ret == result);\n+    TEST_EQUAL(ret, result);\n \n     if (ret != 0) {\n         goto exit;\n     }\n \n     ret = mbedtls_x509_write_names(&c, buf, names);\n-    TEST_ASSERT(ret > 0);\n+    TEST_LE_S(1, ret);\n \n-    TEST_ASSERT(mbedtls_asn1_get_tag(&c, buf + sizeof(buf), &len,\n-                                     MBEDTLS_ASN1_CONSTRUCTED | MBEDTLS_ASN1_SEQUENCE) == 0);\n-    TEST_ASSERT(mbedtls_x509_get_name(&c, buf + sizeof(buf), &parsed) == 0);\n+    TEST_EQUAL(mbedtls_asn1_get_tag(&c, buf + sizeof(buf), &len,\n+                                     MBEDTLS_ASN1_CONSTRUCTED | MBEDTLS_ASN1_SEQUENCE), 0);\n+    TEST_EQUAL(mbedtls_x509_get_name(&c, buf + sizeof(buf), &parsed), 0);\n \n     ret = mbedtls_x509_dn_gets((char *) out, sizeof(out), &parsed);\n-    TEST_ASSERT(ret > 0);\n+    TEST_LE_S(1, ret);\n \n     TEST_ASSERT(strcmp((char *) out, parsed_name) == 0);\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42528141-vul",
+      "digest": "sha256:e81448e54cd7f634446a70132a8ae68674d9456630e1ba03d1b65de363762b93"
+    },
+    "patched": {
+      "ref": "n132/arvo:42528141-fix",
+      "digest": "sha256:76baaa0d78f84423aeebd7305f7321d7b397a145218fb29bc162f700ab9f546a"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/mbedtls/library/alignment.h:83",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/mbedtls/library/alignment.h:83"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

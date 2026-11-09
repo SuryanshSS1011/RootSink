@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042532722",
+  "chain": "CWE-1285->CWE-125",
+  "project": "freeradius-server",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42532722",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "dbac50e667c70419625ce52eebb8b928f1ee6dfa",
+      "fix_commits": [
+        "dbac50e667c70419625ce52eebb8b928f1ee6dfa"
+      ],
+      "repo": "https://github.com/FreeRADIUS/freeradius-server"
+    },
+    "patch": "diff --git a/src/protocols/radius/decode.c b/src/protocols/radius/decode.c\nindex 8ef039f38675..d7faf796573b 100644\n--- a/src/protocols/radius/decode.c\n+++ b/src/protocols/radius/decode.c\n@@ -887,7 +887,7 @@ static ssize_t decode_extended_fragments(TALLOC_CTX *ctx, fr_pair_list_t *out,\n \tlast_frag = false;\n \n \twhile (frag < end) {\n-\t\tif (last_frag ||\n+\t\tif (last_frag || ((end - frag) < 2) ||\n \t\t    (frag[0] != attr[0]) ||\n \t\t    (frag[1] < 4) ||\t\t       /* too short for long-extended */\n \t\t    (frag[2] != attr[2]) ||\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42532722-vul",
+      "digest": "sha256:8864ef5069e1b588ee16df512a462164c7ffe8300cba18c7b4610d280a80da58"
+    },
+    "patched": {
+      "ref": "n132/arvo:42532722-fix",
+      "digest": "sha256:a226038fb16b0838a27a5d6660a6b51492d8bbcbcdf68577df30cc52ebf0d99f"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/freeradius-server/src/protocols/radius/decode.c:879",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/freeradius-server/src/protocols/radius/decode.c:879"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

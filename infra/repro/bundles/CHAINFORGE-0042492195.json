@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042492195",
+  "chain": "CWE-416->CWE-787",
+  "project": "relic",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42492195",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "bba5b5fa5489706ab4eaf5d7d0c2550e0a9722c0",
+      "fix_commits": [
+        "bba5b5fa5489706ab4eaf5d7d0c2550e0a9722c0"
+      ],
+      "repo": "https://github.com/relic-toolkit/relic"
+    },
+    "patch": "diff --git a/src/bn/relic_bn_mxp.c b/src/bn/relic_bn_mxp.c\nindex 7d714b463..c3e986e6f 100644\n--- a/src/bn/relic_bn_mxp.c\n+++ b/src/bn/relic_bn_mxp.c\n@@ -112,7 +112,7 @@ void bn_mxp_basic(bn_t c, const bn_t a, const bn_t b, const bn_t m) {\n void bn_mxp_slide(bn_t c, const bn_t a, const bn_t b, const bn_t m) {\n \tbn_t tab[RLC_TABLE_SIZE], t, u, r;\n \tint i, j, l, w = 1;\n-\tuint8_t win[RLC_BN_BITS];\n+\tuint8_t *win = RLC_ALLOCA(uint8_t, bn_bits(b));\n \n \tif (bn_is_zero(b)) {\n \t\tbn_set_dig(c, 1);\n@@ -128,6 +128,10 @@ void bn_mxp_slide(bn_t c, const bn_t a, const bn_t b, const bn_t m) {\n \t}\n \n \tRLC_TRY {\n+\t\tif (win == NULL) {\n+\t\t\tRLC_THROW(ERR_NO_MEMORY);\n+\t\t}\n+\n \t\t/* Find window size. */\n \t\ti = bn_bits(b);\n \t\tif (i <= 21) {\n@@ -171,7 +175,7 @@ void bn_mxp_slide(bn_t c, const bn_t a, const bn_t b, const bn_t m) {\n \t\t\tbn_mod(tab[i], tab[i], m, u);\n \t\t}\n \n-\t\tl = RLC_BN_BITS + 1;\n+\t\tl = bn_bits(b);\n \t\tbn_rec_slw(win, &l, b, w);\n \t\tfor (i = 0; i < l; i++) {\n \t\t\tif (win[i] == 0) {\n@@ -207,6 +211,7 @@ void bn_mxp_slide(bn_t c, const bn_t a, const bn_t b, const bn_t m) {\n \t\tbn_free(u);\n \t\tbn_free(t);\n \t\tbn_free(r);\n+\t\tRLC_FREE(win);\n \t}\n }\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42492195-vul",
+      "digest": "sha256:ad7a2129cd3327129835a33a599dfd0912cac3de9bcf4a89c9f8bfe2e54f951c"
+    },
+    "patched": {
+      "ref": "n132/arvo:42492195-fix",
+      "digest": "sha256:06b11d0597f045805c608e7a02ecd717ddb3e1be360b468248920fd7e55f0cf2"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/relic/src/bn/relic_bn_mxp.c:175",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/relic/src/bn/relic_bn_mxp.c:175"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

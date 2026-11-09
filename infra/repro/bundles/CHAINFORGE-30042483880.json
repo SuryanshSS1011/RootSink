@@ -1,0 +1,82 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-30042483880",
+  "chain": "CWE-20->CWE-190->CWE-787",
+  "project": "mruby",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42483880",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "15c63688e3f1a3c6067e6af70e3e9bf999d91389",
+      "fix_commits": [
+        "15c63688e3f1a3c6067e6af70e3e9bf999d91389"
+      ],
+      "repo": "https://github.com/mruby/mruby"
+    },
+    "patch": "diff --git a/mrbgems/mruby-sprintf/src/sprintf.c b/mrbgems/mruby-sprintf/src/sprintf.c\nindex 37f446711f..4ad3a34a58 100644\n--- a/mrbgems/mruby-sprintf/src/sprintf.c\n+++ b/mrbgems/mruby-sprintf/src/sprintf.c\n@@ -1041,7 +1041,7 @@ mrb_str_format(mrb_state *mrb, mrb_int argc, const mrb_value *argv, mrb_value fm\n         mrb_value val = GETARG();\n         double fval;\n         mrb_int need = 6;\n-        char fbuf[32];\n+        char fbuf[64];\n \n         fval = mrb_float(mrb_Float(mrb, val));\n         if (!isfinite(fval)) {\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42483880-vul",
+      "digest": "sha256:0e9c18bbcd9794df4749ec338190a6b4c5105a3ae4487b3d4b0253fdc176fa54"
+    },
+    "patched": {
+      "ref": "n132/arvo:42483880-fix",
+      "digest": "sha256:87bca0e9a93b4514047b079d910af114c9e00ef75b5f2d4f424f2d23355a5253"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/mruby/mrbgems/mruby-sprintf/src/sprintf.c:1153",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 190,
+      "role": "intermediate",
+      "witness": {
+        "method": "ubsan-rebuild",
+        "recipe": "SANITIZER=undefined compile && $ENTRYPOINT",
+        "ubsan_options": "print_stacktrace=1:halt_on_error=0:silence_unsigned_overflow=0:symbolize=1"
+      },
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/mruby/mrbgems/mruby-sprintf/src/sprintf.c:1153"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

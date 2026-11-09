@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042538811",
+  "chain": "CWE-456->CWE-457",
+  "project": "graphicsmagick",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42538811",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "bbbd9716ce504d1ccd1b8f6977b4152bbfc5e30a",
+      "fix_commits": [
+        "bbbd9716ce504d1ccd1b8f6977b4152bbfc5e30a"
+      ],
+      "repo": "https://foss.heptapod.net/graphicsmagick/graphicsmagick"
+    },
+    "patch": "diff --git a/ChangeLog b/ChangeLog\nindex c3798a6a75e29163e802fc2c6ad6a01071923a8a_Q2hhbmdlTG9n..bbbd9716ce504d1ccd1b8f6977b4152bbfc5e30a_Q2hhbmdlTG9n 100644\n--- a/ChangeLog\n+++ b/ChangeLog\n@@ -1,5 +1,15 @@\n 2018-04-04  Bob Friesenhahn  <bfriesen@simple.dallas.tx.us>\n \n+\t* coders/pdb.c (ReadPDBImage): Update DirectClass pixels to avoid\n+\tuse of uninitialized memory for 2 bits/pixel.  Fixes oss-fuzz 7350\n+\t\"graphicsmagick/coder_PDB_fuzzer: Use-of-uninitialized-value in\n+\tWritePDBImage\".  (Credit to OSS-Fuzz)\n+\n+\t* coders/palm.c (ReadPALMImage): Fix use of uninitialized memory.\n+\tFixes oss-fuzz 7325 \"graphicsmagick/coder_PALM_fuzzer:\n+\tUse-of-uninitialized-value in TransparentImageCallBack\". (Credit\n+\tto OSS-Fuzz)\n+\n \t* coders/dcm.c (DCM_ReadNonNativeImages): Break out of reading\n \tloop on EOF and properly report exception.  Fixes oss-fuzz 7349\n \t\"graphicsmagick/coder_DCM_fuzzer: Timeout in\ndiff --git a/coders/palm.c b/coders/palm.c\nindex c3798a6a75e29163e802fc2c6ad6a01071923a8a_Y29kZXJzL3BhbG0uYw==..bbbd9716ce504d1ccd1b8f6977b4152bbfc5e30a_Y29kZXJzL3BhbG0uYw== 100644\n--- a/coders/palm.c\n+++ b/coders/palm.c\n@@ -882,6 +882,9 @@\n     *one_row,\n     *ptr;\n \n+  size_t\n+    alloc_size;\n+\n   unsigned int\n     status;\n \n@@ -1093,16 +1096,18 @@\n   if (CheckImagePixelLimits(image, exception) != MagickPass)\n     ThrowPALMReaderException(ResourceLimitError,ImagePixelLimitExceeded,image);\n \n-  one_row = MagickAllocateMemory(unsigned char *,Max(palm_header.bytes_per_row,\n-                                                     MagickArraySize(2,image->columns)));\n+  alloc_size = Max(palm_header.bytes_per_row,MagickArraySize(2,image->columns));\n+  one_row = MagickAllocateMemory(unsigned char *,alloc_size);\n   if (one_row == (unsigned char *) NULL)\n     ThrowPALMReaderException(ResourceLimitError,MemoryAllocationFailed,image);\n+  (void) memset(one_row,0,alloc_size);\n   if (palm_header.compression_type == PALM_COMPRESSION_SCANLINE)\n     {\n-      lastrow = MagickAllocateMemory(unsigned char *,Max(palm_header.bytes_per_row,\n-                                                         MagickArraySize(2,image->columns)));\n+      alloc_size = Max(palm_header.bytes_per_row,MagickArraySize(2,image->columns));\n+      lastrow = MagickAllocateMemory(unsigned char *,alloc_size);\n       if (lastrow == (unsigned char *) NULL)\n         ThrowPALMReaderException(ResourceLimitError,MemoryAllocationFailed,image);\n+      (void) memset(lastrow,0,alloc_size);\n     }\n \n   mask = (1l << palm_header.bits_per_pixel) - 1;\ndiff --git a/coders/pdb.c b/coders/pdb.c\nindex c3798a6a75e29163e802fc2c6ad6a01071923a8a_Y29kZXJzL3BkYi5j..bbbd9716ce504d1ccd1b8f6977b4152bbfc5e30a_Y29kZXJzL3BkYi5j 100644\n--- a/coders/pdb.c\n+++ b/coders/pdb.c\n@@ -582,6 +582,7 @@\n             index=(IndexPacket) (3-((*p >> shift) & 0x03));\n             VerifyColormapIndex(image,index);\n             indexes[x]=index;\n+            *q++=image->colormap[index];\n             if (shift == 0)\n               {\n                 shift = 8;\ndiff --git a/www/Changelog.html b/www/Changelog.html\nindex c3798a6a75e29163e802fc2c6ad6a01071923a8a_d3d3L0NoYW5nZWxvZy5odG1s..bbbd9716ce504d1ccd1b8f6977b4152bbfc5e30a_d3d3L0NoYW5nZWxvZy5odG1s 100644\n--- a/www/Changelog.html\n+++ b/www/Changelog.html\n@@ -38,6 +38,14 @@\n <p>2018-04-04  Bob Friesenhahn  &lt;<a class=\"reference external\" href=\"mailto:bfriesen&#37;&#52;&#48;simple&#46;dallas&#46;tx&#46;us\">bfriesen<span>&#64;</span>simple<span>&#46;</span>dallas<span>&#46;</span>tx<span>&#46;</span>us</a>&gt;</p>\n <blockquote>\n <ul class=\"simple\">\n+<li>coders/pdb.c (ReadPDBImage): Update DirectClass pixels to avoid\n+use of uninitialized memory for 2 bits/pixel.  Fixes oss-fuzz 7350\n+&quot;graphicsmagick/coder_PDB_fuzzer: Use-of-uninitialized-value in\n+WritePDBImage&quot;.  (Credit to OSS-Fuzz)</li>\n+<li>coders/palm.c (ReadPALMImage): Fix use of uninitialized memory.\n+Fixes oss-fuzz 7325 &quot;graphicsmagick/coder_PALM_fuzzer:\n+Use-of-uninitialized-value in TransparentImageCallBack&quot;. (Credit\n+to OSS-Fuzz)</li>\n <li>coders/dcm.c (DCM_ReadNonNativeImages): Break out of reading\n loop on EOF and properly report exception.  Fixes oss-fuzz 7349\n &quot;graphicsmagick/coder_DCM_fuzzer: Timeout in\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42538811-vul",
+      "digest": "sha256:b42aeaaa1c5559b288ed91db2afb04bfcadd0c6702bdcf6caa0fce83cc92bbdf"
+    },
+    "patched": {
+      "ref": "n132/arvo:42538811-fix",
+      "digest": "sha256:7aad573af20c4c66ae09406dd52c07b81fcc064a105b3bc749f0287db625c0eb"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/graphicsmagick/coders/pdb.c:960",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/graphicsmagick/coders/pdb.c:960"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,74 @@
+======================= INFO =========================
+This binary is built for AFL-fuzz.
+To run the target function on individual input(s) execute this:
+  /out/TiffDecoderFuzzer-DngDecoder < INPUT_FILE
+or
+  /out/TiffDecoderFuzzer-DngDecoder INPUT_FILE1 [INPUT_FILE2 ... ]
+To fuzz with afl-fuzz execute this:
+  afl-fuzz [afl-flags] /out/TiffDecoderFuzzer-DngDecoder [-N]
+afl-fuzz will run N iterations before re-spawning the process (default: 1000)
+======================================================
+Reading 452 bytes from /tmp/poc
+=================================================================
+==250126==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x6080000000f0 at pc 0x000000561350 bp 0x7ffef4d68150 sp 0x7ffef4d68148
+READ of size 1 at 0x6080000000f0 thread T0
+SCARINESS: 12 (1-byte-read-heap-buffer-overflow)
+    #0 0x56134f in rawspeed::RawImageData::transferBadPixelsToMap() /src/librawspeed/src/librawspeed/common/RawImage.cpp:298:60
+    #1 0x561624 in rawspeed::RawImageData::fixBadPixels() /src/librawspeed/src/librawspeed/common/RawImage.cpp:308:3
+    #2 0x5f4c7b in rawspeed::RawDecoder::decodeRaw() /src/librawspeed/src/librawspeed/decoders/RawDecoder.cpp:308:12
+    #3 0x55c0af in LLVMFuzzerTestOneInput /src/librawspeed/fuzz/librawspeed/decoders/TiffDecoders/main.cpp:81:14
+    #4 0x6f690e in ExecuteFilesOnyByOne(int, char**) /src/libfuzzer/afl/afl_driver.cpp:271:5
+    #5 0x6f6e9e in main /src/libfuzzer/afl/afl_driver.cpp:308:12
+    #6 0x14cbca79382f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+    #7 0x45fdd8 in _start (/out/TiffDecoderFuzzer-DngDecoder+0x45fdd8)
+
+DEDUP_TOKEN: rawspeed::RawImageData::transferBadPixelsToMap()--rawspeed::RawImageData::fixBadPixels()--rawspeed::RawDecoder::decodeRaw()
+0x6080000000f0 is located 0 bytes to the right of 80-byte region [0x6080000000a0,0x6080000000f0)
+allocated by thread T0 here:
+    #0 0x521aa0 in __interceptor_posix_memalign /src/llvm/projects/compiler-rt/lib/asan/asan_malloc_linux.cc:157
+    #1 0x61ab9b in rawspeed::alignedMalloc(unsigned long, unsigned long) /src/librawspeed/src/librawspeed/common/Memory.cpp:62:12
+    #2 0x56102f in unsigned char* rawspeed::alignedMalloc<unsigned char, 16ul>(unsigned long) /src/librawspeed/src/librawspeed/common/Memory.h:60:31
+    #3 0x56102f in unsigned char* rawspeed::alignedMallocArray<unsigned char, 16ul, false>(unsigned long, unsigned long) /src/librawspeed/src/librawspeed/common/Memory.h:78
+    #4 0x56102f in rawspeed::RawImageData::createBadPixelMap() /src/librawspeed/src/librawspeed/common/RawImage.cpp:255
+    #5 0x56102f in rawspeed::RawImageData::transferBadPixelsToMap() /src/librawspeed/src/librawspeed/common/RawImage.cpp:293
+    #6 0x561624 in rawspeed::RawImageData::fixBadPixels() /src/librawspeed/src/librawspeed/common/RawImage.cpp:308:3
+    #7 0x5f4c7b in rawspeed::RawDecoder::decodeRaw() /src/librawspeed/src/librawspeed/decoders/RawDecoder.cpp:308:12
+    #8 0x55c0af in LLVMFuzzerTestOneInput /src/librawspeed/fuzz/librawspeed/decoders/TiffDecoders/main.cpp:81:14
+    #9 0x6f690e in ExecuteFilesOnyByOne(int, char**) /src/libfuzzer/afl/afl_driver.cpp:271:5
+    #10 0x6f6e9e in main /src/libfuzzer/afl/afl_driver.cpp:308:12
+    #11 0x14cbca79382f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+
+DEDUP_TOKEN: __interceptor_posix_memalign--rawspeed::alignedMalloc(unsigned long, unsigned long)--unsigned char* rawspeed::alignedMalloc<unsigned char, 16ul>(unsigned long)
+SUMMARY: AddressSanitizer: heap-buffer-overflow /src/librawspeed/src/librawspeed/common/RawImage.cpp:298:60 in rawspeed::RawImageData::transferBadPixelsToMap()
+Shadow bytes around the buggy address:
+  0x0c107fff7fc0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c107fff7fd0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c107fff7fe0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c107fff7ff0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c107fff8000: fa fa fa fa 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x0c107fff8010: fa fa fa fa 00 00 00 00 00 00 00 00 00 00[fa]fa
+  0x0c107fff8020: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c107fff8030: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c107fff8040: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c107fff8050: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c107fff8060: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+==250126==ABORTING

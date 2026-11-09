@@ -1,0 +1,61 @@
+======================= INFO =========================
+This binary is built for AFL-fuzz.
+To run the target function on individual input(s) execute this:
+  /out/hts_open_fuzzer < INPUT_FILE
+or
+  /out/hts_open_fuzzer INPUT_FILE1 [INPUT_FILE2 ... ]
+To fuzz with afl-fuzz execute this:
+  afl-fuzz [afl-flags] /out/hts_open_fuzzer [-N]
+afl-fuzz will run N iterations before re-spawning the process (default: 1000)
+======================================================
+Reading 151 bytes from /tmp/poc
+=================================================================
+==2646666==ERROR: AddressSanitizer: attempting double-free on 0x6040000003d0 in thread T0:
+SCARINESS: 42 (double-free)
+    #0 0x49aaf2 in free /src/llvm-project/compiler-rt/lib/asan/asan_malloc_linux.cpp:127:3
+    #1 0x62dd87 in free_context /src/htslib/htscodecs/htscodecs/tokenise_name3.c:243:2
+    #2 0x630f73 in decode_names /src/htslib/htscodecs/htscodecs/tokenise_name3.c:1672:5
+    #3 0x5d5329 in cram_uncompress_block /src/htslib/cram/cram_io.c:1714:23
+    #4 0x5e5f4f in cram_read_SAM_hdr /src/htslib/cram/cram_io.c:4627:13
+    #5 0x5e8a69 in cram_dopen /src/htslib/cram/cram_io.c:5153:28
+    #6 0x4f388a in hts_hopen /src/htslib/hts.c:1173:23
+    #7 0x4cea8c in LLVMFuzzerTestOneInput /src/htslib/test/fuzz/hts_open_fuzzer.c:133:24
+    #8 0x4cf26e in ExecuteFilesOnyByOne /src/libfuzzer/afl/afl_driver.cpp:207:5
+    #9 0x4cf26e in main /src/libfuzzer/afl/afl_driver.cpp:244:12
+    #10 0x15056cfd783f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2083f)
+    #11 0x41fe78 in _start (/out/hts_open_fuzzer+0x41fe78)
+
+DEDUP_TOKEN: free--free_context--decode_names
+0x6040000003d0 is located 0 bytes inside of 35-byte region [0x6040000003d0,0x6040000003f3)
+freed by thread T0 here:
+    #0 0x49aaf2 in free /src/llvm-project/compiler-rt/lib/asan/asan_malloc_linux.cpp:127:3
+    #1 0x62bdb2 in rle_decode /src/htslib/htscodecs/htscodecs/rle.c:186:5
+    #2 0x619903 in rans_uncompress_to_4x16 /src/htslib/htscodecs/htscodecs/rANS_static4x16pr.c:1771:7
+    #3 0x635758 in rans_decode /src/htslib/htscodecs/htscodecs/tokenise_name3.c:1225:9
+    #4 0x6313fb in uncompress /src/htslib/htscodecs/htscodecs/tokenise_name3.c:1305:4
+    #5 0x630c68 in decode_names /src/htslib/htscodecs/htscodecs/tokenise_name3.c:1631:9
+    #6 0x5d5329 in cram_uncompress_block /src/htslib/cram/cram_io.c:1714:23
+    #7 0x5e5f4f in cram_read_SAM_hdr /src/htslib/cram/cram_io.c:4627:13
+    #8 0x5e8a69 in cram_dopen /src/htslib/cram/cram_io.c:5153:28
+    #9 0x4f388a in hts_hopen /src/htslib/hts.c:1173:23
+    #10 0x4cea8c in LLVMFuzzerTestOneInput /src/htslib/test/fuzz/hts_open_fuzzer.c:133:24
+    #11 0x4cf26e in ExecuteFilesOnyByOne /src/libfuzzer/afl/afl_driver.cpp:207:5
+    #12 0x4cf26e in main /src/libfuzzer/afl/afl_driver.cpp:244:12
+    #13 0x15056cfd783f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2083f)
+
+DEDUP_TOKEN: free--rle_decode--rans_uncompress_to_4x16
+previously allocated by thread T0 here:
+    #0 0x49ad5d in malloc /src/llvm-project/compiler-rt/lib/asan/asan_malloc_linux.cpp:145:3
+    #1 0x630bcd in decode_names /src/htslib/htscodecs/htscodecs/tokenise_name3.c:1625:21
+    #2 0x5d5329 in cram_uncompress_block /src/htslib/cram/cram_io.c:1714:23
+    #3 0x5e5f4f in cram_read_SAM_hdr /src/htslib/cram/cram_io.c:4627:13
+    #4 0x5e8a69 in cram_dopen /src/htslib/cram/cram_io.c:5153:28
+    #5 0x4f388a in hts_hopen /src/htslib/hts.c:1173:23
+    #6 0x4cea8c in LLVMFuzzerTestOneInput /src/htslib/test/fuzz/hts_open_fuzzer.c:133:24
+    #7 0x4cf26e in ExecuteFilesOnyByOne /src/libfuzzer/afl/afl_driver.cpp:207:5
+    #8 0x4cf26e in main /src/libfuzzer/afl/afl_driver.cpp:244:12
+    #9 0x15056cfd783f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2083f)
+
+DEDUP_TOKEN: malloc--decode_names--cram_uncompress_block
+SUMMARY: AddressSanitizer: double-free /src/llvm-project/compiler-rt/lib/asan/asan_malloc_linux.cpp:127:3 in free
+==2646666==ABORTING

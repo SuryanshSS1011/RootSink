@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042493820",
+  "chain": "CWE-20->CWE-125",
+  "project": "libredwg",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42493820",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "8b60f5697ce7ed7f66577e8324b2cfd7dd417ece",
+      "fix_commits": [
+        "8b60f5697ce7ed7f66577e8324b2cfd7dd417ece"
+      ],
+      "repo": "https://github.com/LibreDWG/libredwg"
+    },
+    "patch": "diff --git a/examples/llvmfuzz.c b/examples/llvmfuzz.c\nindex 3971f65e27..94ed220bf0 100644\n--- a/examples/llvmfuzz.c\n+++ b/examples/llvmfuzz.c\n@@ -17,10 +17,32 @@\n #  include \"in_dxf.h\"\n #endif\n \n+// libfuzzer limitation:\n+// Enforce NULL-termination of the input buffer, to avoid bugus reports. copy it.\n+// Problematic is mostly strtol(3) which also works with \\n termination.\n+static int enforce_null_termination(Bit_Chain *dat)\n+{\n+    unsigned char *copy;\n+    unsigned char c;\n+    if (!dat->size)\n+      return 0;\n+    c = dat->chain[dat->size - 1];\n+    // Allow \\n termination\n+    if (c == '\\0' || c == '\\n')\n+      return 0;\n+    //fprintf (stderr, \"llvmfuzz: Enforce libfuzzer buffer NULL termination\\n\");\n+    copy = malloc (dat->size + 1);\n+    memcpy (copy, dat->chain, dat->size);\n+    copy[dat->size] = '\\0';\n+    dat->chain = copy;\n+    return 1;\n+}\n+\n int LLVMFuzzerTestOneInput(const unsigned char *data, size_t size) {\n     Dwg_Data dwg;\n     Bit_Chain dat = { NULL, 0, 0, 0, 0 };\n     Bit_Chain out_dat = { NULL, 0, 0, 0, 0 };\n+    int copied = 0;\n     struct ly_ctx *ctx = NULL;\n \n     static char tmp_file[256];\n@@ -50,17 +72,31 @@ int LLVMFuzzerTestOneInput(const unsigned char *data, size_t size) {\n #ifndef DISABLE_JSON\n     else if (dat.size > 1 && dat.chain[0] == '{')\n       {\n+        copied = enforce_null_termination(&dat);\n         if (dwg_read_json (&dat, &dwg) >= DWG_ERR_CRITICAL)\n-          return 0;\n+          {\n+            if (copied) bit_chain_free (&dat);\n+            return 0;\n+          }\n       }\n #endif\n #ifndef DISABLE_DXF\n-    else if (dwg_read_dxf (&dat, &dwg) >= DWG_ERR_CRITICAL)\n-        return 0;\n-#endif\n     else\n-        return 0;\n+      {\n+        copied = enforce_null_termination(&dat);\n+        if (dwg_read_dxf (&dat, &dwg) >= DWG_ERR_CRITICAL)\n+          {\n+            if (copied) bit_chain_free (&dat);\n+            return 0;\n+          }\n+      }\n+#else\n+    else\n+      return 0;\n+#endif\n     bit_chain_set_version (&out_dat, &dat);\n+    if (copied)\n+      bit_chain_free (&dat);\n \n #if 0\n     snprintf (tmp_file, 255, \"/tmp/llvmfuzzer%d.out\", getpid());\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42493820-vul",
+      "digest": "sha256:dbf85f1175f77eedd93c588fe84903d79be1db9e64bdf876531a921f78d0127d"
+    },
+    "patched": {
+      "ref": "n132/arvo:42493820-fix",
+      "digest": "sha256:e566b5a9aec943233c809bb02c54dd724238c317d4815d9d5a31c36b2d07589c"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/libredwg/src/in_json.c:483",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/libredwg/src/in_json.c:483"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

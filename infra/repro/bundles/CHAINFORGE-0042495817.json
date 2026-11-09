@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042495817",
+  "chain": "CWE-1285->CWE-125",
+  "project": "c-blosc2",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42495817",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "8a058b7a6be4d7e47a9af5831c454fca8c725dd4",
+      "fix_commits": [
+        "8a058b7a6be4d7e47a9af5831c454fca8c725dd4"
+      ],
+      "repo": "https://github.com/Blosc/c-blosc2"
+    },
+    "patch": "diff --git a/blosc/frame.c b/blosc/frame.c\nindex 4bfae62f9..9edf6588f 100644\n--- a/blosc/frame.c\n+++ b/blosc/frame.c\n@@ -1285,16 +1285,15 @@ static int get_meta_from_header(blosc2_frame_s* frame, blosc2_schunk* schunk, ui\n     }\n     // Go to offset and see if we have the correct marker\n     uint8_t* content_marker = header + offset;\n+    if (header_len < offset + 1 + 4) {\n+      return BLOSC2_ERROR_READ_BUFFER;\n+    }\n     if (*content_marker != 0xc6) {\n       return BLOSC2_ERROR_DATA;\n     }\n \n     // Read the size of the content\n     int32_t content_len;\n-    header_pos += sizeof(content_len);\n-    if (header_len < header_pos) {\n-      return BLOSC2_ERROR_READ_BUFFER;\n-    }\n     from_big(&content_len, content_marker + 1, sizeof(content_len));\n     if (content_len < 0) {\n       return BLOSC2_ERROR_DATA;\n@@ -1302,8 +1301,7 @@ static int get_meta_from_header(blosc2_frame_s* frame, blosc2_schunk* schunk, ui\n     metalayer->content_len = content_len;\n \n     // Finally, read the content\n-    header_pos += content_len;\n-    if (header_len < header_pos) {\n+    if (header_len < offset + 1 + 4 + content_len) {\n       return BLOSC2_ERROR_READ_BUFFER;\n     }\n     char* content = malloc((size_t)content_len);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42495817-vul",
+      "digest": "sha256:5773a933c34eb9ad778a4d3aac4bfb0b97e4710bf3ec933239d9f435891b1496"
+    },
+    "patched": {
+      "ref": "n132/arvo:42495817-fix",
+      "digest": "sha256:c727c655c385c2fcabbe9817acdbec762d4c20ede5f6a78362447ca8d07ec78c"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/c-blosc2/blosc/frame.c:1202",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/c-blosc2/blosc/frame.c:1202"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

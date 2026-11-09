@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042511893",
+  "chain": "CWE-456->CWE-457",
+  "project": "ndpi",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42511893",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "ca115774c9d735dc48a241682efded272011c009",
+      "fix_commits": [
+        "ca115774c9d735dc48a241682efded272011c009"
+      ],
+      "repo": "https://github.com/ntop/nDPI"
+    },
+    "patch": "From ca115774c9d735dc48a241682efded272011c009 Mon Sep 17 00:00:00 2001\nFrom: Ivan Nardi <12729895+IvanNardi@users.noreply.github.com>\nDate: Mon, 30 May 2022 19:40:47 +0200\nSubject: [PATCH] TLS: fix use-of-uninitialized-value error (#1566)\n\n```\nUninitialized bytes in __interceptor_strlen at offset 0 inside [0x7ffc987443a0, 7)\n==282918==WARNING: MemorySanitizer: use-of-uninitialized-value\n    #0 0x5651277e001b in ndpi_strdup /home/ivan/svnrepos/nDPI/src/lib/ndpi_main.c:268:13\n    #1 0x5651277a45c1 in ndpi_set_risk /home/ivan/svnrepos/nDPI/src/lib/ndpi_utils.c:2254:12\n    #2 0x5651278cfaa6 in processClientServerHello /home/ivan/svnrepos/nDPI/src/lib/protocols/tls.c:1515:8\n    #3 0x5651278e7834 in processTLSBlock /home/ivan/svnrepos/nDPI/src/lib/protocols/tls.c:865:5\n    #4 0x5651278e60bd in ndpi_search_tls_tcp /home/ivan/svnrepos/nDPI/src/lib/protocols/tls.c:1024:2\n    #5 0x5651278e1ffc in ndpi_search_tls_wrapper /home/ivan/svnrepos/nDPI/src/lib/protocols/tls.c:2445:5\n    #6 0x565127831c2a in check_ndpi_detection_func /home/ivan/svnrepos/nDPI/src/lib/ndpi_main.c:5150:6\n    #7 0x565127832938 in check_ndpi_tcp_flow_func /home/ivan/svnrepos/nDPI/src/lib/ndpi_main.c:5198:12\n    #8 0x5651278323a1 in ndpi_check_flow_func /home/ivan/svnrepos/nDPI/src/lib/ndpi_main.c:5217:12\n    #9 0x565127843e3a in ndpi_detection_process_packet /home/ivan/svnrepos/nDPI/src/lib/ndpi_main.c:6076:15\n    #10 0x56512778641f in LLVMFuzzerTestOneInput /home/ivan/svnrepos/nDPI/fuzz/fuzz_process_packet.c:29:5\n    #11 0x5651277874ae in main /home/ivan/svnrepos/nDPI/fuzz/fuzz_process_packet.c:101:17\n    #12 0x7f4c46794082 in __libc_start_main /build/glibc-SzIz7B/glibc-2.31/csu/../csu/libc-start.c:308:16\n    #13 0x5651276fe40d in _start (/home/ivan/svnrepos/nDPI/fuzz/fuzz_process_packet_with_main+0xa340d)\n```\nFound by oss-fuzzer\nSee: https://bugs.chromium.org/p/oss-fuzz/issues/detail?id=47728\n---\n src/lib/protocols/tls.c | 1 +\n 1 file changed, 1 insertion(+)\n\ndiff --git a/src/lib/protocols/tls.c b/src/lib/protocols/tls.c\nindex 26d9067..99e11cc 100644\n--- a/src/lib/protocols/tls.c\n+++ b/src/lib/protocols/tls.c\n@@ -1488,6 +1488,7 @@ int processClientServerHello(struct ndpi_detection_module_struct *ndpi_struct,\n \t  if(tot_alpn_len > packet->payload_packet_len)\n \t    return 0;\n \n+\t  alpn_str[0] = '\\0';\n \t  while(s_offset < tot_alpn_len && s_offset < total_len) {\n \t    u_int8_t alpn_i, alpn_len = packet->payload[s_offset++];\n \n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42511893-vul",
+      "digest": "sha256:158962f9a3dcb7962bfe56b39f818fccf232e098e534c86d45def11eeccf989c"
+    },
+    "patched": {
+      "ref": "n132/arvo:42511893-fix",
+      "digest": "sha256:64c1349edaa1645880371b0e0f48296698780680c5d8f5a6fc48e44d21047a91"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/ndpi/src/lib/ndpi_main.c:268",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/ndpi/src/lib/ndpi_main.c:268"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

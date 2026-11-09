@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042520464",
+  "chain": "CWE-416->CWE-125",
+  "project": "ghostpdl",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42520464",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "e8da62c6ab890c6a27762f9285441afc6920e558",
+      "fix_commits": [
+        "e8da62c6ab890c6a27762f9285441afc6920e558"
+      ],
+      "repo": "https://cgit.ghostscript.com/ghostpdl.git"
+    },
+    "patch": "From e8da62c6ab890c6a27762f9285441afc6920e558 Mon Sep 17 00:00:00 2001\nFrom: Chris Liddell <chris.liddell@artifex.com>\nDate: Thu, 9 Feb 2023 14:52:13 +0000\nSubject: [PATCH] oss-fuzz 55443: Dangling reference in extreme out-of-memory\n condition\n\nIf we've exhausted memory to the extent that we cannot even run the Postscript\nerror handler properly, we can end up with references to the arrays that\ncontain the record of the stacks' content in $error lasting until the final\ngarbage collection, with the arrays themselves having been freed by the\nend-of-job restore.\n\nSo explicitly remove those references and clear the operand stack before we\ntackle the final stages of shutting down.\n---\n psi/imain.c | 12 +++++++++++-\n 1 file changed, 11 insertions(+), 1 deletion(-)\n\ndiff --git a/psi/imain.c b/psi/imain.c\nindex 2658593..4ff96af 100644\n--- a/psi/imain.c\n+++ b/psi/imain.c\n@@ -1,4 +1,4 @@\n-/* Copyright (C) 2001-2021 Artifex Software, Inc.\n+/* Copyright (C) 2001-2023 Artifex Software, Inc.\n    All Rights Reserved.\n \n    This software is provided AS-IS with no warranty, either express or\n@@ -1278,6 +1278,16 @@ gs_main_finit(gs_main_instance * minst, int exit_status, int env_code)\n         int code = 0;\n \n         if (idmemory->reclaim != 0) {\n+            /* In extreme error conditions, these references can persist, despite the\n+             * arrays themselves having been restored away.\n+             */\n+            gs_main_run_string(minst,\n+                \"$error /dstack undef \\\n+                 $error /estack undef \\\n+                 $error /ostack undef\",\n+                 0 , &exit_code, &error_object);\n+\n+            ref_stack_clear(&o_stack);\n             code = interp_reclaim(&minst->i_ctx_p, avm_global);\n \n             /* We ignore gs_error_VMerror because it comes from gs_vmreclaim()\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42520464-vul",
+      "digest": "sha256:607ae15c2f748bef41f2e851395e5db78c9df57b766a151df846be9c76f3f287"
+    },
+    "patched": {
+      "ref": "n132/arvo:42520464-fix",
+      "digest": "sha256:74b053b75eb3826a9034553364e9de6ba4d344e8860a6c04091a630871daeda2"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/ghostpdl/./psi/igc.c:915",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/ghostpdl/./psi/igc.c:915"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

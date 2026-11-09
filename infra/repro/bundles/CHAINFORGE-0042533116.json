@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042533116",
+  "chain": "CWE-416->CWE-125",
+  "project": "libredwg",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42533116",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "08ecfb5da586e7d28e92edab0881020f831e3e34",
+      "fix_commits": [
+        "08ecfb5da586e7d28e92edab0881020f831e3e34"
+      ],
+      "repo": "https://github.com/LibreDWG/libredwg"
+    },
+    "patch": "From 08ecfb5da586e7d28e92edab0881020f831e3e34 Mon Sep 17 00:00:00 2001\nFrom: Reini Urban <reini.urban@gmail.com>\nDate: Tue, 20 Feb 2024 15:13:31 +0100\nSubject: [PATCH] indxf: fix UAF\n\nFixes oss-fuzz 66835\n---\n src/in_dxf.c | 3 ++-\n 1 file changed, 2 insertions(+), 1 deletion(-)\n\ndiff --git a/src/in_dxf.c b/src/in_dxf.c\nindex e53ab82..20e039d 100644\n--- a/src/in_dxf.c\n+++ b/src/in_dxf.c\n@@ -12113,7 +12113,7 @@ dxf_tables_read (Bit_Chain *restrict dat, Dwg_Data *restrict dwg)\n                  && strEQ (pair->value.s, table))\n             {\n               Dwg_Object *obj;\n-              Dwg_Object *ctrl = &dwg->object[ctrl_id];\n+              Dwg_Object *ctrl;\n               char *dxfname = strdup (pair->value.s);\n               BITCODE_BL idx = dwg->num_objects;\n               BITCODE_H ref;\n@@ -12122,6 +12122,7 @@ dxf_tables_read (Bit_Chain *restrict dat, Dwg_Data *restrict dwg)\n               pair = new_object (table, dxfname, dat, dwg, ctrl_id,\n                                  (BITCODE_BL *)&i);\n               obj = &dwg->object[idx];\n+              ctrl = &dwg->object[ctrl_id];\n               if (!pair)\n                 {\n                   free (dxfname);\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42533116-vul",
+      "digest": "sha256:51e1c15e8a3f8aeef6fa47dce3451c7daa551e5d64ce2cdfa481ba8d317e5d92"
+    },
+    "patched": {
+      "ref": "n132/arvo:42533116-fix",
+      "digest": "sha256:1c2d72a2f9b2c31955361e1c89e9d3b1a11a0b8d083a63a7d0a33d2692e8f82d"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/libredwg/src/in_dxf.c:11738",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/libredwg/src/in_dxf.c:11738"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

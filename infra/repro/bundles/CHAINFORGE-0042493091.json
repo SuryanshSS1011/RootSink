@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042493091",
+  "chain": "CWE-456->CWE-457",
+  "project": "poppler",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42493091",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "e21c83650f15a197b286f8eed8c7d723c6900925",
+      "fix_commits": [
+        "e21c83650f15a197b286f8eed8c7d723c6900925"
+      ],
+      "repo": "https://gitlab.freedesktop.org/poppler/poppler.git"
+    },
+    "patch": "diff --git a/utils/pdftoppm.cc b/utils/pdftoppm.cc\nindex 1789aadf9c94b98ddcbfb51b2c4a6ce27cc0812b..97fdbea26de773fda4a9f6fcf59aeff3b3727482 100644\n--- a/utils/pdftoppm.cc\n+++ b/utils/pdftoppm.cc\n@@ -628,23 +628,34 @@ int main(int argc, char *argv[])\n         if (scaleDimensionBeforeRotation && needToRotate(doc->getPageRotate(pg)))\n             std::swap(pg_w, pg_h);\n \n+        // Handle requests for specific image size\n         if (scaleTo != 0) {\n             resolution = (72.0 * scaleTo) / (pg_w > pg_h ? pg_w : pg_h);\n             x_resolution = y_resolution = resolution;\n+            pg_w = pg_h = scaleTo;\n         } else {\n             if (x_scaleTo > 0) {\n                 x_resolution = (72.0 * x_scaleTo) / pg_w;\n+                pg_w = x_scaleTo;\n                 if (y_scaleTo == -1)\n                     y_resolution = x_resolution;\n             }\n+\n             if (y_scaleTo > 0) {\n                 y_resolution = (72.0 * y_scaleTo) / pg_h;\n+                pg_h = y_scaleTo;\n                 if (x_scaleTo == -1)\n                     x_resolution = y_resolution;\n             }\n+\n+            // No specific image size requested---compute the size from the resolution\n+            if (x_scaleTo <= 0) {\n+                pg_w = pg_w * (x_resolution / 72.0);\n+            }\n+            if (y_scaleTo <= 0) {\n+                pg_h = pg_h * (y_resolution / 72.0);\n+            }\n         }\n-        pg_w = pg_w * (x_resolution / 72.0);\n-        pg_h = pg_h * (y_resolution / 72.0);\n \n         if (!scaleDimensionBeforeRotation && needToRotate(doc->getPageRotate(pg)))\n             std::swap(pg_w, pg_h);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42493091-vul",
+      "digest": "sha256:d322de06b1d89da7606d090e183f2cfe3a7a3b9ff103c96d3c4d172add9da585"
+    },
+    "patched": {
+      "ref": "n132/arvo:42493091-fix",
+      "digest": "sha256:8e34507abea95a0ec0ea0df22fec1d5b88a7be2b49c14058408efb800903d625"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/poppler/poppler/GfxState_helpers.h:31",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/poppler/poppler/GfxState_helpers.h:31"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

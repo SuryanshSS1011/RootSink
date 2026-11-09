@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-961279538",
+  "chain": "CWE-456->CWE-457",
+  "project": "libxslt",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42476555",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://gitlab.gnome.org/GNOME/libxslt.git2232473733b7313d67de8836ea3b29eec6e8e285",
+      "fix_commits": [
+        "2232473733b7313d67de8836ea3b29eec6e8e285"
+      ],
+      "repo": "https://gitlab.gnome.org/GNOME/libxslt.git"
+    },
+    "patch": "From 2232473733b7313d67de8836ea3b29eec6e8e285 Mon Sep 17 00:00:00 2001\nFrom: Nick Wellnhofer <wellnhofer@aevum.de>\nDate: Sat, 17 Aug 2019 16:51:53 +0200\nSubject: [PATCH] Fix dangling pointer in xsltCopyText\n\nxsltCopyText didn't reset ctxt->lasttext in some cases which could\nlead to various memory errors in relation with CDATA sections in input\ndocuments.\n\nFound by OSS-Fuzz.\n---\n libxslt/transform.c | 2 ++\n 1 file changed, 2 insertions(+)\n\ndiff --git a/libxslt/transform.c b/libxslt/transform.c\nindex 95ebd07..d7ab0b6 100644\n--- a/libxslt/transform.c\n+++ b/libxslt/transform.c\n@@ -1094,6 +1094,8 @@ xsltCopyText(xsltTransformContextPtr ctxt, xmlNodePtr target,\n \t    if ((copy->content = xmlStrdup(cur->content)) == NULL)\n \t\treturn NULL;\n \t}\n+\n+\tctxt->lasttext = NULL;\n     } else {\n         /*\n \t * normal processing. keep counters to extend the text node\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42476555-vul",
+      "digest": "sha256:ab5215938fcf2a9cbf4a2e8774875daf1b95c3cc5478084977d9463eeca3b972"
+    },
+    "patched": {
+      "ref": "n132/arvo:42476555-fix",
+      "digest": "sha256:aa164e8bc093365188249b7b1b80e01f30125e68582f89851249e8e4be5ea54b"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/libxml2/xmlIO.c:3511",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/libxml2/xmlIO.c:3511"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

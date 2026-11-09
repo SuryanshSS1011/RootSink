@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0394644267",
+  "chain": "CWE-1285->CWE-125",
+  "project": "libdwarf",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "394644267",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "156156a80affdc63b851fbf7fdc01e4d41849eb0",
+      "fix_commits": [
+        "156156a80affdc63b851fbf7fdc01e4d41849eb0"
+      ],
+      "repo": "https://github.com/davea42/libdwarf-code"
+    },
+    "patch": "diff --git a/src/lib/libdwarf/dwarf_macro5.c b/src/lib/libdwarf/dwarf_macro5.c\nindex 89f21272c..b2b0284ef 100644\n--- a/src/lib/libdwarf/dwarf_macro5.c\n+++ b/src/lib/libdwarf/dwarf_macro5.c\n@@ -1322,8 +1322,10 @@ _dwarf_internal_macro_context_by_offset(Dwarf_Debug dbg,\n \n     section_base = dbg->de_debug_macro.dss_data;\n     section_size = dbg->de_debug_macro.dss_size;\n+    /* guarding against overflow */\n     /*  The '3'  ensures the header initial bytes present too. */\n-    if ((3+macro_offset) >= section_size) {\n+    if ((macro_offset >= section_size) || \n+        ((3+macro_offset) >= section_size) ) {\n         dealloc_macro_srcfiles(srcfiles,srcfilescount);\n         _dwarf_error(dbg, error, DW_DLE_MACRO_OFFSET_BAD);\n         return DW_DLV_ERROR;\n@@ -1331,7 +1333,6 @@ _dwarf_internal_macro_context_by_offset(Dwarf_Debug dbg,\n     macro_header = macro_offset + section_base;\n     macro_data = macro_header;\n     section_end = section_base +section_size;\n-\n     macro_context = (Dwarf_Macro_Context)\n         _dwarf_get_alloc(dbg,DW_DLA_MACRO_CONTEXT,1);\n     if (!macro_context) {\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:394644267-vul",
+      "digest": "sha256:48378fe9140f86ae9a2833720eba70900fd455b450c9bb9d80443cf1eeab9de4"
+    },
+    "patched": {
+      "ref": "n132/arvo:394644267-fix",
+      "digest": "sha256:dde0bc7aec3c765b0eceaeebb47e4efecbda26367ad32aec25fc23d65d9e01e8"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/libdwarf/src/lib/libdwarf/dwarf_memcpy_swap.c:71",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/libdwarf/src/lib/libdwarf/dwarf_memcpy_swap.c:71"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0378985224",
+  "chain": "CWE-416->CWE-125",
+  "project": "gpac",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "378985224",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "7e2d00903eb2c484abfc7e1e3547be6a0e5bd3df",
+      "fix_commits": [
+        "7e2d00903eb2c484abfc7e1e3547be6a0e5bd3df"
+      ],
+      "repo": "https://github.com/gpac/gpac"
+    },
+    "patch": "From 7e2d00903eb2c484abfc7e1e3547be6a0e5bd3df Mon Sep 17 00:00:00 2001\nFrom: Aurelien David <aurelien.david@telecom-paristech.fr>\nDate: Mon, 18 Nov 2024 12:26:59 +0100\nSubject: [PATCH] dmx_gsf: avoid double adding to pck_res list to prevent\n double free\n\nossfuzz issue 378985224\n---\n src/filters/dmx_gsf.c | 4 +++-\n 1 file changed, 3 insertions(+), 1 deletion(-)\n\ndiff --git a/src/filters/dmx_gsf.c b/src/filters/dmx_gsf.c\nindex 22c4080..1bd8b32 100644\n--- a/src/filters/dmx_gsf.c\n+++ b/src/filters/dmx_gsf.c\n@@ -1017,7 +1017,9 @@ static void gsfdmx_stream_del(GSF_DemuxCtx *ctx, GSF_Stream *gst, Bool is_flush)\n \t\t\t}\n \t\t}\n \t\tgsfdmx_pck_reset(gpck);\n-\t\tgf_list_add(ctx->pck_res, gpck);\n+\t\tif (gf_list_find(ctx->pck_res, gpck) == -1)\n+\t\t\tgf_list_add(ctx->pck_res, gpck);\n+\n \t}\n \tif (is_flush && gst->opid)\n \t\tgf_filter_pid_remove(gst->opid);\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:378985224-vul",
+      "digest": "sha256:bd20b4e62c1f8abfc81ddc13862e62dbe489c70489a6796724d65db10726cd35"
+    },
+    "patched": {
+      "ref": "n132/arvo:378985224-fix",
+      "digest": "sha256:916d48ef8f758dd1a82c0176657f0be344a0a94661bf26b0de616402f536a8c3"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/gpac/src/filters/dmx_gsf.c:1338",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/gpac/src/filters/dmx_gsf.c:1338"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

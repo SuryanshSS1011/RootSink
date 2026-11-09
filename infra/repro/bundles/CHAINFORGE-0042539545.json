@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042539545",
+  "chain": "CWE-1284->CWE-125",
+  "project": "wireshark",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42539545",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "df5a8b29bbb046933b73e9e369b9bc9e4b03aaa8",
+      "fix_commits": [
+        "df5a8b29bbb046933b73e9e369b9bc9e4b03aaa8"
+      ],
+      "repo": "https://github.com/wireshark/wireshark"
+    },
+    "patch": "diff --git a/epan/dissectors/packet-ber.c b/epan/dissectors/packet-ber.c\nindex 03842543a6f..3690121b3b4 100644\n--- a/epan/dissectors/packet-ber.c\n+++ b/epan/dissectors/packet-ber.c\n@@ -3905,11 +3905,11 @@ dissect_ber_constrained_bitstring(gboolean implicit_tag, asn1_ctx_t *actx, proto\n         len = tvb_reported_length_remaining(tvb, offset);\n         end_offset = offset+len;\n     }\n-    if (len == 0) {\n+    if ((int)len <= 0) {\n         proto_tree_add_expert_format(\n             parent_tree, actx->pinfo, &ei_ber_constr_bitstr, tvb, offset, len,\n-            \"dissect_ber_constrained_bitstring(): frame:%u offset:%d Was passed an illegal length of 0\",\n-            actx->pinfo->num, offset);\n+            \"dissect_ber_constrained_bitstring(): frame:%u offset:%d Was passed an illegal length of %d\",\n+            actx->pinfo->num, offset, len);\n         return offset;\n     }\n     actx->created_item = NULL;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42539545-vul",
+      "digest": "sha256:e314808ab99180e8b1f03847c5370248c2769471e9509a7a4dce841e8d912463"
+    },
+    "patched": {
+      "ref": "n132/arvo:42539545-fix",
+      "digest": "sha256:010d25cd9c38ca59dd1691d9b3657de41cf14d616227ef65d334e3170eba356b"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/wireshark/epan/dissectors/packet-ber.c:3994",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/wireshark/epan/dissectors/packet-ber.c:3994"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

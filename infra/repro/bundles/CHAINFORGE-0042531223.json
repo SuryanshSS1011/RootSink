@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042531223",
+  "chain": "CWE-416->CWE-787",
+  "project": "jq",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42531223",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "b86ff49f46a4a37e5a8e75a140cb5fd6e1331384",
+      "fix_commits": [
+        "b86ff49f46a4a37e5a8e75a140cb5fd6e1331384"
+      ],
+      "repo": "https://github.com/jqlang/jq"
+    },
+    "patch": "diff --git a/src/jv.c b/src/jv.c\nindex e7ae561975..4e50c582e7 100644\n--- a/src/jv.c\n+++ b/src/jv.c\n@@ -206,9 +206,6 @@ enum {\n   JVP_NUMBER_DECIMAL = 1\n };\n \n-#define JV_NUMBER_SIZE_INIT      (0)\n-#define JV_NUMBER_SIZE_CONVERTED (1)\n-\n #define JVP_FLAGS_NUMBER_NATIVE       JVP_MAKE_FLAGS(JV_KIND_NUMBER, JVP_MAKE_PFLAGS(JVP_NUMBER_NATIVE, 0))\n #define JVP_FLAGS_NUMBER_LITERAL      JVP_MAKE_FLAGS(JV_KIND_NUMBER, JVP_MAKE_PFLAGS(JVP_NUMBER_DECIMAL, 1))\n \n@@ -587,8 +584,12 @@ static jv jvp_literal_number_new(const char * literal) {\n     jv_mem_free(n);\n     return JV_INVALID;\n   }\n+  if (decNumberIsNaN(&n->num_decimal)) {\n+    jv_mem_free(n);\n+    return jv_number(NAN);\n+  }\n \n-  jv r = {JVP_FLAGS_NUMBER_LITERAL, 0, 0, JV_NUMBER_SIZE_INIT, {&n->refcnt}};\n+  jv r = {JVP_FLAGS_NUMBER_LITERAL, 0, 0, 0, {&n->refcnt}};\n   return r;\n }\n \n@@ -696,9 +697,8 @@ double jv_number_value(jv j) {\n   if (JVP_HAS_FLAGS(j, JVP_FLAGS_NUMBER_LITERAL)) {\n     jvp_literal_number* n = jvp_literal_number_ptr(j);\n \n-    if (j.size != JV_NUMBER_SIZE_CONVERTED) {\n+    if (isnan(n->num_double)) {\n       n->num_double = jvp_literal_number_to_double(j);\n-      j.size = JV_NUMBER_SIZE_CONVERTED;\n     }\n \n     return n->num_double;\n@@ -729,7 +729,7 @@ int jvp_number_is_nan(jv n) {\n     return decNumberIsNaN(pdec);\n   }\n #endif\n-  return n.u.number != n.u.number;\n+  return isnan(n.u.number);\n }\n \n jv jv_number_negate(jv n) {\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42531223-vul",
+      "digest": "sha256:a41316667dd80642267ad12fdf14574b051841696b80bea8d60558facdee3815"
+    },
+    "patched": {
+      "ref": "n132/arvo:42531223-fix",
+      "digest": "sha256:7c9310256a370143571d0d7c7c43fd76b3237d48f65d5716670772027b4135c2"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/jq/src/decNumber/decNumber.c:3375",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/jq/src/decNumber/decNumber.c:3375"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

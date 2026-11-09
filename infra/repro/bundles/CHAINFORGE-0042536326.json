@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042536326",
+  "chain": "CWE-20->CWE-787",
+  "project": "ffmpeg",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42536326",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "e939f02ce67f2af570115214d2d5a6d93501dd80",
+      "fix_commits": [
+        "e939f02ce67f2af570115214d2d5a6d93501dd80"
+      ],
+      "repo": "https://git.ffmpeg.org/ffmpeg.git"
+    },
+    "patch": "From e939f02ce67f2af570115214d2d5a6d93501dd80 Mon Sep 17 00:00:00 2001\nFrom: Anton Khirnov <anton@khirnov.net>\nDate: Wed, 26 Jun 2024 14:41:41 +0200\nSubject: [PATCH] lavc/hevcdec: improve check for PPS changing between slices\n\nCompare actual PPS objects rather than just PPS ID, as the former might\nchange while the latter stays the same.\n\nReported-by: Michael Niedermayer <michael@niedermayer.cc>\n---\n libavcodec/hevc/hevcdec.c | 2 +-\n 1 file changed, 1 insertion(+), 1 deletion(-)\n\ndiff --git a/libavcodec/hevc/hevcdec.c b/libavcodec/hevc/hevcdec.c\nindex 01d3208..fd143cd 100644\n--- a/libavcodec/hevc/hevcdec.c\n+++ b/libavcodec/hevc/hevcdec.c\n@@ -603,7 +603,7 @@ static int hls_slice_header(SliceHeader *sh, const HEVCContext *s, GetBitContext\n         av_log(s->avctx, AV_LOG_ERROR, \"PPS id out of range: %d\\n\", pps_id);\n         return AVERROR_INVALIDDATA;\n     }\n-    if (!sh->first_slice_in_pic_flag && pps_id != sh->pps_id) {\n+    if (!sh->first_slice_in_pic_flag && s->ps.pps_list[pps_id] != s->pps) {\n         av_log(s->avctx, AV_LOG_ERROR, \"PPS changed between slices.\\n\");\n         return AVERROR_INVALIDDATA;\n     }\n-- \n2.55.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42536326-vul",
+      "digest": "sha256:d18a16d0d729bce2a25ec534ffe895240235c2ee35346d52a73a17bbbead90c8"
+    },
+    "patched": {
+      "ref": "n132/arvo:42536326-fix",
+      "digest": "sha256:3991c1c852f8f1e6bbf32dc80fd0237211388e2a9e183e461930151ea18d0272"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/ffmpeg/libavcodec/hevc/mvs.c:466",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/ffmpeg/libavcodec/hevc/mvs.c:466"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

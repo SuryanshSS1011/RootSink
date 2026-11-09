@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042496638",
+  "chain": "CWE-20->CWE-125",
+  "project": "readstat",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42496638",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "c7baae72b36acdc24f56ad48d3e859850fdbdc2b",
+      "fix_commits": [
+        "c7baae72b36acdc24f56ad48d3e859850fdbdc2b"
+      ],
+      "repo": "https://github.com/WizardMac/ReadStat"
+    },
+    "patch": "diff --git a/src/spss/readstat_sav_read.c b/src/spss/readstat_sav_read.c\nindex 7f494904..460bf078 100644\n--- a/src/spss/readstat_sav_read.c\n+++ b/src/spss/readstat_sav_read.c\n@@ -717,7 +717,7 @@ static readstat_error_t sav_process_row(unsigned char *buffer, size_t buffer_len\n             }\n             if (++offset == col_info->width) {\n                 if (++segment_offset < var_info->n_segments) {\n-                    raw_str_used--;\n+                    if (raw_str_used > 0) raw_str_used--;\n                 }\n                 offset = 0;\n                 col++;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42496638-vul",
+      "digest": "sha256:b3e7b60f5b37b99b2db04dfb8d426b02d277211adcc0f3b7a4442188cddf50d4"
+    },
+    "patched": {
+      "ref": "n132/arvo:42496638-fix",
+      "digest": "sha256:e9aa488694104ee3d9e56ca16885318a7142c20c68694808a21466845fd32d47"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/readstat/src/readstat_convert.c:10",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/readstat/src/readstat_convert.c:10"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

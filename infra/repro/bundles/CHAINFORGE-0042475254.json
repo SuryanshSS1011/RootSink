@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042475254",
+  "chain": "CWE-456->CWE-457",
+  "project": "qtbase",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42475254",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "09504d484c258eafb10ac12eeda1becda5b985c1",
+      "fix_commits": [
+        "09504d484c258eafb10ac12eeda1becda5b985c1"
+      ],
+      "repo": "git://code.qt.io/qt/qtbase.git"
+    },
+    "patch": "From 09504d484c258eafb10ac12eeda1becda5b985c1 Mon Sep 17 00:00:00 2001\nFrom: =?UTF-8?q?Tor=20Arne=20Vestb=C3=B8?= <torarnv@gmail.com>\nDate: Fri, 10 May 2019 16:06:47 +0200\nSubject: [PATCH] macOS: Guard against display on non-main threads\nMIME-Version: 1.0\nContent-Type: text/plain; charset=UTF-8\nContent-Transfer-Encoding: 8bit\n\nAppKit will in some cases ask our view to display on secondary threads if\nwe call APIs that are only supposed to be called on the main thread, such\nas -[NSOpenGLContext setView:] or -[NSOpenGLContext update].\n\nForwarding this display-request is bad, as QtGui expects all window system\nevents to come on the main thread, and we can easily deadlock client code\nsuch as the Qt Quick threaded renderer.\n\nChange-Id: I1daeabf1dca6ca8ba908d3998b444a2089681e3a\nReviewed-by: Morten Johan S\u00f8rvig <morten.sorvig@qt.io>\nReviewed-by: Tor Arne Vestb\u00f8 <tor.arne.vestbo@qt.io>\n---\n src/plugins/platforms/cocoa/qnsview_drawing.mm | 9 +++++++++\n 1 file changed, 9 insertions(+)\n\ndiff --git a/src/plugins/platforms/cocoa/qnsview_drawing.mm b/src/plugins/platforms/cocoa/qnsview_drawing.mm\nindex 3690d6e..116a9a7 100644\n--- a/src/plugins/platforms/cocoa/qnsview_drawing.mm\n+++ b/src/plugins/platforms/cocoa/qnsview_drawing.mm\n@@ -189,6 +189,15 @@\n \n - (void)displayLayer:(CALayer *)layer\n {\n+    if (!NSThread.isMainThread) {\n+        // Qt is calling AppKit APIs such as -[NSOpenGLContext setView:] on secondary threads,\n+        // which we shouldn't do. This may result in AppKit (wrongly) triggering a display on\n+        // the thread where we made the call, so block it here and defer to the main thread.\n+        qCWarning(lcQpaDrawing) << \"Display non non-main thread! Deferring to main thread\";\n+        dispatch_async(dispatch_get_main_queue(), ^{ self.needsDisplay = YES; });\n+        return;\n+    }\n+\n     Q_ASSERT(layer == self.layer);\n \n     if (!m_platformWindow)\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42475254-vul",
+      "digest": "sha256:a5bb09e44122452947c8d16adc188b2d3f161644d2f8dea868d83b7bed93d73f"
+    },
+    "patched": {
+      "ref": "n132/arvo:42475254-fix",
+      "digest": "sha256:ee6134de99c4348b3f470c00d1e7dc76a24557f0766e785be4ef0c515dcd8c2a"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/qtbase/src/corelib/tools/qstring.h:572",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/qtbase/src/corelib/tools/qstring.h:572"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

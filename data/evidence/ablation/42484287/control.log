@@ -1,0 +1,66 @@
+Accepting input from '/tmp/poc'
+Usage for fuzzing: honggfuzz -P [flags] -- /out/curl_fuzzer_imap
+=================================================================
+==39093==ERROR: AddressSanitizer: stack-buffer-overflow on address 0x7f82910f9420 at pc 0x000000494ada bp 0x7ffc6078a970 sp 0x7ffc6078a138
+WRITE of size 1025 at 0x7f82910f9420 thread T0
+SCARINESS: 60 (multi-byte-write-stack-buffer-overflow)
+    #0 0x494ad9 in __asan_memcpy /src/llvm-project/compiler-rt/lib/asan/asan_interceptors_memintrinsics.cpp:22:3
+    #1 0x53cf16 in Curl_pp_readresp /src/curl/lib/pingpong.c:310:7
+    #2 0x510a02 in imap_statemach_act /src/curl/lib/imap.c:1275:14
+    #3 0x53c25c in Curl_pp_statemach /src/curl/lib/pingpong.c:134:14
+    #4 0x515730 in imap_block_statemach /src/curl/lib/imap.c:1370:14
+    #5 0x510685 in imap_disconnect /src/curl/lib/imap.c:1625:13
+    #6 0x4d3673 in Curl_disconnect /src/curl/lib/url.c:817:5
+    #7 0x5aeec4 in Curl_conncache_close_all_connections /src/curl/lib/conncache.c:552:11
+    #8 0x533c3e in curl_multi_cleanup /src/curl/lib/multi.c:2476:5
+    #9 0x4c8c80 in fuzz_handle_transfer(fuzz_data*) /src/curl_fuzzer/curl_fuzzer.cc:391:3
+    #10 0x4c7d12 in LLVMFuzzerTestOneInput /src/curl_fuzzer/curl_fuzzer.cc:93:3
+    #11 0xa8e40d in main (/out/curl_fuzzer_imap+0xa8e40d)
+    #12 0x7f829007182f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+    #13 0x41ce48 in _start (/out/curl_fuzzer_imap+0x41ce48)
+
+DEDUP_TOKEN: __asan_memcpy--Curl_pp_readresp--imap_statemach_act
+Address 0x7f82910f9420 is located in stack of thread T0 at offset 1056 in frame
+    #0 0x5aec5f in Curl_conncache_close_all_connections /src/curl/lib/conncache.c:535
+
+DEDUP_TOKEN: Curl_conncache_close_all_connections
+  This frame has 3 object(s):
+    [32, 1056) 'buffer' (line 537)
+    [1184, 1344) 'pipe_st' (line 545) <== Memory access at offset 1056 partially underflows this variable
+    [1408, 1568) 'pipe_st17' (line 560) <== Memory access at offset 1056 partially underflows this variable
+HINT: this may be a false positive if your program uses some custom stack unwind mechanism, swapcontext or vfork
+      (longjmp and C++ exceptions *are* supported)
+SUMMARY: AddressSanitizer: stack-buffer-overflow /src/llvm-project/compiler-rt/lib/asan/asan_interceptors_memintrinsics.cpp:22:3 in __asan_memcpy
+Shadow bytes around the buggy address:
+  0x0ff0d2217230: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0ff0d2217240: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0ff0d2217250: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0ff0d2217260: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0ff0d2217270: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x0ff0d2217280: 00 00 00 00[f2]f2 f2 f2 f2 f2 f2 f2 f2 f2 f2 f2
+  0x0ff0d2217290: f2 f2 f2 f2 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0ff0d22172a0: 00 00 00 00 00 00 00 00 f2 f2 f2 f2 f2 f2 f2 f2
+  0x0ff0d22172b0: f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8
+  0x0ff0d22172c0: f8 f8 f8 f8 f3 f3 f3 f3 f3 f3 f3 f3 00 00 00 00
+  0x0ff0d22172d0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+  Shadow gap:              cc
+==39093==ABORTING

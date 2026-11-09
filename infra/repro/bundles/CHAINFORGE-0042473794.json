@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042473794",
+  "chain": "CWE-416->CWE-125",
+  "project": "capstonenext",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42473794",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "85d1bc7bc406c37e067e10587e6c8f38dc154ee4",
+      "fix_commits": [
+        "85d1bc7bc406c37e067e10587e6c8f38dc154ee4"
+      ],
+      "repo": "https://github.com/aquynh/capstone"
+    },
+    "patch": "diff --git a/arch/X86/X86DisassemblerDecoder.c b/arch/X86/X86DisassemblerDecoder.c\nindex 2337a1c527..7c5501b19e 100644\n--- a/arch/X86/X86DisassemblerDecoder.c\n+++ b/arch/X86/X86DisassemblerDecoder.c\n@@ -955,7 +955,13 @@ static bool is16BitEquivalent(unsigned orig, unsigned equiv)\n  */\n static bool is64Bit(uint16_t id)\n {\n-\treturn insns[id].is64bit;\n+\tunsigned int i = find_insn(id);\n+\tif (i != -1) {\n+\t\treturn insns[i].is64bit;\n+\t}\n+\n+\t// not found??\n+\treturn false;\n }\n \n /*\ndiff --git a/arch/X86/X86Mapping.c b/arch/X86/X86Mapping.c\nindex 86ded6aaed..6cf8cb80b3 100644\n--- a/arch/X86/X86Mapping.c\n+++ b/arch/X86/X86Mapping.c\n@@ -965,10 +965,11 @@ static void arr_replace(uint16_t *arr, uint8_t max, x86_reg r1, x86_reg r2)\n \n // look for @id in @insns\n // return -1 if not found\n-static unsigned int find_insn(const insn_map_x86 *insns, unsigned int max, unsigned int id)\n+unsigned int find_insn(unsigned int id)\n {\n \t// binary searching since the IDs are sorted in order\n \tunsigned int left, right, m;\n+\tunsigned int max = ARR_SIZE(insns);\n \n \tleft = 0;\n \tright = max - 1;\n@@ -993,7 +994,7 @@ static unsigned int find_insn(const insn_map_x86 *insns, unsigned int max, unsig\n // given internal insn id, return public instruction info\n void X86_get_insn_id(cs_struct *h, cs_insn *insn, unsigned int id)\n {\n-\tunsigned int i = find_insn(insns, ARR_SIZE(insns), id);\n+\tunsigned int i = find_insn(id);\n \tif (i != -1) {\n \t\tinsn->id = insns[i].mapid;\n \n@@ -1584,7 +1585,7 @@ bool X86_insn_reg_att2(unsigned int id, x86_reg *reg1, enum cs_ac_type *access1,\n static bool valid_repne(cs_struct *h, unsigned int opcode)\n {\n \tunsigned int id;\n-\tunsigned int i = find_insn(insns, ARR_SIZE(insns), opcode);\n+\tunsigned int i = find_insn(opcode);\n \tif (i != -1) {\n \t\tid = insns[i].mapid;\n \t\tswitch(id) {\n@@ -1653,7 +1654,7 @@ static bool valid_repne(cs_struct *h, unsigned int opcode)\n static bool valid_bnd(cs_struct *h, unsigned int opcode)\n {\n \tunsigned int id;\n-\tunsigned int i = find_insn(insns, ARR_SIZE(insns), opcode);\n+\tunsigned int i = find_insn(opcode);\n \tif (i != -1) {\n \t\tid = insns[i].mapid;\n \t\tswitch(id) {\n@@ -1698,7 +1699,7 @@ static bool valid_bnd(cs_struct *h, unsigned int opcode)\n static bool valid_rep(cs_struct *h, unsigned int opcode)\n {\n \tunsigned int id;\n-\tunsigned int i = find_insn(insns, ARR_SIZE(insns), opcode);\n+\tunsigned int i = find_insn(opcode);\n \tif (i != -1) {\n \t\tid = insns[i].mapid;\n \t\tswitch(id) {\n@@ -1753,7 +1754,7 @@ static bool valid_rep(cs_struct *h, unsigned int opcode)\n static bool valid_repe(cs_struct *h, unsigned int opcode)\n {\n \tunsigned int id;\n-\tunsigned int i = find_insn(insns, ARR_SIZE(insns), opcode);\n+\tunsigned int i = find_insn(opcode);\n \tif (i != -1) {\n \t\tid = insns[i].mapid;\n \t\tswitch(id) {\n@@ -2014,7 +2015,7 @@ static insn_op insn_ops[] = {\n // given internal insn id, return operand access info\n uint8_t *X86_get_op_access(cs_struct *h, unsigned int id, uint64_t *eflags)\n {\n-\tunsigned int i = find_insn(insns, ARR_SIZE(insns), id);\n+\tunsigned int i = find_insn(id);\n \tif (i != -1) {\n \t\t*eflags = insn_ops[i].flags;\n \t\treturn insn_ops[i].access;\ndiff --git a/arch/X86/X86Mapping.h b/arch/X86/X86Mapping.h\nindex 7654d954e6..dbdb645b19 100644\n--- a/arch/X86/X86Mapping.h\n+++ b/arch/X86/X86Mapping.h\n@@ -89,4 +89,6 @@ uint8_t X86_immediate_size(unsigned int id, uint8_t *enc_size);\n \n unsigned short X86_register_map(unsigned short id);\n \n+unsigned int find_insn(unsigned int id);\n+\n #endif\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42473794-vul",
+      "digest": "sha256:599f1e17bede24650916c5c84be586540d40696230a7f6058ff9341b34e624b8"
+    },
+    "patched": {
+      "ref": "n132/arvo:42473794-fix",
+      "digest": "sha256:ba4777ab557dff8fab0e99c17d11f8a7aa0b021d9e2eaabc7b3fbda8a0958ff6"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "global-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/capstonenext/arch/X86/X86DisassemblerDecoder.c:958",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "global-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/capstonenext/arch/X86/X86DisassemblerDecoder.c:958"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

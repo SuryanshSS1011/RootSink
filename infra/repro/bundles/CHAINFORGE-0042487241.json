@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042487241",
+  "chain": "CWE-1285->CWE-125",
+  "project": "htslib",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42487241",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "8bab82bdb8c2613e1ca7bd5573d7c12117a2dc02",
+      "fix_commits": [
+        "8bab82bdb8c2613e1ca7bd5573d7c12117a2dc02"
+      ],
+      "repo": "https://github.com/samtools/htslib"
+    },
+    "patch": "diff --git a/vcf.c b/vcf.c\nindex b2d4e9b7e..2ad0ac136 100755\n--- a/vcf.c\n+++ b/vcf.c\n@@ -1272,7 +1272,7 @@ static int bcf_dec_typed_int1_safe(uint8_t *p, uint8_t *end, uint8_t **q,\n     if (t == BCF_BT_INT8) {\n         *val = *(int8_t *) p++;\n     } else {\n-        if (end - p < bcf_type_shift[t]) return -1;\n+        if (end - p < (1<<bcf_type_shift[t])) return -1;\n         if (t == BCF_BT_INT16) {\n             *val = le_to_i16(p);\n             p += 2;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42487241-vul",
+      "digest": "sha256:c2c02ce2a4773d1011ae5736d88bfb02d3d31e167ae02b74f085bc24c622b528"
+    },
+    "patched": {
+      "ref": "n132/arvo:42487241-fix",
+      "digest": "sha256:30ef9db0d764d0342b508c7095e683921211b89110798398cdf4628a5797e281"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/htslib/./htslib/hts_endian.h:136",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/htslib/./htslib/hts_endian.h:136"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

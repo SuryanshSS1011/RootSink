@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042487506",
+  "chain": "CWE-20->CWE-787",
+  "project": "ffmpeg",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42487506",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "5a2a7604da5f7a2fc498d1d5c90bd892edac9ce8",
+      "fix_commits": [
+        "5a2a7604da5f7a2fc498d1d5c90bd892edac9ce8"
+      ],
+      "repo": "https://git.ffmpeg.org/ffmpeg.git"
+    },
+    "patch": "From 5a2a7604da5f7a2fc498d1d5c90bd892edac9ce8 Mon Sep 17 00:00:00 2001\nFrom: Michael Niedermayer <michael@niedermayer.cc>\nDate: Sun, 27 Sep 2020 20:23:10 +0200\nSubject: [PATCH] avcodec/cook: Check subpacket index against max\n\nFixes: off by 1 error\nFixes: index 5 out of bounds for type 'COOKSubpacket [5]'\nFixes: 25772/clusterfuzz-testcase-minimized-ffmpeg_AV_CODEC_ID_COOK_fuzzer-5762459498184704.fuzz\n\nFound-by: continuous fuzzing process https://github.com/google/oss-fuzz/tree/master/projects/ffmpeg\nSigned-off-by: Michael Niedermayer <michael@niedermayer.cc>\n---\n libavcodec/cook.c | 8 ++++----\n 1 file changed, 4 insertions(+), 4 deletions(-)\n\ndiff --git a/libavcodec/cook.c b/libavcodec/cook.c\nindex d0b41a2..9582495 100644\n--- a/libavcodec/cook.c\n+++ b/libavcodec/cook.c\n@@ -1084,6 +1084,10 @@ static av_cold int cook_decode_init(AVCodecContext *avctx)\n     ff_audiodsp_init(&q->adsp);\n \n     while (bytestream2_get_bytes_left(&gb)) {\n+        if (s >= FFMIN(MAX_SUBPACKETS, avctx->block_align)) {\n+            avpriv_request_sample(avctx, \"subpackets > %d\", FFMIN(MAX_SUBPACKETS, avctx->block_align));\n+            return AVERROR_PATCHWELCOME;\n+        }\n         /* 8 for mono, 16 for stereo, ? for multichannel\n            Swap to right endianness so we don't need to care later on. */\n         q->subpacket[s].cookversion      = bytestream2_get_be32(&gb);\n@@ -1215,10 +1219,6 @@ static av_cold int cook_decode_init(AVCodecContext *avctx)\n \n         q->num_subpackets++;\n         s++;\n-        if (s > FFMIN(MAX_SUBPACKETS, avctx->block_align)) {\n-            avpriv_request_sample(avctx, \"subpackets > %d\", FFMIN(MAX_SUBPACKETS, avctx->block_align));\n-            return AVERROR_PATCHWELCOME;\n-        }\n     }\n \n     /* Try to catch some obviously faulty streams, otherwise it might be exploitable */\n-- \n2.55.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42487506-vul",
+      "digest": "sha256:abce638fb4f7413f435f4e24ee5e52304985b22363faff21abf51f95b8e44eba"
+    },
+    "patched": {
+      "ref": "n132/arvo:42487506-fix",
+      "digest": "sha256:b0126c1f630fbd748f4050ab4b486bc3536f945dd444314ff72ce55f4073784a"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/ffmpeg/libavcodec/cook.c:1098",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/ffmpeg/libavcodec/cook.c:1098"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

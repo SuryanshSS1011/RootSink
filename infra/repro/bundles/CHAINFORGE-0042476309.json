@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042476309",
+  "chain": "CWE-456->CWE-457",
+  "project": "leptonica",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42476309",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "4972d55fcddee5c51f393747848c87fa54a64a78",
+      "fix_commits": [
+        "4972d55fcddee5c51f393747848c87fa54a64a78"
+      ],
+      "repo": "https://github.com/DanBloomberg/leptonica"
+    },
+    "patch": "From 4972d55fcddee5c51f393747848c87fa54a64a78 Mon Sep 17 00:00:00 2001\nFrom: Dan Bloomberg <dan.bloomberg@gmail.com>\nDate: Thu, 27 Jun 2019 11:21:09 -0700\nSubject: [PATCH] Small cleanup; use morph sequence function instead of brick\n function\n\n---\n src/pageseg.c |  2 +-\n src/utils1.c  | 37 ++++++++++++++++++++++++++++++++++++-\n 2 files changed, 37 insertions(+), 2 deletions(-)\n\ndiff --git a/src/pageseg.c b/src/pageseg.c\nindex 5f1e66d..c27bc69 100644\n--- a/src/pageseg.c\n+++ b/src/pageseg.c\n@@ -421,7 +421,7 @@ PIX     *pix1, *pix2, *pixvws, *pixd;\n          *   (1) close the characters and words in the textlines\n          *   (2) open the vertical whitespace corridors back up\n          *   (3) small opening to remove noise    */\n-    pix1 = pixCloseSafeBrick(NULL, pixs, 30, 1);\n+    pix1 = pixMorphSequence(pixs, \"c30.1\", 0);\n     if (pixadb) pixaAddPix(pixadb, pix1, L_COPY);\n     pixd = pixSubtract(NULL, pix1, pixvws);\n     pixOpenBrick(pixd, pixd, 3, 3);\ndiff --git a/src/utils1.c b/src/utils1.c\nindex 578ba54..86359cc 100644\n--- a/src/utils1.c\n+++ b/src/utils1.c\n@@ -911,7 +911,7 @@ size_t  bufsize = 100;\n /*---------------------------------------------------------------------*\n  *                           Timing procs                              *\n  *---------------------------------------------------------------------*/\n-#ifndef _WIN32\n+#if !defined(_WIN32) && !defined(__Fuchsia__)\n \n #include <sys/time.h>\n #include <sys/resource.h>\n@@ -1006,6 +1006,41 @@ struct timeval tv;\n     return;\n }\n \n+#elif defined(__Fuchsia__) /* resource.h not implemented on Fuchsia. */\n+\n+    /* Timer functions are used for testing and debugging, and\n+     * are stubbed out.  If they are needed in the future, they\n+     * can be implemented in Fuchsia using the zircon syscall\n+     * zx_object_get_info() in ZX_INFOR_THREAD_STATS mode.  */\n+\n+void\n+startTimer(void)\n+{\n+}\n+\n+l_float32\n+stopTimer(void)\n+{\n+    return 0.0;\n+}\n+\n+L_TIMER\n+startTimerNested(void)\n+{\n+    return NULL;\n+}\n+\n+l_float32\n+stopTimerNested(L_TIMER  rusage_start)\n+{\n+    return 0.0;\n+}\n+\n+void\n+l_getCurrentTime(l_int32  *sec,\n+                 l_int32  *usec)\n+{\n+}\n \n #else   /* _WIN32 : resource.h not implemented under Windows */\n \n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42476309-vul",
+      "digest": "sha256:5c60c2fb9e63110d927039273a4541654d65cbc34aee649fcb93c5e756fe7d1a"
+    },
+    "patched": {
+      "ref": "n132/arvo:42476309-fix",
+      "digest": "sha256:6a22ad705b4108bd280176f2c7baa998b1d34093637744074fa39521d06e071f"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/libtiff/libtiff/tif_color.c:188",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/libtiff/libtiff/tif_color.c:188"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

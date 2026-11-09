@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-965844702",
+  "chain": "CWE-456->CWE-457",
+  "project": "php-src",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42487017",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/php/php-src/commit/2022f2e5c905995c79fa08bb6955777573f32669",
+      "fix_commits": [
+        "2022f2e5c905995c79fa08bb6955777573f32669"
+      ],
+      "repo": "https://github.com/php/php-src"
+    },
+    "patch": "diff --git a/Zend/zend_compile.c b/Zend/zend_compile.c\nindex 18c149de546e..190e7e49d843 100644\n--- a/Zend/zend_compile.c\n+++ b/Zend/zend_compile.c\n@@ -2224,7 +2224,12 @@ static zend_op *zend_delayed_compile_end(uint32_t offset) /* {{{ */\n \tfor (i = offset; i < count; ++i) {\n \t\topline = get_next_op();\n \t\tmemcpy(opline, &oplines[i], sizeof(zend_op));\n+\t\tif (opline->opcode == ZEND_JMP_NULL) {\n+\t\t\tuint32_t opnum = get_next_op_number() - 1;\n+\t\t\tzend_stack_push(&CG(short_circuiting_opnums), &opnum);\n+\t\t}\n \t}\n+\n \tCG(delayed_oplines_stack).top = offset;\n \treturn opline;\n }\n@@ -2799,7 +2804,11 @@ static zend_op *zend_delayed_compile_prop(znode *result, zend_ast *ast, uint32_t\n \t\topline = zend_delayed_compile_var(&obj_node, obj_ast, type, 0);\n \t\tzend_separate_if_call_and_write(&obj_node, obj_ast, type);\n \t\tif (nullsafe) {\n-\t\t\tzend_emit_jmp_null(&obj_node);\n+\t\t\t/* We will push to the short_cirtcuiting_opnums stack in zend_delayed_compile_end(). */\n+\t\t\topline = zend_delayed_emit_op(NULL, ZEND_JMP_NULL, &obj_node, NULL);\n+\t\t\tif (opline->op1_type == IS_CONST) {\n+\t\t\t\tZ_TRY_ADDREF_P(CT_CONSTANT(opline->op1));\n+\t\t\t}\n \t\t}\n \t}\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42487017-vul",
+      "digest": "sha256:35a14c044d576e9175dda7f28bc0874cbd2ca297a331713c3cd607bbf8c36438"
+    },
+    "patched": {
+      "ref": "n132/arvo:42487017-fix",
+      "digest": "sha256:3d0957524400702f7604f22a59407e63f33ebce30a5dbc22f86314d36f778856"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/php-src/Zend/zend_vm_execute.h:11160",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/php-src/Zend/zend_vm_execute.h:11160"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

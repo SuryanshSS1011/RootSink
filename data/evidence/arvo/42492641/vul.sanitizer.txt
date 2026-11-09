@@ -1,0 +1,76 @@
+INFO: Seed: 2779111080
+INFO: Loaded 1 modules   (12725 inline 8-bit counters): 12725 [0xaa7b20, 0xaaacd5), 
+INFO: Loaded 1 PC tables (12725 PCs): 12725 [0xaaacd8,0xadc828), 
+/out/fuzz_process_packet: Running 1 inputs 1 time(s) each.
+Running: /tmp/poc
+=================================================================
+==2406682==ERROR: AddressSanitizer: stack-buffer-overflow on address 0x7fffb0a766f3 at pc 0x0000004c2ba1 bp 0x7fffb0a74fa0 sp 0x7fffb0a74738
+WRITE of size 6 at 0x7fffb0a766f3 thread T0
+SCARINESS: 54 (6-byte-write-stack-buffer-overflow)
+    #0 0x4c2ba0 in vsnprintf /src/llvm-project/compiler-rt/lib/asan/../sanitizer_common/sanitizer_common_interceptors.inc:1649:1
+    #1 0x4c40f0 in snprintf /src/llvm-project/compiler-rt/lib/asan/../sanitizer_common/sanitizer_common_interceptors.inc:1720:1
+    #2 0x586bf1 in processClientServerHello /src/ndpi/src/lib/protocols/tls.c:991:11
+    #3 0x58aaf4 in processTLSBlock /src/ndpi/src/lib/protocols/tls.c:611:5
+    #4 0x58a438 in ndpi_search_tls_tcp /src/ndpi/src/lib/protocols/tls.c:710:2
+    #5 0x589892 in ndpi_search_tls_wrapper /src/ndpi/src/lib/protocols/tls.c:1467:5
+    #6 0x562399 in check_ndpi_tcp_flow_func /src/ndpi/src/lib/ndpi_main.c:3922:4
+    #7 0x563324 in ndpi_check_flow_func /src/ndpi/src/lib/ndpi_main.c:3967:5
+    #8 0x568f05 in ndpi_detection_process_packet /src/ndpi/src/lib/ndpi_main.c:4654:3
+    #9 0x55058a in LLVMFuzzerTestOneInput /src/ndpi/fuzz/fuzz_process_packet.c:24:3
+    #10 0x457c91 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:558:15
+    #11 0x443422 in fuzzer::RunOneTest(fuzzer::Fuzzer*, char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:296:6
+    #12 0x44943e in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:796:9
+    #13 0x470e52 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:19:10
+    #14 0x15361521383f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2083f)
+    #15 0x41e468 in _start (/out/fuzz_process_packet+0x41e468)
+
+DEDUP_TOKEN: vsnprintf--snprintf--processClientServerHello
+Address 0x7fffb0a766f3 is located in stack of thread T0 at offset 5427 in frame
+    #0 0x585d7f in processClientServerHello /src/ndpi/src/lib/protocols/tls.c:858
+
+DEDUP_TOKEN: processClientServerHello
+  This frame has 8 object(s):
+    [32, 4138) 'ja3' (line 860)
+    [4400, 5424) 'ja3_str' (line 863) <== Memory access at offset 5427 overflows this variable
+    [5552, 5640) 'ctx' (line 864)
+    [5680, 5696) 'md5_hash' (line 865)
+    [5712, 5776) 'buffer' (line 869)
+    [5808, 6064) 'alpn_str' (line 1221)
+    [6128, 6384) 'version_str' (line 1264)
+    [6448, 6449) 'unknown_tls_version' (line 1279)
+HINT: this may be a false positive if your program uses some custom stack unwind mechanism, swapcontext or vfork
+      (longjmp and C++ exceptions *are* supported)
+SUMMARY: AddressSanitizer: stack-buffer-overflow /src/llvm-project/compiler-rt/lib/asan/../sanitizer_common/sanitizer_common_interceptors.inc:1649:1 in vsnprintf
+Shadow bytes around the buggy address:
+  0x100076146c80: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x100076146c90: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x100076146ca0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x100076146cb0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x100076146cc0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x100076146cd0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00[f2]f2
+  0x100076146ce0: f2 f2 f2 f2 f2 f2 f2 f2 f2 f2 f2 f2 f2 f2 00 00
+  0x100076146cf0: 00 00 00 00 00 00 00 00 00 f2 f2 f2 f2 f2 00 00
+  0x100076146d00: f2 f2 00 00 00 00 00 00 00 00 f2 f2 f2 f2 f8 f8
+  0x100076146d10: f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8
+  0x100076146d20: f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f2 f2
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+  Shadow gap:              cc
+==2406682==ABORTING

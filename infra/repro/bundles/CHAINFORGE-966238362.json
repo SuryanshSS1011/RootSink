@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-966238362",
+  "chain": "CWE-456->CWE-457",
+  "project": "libxml2",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42470157",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://gitlab.gnome.org/GNOME/libxml2/-/commit/8c9daf790abfc06e8ca3a44652542c577bb67d49",
+      "fix_commits": [
+        "8c9daf790abfc06e8ca3a44652542c577bb67d49"
+      ],
+      "repo": "https://gitlab.gnome.org/GNOME/libxml2"
+    },
+    "patch": "diff --git a/SAX2.c b/SAX2.c\nindex 0f261b7b3623bbf7ffd1437a0214c8f1221d95df..49ce566c0e38a273ed2258fd024fad3439b81211 100644\n--- a/SAX2.c\n+++ b/SAX2.c\n@@ -1665,7 +1665,10 @@ xmlSAX2StartElement(void *ctx, const xmlChar *fullname, const xmlChar **atts)\n #ifdef DEBUG_SAX_TREE\n     xmlGenericError(xmlGenericErrorContext, \"pushing(%s)\\n\", name);\n #endif\n-    nodePush(ctxt, ret);\n+    if (nodePush(ctxt, ret) < 0) {\n+        xmlFreeNode(ret);\n+        return;\n+    }\n \n     /*\n      * Link the child element\n@@ -2336,7 +2339,10 @@ xmlSAX2StartElementNs(void *ctx,\n     /*\n      * We are parsing a new node.\n      */\n-    nodePush(ctxt, ret);\n+    if (nodePush(ctxt, ret) < 0) {\n+        xmlFreeNode(ret);\n+        return;\n+    }\n \n     /*\n      * Link the child element\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42470157-vul",
+      "digest": "sha256:b53273e75b578b2026efe7029269eee70c1deee3355664c018833eb08860b0b2"
+    },
+    "patched": {
+      "ref": "n132/arvo:42470157-fix",
+      "digest": "sha256:9d7cd9548c3122d7b24d96a34a4dcd3ed78fca977ec0965d459f5f42a11bf499"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/libxml2/encoding.c:1180",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/libxml2/encoding.c:1180"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

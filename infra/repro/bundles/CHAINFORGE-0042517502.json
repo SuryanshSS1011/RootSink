@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042517502",
+  "chain": "CWE-20->CWE-125",
+  "project": "ClickHouse",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42517502",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "88f3db911504a8b8fba8a624370add57600c10bb",
+      "fix_commits": [
+        "88f3db911504a8b8fba8a624370add57600c10bb"
+      ],
+      "repo": "https://github.com/ClickHouse/ClickHouse"
+    },
+    "patch": "diff --git a/.github/workflows/nightly.yml b/.github/workflows/nightly.yml\nindex 801f7eda94ae..e6da4df72004 100644\n--- a/.github/workflows/nightly.yml\n+++ b/.github/workflows/nightly.yml\n@@ -122,3 +122,55 @@ jobs:\n           docker ps --quiet | xargs --no-run-if-empty docker kill ||:\n           docker ps --all --quiet | xargs --no-run-if-empty docker rm -f ||:\n           sudo rm -fr \"$TEMP_PATH\" \"$CACHES_PATH\"\n+  SonarCloud:\n+    runs-on: [self-hosted, builder]\n+    env:\n+      SONAR_SCANNER_VERSION: 4.7.0.2747\n+      SONAR_SERVER_URL: \"https://sonarcloud.io\"\n+      BUILD_WRAPPER_OUT_DIR: build_wrapper_output_directory # Directory where build-wrapper output will be placed\n+    steps:\n+      - uses: actions/checkout@v2\n+        with:\n+          fetch-depth: 0  # Shallow clones should be disabled for a better relevancy of analysis\n+          submodules: true\n+      - name: Set up JDK 11\n+        uses: actions/setup-java@v1\n+        with:\n+          java-version: 11\n+      - name: Download and set up sonar-scanner\n+        env:\n+          SONAR_SCANNER_DOWNLOAD_URL: https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-${{ env.SONAR_SCANNER_VERSION }}-linux.zip\n+        run: |\n+          mkdir -p \"$HOME/.sonar\"\n+          curl -sSLo \"$HOME/.sonar/sonar-scanner.zip\" \"${{ env.SONAR_SCANNER_DOWNLOAD_URL }}\"\n+          unzip -o \"$HOME/.sonar/sonar-scanner.zip\" -d \"$HOME/.sonar/\"\n+          echo \"$HOME/.sonar/sonar-scanner-${{ env.SONAR_SCANNER_VERSION }}-linux/bin\" >> \"$GITHUB_PATH\"\n+      - name: Download and set up build-wrapper\n+        env:\n+          BUILD_WRAPPER_DOWNLOAD_URL: ${{ env.SONAR_SERVER_URL }}/static/cpp/build-wrapper-linux-x86.zip\n+        run: |\n+          curl -sSLo \"$HOME/.sonar/build-wrapper-linux-x86.zip ${{ env.BUILD_WRAPPER_DOWNLOAD_URL }}\"\n+          unzip -o \"$HOME/.sonar/build-wrapper-linux-x86.zip\" -d \"$HOME/.sonar/\"\n+          echo \"$HOME/.sonar/build-wrapper-linux-x86\" >> \"$GITHUB_PATH\"\n+      - name: Set Up Build Tools\n+        run: |\n+          sudo apt-get update\n+          sudo apt-get install -yq git cmake ccache python3 ninja-build\n+          sudo bash -c \"$(wget -O - https://apt.llvm.org/llvm.sh)\"\n+      - name: Run build-wrapper\n+        run: |\n+          mkdir build\n+          cd build\n+          cmake ..\n+          cd ..\n+          build-wrapper-linux-x86-64 --out-dir ${{ env.BUILD_WRAPPER_OUT_DIR }} cmake --build build/\n+      - name: Run sonar-scanner\n+        env:\n+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}\n+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}\n+        run: |\n+          sonar-scanner \\\n+            --define sonar.host.url=\"${{ env.SONAR_SERVER_URL }}\" \\\n+            --define sonar.cfamily.build-wrapper-output=\"${{ env.BUILD_WRAPPER_OUT_DIR }}\" \\\n+            --define sonar.projectKey=\"ClickHouse_ClickHouse\" \\\n+            --define sonar.organization=\"clickhouse-java\"\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42517502-vul",
+      "digest": "sha256:105b171abb1030962c950de7c52be75562821c7ff960fc8171109a7b1d7ff9b7"
+    },
+    "patched": {
+      "ref": "n132/arvo:42517502-fix",
+      "digest": "sha256:e598b206b77baa6c4b094f8c0a37d6a2db79fa4b1a6e11ac17f79ebfe86596b0"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": null,
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": null
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042514879",
+  "chain": "CWE-20->CWE-125",
+  "project": "lcms",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42514879",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "54390818348493a88c43b0dadbad77bdc9750699",
+      "fix_commits": [
+        "54390818348493a88c43b0dadbad77bdc9750699"
+      ],
+      "repo": "https://github.com/mm2/Little-CMS"
+    },
+    "patch": "diff --git a/src/cmstypes.c b/src/cmstypes.c\nindex e056731f2..4b7e7ab1a 100644\n--- a/src/cmstypes.c\n+++ b/src/cmstypes.c\n@@ -1935,17 +1935,25 @@ cmsBool  Type_LUT8_Write(struct _cms_typehandler_struct* self, cmsIOHANDLER* io,\n \n     // That should be all\n     if (mpe != NULL) {\n-        cmsSignalError(mpe->ContextID, cmsERROR_UNKNOWN_EXTENSION, \"LUT is not suitable to be saved as LUT8\");\n+        cmsSignalError(self->ContextID, cmsERROR_UNKNOWN_EXTENSION, \"LUT is not suitable to be saved as LUT8\");\n         return FALSE;\n     }\n \n     if (clut == NULL)\n         clutPoints = 0;\n-    else\n-        clutPoints    = clut->Params->nSamples[0];\n-\n-    if (!_cmsWriteUInt8Number(io, (cmsUInt8Number) NewLUT ->InputChannels)) return FALSE;\n-    if (!_cmsWriteUInt8Number(io, (cmsUInt8Number) NewLUT ->OutputChannels)) return FALSE;\n+    else {\n+        // Lut8 only allows same CLUT points in all dimensions        \n+        clutPoints = clut->Params->nSamples[0];\n+        for (i = 1; i < cmsPipelineInputChannels(NewLUT); i++) {\n+            if (clut->Params->nSamples[i] != clutPoints) {\n+                cmsSignalError(self->ContextID, cmsERROR_UNKNOWN_EXTENSION, \"LUT with different samples per dimension not suitable to be saved as LUT16\");\n+                return FALSE;\n+            }\n+        }\n+    }\n+        \n+    if (!_cmsWriteUInt8Number(io, (cmsUInt8Number)cmsPipelineInputChannels(NewLUT))) return FALSE;\n+    if (!_cmsWriteUInt8Number(io, (cmsUInt8Number)cmsPipelineOutputChannels(NewLUT))) return FALSE;\n     if (!_cmsWriteUInt8Number(io, (cmsUInt8Number) clutPoints)) return FALSE;\n     if (!_cmsWriteUInt8Number(io, 0)) return FALSE; // Padding\n \n@@ -2218,7 +2226,7 @@ cmsBool Type_LUT16_Write(struct _cms_typehandler_struct* self, cmsIOHANDLER* io,\n \n     // That should be all\n     if (mpe != NULL) {\n-        cmsSignalError(mpe->ContextID, cmsERROR_UNKNOWN_EXTENSION, \"LUT is not suitable to be saved as LUT16\");\n+        cmsSignalError(self->ContextID, cmsERROR_UNKNOWN_EXTENSION, \"LUT is not suitable to be saved as LUT16\");\n         return FALSE;\n     }\n \n@@ -2227,8 +2235,16 @@ cmsBool Type_LUT16_Write(struct _cms_typehandler_struct* self, cmsIOHANDLER* io,\n \n     if (clut == NULL)\n         clutPoints = 0;\n-    else\n-        clutPoints    = clut->Params->nSamples[0];\n+    else {\n+        // Lut16 only allows same CLUT points in all dimensions        \n+        clutPoints = clut->Params->nSamples[0];\n+        for (i = 1; i < InputChannels; i++) {\n+            if (clut->Params->nSamples[i] != clutPoints) {\n+                cmsSignalError(self->ContextID, cmsERROR_UNKNOWN_EXTENSION, \"LUT with different samples per dimension not suitable to be saved as LUT16\");\n+                return FALSE;\n+            }\n+        }\n+    }\n \n     if (!_cmsWriteUInt8Number(io, (cmsUInt8Number) InputChannels)) return FALSE;\n     if (!_cmsWriteUInt8Number(io, (cmsUInt8Number) OutputChannels)) return FALSE;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42514879-vul",
+      "digest": "sha256:7833c8b41513628e3123bde935e2bf5b704a77f9894752f19637ccf349a342f8"
+    },
+    "patched": {
+      "ref": "n132/arvo:42514879-fix",
+      "digest": "sha256:58efd41f0490850a6faa7775ce5828e40d2cd1b38d7e13375784811d6e8cfa50"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/lcms/src/cmsplugin.c:289",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/lcms/src/cmsplugin.c:289"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

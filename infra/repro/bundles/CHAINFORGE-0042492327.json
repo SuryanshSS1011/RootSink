@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042492327",
+  "chain": "CWE-456->CWE-457",
+  "project": "harfbuzz",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42492327",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "14a639ea592cba971e5548f0942dd395c602c7a8",
+      "fix_commits": [
+        "14a639ea592cba971e5548f0942dd395c602c7a8"
+      ],
+      "repo": "https://github.com/harfbuzz/harfbuzz"
+    },
+    "patch": "From 14a639ea592cba971e5548f0942dd395c602c7a8 Mon Sep 17 00:00:00 2001\nFrom: Behdad Esfahbod <behdad@behdad.org>\nDate: Fri, 11 Aug 2017 11:30:39 -0700\nSubject: [PATCH] [unsafe-to-break] Fix Use-of-uninitialized-value in\n unsafe_to_break_set_mask\n\nFixes https://bugs.chromium.org/p/oss-fuzz/issues/detail?id=3011\n---\n src/hb-ot-shape-complex-hangul.cc | 2 +-\n 1 file changed, 1 insertion(+), 1 deletion(-)\n\ndiff --git a/src/hb-ot-shape-complex-hangul.cc b/src/hb-ot-shape-complex-hangul.cc\nindex a90af3f..0e74802 100644\n--- a/src/hb-ot-shape-complex-hangul.cc\n+++ b/src/hb-ot-shape-complex-hangul.cc\n@@ -372,7 +372,7 @@ preprocess_text_hangul (const hb_ot_shape_plan_t *plan,\n \t    buffer->merge_out_clusters (start, end);\n \t  continue;\n \t}\n-\telse if (!tindex)\n+\telse if ((!tindex && buffer->idx + 1 < count && isT (buffer->cur(+1).codepoint)))\n \t  buffer->unsafe_to_break (buffer->idx, buffer->idx + 2); /* Mark unsafe between LV and T. */\n       }\n \n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42492327-vul",
+      "digest": "sha256:a14bf6ed944c89b41524a8db719270e9489de3467f2c3051b2db489a0e76601d"
+    },
+    "patched": {
+      "ref": "n132/arvo:42492327-fix",
+      "digest": "sha256:723ea426ec1d4c28f24099b75bd5cf75378b4da2ac0889b65b394e3b3c1c1da4"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/harfbuzz/src/hb-buffer.cc:656",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/harfbuzz/src/hb-buffer.cc:656"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

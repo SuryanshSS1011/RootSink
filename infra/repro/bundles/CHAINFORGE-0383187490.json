@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0383187490",
+  "chain": "CWE-1284->CWE-125",
+  "project": "upx",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "383187490",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "0870514194c83c193330c817d82a78d276b72215",
+      "fix_commits": [
+        "0870514194c83c193330c817d82a78d276b72215"
+      ],
+      "repo": "https://github.com/upx/upx"
+    },
+    "patch": "diff --git a/src/p_lx_elf.cpp b/src/p_lx_elf.cpp\nindex 25f0cbab24..843307a530 100644\n--- a/src/p_lx_elf.cpp\n+++ b/src/p_lx_elf.cpp\n@@ -8650,25 +8650,27 @@ unsigned PackLinuxElf::elf_hash(char const *p)\n Elf32_Sym const *PackLinuxElf32::elf_lookup(char const *name) const\n {\n     if (hashtab && dynsym && dynstr) {\n-        unsigned const nbucket = get_te32(&hashtab[0]);\n+        unsigned const n_bucket = get_te32(&hashtab[0]);\n         unsigned const *const buckets = &hashtab[2];\n-        unsigned const *const chains = &buckets[nbucket];\n-        if (nbucket) {\n-            unsigned const m = elf_hash(name) % nbucket;\n+        unsigned const *const chains = &buckets[n_bucket];\n+        if (n_bucket) {\n+            unsigned const m = elf_hash(name) % n_bucket;\n             unsigned nvisit = 0;\n             unsigned si;\n-            for (si= get_te32(&buckets[m]); si; ) {\n+            if ((file_size + file_image) <= (void const *)chains) {\n+                throwCantPack(\"bad n_bucket %#x\\n\", n_bucket);\n+            }\n+            for (si= get_te32(&buckets[m]); si; si = get_te32(&chains[si])) {\n+                if (n_bucket <= si) {\n+                    throwCantPack(\"bad DT_HASH chain %d\\n\", si);\n+                }\n                 char const *const p= get_dynsym_name(si, (unsigned)-1);\n                 if (p && 0==strcmp(name, p)) {\n                     return &dynsym[si];\n                 }\n-                if (nbucket <= ++nvisit) {\n+                if (n_bucket <= ++nvisit) {\n                     throwCantPack(\"circular DT_HASH chain %d\\n\", si);\n                 }\n-                si= get_te32(&chains[si]);\n-                if (nbucket <= si) { // bad hashtab\n-                    break;\n-                }\n             }\n         }\n     }\n@@ -8737,25 +8739,27 @@ Elf32_Sym const *PackLinuxElf32::elf_lookup(char const *name) const\n Elf64_Sym const *PackLinuxElf64::elf_lookup(char const *name) const\n {\n     if (hashtab && dynsym && dynstr) {\n-        unsigned const nbucket = get_te32(&hashtab[0]);\n+        unsigned const n_bucket = get_te32(&hashtab[0]);\n         unsigned const *const buckets = &hashtab[2];\n-        unsigned const *const chains = &buckets[nbucket];\n-        if (nbucket) { // -rust-musl can have \"empty\" hashtab\n-            unsigned const m = elf_hash(name) % nbucket;\n+        unsigned const *const chains = &buckets[n_bucket];\n+        if (n_bucket) { // -rust-musl can have \"empty\" hashtab\n+            unsigned const m = elf_hash(name) % n_bucket;\n             unsigned nvisit = 0;\n             unsigned si;\n-            for (si= get_te32(&buckets[m]); si; ) {\n+            if ((file_size + file_image) <= (void const *)chains) {\n+                throwCantPack(\"bad n_bucket %#x\\n\", n_bucket);\n+            }\n+            for (si= get_te32(&buckets[m]); si; si = get_te32(&chains[si])) {\n+                if (n_bucket <= si) {\n+                    throwCantPack(\"bad DT_HASH chain %d\\n\", si);\n+                }\n                 char const *const p= get_dynsym_name(si, (unsigned)-1);\n                 if (p && 0==strcmp(name, p)) {\n                     return &dynsym[si];\n                 }\n-                if (nbucket <= ++nvisit) {\n+                if (n_bucket <= ++nvisit) {\n                     throwCantPack(\"circular DT_HASH chain %d\\n\", si);\n                 }\n-                si = get_te32(&chains[si]);\n-                if (nbucket <= si) { // bad hashtab\n-                    break;\n-                }\n             }\n         }\n     }\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:383187490-vul",
+      "digest": "sha256:cc10de0687c08e26036eafb29d8f3d795d58abecac14f9f647142f1f1592e3f9"
+    },
+    "patched": {
+      "ref": "n132/arvo:383187490-fix",
+      "digest": "sha256:82fd3cc9931f1e596403577bf7f798fe4c75be5aa344930c2335e19abc7e9b75"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/upx/src/util/../bele.h:132",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/upx/src/util/../bele.h:132"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

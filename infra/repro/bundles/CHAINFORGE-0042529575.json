@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042529575",
+  "chain": "CWE-1285->CWE-125",
+  "project": "ghostpdl",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42529575",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "74bfcfea5faa35ee3c5e7e2690b2473e0c4aac59",
+      "fix_commits": [
+        "74bfcfea5faa35ee3c5e7e2690b2473e0c4aac59"
+      ],
+      "repo": "https://cgit.ghostscript.com/ghostpdl.git"
+    },
+    "patch": "From 74bfcfea5faa35ee3c5e7e2690b2473e0c4aac59 Mon Sep 17 00:00:00 2001\nFrom: Ken Sharp <Ken.Sharp@artifex.com>\nDate: Tue, 31 Oct 2023 12:12:58 +0000\nSubject: [PATCH] pdfwrite device - prevent buffer underrun with corrupt TT\n font\n\nOSS-fuzz #63648\n\nA corrupted TrueType font could execute a jump instruction where the\ndistance to jump moved the instruction pointer back before the start\nof the glyph program.\n\nDetect that here, and if it happens move the instruction pointer to the\nend of the glyph program so we terminate processing it. We can't return\nan error at this level.\n---\n base/ttinterp.c | 18 ++++++++++++++++++\n 1 file changed, 18 insertions(+)\n\ndiff --git a/base/ttinterp.c b/base/ttinterp.c\nindex e0248e1..6dba3b6 100644\n--- a/base/ttinterp.c\n+++ b/base/ttinterp.c\n@@ -1783,6 +1783,12 @@ static int nInstrCount=0;\n       CUR.IP      += (Int)(args[0]);\n       CUR.step_ins = FALSE;\n \n+      /* If the instruction pointer moves back past the start of the description\n+       * assume there is a fatal error, and move to the end of the description instead.\n+       */\n+      if(CUR.IP < 0)\n+          CUR.IP = CUR.codeSize;\n+\n       /* See JMPR below */\n       if(CUR.IP > CUR.codeSize ||\n          (CUR.code[CUR.IP] != 0x2D && CUR.code[CUR.IP - 1] == 0x2D))\n@@ -1805,6 +1811,12 @@ static int nInstrCount=0;\n     CUR.IP      += (Int)(args[0]);\n     CUR.step_ins = FALSE;\n \n+    /* If the instruction pointer moves back past the start of the description\n+     * assume there is a fatal error, and move to the end of the description instead.\n+     */\n+    if(CUR.IP < 0)\n+        CUR.IP = CUR.codeSize;\n+\n     if(CUR.IP > CUR.codeSize ||\n        (CUR.code[CUR.IP] != 0x2D && CUR.code[CUR.IP - 1] == 0x2D))\n     /* The JPMR is meant to stop at the ENDF instruction to finish\n@@ -1834,6 +1846,12 @@ static int nInstrCount=0;\n       CUR.IP      += (Int)(args[0]);\n       CUR.step_ins = FALSE;\n \n+      /* If the instruction pointer moves back past the start of the description\n+       * assume there is a fatal error, and move to the end of the description instead.\n+       */\n+      if(CUR.IP < 0)\n+          CUR.IP = CUR.codeSize;\n+\n       /* See JMPR above */\n       if(CUR.code[CUR.IP] != 0x2D && CUR.code[CUR.IP - 1] == 0x2D)\n         CUR.IP -= 1;\n-- \n2.55.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42529575-vul",
+      "digest": "sha256:b0191f550965129e51feeaf1a96584c250124c291c9c96d1d0324a35bb227a0e"
+    },
+    "patched": {
+      "ref": "n132/arvo:42529575-fix",
+      "digest": "sha256:ad2a363d9826ce337beba97fee6e2ddc94035015c83b2792da157c7ff43cd61c"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/ghostpdl/./base/ttinterp.c:1788",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/ghostpdl/./base/ttinterp.c:1788"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0386713387",
+  "chain": "CWE-416->CWE-125",
+  "project": "binutils-gdb",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "386713387",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "d8d3ed295efb75a7421340484e3fe8115402b1f2",
+      "fix_commits": [
+        "d8d3ed295efb75a7421340484e3fe8115402b1f2"
+      ],
+      "repo": "git://sourceware.org/git/binutils-gdb.git"
+    },
+    "patch": "diff --git a/bfd/bfd.c b/bfd/bfd.c\nindex 0e567ddeaea..194f24179fd 100644\n--- a/bfd/bfd.c\n+++ b/bfd/bfd.c\n@@ -768,11 +768,6 @@ CODE_FRAGMENT\n .\n */\n \n-static TLS bfd_error_type bfd_error;\n-static TLS bfd_error_type input_error;\n-static TLS bfd *input_bfd;\n-static TLS char *_bfd_error_buf;\n-\n const char *const bfd_errmsgs[] =\n {\n   N_(\"no error\"),\n@@ -800,6 +795,19 @@ const char *const bfd_errmsgs[] =\n   N_(\"#<invalid error code>\")\n };\n \n+static TLS bfd_error_type bfd_error;\n+static TLS char *_bfd_error_buf;\n+\n+/* Free any data associated with the BFD error.  */\n+\n+static void\n+_bfd_clear_error_data (void)\n+{\n+  bfd_error = bfd_error_no_error;\n+  free (_bfd_error_buf);\n+  _bfd_error_buf = NULL;\n+}\n+\n /*\n FUNCTION\n \tbfd_get_error\n@@ -858,12 +866,12 @@ bfd_set_input_error (bfd *input, bfd_error_type error_tag)\n {\n   /* This is an error that occurred during bfd_close when writing an\n      archive, but on one of the input files.  */\n-  bfd_error = bfd_error_on_input;\n   _bfd_clear_error_data ();\n-  input_bfd = input;\n-  input_error = error_tag;\n-  if (input_error >= bfd_error_on_input)\n+  if (error_tag >= bfd_error_on_input)\n     abort ();\n+  if (bfd_asprintf (_(bfd_errmsgs[bfd_error_on_input]),\n+\t\t    bfd_get_filename (input), bfd_errmsg (error_tag)))\n+    bfd_error = bfd_error_on_input;\n }\n \n /*\n@@ -885,16 +893,7 @@ bfd_errmsg (bfd_error_type error_tag)\n   extern int errno;\n #endif\n   if (error_tag == bfd_error_on_input)\n-    {\n-      const char *msg = bfd_errmsg (input_error);\n-      char *ret = bfd_asprintf (_(bfd_errmsgs[error_tag]),\n-\t\t\t\tbfd_get_filename (input_bfd), msg);\n-      if (ret)\n-\treturn ret;\n-\n-      /* Ick, what to do on out of memory?  */\n-      return msg;\n-    }\n+    return _bfd_error_buf;\n \n   if (error_tag == bfd_error_system_call)\n     return xstrerror (errno);\n@@ -931,24 +930,6 @@ bfd_perror (const char *message)\n   fflush (stderr);\n }\n \n-/*\n-INTERNAL_FUNCTION\n-\t_bfd_clear_error_data\n-\n-SYNOPSIS\n-\tvoid _bfd_clear_error_data (void);\n-\n-DESCRIPTION\n-\tFree any data associated with the BFD error.\n-*/\n-\n-void\n-_bfd_clear_error_data (void)\n-{\n-  free (_bfd_error_buf);\n-  _bfd_error_buf = NULL;\n-}\n-\n /*\n INTERNAL_FUNCTION\n \tbfd_asprintf\n@@ -1961,10 +1942,7 @@ DESCRIPTION\n unsigned int\n bfd_init (void)\n {\n-  bfd_error = bfd_error_no_error;\n-  input_bfd = NULL;\n   _bfd_clear_error_data ();\n-  input_error = bfd_error_no_error;\n   _bfd_error_internal = error_handler_fprintf;\n   _bfd_assert_handler = _bfd_default_assert_handler;\n \ndiff --git a/bfd/libbfd.h b/bfd/libbfd.h\nindex 3925fba00e4..f86cc23db45 100644\n--- a/bfd/libbfd.h\n+++ b/bfd/libbfd.h\n@@ -963,8 +963,6 @@ bool bfd_write_bigendian_4byte_int (bfd *, unsigned int) ATTRIBUTE_HIDDEN;\n unsigned int bfd_log2 (bfd_vma x) ATTRIBUTE_HIDDEN;\n \n /* Extracted from bfd.c.  */\n-void _bfd_clear_error_data (void) ATTRIBUTE_HIDDEN;\n-\n char *bfd_asprintf (const char *fmt, ...) ATTRIBUTE_HIDDEN;\n \n /* Cached _bfd_check_format messages are put in this.  */\ndiff --git a/bfd/opncls.c b/bfd/opncls.c\nindex a0b30f568d7..93adbf117f0 100644\n--- a/bfd/opncls.c\n+++ b/bfd/opncls.c\n@@ -943,7 +943,6 @@ bfd_close_all_done (bfd *abfd)\n     _maybe_make_executable (abfd);\n \n   _bfd_delete_bfd (abfd);\n-  _bfd_clear_error_data ();\n \n   return ret;\n }\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:386713387-vul",
+      "digest": "sha256:3149b780b1f164ebcf788129eb009cecca976b2180a6751923cbb3e7516367cd"
+    },
+    "patched": {
+      "ref": "n132/arvo:386713387-fix",
+      "digest": "sha256:fe5fbbf7075f608089e416bde9321029524a26bbbd5f6daa332030ed528961f9"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/binutils-gdb/bfd/./bfd.h:2325",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/binutils-gdb/bfd/./bfd.h:2325"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

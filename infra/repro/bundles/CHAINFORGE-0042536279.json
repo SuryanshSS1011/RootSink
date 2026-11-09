@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042536279",
+  "chain": "CWE-1284->CWE-787",
+  "project": "libavc",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42536279",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "b0117e32b9555e7069c2aef571d921bff22f502f",
+      "fix_commits": [
+        "b0117e32b9555e7069c2aef571d921bff22f502f"
+      ],
+      "repo": "https://github.com/ittiam-systems/libavc"
+    },
+    "patch": "diff --git a/decoder/svc/isvcd_parse_slice.c b/decoder/svc/isvcd_parse_slice.c\nindex 226a6e40..60bed2a5 100644\n--- a/decoder/svc/isvcd_parse_slice.c\n+++ b/decoder/svc/isvcd_parse_slice.c\n@@ -766,6 +766,12 @@ WORD32 isvcd_parse_decode_slice_ext_nal(UWORD8 u1_is_idr_slice, UWORD8 u1_nal_re\n         if(ps_dec->u2_frm_ht_in_mbs != ps_seq->u2_frm_ht_in_mbs) return ERROR_INV_SLICE_HDR_T;\n     }\n \n+    if(ps_dec->u1_init_dec_flag == 1)\n+    {\n+        if(ps_dec->u2_disp_height != ps_subset_seq->u2_disp_height) return ERROR_INV_SLICE_HDR_T;\n+        if(ps_dec->u2_disp_width != ps_subset_seq->u2_disp_width) return ERROR_INV_SLICE_HDR_T;\n+    }\n+\n     ps_dec->i4_reorder_depth = ps_subset_seq->i4_reorder_depth;\n \n     ps_dec->u2_disp_height = ps_subset_seq->u2_disp_height;\n@@ -2004,6 +2010,12 @@ WORD32 isvcd_parse_decode_slice(UWORD8 u1_is_idr_slice, UWORD8 u1_nal_ref_idc,\n         if(ps_dec->u2_frm_ht_in_mbs != ps_seq->u2_frm_ht_in_mbs) return ERROR_INV_SLICE_HDR_T;\n     }\n \n+    if(ps_dec->u1_init_dec_flag == 1)\n+    {\n+        if(ps_dec->u2_disp_height != ps_subset_seq->u2_disp_height) return ERROR_INV_SLICE_HDR_T;\n+        if(ps_dec->u2_disp_width != ps_subset_seq->u2_disp_width) return ERROR_INV_SLICE_HDR_T;\n+    }\n+\n     if(ps_seq->u1_profile_idc == BASE_PROFILE_IDC)\n     {\n         if(ps_pps->u1_entropy_coding_mode != 0)\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42536279-vul",
+      "digest": "sha256:b5ddbbc1d2b266922d144a690d3db8fcb5affcfa6e93ad5274e571e0df772040"
+    },
+    "patched": {
+      "ref": "n132/arvo:42536279-fix",
+      "digest": "sha256:eda6af23829d8bbbd1965049eb430183fafb470cfbe45be8521e13b6f3f649f8"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/libavc/decoder/ih264d_format_conv.c:497",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/libavc/decoder/ih264d_format_conv.c:497"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

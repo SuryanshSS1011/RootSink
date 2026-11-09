@@ -1,0 +1,81 @@
+Accepting input from '/tmp/poc'
+Usage for fuzzing: honggfuzz -P [flags] -- /out/encoder_mng_fuzzer
+=================================================================
+==7==ERROR: AddressSanitizer: heap-use-after-free on address 0x627000022d50 at pc 0x00000086aff9 bp 0x7fff10293570 sp 0x7fff10293568
+READ of size 8 at 0x627000022d50 thread T0
+SCARINESS: 51 (8-byte-read-heap-use-after-free)
+    #0 0x86aff8 in CloseBlob /src/imagemagick/MagickCore/blob.c:611:3
+    #1 0xf06900 in ReadOneMNGImage /src/imagemagick/coders/png.c:6852:13
+    #2 0xef2c14 in ReadMNGImage /src/imagemagick/coders/png.c:7821:9
+    #3 0x8ed2e5 in ReadImage /src/imagemagick/MagickCore/constitute.c:728:15
+    #4 0x86889e in BlobToImage /src/imagemagick/MagickCore/blob.c:475:13
+    #5 0x7787b1 in Magick::Image::read(Magick::Blob const&) /src/imagemagick/Magick++/lib/Image.cpp:4044:12
+    #6 0x75f965 in LLVMFuzzerTestOneInput /src/imagemagick/Magick++/fuzz/encoder_fuzzer.cc:66:11
+    #7 0x76048b in main (/out/encoder_mng_fuzzer+0x76048b)
+    #8 0x7f48d863b082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082)
+    #9 0x6a620d in _start (/out/encoder_mng_fuzzer+0x6a620d)
+
+DEDUP_TOKEN: CloseBlob--ReadOneMNGImage--ReadMNGImage
+0x627000022d50 is located 13392 bytes inside of 13504-byte region [0x62700001f900,0x627000022dc0)
+freed by thread T0 here:
+    #0 0x726652 in free /src/llvm-project/compiler-rt/lib/asan/asan_malloc_linux.cpp:111:3
+    #1 0xa36696 in RelinquishMagickMemory /src/imagemagick/MagickCore/memory.c:1167:3
+    #2 0x9f28b8 in DestroyImage /src/imagemagick/MagickCore/image.c:1223:19
+    #3 0xa154d1 in DeleteImageFromList /src/imagemagick/MagickCore/list.c:333:12
+    #4 0xa154d1 in DestroyImageList /src/imagemagick/MagickCore/list.c:485:5
+    #5 0xf1b604 in ReadOnePNGImage /src/imagemagick/coders/png.c:2437:15
+    #6 0xf0666f in ReadOneMNGImage /src/imagemagick/coders/png.c:6838:13
+    #7 0xef2c14 in ReadMNGImage /src/imagemagick/coders/png.c:7821:9
+    #8 0x8ed2e5 in ReadImage /src/imagemagick/MagickCore/constitute.c:728:15
+    #9 0x86889e in BlobToImage /src/imagemagick/MagickCore/blob.c:475:13
+    #10 0x7787b1 in Magick::Image::read(Magick::Blob const&) /src/imagemagick/Magick++/lib/Image.cpp:4044:12
+    #11 0x75f965 in LLVMFuzzerTestOneInput /src/imagemagick/Magick++/fuzz/encoder_fuzzer.cc:66:11
+    #12 0x76048b in main (/out/encoder_mng_fuzzer+0x76048b)
+
+DEDUP_TOKEN: free--RelinquishMagickMemory--DestroyImage
+previously allocated by thread T0 here:
+    #0 0x7268bd in malloc /src/llvm-project/compiler-rt/lib/asan/asan_malloc_linux.cpp:129:3
+    #1 0xa34d31 in AcquireMagickMemory /src/imagemagick/MagickCore/memory.c:558:10
+    #2 0xa34d31 in AcquireCriticalMemory /src/imagemagick/MagickCore/memory.c:634:10
+    #3 0x9eb528 in AcquireImage /src/imagemagick/MagickCore/image.c:150:19
+    #4 0xef2b9d in ReadMNGImage /src/imagemagick/coders/png.c:7803:9
+    #5 0x8ed2e5 in ReadImage /src/imagemagick/MagickCore/constitute.c:728:15
+    #6 0x86889e in BlobToImage /src/imagemagick/MagickCore/blob.c:475:13
+    #7 0x7787b1 in Magick::Image::read(Magick::Blob const&) /src/imagemagick/Magick++/lib/Image.cpp:4044:12
+    #8 0x75f965 in LLVMFuzzerTestOneInput /src/imagemagick/Magick++/fuzz/encoder_fuzzer.cc:66:11
+    #9 0x76048b in main (/out/encoder_mng_fuzzer+0x76048b)
+
+DEDUP_TOKEN: malloc--AcquireMagickMemory--AcquireCriticalMemory
+SUMMARY: AddressSanitizer: heap-use-after-free /src/imagemagick/MagickCore/blob.c:611:3 in CloseBlob
+Shadow bytes around the buggy address:
+  0x0c4e7fffc550: fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd
+  0x0c4e7fffc560: fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd
+  0x0c4e7fffc570: fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd
+  0x0c4e7fffc580: fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd
+  0x0c4e7fffc590: fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd
+=>0x0c4e7fffc5a0: fd fd fd fd fd fd fd fd fd fd[fd]fd fd fd fd fd
+  0x0c4e7fffc5b0: fd fd fd fd fd fd fd fd fa fa fa fa fa fa fa fa
+  0x0c4e7fffc5c0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c4e7fffc5d0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c4e7fffc5e0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c4e7fffc5f0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+==7==ABORTING

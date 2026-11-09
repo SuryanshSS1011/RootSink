@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042488342",
+  "chain": "CWE-1284->CWE-125",
+  "project": "libvips",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42488342",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "ae82bcc3e8797af4fdca8adf8ef73acac7718f7b",
+      "fix_commits": [
+        "ae82bcc3e8797af4fdca8adf8ef73acac7718f7b"
+      ],
+      "repo": "https://github.com/libvips/libvips"
+    },
+    "patch": "diff --git a/ChangeLog b/ChangeLog\nindex 3296e28c60..fe971a3de3 100644\n--- a/ChangeLog\n+++ b/ChangeLog\n@@ -1,6 +1,7 @@\n 18/10/20 started 8.10.3\n - relax heic is_a rules [hisham]\n - fix vips7 webp load [barryspearce]\n+- fix out of bounds exif read in heifload\n \n 6/9/20 started 8.10.2\n - update magicksave/load profile handling [kelilevi]\ndiff --git a/libvips/foreign/exif.c b/libvips/foreign/exif.c\nindex 3727af04a7..521e142fbb 100644\n--- a/libvips/foreign/exif.c\n+++ b/libvips/foreign/exif.c\n@@ -158,10 +158,18 @@ show_values( ExifData *data )\n  * their default value and we won't know about it. \n  */\n static ExifData *\n-vips_exif_load_data_without_fix( const void *data, int length )\n+vips_exif_load_data_without_fix( const void *data, size_t length )\n {\n \tExifData *ed;\n \n+\t/* exif_data_load_data() only allows uint for length. Limit it to less\n+\t * than that: 2**20 should be enough for anyone.\n+\t */\n+\tif( length > 1 << 20 ) {\n+\t\tvips_error( \"exif\", \"%s\", _( \"exif too large\" ) ); \n+\t\treturn( NULL );\n+\t}\n+\n \tif( !(ed = exif_data_new()) ) {\n \t\tvips_error( \"exif\", \"%s\", _( \"unable to init exif\" ) ); \n \t\treturn( NULL );\ndiff --git a/libvips/foreign/heifload.c b/libvips/foreign/heifload.c\nindex fc98bc0732..77e5f4bc34 100644\n--- a/libvips/foreign/heifload.c\n+++ b/libvips/foreign/heifload.c\n@@ -464,7 +464,7 @@ vips_foreign_load_heif_set_header( VipsForeignLoadHeif *heif, VipsImage *out )\n \t\tchar name[256];\n \n #ifdef DEBUG\n-\t\tprintf( \"metadata type = %s, length = %zd\\n\", type, length ); \n+\t\tprintf( \"metadata type = %s, length = %zu\\n\", type, length ); \n #endif /*DEBUG*/\n \n \t\tif( !(data = VIPS_ARRAY( out, length, unsigned char )) )\n@@ -479,7 +479,8 @@ vips_foreign_load_heif_set_header( VipsForeignLoadHeif *heif, VipsImage *out )\n \t\t/* We need to skip the first four bytes of EXIF, they just\n \t\t * contain the offset.\n \t\t */\n-\t\tif( g_ascii_strcasecmp( type, \"exif\" ) == 0 ) {\n+\t\tif( length > 4 &&\n+\t\t\tg_ascii_strcasecmp( type, \"exif\" ) == 0 ) {\n \t\t\tdata += 4;\n \t\t\tlength -= 4;\n \t\t}\n@@ -492,6 +493,7 @@ vips_foreign_load_heif_set_header( VipsForeignLoadHeif *heif, VipsImage *out )\n \t\tif( g_ascii_strcasecmp( type, \"exif\" ) == 0 )\n \t\t\tvips_snprintf( name, 256, VIPS_META_EXIF_NAME );\n \t\telse if( g_ascii_strcasecmp( type, \"mime\" ) == 0 &&\n+\t\t\tlength > 10 &&\n \t\t\tvips_isprefix( \"<x:xmpmeta\", (const char *) data ) ) \n \t\t\tvips_snprintf( name, 256, VIPS_META_XMP_NAME );\n \t\telse\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42488342-vul",
+      "digest": "sha256:151827939982a5e383a6663c9c763d58d6e8cb4eec9599a8ef8dbc551d87200d"
+    },
+    "patched": {
+      "ref": "n132/arvo:42488342-fix",
+      "digest": "sha256:5aef1785efe7dd94662b2f9664613c2c953c50c73596e0cb4934237bd35879f4"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/libexif/libexif/exif-data.c:862",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/libexif/libexif/exif-data.c:862"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

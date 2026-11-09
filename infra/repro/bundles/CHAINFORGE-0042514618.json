@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042514618",
+  "chain": "CWE-20->CWE-125",
+  "project": "open62541",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42514618",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "68bdf5e9a9bfc1c50b0bae131ef34b7c12f2b9ba",
+      "fix_commits": [
+        "68bdf5e9a9bfc1c50b0bae131ef34b7c12f2b9ba"
+      ],
+      "repo": "https://github.com/open62541/open62541"
+    },
+    "patch": "diff --git a/src/server/ua_services_attribute.c b/src/server/ua_services_attribute.c\nindex ce8919c2e43..97d449b2515 100644\n--- a/src/server/ua_services_attribute.c\n+++ b/src/server/ua_services_attribute.c\n@@ -917,6 +917,12 @@ writeValueAttributeWithRange(UA_VariableNode *node, const UA_DataValue *value,\n         v = &editableValue;\n     }\n \n+    /* Check that the type is an exact match and not only \"compatible\" */\n+    if(!node->value.data.value.value.type ||\n+       !UA_NodeId_equal(&node->value.data.value.value.type->typeId,\n+                        &v->type->typeId))\n+        return UA_STATUSCODE_BADTYPEMISMATCH;\n+\n     /* Write the value */\n     UA_StatusCode retval = UA_Variant_setRangeCopy(&node->value.data.value.value,\n                                                    v->data, v->arrayLength, *rangeptr);\n@@ -959,10 +965,10 @@ writeValueAttribute(UA_Server *server, UA_Session *session,\n     if(value->hasValue && value->value.type) {\n         adjustValue(server, &adjustedValue.value, &node->dataType);\n \n-        /* The value may be an extension object, especially the nodeset compiler uses\n-         * extension objects to write variable values.\n-         * If value is an extension object we check if the current node value is also an extension object.\n-         */\n+        /* The value may be an extension object, especially the nodeset compiler\n+         * uses extension objects to write variable values. If value is an\n+         * extension object we check if the current node value is also an\n+         * extension object. */\n         UA_Boolean compatible;\n         if (value->value.type->typeId.identifierType == UA_NODEIDTYPE_NUMERIC &&\n             value->value.type->typeId.identifier.numeric == UA_NS0ID_STRUCTURE) {\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42514618-vul",
+      "digest": "sha256:cfe261933be2fcbd6d7da0a94aa3f0529c4a1feefa98a7f5815a3a69a6a09db9"
+    },
+    "patched": {
+      "ref": "n132/arvo:42514618-fix",
+      "digest": "sha256:7373e78d7609dd0da2626cc3eff5f12b057f7df39f2b45b74e6d220223d73db2"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/open62541/src/ua_types.c:716",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/open62541/src/ua_types.c:716"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

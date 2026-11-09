@@ -1,0 +1,82 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-930181572",
+  "chain": "CWE-20->CWE-190->CWE-787",
+  "project": "tarantool",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "394126186",
+    "commit_range": {
+      "introduced": null,
+      "fixed": null,
+      "fix_commits": [
+        "58dcabe695e8b4d8c604f7f73948061fa7dbabcd"
+      ],
+      "repo": "https://github.com/tarantool/luajit"
+    },
+    "patch": "diff --git a/src/lj_debug.c b/src/lj_debug.c\nindex 107f464c83..76e48acadc 100644\n--- a/src/lj_debug.c\n+++ b/src/lj_debug.c\n@@ -64,6 +64,7 @@ static BCPos debug_framepc(lua_State *L, GCfunc *fn, cTValue *nextframe)\n     if (cf == NULL || (char *)cframe_pc(cf) == (char *)cframe_L(cf))\n       return NO_BCPOS;\n     ins = cframe_pc(cf);  /* Only happens during error/hook handling. */\n+    if (!ins) return NO_BCPOS;\n   } else {\n     if (frame_islua(nextframe)) {\n       ins = frame_pc(nextframe);\ndiff --git a/src/lj_err.c b/src/lj_err.c\nindex 1a9a2f2b98..80dca8478a 100644\n--- a/src/lj_err.c\n+++ b/src/lj_err.c\n@@ -784,7 +784,14 @@ LJ_NOINLINE void lj_err_mem(lua_State *L)\n     TValue *base = tvref(G(L)->jit_base);\n     if (base) L->base = base;\n   }\n-  if (curr_funcisL(L)) L->top = curr_topL(L);\n+  if (curr_funcisL(L)) {\n+    L->top = curr_topL(L);\n+    if (LJ_UNLIKELY(L->top > tvref(L->maxstack))) {\n+      /* The current Lua frame violates the stack. Replace it with a dummy. */\n+      L->top = L->base;\n+      setframe_gc(L->base - 1 - LJ_FR2, obj2gco(L), LJ_TTHREAD);\n+    }\n+  }\n   setstrV(L, L->top++, lj_err_str(L, LJ_ERR_ERRMEM));\n   lj_err_throw(L, LUA_ERRMEM);\n }\n@@ -845,9 +852,11 @@ LJ_NOINLINE void LJ_FASTCALL lj_err_run(lua_State *L)\n {\n   ptrdiff_t ef = (LJ_HASJIT && tvref(G(L)->jit_base)) ? 0 : finderrfunc(L);\n   if (ef) {\n-    TValue *errfunc = restorestack(L, ef);\n-    TValue *top = L->top;\n+    TValue *errfunc, *top;\n+    lj_state_checkstack(L, LUA_MINSTACK * 2);  /* Might raise new error. */\n     lj_trace_abort(G(L));\n+    errfunc = restorestack(L, ef);\n+    top = L->top;\n     if (!tvisfunc(errfunc) || L->status == LUA_ERRERR) {\n       setstrV(L, top-1, lj_err_str(L, LJ_ERR_ERRERR));\n       lj_err_throw(L, LUA_ERRERR);\n@@ -862,7 +871,15 @@ LJ_NOINLINE void LJ_FASTCALL lj_err_run(lua_State *L)\n   lj_err_throw(L, LUA_ERRRUN);\n }\n \n+/* Stack overflow error. */\n+void LJ_FASTCALL lj_err_stkov(lua_State *L)\n+{\n+  lj_debug_addloc(L, err2msg(LJ_ERR_STKOV), L->base-1, NULL);\n+  lj_err_run(L);\n+}\n+\n #if LJ_HASJIT\n+/* Rethrow error after doing a trace exit. */\n LJ_NOINLINE void LJ_FASTCALL lj_err_trace(lua_State *L, int errcode)\n {\n   if (errcode == LUA_ERRRUN)\ndiff --git a/src/lj_err.h b/src/lj_err.h\nindex b0c72c24f9..56bd0375a5 100644\n--- a/src/lj_err.h\n+++ b/src/lj_err.h\n@@ -23,6 +23,7 @@ LJ_DATA const char *lj_err_allmsg;\n LJ_FUNC GCstr *lj_err_str(lua_State *L, ErrMsg em);\n LJ_FUNCA_NORET void LJ_FASTCALL lj_err_throw(lua_State *L, int errcode);\n LJ_FUNC_NORET void lj_err_mem(lua_State *L);\n+LJ_FUNC_NORET void LJ_FASTCALL lj_err_stkov(lua_State *L);\n LJ_FUNC_NORET void LJ_FASTCALL lj_err_run(lua_State *L);\n #if LJ_HASJIT\n LJ_FUNCA_NORET void LJ_FASTCALL lj_err_trace(lua_State *L, int errcode);\ndiff --git a/src/lj_state.c b/src/lj_state.c\nindex 5a92010271..053e5ec966 100644\n--- a/src/lj_state.c\n+++ b/src/lj_state.c\n@@ -120,27 +120,49 @@ void lj_state_shrinkstack(lua_State *L, MSize used)\n /* Try to grow stack. */\n void LJ_FASTCALL lj_state_growstack(lua_State *L, MSize need)\n {\n-  MSize n;\n-  if (L->stacksize >= LJ_STACK_MAXEX) {\n-    /* 4. Throw 'error in error handling' when we are _over_ the limit. */\n-    if (L->stacksize > LJ_STACK_MAXEX)\n+  MSize n = L->stacksize + need;\n+  if (LJ_LIKELY(n < LJ_STACK_MAX)) {  /* The stack can grow as requested. */\n+    if (n < 2 * L->stacksize) {  /* Try to double the size. */\n+      n = 2 * L->stacksize;\n+      if (n > LJ_STACK_MAX)\n+\tn = LJ_STACK_MAX;\n+    }\n+    resizestack(L, n);\n+  } else {  /* Request would overflow. Raise a stack overflow error. */\n+    if (LJ_HASJIT) {\n+      TValue *base = tvref(G(L)->jit_base);\n+      if (base) L->base = base;\n+    }\n+    if (curr_funcisL(L)) {\n+      L->top = curr_topL(L);\n+      if (L->top > tvref(L->maxstack)) {\n+\t/* The current Lua frame violates the stack, so replace it with a\n+\t** dummy. This can happen when BC_IFUNCF is trying to grow the stack.\n+\t*/\n+\tL->top = L->base;\n+\tsetframe_gc(L->base - 1 - LJ_FR2, obj2gco(L), LJ_TTHREAD);\n+      }\n+    }\n+    if (L->stacksize <= LJ_STACK_MAXEX) {\n+      /* An error handler might want to inspect the stack overflow error, but\n+      ** will need some stack space to run in. We give it a stack size beyond\n+      ** the normal limit in order to do so, then rely on lj_state_relimitstack\n+      ** calls during unwinding to bring us back to a convential stack size.\n+      ** The + 1 is space for the error message, and 2 * LUA_MINSTACK is for\n+      ** the lj_state_checkstack() call in lj_err_run().\n+      */\n+      resizestack(L, LJ_STACK_MAX + 1 + 2 * LUA_MINSTACK);\n+      lj_err_stkov(L);  /* May invoke an error handler. */\n+    } else {\n+      /* If we're here, then the stack overflow error handler is requesting\n+      ** to grow the stack even further. We have no choice but to abort the\n+      ** error handler.\n+      */\n+      GCstr *em = lj_err_str(L, LJ_ERR_STKOV);  /* Might OOM. */\n+      setstrV(L, L->top++, em);  /* There is always space to push an error. */\n       lj_err_throw(L, LUA_ERRERR);  /* Does not invoke an error handler. */\n-    /* 1. We are _at_ the limit after the last growth. */\n-    if (L->status < LUA_ERRRUN) {  /* 2. Throw 'stack overflow'. */\n-      L->status = LUA_ERRRUN;  /* Prevent ending here again for pushed msg. */\n-      lj_err_msg(L, LJ_ERR_STKOV);  /* May invoke an error handler. */\n     }\n-    /* 3. Add space (over the limit) for pushed message and error handler. */\n-  }\n-  n = L->stacksize + need;\n-  if (n > LJ_STACK_MAX) {\n-    n += 2*LUA_MINSTACK;\n-  } else if (n < 2*L->stacksize) {\n-    n = 2*L->stacksize;\n-    if (n >= LJ_STACK_MAX)\n-      n = LJ_STACK_MAX;\n   }\n-  resizestack(L, n);\n }\n \n void LJ_FASTCALL lj_state_growstack1(lua_State *L)\ndiff --git a/test/LuaJIT-tests/lang/stackov.lua b/test/LuaJIT-tests/lang/stackov.lua\nindex 8afa86b4c5..b052ad80ec 100644\n--- a/test/LuaJIT-tests/lang/stackov.lua\n+++ b/test/LuaJIT-tests/lang/stackov.lua\n@@ -31,13 +31,17 @@ end\n do --- Base test.\n   local err, s = xpcall(f, debug.traceback)\n   assert(err == false)\n-  test_error_msg(f, s)\n+  -- There is no place on the stack to invoke the handler.\n+  -- Just test the error reason.\n+  assert(string.match(s, \"stack overflow\"))\n end\n \n do --- Stack overflow with non-empty arg list.\n   local err, s = xpcall(g, debug.traceback, 1)\n   assert(err == false)\n-  test_error_msg(g, s)\n+  -- There is no place on the stack to invoke the handler.\n+  -- Just test the error reason.\n+  assert(string.match(s, \"stack overflow\"))\n end\n \n do --- Vararg tail call with non-empty arg list. +slow\ndiff --git a/test/tarantool-tests/lj-1152-stack-buffer-overflow-on-error.test.lua b/test/tarantool-tests/lj-1152-stack-buffer-overflow-on-error.test.lua\nnew file mode 100644\nindex 0000000000..08e344deda\n--- /dev/null\n+++ b/test/tarantool-tests/lj-1152-stack-buffer-overflow-on-error.test.lua\n@@ -0,0 +1,79 @@\n+local tap = require('tap')\n+local allocinject = require('allocinject')\n+\n+local test = tap.test('lj-1152-stack-buffer-overflow-on-error')\n+test:plan(6)\n+\n+local LJ_MAX_LOCVAR = 200\n+\n+-- Generate the following Lua chunk:\n+--   local function recursive_f()\n+--     local _\n+--     ...\n+--     recursive_f()\n+--   end\n+--   return recursive_f\n+local function generate_recursive_f(n_locals)\n+  local chunk = 'local function recursive_f()\\n'\n+  for _ = 1, n_locals do\n+    chunk = chunk .. 'local _\\n'\n+  end\n+  chunk = chunk .. [[\n+      recursive_f()\n+    end\n+    return recursive_f\n+  ]]\n+  local f = assert(loadstring(chunk))\n+  return f()\n+end\n+\n+-- Use `coroutine.wrap()` for functions to use newly created stack\n+-- with fixed number of stack slots.\n+\n+-- Check that we still got the correct error message in case of\n+-- the unsafe error handler function.\n+coroutine.wrap(function()\n+  -- XXX: Use different recursive functions as callee and handler\n+  -- to be sure to get the invalid stack value instead of `nil`.\n+  local function recursive() recursive() end\n+  local function bad_errfunc() bad_errfunc() end\n+  local r, e = xpcall(recursive, bad_errfunc)\n+  -- XXX: Don't create a constant string that is anchored to the\n+  -- prototype. It is necessary to make the error message freed by\n+  -- the GC and OOM raising in the last test.\n+  local EXPECTED_MSG = 'stack ' .. 'overflow'\n+  test:ok(not r, 'correct status')\n+  test:like(e, EXPECTED_MSG, 'correct error message')\n+end)()\n+\n+coroutine.wrap(function()\n+  -- Collect all strings including the possibly-existed string\n+  -- with the 'stack overflow' error message.\n+  collectgarbage()\n+  local function recursive() recursive() end\n+  -- Avoid trace recording. A trace can't be allocated anyway.\n+  jit.off(recursive)\n+\n+  -- Check the case when the error\n+  allocinject.enable_null_alloc()\n+  local r, e = pcall(recursive)\n+  allocinject.disable()\n+\n+  test:ok(not r, 'correct status')\n+  test:like(e, 'not enough memory', 'correct error message')\n+end)()\n+\n+-- Check overflow of the buffer related to the Lua stack.\n+-- This test fails under ASAN without the patch.\n+local recursive_f = generate_recursive_f(LJ_MAX_LOCVAR)\n+coroutine.wrap(function()\n+  local r, e = pcall(recursive_f)\n+  test:ok(not r, 'correct status')\n+  -- XXX: Don't create a constant string that is anchored to the\n+  -- prototype. It is necessary to make the error message freed by\n+  -- the GC and OOM raising in the last test.\n+  local EXPECTED_MSG = 'stack ' .. 'overflow'\n+  test:like(e, EXPECTED_MSG, 'correct error message')\n+end)()\n+\n+test:done(true)\ndiff --git a/test/tarantool-tests/utils/CMakeLists.txt b/test/tarantool-tests/utils/CMakeLists.txt\nindex 158719347b..e74e184b9c 100644\n--- a/test/tarantool-tests/utils/CMakeLists.txt\n+++ b/test/tarantool-tests/utils/CMakeLists.txt\n@@ -1,4 +1,5 @@\n list(APPEND tests\n+  lj-1152-stack-buffer-overflow-on-error.test.lua\n   lj-1166-error-stitch-oom-ir-buff.test.lua\n   lj-1166-error-stitch-oom-snap-buff.test.lua\n   lj-1247-fin-tab-rehashing-on-trace.test.lua\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:394126186-vul",
+      "digest": "sha256:2674fd2e444de77c4588d1435392c2c8cf7139559fcd0e6aa2d9dcfa0143d3d7"
+    },
+    "patched": {
+      "ref": "n132/arvo:394126186-fix",
+      "digest": "sha256:778753abf13b505c75312bf149e570bad9ac46978d988a05057ea6c9071c253f"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/tarantool/third_party/luajit/src/lj_obj.h:944",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 190,
+      "role": "intermediate",
+      "witness": {
+        "method": "ubsan-rebuild",
+        "recipe": "SANITIZER=undefined compile && $ENTRYPOINT",
+        "ubsan_options": "print_stacktrace=1:halt_on_error=0:silence_unsigned_overflow=0:symbolize=1"
+      },
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/tarantool/third_party/luajit/src/lj_obj.h:944"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

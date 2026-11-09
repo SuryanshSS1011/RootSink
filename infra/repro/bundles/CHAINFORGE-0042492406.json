@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042492406",
+  "chain": "CWE-20->CWE-787",
+  "project": "wolfmqtt",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42492406",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "9af08af3d162e455c4da5df98b7305a06cef9ab6",
+      "fix_commits": [
+        "9af08af3d162e455c4da5df98b7305a06cef9ab6"
+      ],
+      "repo": "https://github.com/wolfSSL/wolfMQTT"
+    },
+    "patch": "diff --git a/src/mqtt_packet.c b/src/mqtt_packet.c\nindex 321518f05..815bf7d79 100755\n--- a/src/mqtt_packet.c\n+++ b/src/mqtt_packet.c\n@@ -744,16 +744,6 @@ int MqttEncode_Connect(byte *tx_buf, int tx_buf_len, MqttConnect *mc_connect)\n     if (mc_connect->username) {\n         tx_payload += MqttEncode_String(tx_payload, mc_connect->username);\n     }\n-    else {\n-        /* A Server MAY allow a Client to supply a ClientID that has a length\n-         * of zero bytes, however if it does so the Server MUST treat this as a\n-         * special case and assign a unique ClientID to that Client\n-         * [MQTT-3.1.3-6]. It MUST then process the CONNECT packet as if the\n-         * Client had provided that unique ClientID, and MUST return the\n-         * Assigned Client Identifier in the CONNACK packet [MQTT-3.1.3-7].\n-         */\n-        tx_payload += MqttEncode_Num(tx_payload, (word16)0);\n-    }\n     if (mc_connect->password) {\n         tx_payload += MqttEncode_String(tx_payload, mc_connect->password);\n     }\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42492406-vul",
+      "digest": "sha256:3ac7190680310791c3b108dbdac95b80a75388ba1ca6abce0810209c8d308e7d"
+    },
+    "patched": {
+      "ref": "n132/arvo:42492406-fix",
+      "digest": "sha256:aa7cb1f61f54c1ba3d9c4b1f6ba5172acbdb826030a983384c8c319832af02c1"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/wolfmqtt/src/mqtt_packet.c:281",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/wolfmqtt/src/mqtt_packet.c:281"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

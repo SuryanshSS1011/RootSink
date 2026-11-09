@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-959193883",
+  "chain": "CWE-129->CWE-119",
+  "project": "pcre2",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42475028",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/PCRE2Project/pcre2/commit/1909bf0691c7aba55fc0b4381bd36367a0862d34",
+      "fix_commits": [
+        "1909bf0691c7aba55fc0b4381bd36367a0862d34"
+      ],
+      "repo": "https://github.com/PCRE2Project/pcre2"
+    },
+    "patch": "diff --git a/ChangeLog b/ChangeLog\nindex cfb7b638e..b22a58a17 100644\n--- a/ChangeLog\n+++ b/ChangeLog\n@@ -35,6 +35,10 @@ bugs were never in fully released code, but are noted here for the record.\n       happening if the assertion matched via (*ACCEPT).   \n       \n   (e) Mark values were not being passed out of recursions. \n+  \n+  (f) Refactor some code in do_callout() to avoid picky compiler warnings about \n+      negative indices. Fixes oss-fuzz issue 1454.\n+ \n       \n 2. Now that pcre2_match() no longer uses recursive function calls (see above),\n the \"match limit recursion\" value seems misnamed. It still exists, and limits \n@@ -157,6 +161,7 @@ tests to improve coverage.\n pcre2test, a crash could occur.\n \n \n+\n Version 10.23 14-February-2017\n ------------------------------\n \ndiff --git a/src/pcre2_match.c b/src/pcre2_match.c\nindex 57743aa18..41d0fcbde 100644\n--- a/src/pcre2_match.c\n+++ b/src/pcre2_match.c\n@@ -263,18 +263,32 @@ Returns:     the return from the callout\n static int\n do_callout(heapframe *F, match_block *mb, PCRE2_SIZE *lengthptr)\n {\n+int rc;\n PCRE2_SIZE save0, save1;\n+PCRE2_SIZE *callout_ovector;\n pcre2_callout_block cb;\n-int rc;\n \n *lengthptr = (*Fecode == OP_CALLOUT)?\n   PRIV(OP_lengths)[OP_CALLOUT] : GET(Fecode, 1 + 2*LINK_SIZE);\n-\n+  \n if (mb->callout == NULL) return 0;   /* No callout function provided */\n+\n+/* The original matching code (pre 10.30) worked directly with the ovector\n+passed by the user, and this was passed to callouts. Now that the working\n+ovector is in the backtracking frame, it no longer needs to reserve space for\n+the overall match offsets (which would waste space in the frame). For backward\n+compatibility, however, we pass capture_top and offset_vector to the callout as\n+if for the extended ovector, and we ensure that the first two slots are unset\n+by preserving and restoring their current contents. Picky compilers complain if \n+references such as Fovector[-2] are use directly, so we set up a separate \n+pointer. */\n+\n+callout_ovector = (PCRE2_SIZE *)(Fovector) - 2; \n+\n cb.version          = 1;\n cb.capture_top      = (uint32_t)Foffset_top/2 + 1;\n cb.capture_last     = Fcapture_last;\n-cb.offset_vector    = Fovector - 2;\n+cb.offset_vector    = callout_ovector;\n cb.mark             = mb->nomatch_mark;\n cb.subject          = mb->start_subject;\n cb.subject_length   = (PCRE2_SIZE)(mb->end_subject - mb->start_subject);\n@@ -299,20 +313,12 @@ else  /* String callout */\n     *lengthptr - (1 + 4*LINK_SIZE) - 2;\n   }\n \n-/* The original matching code (pre 10.30) worked directly with the ovector\n-passed by the user, and this was passed to callouts. Now that the working\n-ovector is in the backtracking frame, it no longer needs to reserve space for\n-the overall match offsets (which would waste space in the frame). For backward\n-compatibility, however, we pass capture_top and offset_vector to the callout as\n-if for the extended ovector, and we ensure that the first two slots are unset\n-by preserving and restoring their current contents. */\n-\n-save0 = Fovector[-2];\n-save1 = Fovector[-1];\n-Fovector[-2] = Fovector[-1] = PCRE2_UNSET;\n+save0 = callout_ovector[0];\n+save1 = callout_ovector[1];\n+callout_ovector[0] = callout_ovector[1] = PCRE2_UNSET;\n rc = mb->callout(&cb, mb->callout_data);\n-Fovector[-2] = save0;\n-Fovector[-1] = save1;\n+callout_ovector[0] = save0;\n+callout_ovector[1] = save1;\n return rc;\n }\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42475028-vul",
+      "digest": "sha256:68ed7ca746d73eef40b8420689e5f401ab181dfad446df94b7d8d81064cbffd4"
+    },
+    "patched": {
+      "ref": "n132/arvo:42475028-fix",
+      "digest": "sha256:3bf6ca1e44de2f4851c8248381688799730aad3f1a670a642500e06397c7321a"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "crash_site": "/src/pcre2/src/pcre2_match.c:277",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 129,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 119,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "site": "/src/pcre2/src/pcre2_match.c:277"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

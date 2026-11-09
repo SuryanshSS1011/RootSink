@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042494962",
+  "chain": "CWE-456->CWE-457",
+  "project": "lxc",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42494962",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "c45833e39c85c5e16270aa4122b1929dd086127a",
+      "fix_commits": [
+        "c45833e39c85c5e16270aa4122b1929dd086127a"
+      ],
+      "repo": "https://github.com/lxc/lxc"
+    },
+    "patch": "From c45833e39c85c5e16270aa4122b1929dd086127a Mon Sep 17 00:00:00 2001\nFrom: Christian Brauner <christian.brauner@ubuntu.com>\nDate: Sat, 27 Mar 2021 07:14:56 +0100\nSubject: [PATCH] string_utils: always memset buf in lxc_safe_int64_residual()\n\nLink: https://bugs.chromium.org/p/oss-fuzz/issues/detail?id=32482\nSigned-off-by: Christian Brauner <christian.brauner@ubuntu.com>\n---\n src/lxc/string_utils.c | 6 +++---\n 1 file changed, 3 insertions(+), 3 deletions(-)\n\ndiff --git a/src/lxc/string_utils.c b/src/lxc/string_utils.c\nindex 793fd2c..1d408b9 100644\n--- a/src/lxc/string_utils.c\n+++ b/src/lxc/string_utils.c\n@@ -677,6 +677,8 @@ int lxc_safe_int64_residual(const char *numstr, int64_t *converted, int base, ch\n \tif (!residual && residual_len != 0)\n \t\treturn ret_errno(EINVAL);\n \n+\tmemset(residual, 0, residual_len);\n+\n \twhile (isspace(*numstr))\n \t\tnumstr++;\n \n@@ -691,10 +693,8 @@ int lxc_safe_int64_residual(const char *numstr, int64_t *converted, int base, ch\n \tif (residual) {\n \t\tsize_t len = 0;\n \n-\t\tif (*remaining == '\\0') {\n-\t\t\tmemset(residual, 0, residual_len);\n+\t\tif (*remaining == '\\0')\n \t\t\tgoto out;\n-\t\t}\n \n \t\tlen = strlen(remaining);\n \t\tif (len >= residual_len)\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42494962-vul",
+      "digest": "sha256:dfdf31d93c203593e8775ba19ffdbcb75b2ddfa721aa8af5202638656742c1aa"
+    },
+    "patched": {
+      "ref": "n132/arvo:42494962-fix",
+      "digest": "sha256:55db60ae3610e1ddd639cd15419298daf80ca2bdedb073d07871a8b8617952c9"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/lxc/src/lxc/string_utils.c:1007",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/lxc/src/lxc/string_utils.c:1007"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

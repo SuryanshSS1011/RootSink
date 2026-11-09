@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-964637844",
+  "chain": "CWE-456->CWE-457",
+  "project": "libraw",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42484793",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/libraw/libraw/commit/adcb898a00746c8aa886eb06cc9f5a1cb1834fca",
+      "fix_commits": [
+        "adcb898a00746c8aa886eb06cc9f5a1cb1834fca"
+      ],
+      "repo": "https://github.com/libraw/libraw"
+    },
+    "patch": "diff --git a/internal/libraw_cameraids.h b/internal/libraw_cameraids.h\nindex 538d1057a..90652e30d 100644\n--- a/internal/libraw_cameraids.h\n+++ b/internal/libraw_cameraids.h\n@@ -157,6 +157,7 @@ it under the terms of the one of two licenses as you choose:\n #define OlyID_E_M5_Mark_III   OlyID_str2hex(\"S0089\")\r\n #define OlyID_E_M1_Mark_III   OlyID_str2hex(\"S0092\")\r\n #define OlyID_E_P7            OlyID_str2hex(\"S0093\")\r\n+#define OlyID_OM_1            OlyID_str2hex(\"S0095\")\r\n #define OlyID_C_3030Z         OlyID_str2hex(\"SX351\")\r\n #define OlyID_C_5050Z         OlyID_str2hex(\"SX558\")\r\n #define OlyID_C_350Z          OlyID_str2hex(\"SX751\")\r\ndiff --git a/libraw/libraw_const.h b/libraw/libraw_const.h\nindex fd6ba741e..81d42b685 100644\n--- a/libraw/libraw_const.h\n+++ b/libraw/libraw_const.h\n@@ -362,6 +362,8 @@ enum LibRaw_cameramaker_index\n   LIBRAW_CAMERAMAKER_HMD_Global,\n   LIBRAW_CAMERAMAKER_HUAWEI,\n   LIBRAW_CAMERAMAKER_RaspberryPi,\n+  LIBRAW_CAMERAMAKER_OmDigital,\n+\n   // Insert additional indexes here\n   LIBRAW_CAMERAMAKER_TheLastOne\n };\ndiff --git a/src/metadata/identify.cpp b/src/metadata/identify.cpp\nindex a3d9b0218..f17bb2290 100644\n--- a/src/metadata/identify.cpp\n+++ b/src/metadata/identify.cpp\n@@ -42,7 +42,8 @@ static const struct\n     {LIBRAW_CAMERAMAKER_Nikon,          \"Nikon\"},\n     {LIBRAW_CAMERAMAKER_Nokia,          \"Nokia\"},\n     {LIBRAW_CAMERAMAKER_Olympus,        \"Olympus\"},\n-    {LIBRAW_CAMERAMAKER_Ricoh,          \"Ricoh\"},\n+    {LIBRAW_CAMERAMAKER_OmDigital,\t\t\"OM Digital\"},\n+    {LIBRAW_CAMERAMAKER_Ricoh,\t\t\t\"Ricoh\"},\n     {LIBRAW_CAMERAMAKER_Pentax,         \"Pentax\"},\n     {LIBRAW_CAMERAMAKER_PhaseOne,       \"Phase One\"},\n     {LIBRAW_CAMERAMAKER_PhaseOne,       \"PhaseOne\"},\n@@ -2212,12 +2213,15 @@ void LibRaw::identify_finetune_dcr(char head[64], int fsize, int flen)\n \t\t\tif (width == 4080) // Olympus E-PM1, E-PL3, E-P3;\n \t\t\t\twidth -= 24;\n \n-\t\t\tif (width == 10400) // Olympus PEN-F, E-M1-II, E-M1-III, E-M1X\n+\t\t\tif (width == 10400) // Olympus PEN-F, E-M1-II, E-M1-III, E-M1X, OM-1\n \t\t\t\twidth -= 12;\n \n \t\t\tif (width == 8200) // E-M1-III in 50Mp mode, E-M1X\n \t\t\t\twidth -= 30;\n \n+\t\t\tif (width == 8180) // OM-1 in 50Mp\n+              width -= 10;\n+\n \t\t\tif (width == 9280) { // Olympus E-M5 Mark II;\n \t\t\t\twidth -= 6;\n \t\t\t\theight -= 6;\ndiff --git a/src/metadata/makernotes.cpp b/src/metadata/makernotes.cpp\nindex f4bb2cc77..feb36bd6b 100644\n--- a/src/metadata/makernotes.cpp\n+++ b/src/metadata/makernotes.cpp\n@@ -116,7 +116,7 @@ void LibRaw::parse_makernote_0xc634(int base, int uptag, unsigned dng_writer)\n   uchar *table_buf_0x940e;\n   ushort table_buf_0x940e_len = 0;\n \n-  if (!strcmp(buf, \"OLYMPUS\") || !strcmp(buf, \"PENTAX \") ||\n+  if (!strcmp(buf, \"OLYMPUS\") || !strcmp(buf, \"PENTAX \") || !strncmp(buf,\"OM SYS\",6)||\n       (!strncmp(make, \"SAMSUNG\", 7) && (dng_writer == CameraDNG)))\n   {\n     base = ftell(ifp) - 10;\n@@ -176,7 +176,7 @@ void LibRaw::parse_makernote_0xc634(int base, int uptag, unsigned dng_writer)\n     is_Sony = 1;\n \n   if (!is_Olympus &&\n-      (!strncmp(make, \"OLYMPUS\", 7) ||\n+      (!strncmp(make, \"OLYMPUS\", 7) || !strncmp(make, \"OM Digi\", 7) ||\n       (!strncasecmp(make, \"CLAUSS\", 6) && !strncasecmp(model, \"piX 5oo\", 7)))) {\n     is_Olympus = 1;\n     OlympusDNG_SubDirOffsetValid =\n@@ -433,11 +433,13 @@ void LibRaw::parse_makernote(int base, int uptag)\n     goto quit;\n   }\n \n-  if (!strcmp(buf, \"OLYMPUS\") ||\n+  if (!strcmp(buf, \"OLYMPUS\") || !strncmp(buf, \"OM SYS\",6) ||\n       !strcmp(buf, \"PENTAX \"))\n   {\n     base = ftell(ifp) - 10;\n     fseek(ifp, -2, SEEK_CUR);\n+\tif (buf[1] == 'M')\n+\t\tget4();\n     order = get2();\n     if (buf[0] == 'O')\n       get2();\n@@ -484,7 +486,7 @@ void LibRaw::parse_makernote(int base, int uptag)\n   }\n \n   if (!is_Olympus &&\n-      (!strncasecmp(make, \"Olympus\", 7) ||\n+      (!strncasecmp(make, \"Olympus\", 7) || !strncmp(make, \"OM Digi\", 7) ||\n       (!strncasecmp(make, \"CLAUSS\", 6) && !strncasecmp(model, \"piX 5oo\", 7)))) {\n     is_Olympus = 1;\n   }\ndiff --git a/src/metadata/normalize_model.cpp b/src/metadata/normalize_model.cpp\nindex e3de0dbb4..10fad9873 100644\n--- a/src/metadata/normalize_model.cpp\n+++ b/src/metadata/normalize_model.cpp\n@@ -600,10 +600,13 @@ void LibRaw::GetNormalizedModel()\n   {\n \t  setMakeFromIndex(LIBRAW_CAMERAMAKER_Sony);\n   }\n+  else if (makeIs(LIBRAW_CAMERAMAKER_OmDigital))\n+  {\n+\t  setMakeFromIndex(LIBRAW_CAMERAMAKER_Olympus);\n+  }\n   else if (makeIs(LIBRAW_CAMERAMAKER_Clauss) && (OlyID == OlyID_E_M10_Mark_II))\n   {\n \t  setMakeFromIndex(LIBRAW_CAMERAMAKER_Olympus);\n-\n   } else if (makeIs(LIBRAW_CAMERAMAKER_Canon) &&\n              (!strncmp(model, \"EOS D2000\", 9) || // don't use unique_id here\n               !strncmp(model, \"EOS D6000\", 9) || // because ids for Monochrome models are unknown\n@@ -1420,7 +1423,7 @@ void LibRaw::SetStandardIlluminants (unsigned makerIdx, const char* normModel) {\n   int c;\n   if (!icWBC[LIBRAW_WBI_Ill_A][0] &&\n       !icWBC[LIBRAW_WBI_D65][0]) {\n-    if (makerIdx == LIBRAW_CAMERAMAKER_Olympus) {\n+    if (makerIdx == LIBRAW_CAMERAMAKER_Olympus ) {\n       while (++i, icWBCCTC[i][0]) {\n         if (icWBCCTC[i][0] == 3000)\n           FORC4 icWBC[LIBRAW_WBI_Ill_A][c] = icWBCCTC[i][c+1];\ndiff --git a/src/metadata/tiff.cpp b/src/metadata/tiff.cpp\nindex 29523f53b..9e5357b2f 100644\n--- a/src/metadata/tiff.cpp\n+++ b/src/metadata/tiff.cpp\n@@ -1881,7 +1881,7 @@ void LibRaw::apply_tiff()\n         filters = 0;\n         break;\n       }\n-      if ((!strncmp(make, \"OLYMPUS\", 7) ||\n+      if ((!strncmp(make, \"OLYMPUS\", 7) || !strncmp(make, \"OM Digi\", 7) ||\n            (!strncasecmp(make, \"CLAUSS\", 6) &&\n             !strncasecmp(model, \"piX 5oo\", 7))) && // 0x5330303539 works here\n           (INT64(tiff_ifd[raw].bytes) * 2ULL ==\n@@ -1913,7 +1913,7 @@ void LibRaw::apply_tiff()\n         load_flags = 0;\n       case 16:\n         load_raw = &LibRaw::unpacked_load_raw;\n-        if ((!strncmp(make, \"OLYMPUS\", 7) ||\n+        if ((!strncmp(make, \"OLYMPUS\", 7) || !strncmp(make, \"OM Digi\", 7) ||\n              (!strncasecmp(make, \"CLAUSS\", 6) &&\n               !strncasecmp(model, \"piX 5oo\", 7))) && // 0x5330303539 works here\n             (INT64(tiff_ifd[raw].bytes) * 7ULL >\ndiff --git a/src/tables/cameralist.cpp b/src/tables/cameralist.cpp\nindex cc25b5276..c2522833a 100644\n--- a/src/tables/cameralist.cpp\n+++ b/src/tables/cameralist.cpp\n@@ -834,6 +834,7 @@ static const char *static_camera_list[] = {\n \t\"Olympus XZ-1\",\n \t\"Olympus XZ-2\",\n \t\"Olympus XZ-10\",\n+\t\"OM Digital OM-1\",\n \t\"OmniVision 4688\",\n \t\"OmniVision OV5647\",\n \t\"OmniVision OV5648\",\ndiff --git a/src/tables/colordata.cpp b/src/tables/colordata.cpp\nindex 7e7f5e108..060d374d2 100644\n--- a/src/tables/colordata.cpp\n+++ b/src/tables/colordata.cpp\n@@ -1144,6 +1144,9 @@ int LibRaw::adobe_coeff(unsigned make_idx, const char *t_model,\n     { LIBRAW_CAMERAMAKER_Olympus, \"XZ-2\", 0, 0,\n       { 9777,-3483,-925,-2886,11297,1800,-602,1663,5134 } },\n \n+\t  { LIBRAW_CAMERAMAKER_Olympus, \"OM-1\", 0, 0,\n+\t\t{ 9488, -3984, -714, -2887, 10945, 2229, -137, 960, 5786 } },\n+\n \t{ LIBRAW_CAMERAMAKER_OmniVison, \"\", 16, 0x3ff,\n       { 12782,-4059,-379,-478,9066,1413,1340,1513,5176 } }, /* DJC */\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42484793-vul",
+      "digest": "sha256:24f88c758b75176fa1096a45a9727728a3b4bcbf9c73fcadd439839cde3f2501"
+    },
+    "patched": {
+      "ref": "n132/arvo:42484793-fix",
+      "digest": "sha256:47ba0dec4629a2ca9700289005af5cdbc983750ed4884eba92728081ffa0064f"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/libraw/src/metadata/misc_parsers.cpp:378",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/libraw/src/metadata/misc_parsers.cpp:378"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

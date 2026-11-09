@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042485599",
+  "chain": "CWE-416->CWE-125",
+  "project": "libxml2",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42485599",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "3f18e7486d5feb8ae41911ce3c122e05641a4c3d",
+      "fix_commits": [
+        "3f18e7486d5feb8ae41911ce3c122e05641a4c3d"
+      ],
+      "repo": "https://gitlab.gnome.org/GNOME/libxml2.git"
+    },
+    "patch": "From 3f18e7486d5feb8ae41911ce3c122e05641a4c3d Mon Sep 17 00:00:00 2001\nFrom: Nick Wellnhofer <wellnhofer@aevum.de>\nDate: Sat, 11 Jul 2020 14:34:57 +0200\nSubject: [PATCH] Reset HTML parser input before reporting error\n\nAvoid use-after-free, similar to 13ba5b61. Also make sure that\nxmlBufSetInputBaseCur sets valid pointers in case of buffer errors.\n\nFound by OSS-Fuzz.\n---\n HTMLparser.c | 2 +-\n buf.c        | 6 +++++-\n 2 files changed, 6 insertions(+), 2 deletions(-)\n\ndiff --git a/HTMLparser.c b/HTMLparser.c\nindex 9b12dd1..1dea794 100644\n--- a/HTMLparser.c\n+++ b/HTMLparser.c\n@@ -6150,12 +6150,12 @@ htmlParseChunk(htmlParserCtxtPtr ctxt, const char *chunk, int size,\n \tint res;\n \n \tres = xmlParserInputBufferPush(ctxt->input->buf, size, chunk);\n+        xmlBufSetInputBaseCur(ctxt->input->buf->buffer, ctxt->input, base, cur);\n \tif (res < 0) {\n \t    ctxt->errNo = XML_PARSER_EOF;\n \t    ctxt->disableSAX = 1;\n \t    return (XML_PARSER_EOF);\n \t}\n-        xmlBufSetInputBaseCur(ctxt->input->buf->buffer, ctxt->input, base, cur);\n #ifdef DEBUG_PUSH\n \txmlGenericError(xmlGenericErrorContext, \"HPP: pushed %d\\n\", size);\n #endif\ndiff --git a/buf.c b/buf.c\nindex 8ad18a1..24368d3 100644\n--- a/buf.c\n+++ b/buf.c\n@@ -1334,8 +1334,12 @@ xmlBufGetInputBase(xmlBufPtr buf, xmlParserInputPtr input) {\n int\n xmlBufSetInputBaseCur(xmlBufPtr buf, xmlParserInputPtr input,\n                       size_t base, size_t cur) {\n-    if ((input == NULL) || (buf == NULL) || (buf->error))\n+    if (input == NULL)\n+        return(-1);\n+    if ((buf == NULL) || (buf->error)) {\n+        input->base = input->cur = input->end = BAD_CAST \"\";\n         return(-1);\n+    }\n     CHECK_COMPAT(buf)\n     input->base = &buf->content[base];\n     input->cur = input->base + cur;\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42485599-vul",
+      "digest": "sha256:770774724c1187cdd56dd93693199d545f4c2e0af0f7d6ba087bb12f28843186"
+    },
+    "patched": {
+      "ref": "n132/arvo:42485599-fix",
+      "digest": "sha256:5caf759b8285897e71136fd34152edfb309c8ed05ae20bfcd6f7b0d05d9ae379"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/libxml2/error.c:194",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/libxml2/error.c:194"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042521611",
+  "chain": "CWE-1285->CWE-125",
+  "project": "libdwarf",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42521611",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "bb99fe7ddb2bc6601bcb0ee30ced6a8cc8cb0564",
+      "fix_commits": [
+        "bb99fe7ddb2bc6601bcb0ee30ced6a8cc8cb0564"
+      ],
+      "repo": "https://github.com/davea42/libdwarf-code"
+    },
+    "patch": "diff --git a/src/lib/libdwarf/dwarf_arange.c b/src/lib/libdwarf/dwarf_arange.c\nindex 39914310d..5e49ba563 100644\n--- a/src/lib/libdwarf/dwarf_arange.c\n+++ b/src/lib/libdwarf/dwarf_arange.c\n@@ -147,7 +147,9 @@ _dwarf_get_aranges_list(Dwarf_Debug dbg,\n         /*  arange_ptr has been incremented appropriately past\n             the length field by READ_AREA_LENGTH. */\n \n-        if (area_length >  dbg->de_debug_aranges.dss_size) {\n+        if (area_length >  dbg->de_debug_aranges.dss_size ||\n+            (area_length +local_length_size+local_extension_size)\n+            > dbg->de_debug_aranges.dss_size ) {\n             free_aranges_chain(dbg,head_chain);\n             _dwarf_error(dbg, error,DW_DLE_ARANGES_HEADER_ERROR);\n             return DW_DLV_ERROR;\ndiff --git a/src/lib/libdwarf/dwarf_debugnames.c b/src/lib/libdwarf/dwarf_debugnames.c\nindex 6e2175589..b401e3b5d 100644\n--- a/src/lib/libdwarf/dwarf_debugnames.c\n+++ b/src/lib/libdwarf/dwarf_debugnames.c\n@@ -398,7 +398,9 @@ read_a_name_table_header(Dwarf_Dnames_Head dn,\n     totaloffset += initial_length;\n     dn->dn_offset_size = (Dwarf_Half)offset_size;\n     /* Two stage length test so overflow is caught. */\n-    if (area_length > remaining_space) {\n+    if (area_length > remaining_space ||\n+       (area_length +offset_size +local_extension_size) > \n+       remaining_space) {\n         _dwarf_error_string(dbg, error,\n             DW_DLE_DEBUG_NAMES_HEADER_ERROR,\n             \"DW_DLE_DEBUG_NAMES_HEADER_ERROR: \"\ndiff --git a/src/lib/libdwarf/dwarf_die_deliv.c b/src/lib/libdwarf/dwarf_die_deliv.c\nindex 7d1465e3d..4988f9c73 100644\n--- a/src/lib/libdwarf/dwarf_die_deliv.c\n+++ b/src/lib/libdwarf/dwarf_die_deliv.c\n@@ -444,7 +444,9 @@ read_info_area_length_and_check(Dwarf_Debug dbg,\n         A preliminary sanity check. */\n     max_cu_global_offset =  offset + length +\n         local_extension_size + local_length_size;\n-    if (length > section_size) {\n+    if (length > section_size ||\n+        (length+local_length_size + local_extension_size)>\n+        section_size) {\n         _dwarf_error(dbg, error, DW_DLE_CU_LENGTH_ERROR);\n         return DW_DLV_ERROR;\n     }\ndiff --git a/src/lib/libdwarf/dwarf_frame2.c b/src/lib/libdwarf/dwarf_frame2.c\nindex 30b92070b..6d42e62df 100644\n--- a/src/lib/libdwarf/dwarf_frame2.c\n+++ b/src/lib/libdwarf/dwarf_frame2.c\n@@ -1312,13 +1312,18 @@ _dwarf_read_cie_fde_prefix(Dwarf_Debug dbg,\n         frame_ptr, local_length_size,\n         local_extension_size,error,\n         section_length_in,section_end);\n-\n     if (length == 0) {\n         /*  nul bytes at end of section, seen at end of egcs eh_frame\n             sections (in a.out). Take this as meaning no more CIE/FDE\n             data. We should be very close to end of section. */\n         return DW_DLV_NO_ENTRY;\n     }\n+    if (length > section_length_in ||\n+        (length +local_length_size + local_extension_size) >\n+        section_length_in) {\n+        _dwarf_error(dbg,error,DW_DLE_DEBUG_FRAME_LENGTH_BAD);\n+        return DW_DLV_ERROR;\n+    }\n     if ((frame_ptr + local_length_size) >= section_end) {\n         _dwarf_error(dbg,error,DW_DLE_DEBUG_FRAME_LENGTH_BAD);\n         return DW_DLV_ERROR;\ndiff --git a/src/lib/libdwarf/dwarf_global.c b/src/lib/libdwarf/dwarf_global.c\nindex 91273cab4..1c1c66f2e 100644\n--- a/src/lib/libdwarf/dwarf_global.c\n+++ b/src/lib/libdwarf/dwarf_global.c\n@@ -731,7 +731,6 @@ _dwarf_internal_get_pubnames_like(Dwarf_Debug dbg,\n         }\n         {\n             Dwarf_Small * localend =pubnames_like_ptr + length;\n-\n             if ((length > section_length) ||\n                 (localend > section_end_ptr)){\n                 _dwarf_global_cu_len_error_msg(dbg,\ndiff --git a/src/lib/libdwarf/dwarf_loclists.c b/src/lib/libdwarf/dwarf_loclists.c\nindex 640229063..a08498707 100644\n--- a/src/lib/libdwarf/dwarf_loclists.c\n+++ b/src/lib/libdwarf/dwarf_loclists.c\n@@ -316,7 +316,8 @@ _dwarf_internal_read_loclists_header(Dwarf_Debug dbg,\n         data,offset_size,exten_size,\n         error,\n         sectionlength,end_data);\n-    if (arealen > sectionlength) {\n+    if (arealen > sectionlength ||\n+        (arealen+offset_size+exten_size) > sectionlength) {\n         dwarfstring m;\n         dwarfstring_constructor(&m);\n         dwarfstring_append_printf_u(&m,\ndiff --git a/src/lib/libdwarf/dwarf_rnglists.c b/src/lib/libdwarf/dwarf_rnglists.c\nindex 81bbdbe49..778f94d4c 100644\n--- a/src/lib/libdwarf/dwarf_rnglists.c\n+++ b/src/lib/libdwarf/dwarf_rnglists.c\n@@ -213,7 +213,8 @@ _dwarf_internal_read_rnglists_header(Dwarf_Debug dbg,\n         data,offset_size,exten_size,\n         error,\n         sectionlength,end_data);\n-    if (arealen > sectionlength) {\n+    if (arealen > sectionlength ||\n+        (arealen+offset_size+exten_size) > sectionlength) {\n         dwarfstring m;\n         dwarfstring_constructor(&m);\n         dwarfstring_append_printf_u(&m,\ndiff --git a/src/lib/libdwarf/dwarf_str_offsets.c b/src/lib/libdwarf/dwarf_str_offsets.c\nindex 68977ba9e..30c11241c 100644\n--- a/src/lib/libdwarf/dwarf_str_offsets.c\n+++ b/src/lib/libdwarf/dwarf_str_offsets.c\n@@ -258,9 +258,8 @@ _dwarf_trial_read_dwarf_five_hdr(Dwarf_Debug dbg,\n \n     }\n     if (length > secsize  ||\n-        secsize <\n-        /* 4 is for the version and padding bytes. */\n-        (length+local_extension_size +local_offset_size)) {\n+        (length+local_extension_size +local_offset_size) >\n+        secsize) {\n         dwarfstring m;\n \n         dwarfstring_constructor(&m);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42521611-vul",
+      "digest": "sha256:a6df62da1d20be613b24424dabdc00baaf209425ea4c7d376ee1ed8f5b46c5e1"
+    },
+    "patched": {
+      "ref": "n132/arvo:42521611-fix",
+      "digest": "sha256:aa8280875c389776f39ea4202e94db04cd7f662ae45cdc01c330c94a168b311e"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/libdwarf/src/lib/libdwarf/dwarf_rnglists.c:112",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/libdwarf/src/lib/libdwarf/dwarf_rnglists.c:112"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

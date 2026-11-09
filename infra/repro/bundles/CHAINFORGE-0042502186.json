@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042502186",
+  "chain": "CWE-20->CWE-125",
+  "project": "mruby",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42502186",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "0455313a9bdbe93556a8fd31b7c011dd004a6f2b",
+      "fix_commits": [
+        "0455313a9bdbe93556a8fd31b7c011dd004a6f2b"
+      ],
+      "repo": "https://github.com/mruby/mruby"
+    },
+    "patch": "diff --git a/mrbgems/mruby-compiler/core/codegen.c b/mrbgems/mruby-compiler/core/codegen.c\nindex aba7f66d06..ac611f4224 100644\n--- a/mrbgems/mruby-compiler/core/codegen.c\n+++ b/mrbgems/mruby-compiler/core/codegen.c\n@@ -627,15 +627,17 @@ gen_move(codegen_scope *s, uint16_t dst, uint16_t src, int nopeep)\n         struct mrb_insn_data data0 = mrb_decode_insn(mrb_prev_pc(s, data.addr));\n         if (data0.insn != OP_MOVE || data0.a != data.a || data0.b != dst) goto normal;\n         s->pc = addr_pc(s, data0.addr);\n-        /* constant folding */\n-        data0 = mrb_decode_insn(mrb_prev_pc(s, data0.addr));\n-        mrb_int n;\n-        if (data0.a == dst && get_int_operand(s, &data0, &n)) {\n-          if ((data.insn == OP_ADDI && !mrb_int_add_overflow(n, data.b, &n)) ||\n-              (data.insn == OP_SUBI && !mrb_int_sub_overflow(n, data.b, &n))) {\n-            s->pc = addr_pc(s, data0.addr);\n-            gen_int(s, dst, n);\n-            return;\n+        if (addr_pc(s, data0.addr) != s->lastlabel) {\n+          /* constant folding */\n+          data0 = mrb_decode_insn(mrb_prev_pc(s, data0.addr));\n+          mrb_int n;\n+          if (data0.a == dst && get_int_operand(s, &data0, &n)) {\n+            if ((data.insn == OP_ADDI && !mrb_int_add_overflow(n, data.b, &n)) ||\n+                (data.insn == OP_SUBI && !mrb_int_sub_overflow(n, data.b, &n))) {\n+              s->pc = addr_pc(s, data0.addr);\n+              gen_int(s, dst, n);\n+              return;\n+            }\n           }\n         }\n       }\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42502186-vul",
+      "digest": "sha256:cbbc77c672e5322c590886ca19cb703b12885181eff5339c570343b5094904ab"
+    },
+    "patched": {
+      "ref": "n132/arvo:42502186-fix",
+      "digest": "sha256:eed3dfb71e7ebe63607e3d2369301e0b3f466022c84b1e5a9a305a675a12f021"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/mruby/src/vm.c:1202",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/mruby/src/vm.c:1202"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

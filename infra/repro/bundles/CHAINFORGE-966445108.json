@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-966445108",
+  "chain": "CWE-456->CWE-457",
+  "project": "libxml2",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42531212",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://gitlab.gnome.org/GNOME/libxml2/-/commit/69d88566b6063b6e11f473fccddaa0174b60d6a6",
+      "fix_commits": [
+        "69d88566b6063b6e11f473fccddaa0174b60d6a6"
+      ],
+      "repo": "https://gitlab.gnome.org/GNOME/libxml2"
+    },
+    "patch": "diff --git a/parserInternals.c b/parserInternals.c\nindex 241329cd14af91295bfb27328efef48b9000e786..cf7a9e0a8fd3cd5b2734305b1fb091ca62965766 100644\n--- a/parserInternals.c\n+++ b/parserInternals.c\n@@ -1352,8 +1352,15 @@ xmlSwitchInputEncoding(xmlParserCtxtPtr ctxt, xmlParserInputPtr input,\n      * Is there already some content down the pipe to convert ?\n      */\n     if (xmlBufIsEmpty(in->buffer) == 0) {\n+        xmlBufPtr buf;\n         size_t processed;\n \n+        buf = xmlBufCreate();\n+        if (buf == NULL) {\n+            xmlErrMemory(ctxt, NULL);\n+            return(-1);\n+        }\n+\n         /*\n          * Shrink the current input buffer.\n          * Move it as the raw buffer and create a new input buffer\n@@ -1362,11 +1369,7 @@ xmlSwitchInputEncoding(xmlParserCtxtPtr ctxt, xmlParserInputPtr input,\n         xmlBufShrink(in->buffer, processed);\n         input->consumed += processed;\n         in->raw = in->buffer;\n-        in->buffer = xmlBufCreate();\n-        if (in->buffer == NULL) {\n-            xmlErrMemory(ctxt, NULL);\n-            return(-1);\n-        }\n+        in->buffer = buf;\n         in->rawconsumed = processed;\n \n         nbchars = xmlCharEncInput(in);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42531212-vul",
+      "digest": "sha256:e30fdda72e41115023f3e3eb4b00c31c927e76dfc6bb660bea8b523d02b6a5df"
+    },
+    "patched": {
+      "ref": "n132/arvo:42531212-fix",
+      "digest": "sha256:cadac1adc8b4ba550506b03376be522b727b8923de96dd6f1d4f2d520d7f4804"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/libxml2/HTMLparser.c:428",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/libxml2/HTMLparser.c:428"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

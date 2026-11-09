@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042509901",
+  "chain": "CWE-416->CWE-125",
+  "project": "imagemagick",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42509901",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "966a769a646aaaeff127862b8e475297bf5058d3",
+      "fix_commits": [
+        "966a769a646aaaeff127862b8e475297bf5058d3"
+      ],
+      "repo": "https://github.com/imagemagick/imagemagick"
+    },
+    "patch": "From 966a769a646aaaeff127862b8e475297bf5058d3 Mon Sep 17 00:00:00 2001\nFrom: Cristy <urban-warrior@imagemagick.org>\nDate: Wed, 23 Mar 2022 15:10:57 -0400\nSubject: [PATCH] enforce one `id` per MIFF image\n\n---\n MagickCore/property.c   | 16 ++++++++--------\n MagickCore/splay-tree.c |  2 +-\n coders/miff.c           |  3 +++\n 3 files changed, 12 insertions(+), 9 deletions(-)\n\ndiff --git a/MagickCore/property.c b/MagickCore/property.c\nindex 5d3b3c1..8124e01 100644\n--- a/MagickCore/property.c\n+++ b/MagickCore/property.c\n@@ -2972,10 +2972,10 @@ MagickExport const char *GetMagickProperty(ImageInfo *image_info,\n             if (convex_hull[n].y < extreme.y)\n               {\n                 extreme=convex_hull[n];\n-                continue; \n+                continue;\n               }\n             if (convex_hull[n].y != extreme.y)\n-              continue; \n+              continue;\n             if (convex_hull[n].x < extreme.x)\n               extreme=convex_hull[n];\n           }\n@@ -2988,10 +2988,10 @@ MagickExport const char *GetMagickProperty(ImageInfo *image_info,\n             if (convex_hull[n].x > extreme.x)\n               {\n                 extreme=convex_hull[n];\n-                continue; \n+                continue;\n               }\n             if (convex_hull[n].x != extreme.x)\n-              continue; \n+              continue;\n             if (convex_hull[n].y < extreme.y)\n               extreme=convex_hull[n];\n           }\n@@ -3004,10 +3004,10 @@ MagickExport const char *GetMagickProperty(ImageInfo *image_info,\n             if (convex_hull[n].y > extreme.y)\n               {\n                 extreme=convex_hull[n];\n-                continue; \n+                continue;\n               }\n             if (convex_hull[n].y != extreme.y)\n-              continue; \n+              continue;\n             if (convex_hull[n].x > extreme.x)\n               extreme=convex_hull[n];\n           }\n@@ -3020,10 +3020,10 @@ MagickExport const char *GetMagickProperty(ImageInfo *image_info,\n             if (convex_hull[n].x < extreme.x)\n               {\n                 extreme=convex_hull[n];\n-                continue; \n+                continue;\n               }\n             if (convex_hull[n].x != extreme.x)\n-              continue; \n+              continue;\n             if (convex_hull[n].y > extreme.y)\n               extreme=convex_hull[n];\n           }\ndiff --git a/MagickCore/splay-tree.c b/MagickCore/splay-tree.c\nindex 6f3a920..b2f26c8 100644\n--- a/MagickCore/splay-tree.c\n+++ b/MagickCore/splay-tree.c\n@@ -316,7 +316,7 @@ static void BalanceSplayTree(SplayTreeInfo *splay_tree)\n %  The format of the CloneSplayTree method is:\n %\n %      SplayTreeInfo *CloneSplayTree(SplayTreeInfo *splay_tree,\n-%        void *(*clone_key)(void *),void *(*cline_value)(void *))\n+%        void *(*clone_key)(void *),void *(*clone_value)(void *))\n %\n %  A description of each parameter follows:\n %\ndiff --git a/coders/miff.c b/coders/miff.c\nindex 06e9f49..d2f980d 100644\n--- a/coders/miff.c\n+++ b/coders/miff.c\n@@ -842,6 +842,9 @@ static Image *ReadMIFFImage(const ImageInfo *image_info,\n               {\n                 if (LocaleCompare(keyword,\"id\") == 0)\n                   {\n+                    if (*id != '\\0')\n+                      ThrowMIFFException(CorruptImageError,\n+                        \"ImproperImageHeader\");\n                     (void) CopyMagickString(id,options,MagickPathExtent);\n                     break;\n                   }\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42509901-vul",
+      "digest": "sha256:f1dc417f0edf1f757425951130bf3959f76555f9fb3c091bb148a3d10efc12f3"
+    },
+    "patched": {
+      "ref": "n132/arvo:42509901-fix",
+      "digest": "sha256:6b33edf710715352a0568167bab8685bb4b0b71a02bf8799d7b3c6ad1deb120a"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/imagemagick/MagickCore/locale.c:1416",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/imagemagick/MagickCore/locale.c:1416"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042527782",
+  "chain": "CWE-1284->CWE-125",
+  "project": "serenity",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42527782",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "9e3ee0e2b589ec8b28b27a72232a76e5d57e294b",
+      "fix_commits": [
+        "9e3ee0e2b589ec8b28b27a72232a76e5d57e294b"
+      ],
+      "repo": "https://github.com/SerenityOS/serenity"
+    },
+    "patch": "diff --git a/Userland/Libraries/LibGfx/ImageFormats/ILBMLoader.cpp b/Userland/Libraries/LibGfx/ImageFormats/ILBMLoader.cpp\nindex 50511cb2533778..6ec65acd1580de 100644\n--- a/Userland/Libraries/LibGfx/ImageFormats/ILBMLoader.cpp\n+++ b/Userland/Libraries/LibGfx/ImageFormats/ILBMLoader.cpp\n@@ -300,6 +300,9 @@ static ErrorOr<void> decode_bmhd_chunk(ILBMLoadingContext& context)\n     if (first_chunk.type != FourCC(\"BMHD\"))\n         return Error::from_string_literal(\"IFFImageDecoderPlugin: Invalid chunk type, expected BMHD\");\n \n+    if (first_chunk.data.size() < sizeof(BMHDHeader))\n+        return Error::from_string_literal(\"IFFImageDecoderPlugin: Not enough data for header chunk\");\n+\n     context.bm_header = *bit_cast<BMHDHeader const*>(first_chunk.data.data());\n     context.pitch = ceil_div((u16)context.bm_header.width, (u16)16) * 2;\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42527782-vul",
+      "digest": "sha256:34580fe1f45ca9b9894c5d6d52d0eefde21f189758ee9c9f063cdcd63d444f8d"
+    },
+    "patched": {
+      "ref": "n132/arvo:42527782-fix",
+      "digest": "sha256:522304172a4dcb6ffae1f84366738068ada6b264d0b775d95c14d2af9637058f"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/serenity/Userland/Libraries/LibGfx/ImageFormats/ILBMLoader.cpp:270",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/serenity/Userland/Libraries/LibGfx/ImageFormats/ILBMLoader.cpp:270"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

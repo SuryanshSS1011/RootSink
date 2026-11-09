@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-957163213",
+  "chain": "CWE-129->CWE-125",
+  "project": "ffmpeg",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42476647",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://git.ffmpeg.org/gitweb/ffmpeg.git/commitdiff/07b948fe60789064d7c784d47b8fe798a9a4d2b9",
+      "fix_commits": [
+        "07b948fe60789064d7c784d47b8fe798a9a4d2b9"
+      ],
+      "repo": "https://git.ffmpeg.org/gitweb/ffmpeg.git/commitdiff"
+    },
+    "patch": "From 07b948fe60789064d7c784d47b8fe798a9a4d2b9 Mon Sep 17 00:00:00 2001\nFrom: Michael Niedermayer <michael@niedermayer.cc>\nDate: Mon, 8 Jul 2019 01:18:05 +0200\nSubject: [PATCH] avcodec/vorbisdec: Check get_vlc2() failure\n\nFixes: out of array read\nFixes: 16510/clusterfuzz-testcase-minimized-ffmpeg_AV_CODEC_ID_VORBIS_fuzzer-5754510382727168\n\nFound-by: continuous fuzzing process https://github.com/google/oss-fuzz/tree/master/projects/ffmpeg\nSigned-off-by: Michael Niedermayer <michael@niedermayer.cc>\n---\n libavcodec/vorbisdec.c | 32 +++++++++++++++++++++++++-------\n 1 file changed, 25 insertions(+), 7 deletions(-)\n\ndiff --git a/libavcodec/vorbisdec.c b/libavcodec/vorbisdec.c\nindex 1045d57..104dc86 100644\n--- a/libavcodec/vorbisdec.c\n+++ b/libavcodec/vorbisdec.c\n@@ -1442,7 +1442,7 @@ static av_always_inline int vorbis_residue_decode_internal(vorbis_context *vc,\n                         int vqbook  = vr->books[vqclass][pass];\n \n                         if (vqbook >= 0 && vc->codebooks[vqbook].codevectors) {\n-                            unsigned coffs;\n+                            int coffs;\n                             unsigned dim  = vc->codebooks[vqbook].dimensions;\n                             unsigned step = FASTDIV(vr->partition_size << 1, dim << 1);\n                             vorbis_codebook codebook = vc->codebooks[vqbook];\n@@ -1451,14 +1451,20 @@ static av_always_inline int vorbis_residue_decode_internal(vorbis_context *vc,\n \n                                 voffs = voffset+j*vlen;\n                                 for (k = 0; k < step; ++k) {\n-                                    coffs = get_vlc2(gb, codebook.vlc.table, codebook.nb_bits, 3) * dim;\n+                                    coffs = get_vlc2(gb, codebook.vlc.table, codebook.nb_bits, 3);\n+                                    if (coffs < 0)\n+                                        return coffs;\n+                                    coffs *= dim;\n                                     for (l = 0; l < dim; ++l)\n                                         vec[voffs + k + l * step] += codebook.codevectors[coffs + l];\n                                 }\n                             } else if (vr_type == 1) {\n                                 voffs = voffset + j * vlen;\n                                 for (k = 0; k < step; ++k) {\n-                                    coffs = get_vlc2(gb, codebook.vlc.table, codebook.nb_bits, 3) * dim;\n+                                    coffs = get_vlc2(gb, codebook.vlc.table, codebook.nb_bits, 3);\n+                                    if (coffs < 0)\n+                                        return coffs;\n+                                    coffs *= dim;\n                                     for (l = 0; l < dim; ++l, ++voffs) {\n                                         vec[voffs]+=codebook.codevectors[coffs+l];\n \n@@ -1471,13 +1477,19 @@ static av_always_inline int vorbis_residue_decode_internal(vorbis_context *vc,\n \n                                 if (dim == 2) {\n                                     for (k = 0; k < step; ++k) {\n-                                        coffs = get_vlc2(gb, codebook.vlc.table, codebook.nb_bits, 3) * 2;\n+                                        coffs = get_vlc2(gb, codebook.vlc.table, codebook.nb_bits, 3);\n+                                        if (coffs < 0)\n+                                            return coffs;\n+                                        coffs *= 2;\n                                         vec[voffs + k       ] += codebook.codevectors[coffs    ];\n                                         vec[voffs + k + vlen] += codebook.codevectors[coffs + 1];\n                                     }\n                                 } else if (dim == 4) {\n                                     for (k = 0; k < step; ++k, voffs += 2) {\n-                                        coffs = get_vlc2(gb, codebook.vlc.table, codebook.nb_bits, 3) * 4;\n+                                        coffs = get_vlc2(gb, codebook.vlc.table, codebook.nb_bits, 3);\n+                                        if (coffs < 0)\n+                                            return coffs;\n+                                        coffs *= 4;\n                                         vec[voffs           ] += codebook.codevectors[coffs    ];\n                                         vec[voffs + 1       ] += codebook.codevectors[coffs + 2];\n                                         vec[voffs + vlen    ] += codebook.codevectors[coffs + 1];\n@@ -1485,7 +1497,10 @@ static av_always_inline int vorbis_residue_decode_internal(vorbis_context *vc,\n                                     }\n                                 } else\n                                 for (k = 0; k < step; ++k) {\n-                                    coffs = get_vlc2(gb, codebook.vlc.table, codebook.nb_bits, 3) * dim;\n+                                    coffs = get_vlc2(gb, codebook.vlc.table, codebook.nb_bits, 3);\n+                                    if (coffs < 0)\n+                                        return coffs;\n+                                    coffs *= dim;\n                                     for (l = 0; l < dim; l += 2, voffs++) {\n                                         vec[voffs       ] += codebook.codevectors[coffs + l    ];\n                                         vec[voffs + vlen] += codebook.codevectors[coffs + l + 1];\n@@ -1502,7 +1517,10 @@ static av_always_inline int vorbis_residue_decode_internal(vorbis_context *vc,\n                                 unsigned voffs_mod = voffset - voffs_div * ch;\n \n                                 for (k = 0; k < step; ++k) {\n-                                    coffs = get_vlc2(gb, codebook.vlc.table, codebook.nb_bits, 3) * dim;\n+                                    coffs = get_vlc2(gb, codebook.vlc.table, codebook.nb_bits, 3);\n+                                    if (coffs < 0)\n+                                        return coffs;\n+                                    coffs *= dim;\n                                     for (l = 0; l < dim; ++l) {\n                                         vec[voffs_div + voffs_mod * vlen] +=\n                                             codebook.codevectors[coffs + l];\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42476647-vul",
+      "digest": "sha256:3af86edb1b55dd23a56a5349ab0e960230f770a5e91c0e2093aeecb6e117c80b"
+    },
+    "patched": {
+      "ref": "n132/arvo:42476647-fix",
+      "digest": "sha256:d5c235ba290109ba1e423daadce4154bccd599faee77beb10cf7c6a0360e66e0"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "crash_site": "/src/fdk-aac/libDRCdec/src/drcGainDec_preprocess.cpp:697",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 129,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "site": "/src/fdk-aac/libDRCdec/src/drcGainDec_preprocess.cpp:697"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042501488",
+  "chain": "CWE-20->CWE-125",
+  "project": "libsrtp",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42501488",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "f1d1e57a49dca345e086e01b5fccc44e723221e0",
+      "fix_commits": [
+        "f1d1e57a49dca345e086e01b5fccc44e723221e0"
+      ],
+      "repo": "https://github.com/cisco/libsrtp"
+    },
+    "patch": "diff --git a/srtp/srtp.c b/srtp/srtp.c\nindex dbb099095..7ce2b5395 100644\n--- a/srtp/srtp.c\n+++ b/srtp/srtp.c\n@@ -3277,7 +3277,8 @@ void srtp_crypto_policy_set_null_cipher_hmac_sha1_80(srtp_crypto_policy_t *p)\n      */\n \n     p->cipher_type = SRTP_NULL_CIPHER;\n-    p->cipher_key_len = 16;\n+    p->cipher_key_len =\n+        SRTP_AES_ICM_128_KEY_LEN_WSALT; /* 128 bit key, 112 bit salt */;\n     p->auth_type = SRTP_HMAC_SHA1;\n     p->auth_key_len = 20;\n     p->auth_tag_len = 10;\n@@ -3291,7 +3292,8 @@ void srtp_crypto_policy_set_null_cipher_hmac_null(srtp_crypto_policy_t *p)\n      */\n \n     p->cipher_type = SRTP_NULL_CIPHER;\n-    p->cipher_key_len = 16;\n+    p->cipher_key_len =\n+        SRTP_AES_ICM_128_KEY_LEN_WSALT; /* 128 bit key, 112 bit salt */;\n     p->auth_type = SRTP_NULL_AUTH;\n     p->auth_key_len = 0;\n     p->auth_tag_len = 0;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42501488-vul",
+      "digest": "sha256:a35771015027576cf42668779f96123fe1dc08197b1bc150c6110610306af9a3"
+    },
+    "patched": {
+      "ref": "n132/arvo:42501488-fix",
+      "digest": "sha256:25046a1bb942d4abbefce59cd9786a861de70a81fbd56ce0afd61267a52d5f9d"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/libsrtp/srtp/srtp.c:965",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/libsrtp/srtp/srtp.c:965"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

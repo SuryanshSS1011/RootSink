@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-953447432",
+  "chain": "CWE-129->CWE-125",
+  "project": "libavc",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42530523",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/ittiam-systems/libavc/commit/e49a9150a3b1cfc3fb9097ca02dd042e35226129",
+      "fix_commits": [
+        "e49a9150a3b1cfc3fb9097ca02dd042e35226129"
+      ],
+      "repo": "https://github.com/ittiam-systems/libavc"
+    },
+    "patch": "diff --git a/decoder/svc/isvcd_api.c b/decoder/svc/isvcd_api.c\nindex f3ac7780..6fd595c6 100644\n--- a/decoder/svc/isvcd_api.c\n+++ b/decoder/svc/isvcd_api.c\n@@ -5184,6 +5184,7 @@ WORD32 isvcd_video_decode(iv_obj_t *dec_hdl, void *pv_api_ip, void *pv_api_op)\n                 ps_svcd_ctxt->u1_cur_layer_id = u1_res_id;\n                 ps_svc_lyr_dec = ps_svcd_ctxt->ps_svc_dec_lyr + u1_res_id;\n                 ps_svc_lyr_dec->u1_res_init_done = 0;\n+                ps_svc_lyr_dec->u1_first_mb_addr_check = 1;\n                 ps_dec = &ps_svc_lyr_dec->s_dec;\n \n                 ps_dec->i4_decode_header = ps_dec_zero_lyr->i4_decode_header;\n@@ -5320,7 +5321,7 @@ WORD32 isvcd_video_decode(iv_obj_t *dec_hdl, void *pv_api_ip, void *pv_api_op)\n                     ps_dec = &ps_svc_lyr_dec->s_dec;\n \n                     if((0 == ps_svcd_ctxt->u4_num_sps_ctr) || (0 == ps_svcd_ctxt->u4_num_pps_ctr) ||\n-                       (NULL == ps_dec->ps_cur_pps))\n+                       (NULL == ps_dec->ps_cur_pps) || (ps_svc_lyr_dec->u1_res_init_done == 0))\n                     {\n                         ps_svcd_ctxt->u1_exit_till_next_IDR = 1;\n                         ps_dec_op->u4_error_code = ERROR_UNKNOWN_NAL;\ndiff --git a/decoder/svc/isvcd_parse_slice.c b/decoder/svc/isvcd_parse_slice.c\nindex f8270b6c..2dfba525 100644\n--- a/decoder/svc/isvcd_parse_slice.c\n+++ b/decoder/svc/isvcd_parse_slice.c\n@@ -703,6 +703,18 @@ WORD32 isvcd_parse_decode_slice_ext_nal(UWORD8 u1_is_idr_slice, UWORD8 u1_nal_re\n         return ERROR_CORRUPTED_SLICE;\n     }\n \n+    if(ps_svc_lyr_dec->u1_first_mb_addr_check == 1)\n+    {\n+        if(u2_first_mb_in_slice != 0)\n+        {\n+            return ERROR_CORRUPTED_SLICE;\n+        }\n+        else\n+        {\n+            ps_svc_lyr_dec->u1_first_mb_addr_check = 0;\n+        }\n+    }\n+\n     COPYTHECONTEXT(\"Slice Header SVC ext: first_mb_in_slice\", u2_first_mb_in_slice);\n \n     u4_temp = ih264d_uev(pu4_bitstrm_ofst, pu4_bitstrm_buf);\n@@ -1926,6 +1938,18 @@ WORD32 isvcd_parse_decode_slice(UWORD8 u1_is_idr_slice, UWORD8 u1_nal_ref_idc,\n         return ERROR_CORRUPTED_SLICE;\n     }\n \n+    if(ps_svc_lyr_dec->u1_first_mb_addr_check == 1)\n+    {\n+        if(u2_first_mb_in_slice != 0)\n+        {\n+            return ERROR_CORRUPTED_SLICE;\n+        }\n+        else\n+        {\n+            ps_svc_lyr_dec->u1_first_mb_addr_check = 0;\n+        }\n+    }\n+\n     COPYTHECONTEXT(\"SH: first_mb_in_slice\", u2_first_mb_in_slice);\n \n     u4_temp = ih264d_uev(pu4_bitstrm_ofst, pu4_bitstrm_buf);\ndiff --git a/decoder/svc/isvcd_process_epslice.c b/decoder/svc/isvcd_process_epslice.c\nindex 62bc5bf2..29e9bbba 100644\n--- a/decoder/svc/isvcd_process_epslice.c\n+++ b/decoder/svc/isvcd_process_epslice.c\n@@ -158,6 +158,7 @@ WORD32 isvcd_interlyr_motion_mode_pred(svc_dec_lyr_struct_t *ps_svc_lyr_dec,\n         /* get the current layer ctxt */\n         ps_lyr_mem = &ps_ctxt->as_res_lyr_mem[ps_ctxt->i4_res_id];\n \n+#if 0\n         /* In case of error mb_mode is set to skip */\n         if(ps_svc_lyr_dec->u1_res_init_done == 0)\n         {\n@@ -191,6 +192,7 @@ WORD32 isvcd_interlyr_motion_mode_pred(svc_dec_lyr_struct_t *ps_svc_lyr_dec,\n             }\n         }\n         else\n+#endif\n         {\n             ps_ctxt->i4_listx = i4_listx;\n \ndiff --git a/decoder/svc/isvcd_structs.h b/decoder/svc/isvcd_structs.h\nindex fefd32d5..b891acbe 100644\n--- a/decoder/svc/isvcd_structs.h\n+++ b/decoder/svc/isvcd_structs.h\n@@ -661,6 +661,7 @@ typedef struct _SvcDecLyrStruct\n     UWORD32 u4_pps_id_for_layer;\n     UWORD8 u1_error_in_cur_frame;\n     UWORD8 u1_res_init_done;\n+    UWORD8 u1_first_mb_addr_check;\n } svc_dec_lyr_struct_t;\n \n typedef struct\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42530523-vul",
+      "digest": "sha256:71867f175d02140a437b60aeccc84a701903fcfe25dc3783d5f6f225622f8ed1"
+    },
+    "patched": {
+      "ref": "n132/arvo:42530523-fix",
+      "digest": "sha256:8339a8784475e7db1b97d358558f39bee62ead6e9d88dcf83c688d0605d7963e"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "crash_site": "/src/libavc/decoder/svc/isvcd_process_epslice.c:159",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 129,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "site": "/src/libavc/decoder/svc/isvcd_process_epslice.c:159"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

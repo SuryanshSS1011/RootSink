@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042522543",
+  "chain": "CWE-20->CWE-125",
+  "project": "wolfssl",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42522543",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "aeffe6cfa799565a05bd30d0271fa0bdd26a3d31",
+      "fix_commits": [
+        "aeffe6cfa799565a05bd30d0271fa0bdd26a3d31"
+      ],
+      "repo": "https://github.com/wolfssl/wolfssl"
+    },
+    "patch": "diff --git a/src/internal.c b/src/internal.c\nindex 726d25ea1f4..9e77a1ec095 100644\n--- a/src/internal.c\n+++ b/src/internal.c\n@@ -16045,6 +16045,12 @@ void SendFatalAlertOnly(WOLFSSL *ssl, int error)\n     case WC_PENGIND_E:\n #endif\n         return;\n+\n+    /* peer already disconnected and ssl is possibly in bad state\n+     * don't try to send an alert */\n+    case SOCKET_ERROR_E:\n+        return;\n+\n     case BUFFER_ERROR:\n     case ASN_PARSE_E:\n     case COMPRESSION_ERROR:\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42522543-vul",
+      "digest": "sha256:f9e9cc57daddb0e0384ec0254ff40929267a8086ae0c41729ba336b81f51e21f"
+    },
+    "patched": {
+      "ref": "n132/arvo:42522543-fix",
+      "digest": "sha256:3f96c0be6fde2fd4921cce97e28a40cac9599d7eb3ce0cc9b215ebadd72befd4"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/wolf-ssl-ssh-fuzzers/oss-fuzz/projects/wolf-ssl-ssh/fuzzers/include/fuzzers/shared.h:239",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/wolf-ssl-ssh-fuzzers/oss-fuzz/projects/wolf-ssl-ssh/fuzzers/include/fuzzers/shared.h:239"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

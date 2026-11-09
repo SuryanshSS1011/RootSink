@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042483421",
+  "chain": "CWE-416->CWE-125",
+  "project": "libheif",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42483421",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "b7484d2ed35338970b727e55adb509f2200b0e40",
+      "fix_commits": [
+        "b7484d2ed35338970b727e55adb509f2200b0e40"
+      ],
+      "repo": "https://github.com/strukturag/libheif"
+    },
+    "patch": "diff --git a/libheif/heif_colorconversion.cc b/libheif/heif_colorconversion.cc\nindex 33fb7460ad..54771fda70 100644\n--- a/libheif/heif_colorconversion.cc\n+++ b/libheif/heif_colorconversion.cc\n@@ -2924,6 +2924,23 @@ std::shared_ptr<HeifPixelImage> heif::convert_colorspace(const std::shared_ptr<H\n                                                          std::shared_ptr<const color_profile_nclx> target_profile,\n                                                          int output_bpp)\n {\n+  // --- check that input image is valid\n+\n+  int width = input->get_width();\n+  int height = input->get_width();\n+\n+  // alpha image should have full image resolution\n+\n+  if (input->has_channel(heif_channel_Alpha)) {\n+    if (input->get_width(heif_channel_Alpha) != width ||\n+        input->get_height(heif_channel_Alpha) != height) {\n+      return nullptr;\n+    }\n+  }\n+\n+\n+  // --- prepare conversion\n+\n   ColorState input_state;\n   input_state.colorspace = input->get_colorspace();\n   input_state.chroma = input->get_chroma_format();\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42483421-vul",
+      "digest": "sha256:4991261fa3969af862661f598d9a72cf5c2769247ca4af13bff2075a85c06bf7"
+    },
+    "patched": {
+      "ref": "n132/arvo:42483421-fix",
+      "digest": "sha256:8b6b5ff4d6dae3a3959d87b378a8b750da2d470876cccb1569925e4b658b2c12"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/libheif/libheif/heif_colorconversion.cc:164",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/libheif/libheif/heif_colorconversion.cc:164"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

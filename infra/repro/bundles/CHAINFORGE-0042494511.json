@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042494511",
+  "chain": "CWE-416->CWE-125",
+  "project": "c-blosc2",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42494511",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "48123a7d2e7409ecd0e74f64a326fa7f2af0627d",
+      "fix_commits": [
+        "48123a7d2e7409ecd0e74f64a326fa7f2af0627d"
+      ],
+      "repo": "https://github.com/Blosc/c-blosc2"
+    },
+    "patch": "From 48123a7d2e7409ecd0e74f64a326fa7f2af0627d Mon Sep 17 00:00:00 2001\nFrom: Francesc Alted <faltet@gmail.com>\nDate: Tue, 13 Apr 2021 14:52:27 +0200\nSubject: [PATCH] Another sanity check for the number of chunks in frame\n\n---\n blosc/frame.c | 32 +++++++++++++++++++++-----------\n 1 file changed, 21 insertions(+), 11 deletions(-)\n\ndiff --git a/blosc/frame.c b/blosc/frame.c\nindex 5a395a5..5c24677 100644\n--- a/blosc/frame.c\n+++ b/blosc/frame.c\n@@ -958,7 +958,8 @@ int64_t frame_from_schunk(blosc2_schunk *schunk, blosc2_frame_s *frame) {\n \n \n // Get the compressed data offsets\n-uint8_t* get_coffsets(blosc2_frame_s *frame, int32_t header_len, int64_t cbytes, int32_t *off_cbytes) {\n+uint8_t* get_coffsets(blosc2_frame_s *frame, int32_t header_len, int64_t cbytes,\n+                      int32_t nchunks, int32_t *off_cbytes) {\n   int32_t chunk_cbytes;\n   int rc;\n \n@@ -986,7 +987,9 @@ uint8_t* get_coffsets(blosc2_frame_s *frame, int32_t header_len, int64_t cbytes,\n     // For in-memory frames, the coffset is just one pointer away\n     uint8_t* off_start = frame->cframe + off_pos;\n     if (off_cbytes != NULL) {\n-      rc = blosc2_cbuffer_sizes(off_start, NULL, &chunk_cbytes, NULL);\n+      int32_t chunk_nbytes;\n+      int32_t chunk_blocksize;\n+      rc = blosc2_cbuffer_sizes(off_start, &chunk_nbytes, &chunk_cbytes, &chunk_blocksize);\n       if (rc < 0) {\n         return NULL;\n       }\n@@ -995,6 +998,12 @@ uint8_t* get_coffsets(blosc2_frame_s *frame, int32_t header_len, int64_t cbytes,\n         BLOSC_TRACE_ERROR(\"Cannot read the cbytes outside of frame boundary.\");\n         return NULL;\n       }\n+      if (chunk_nbytes != nchunks * sizeof(int64_t)) {\n+        BLOSC_TRACE_ERROR(\"The number of chunks in offset idx \"\n+                          \"does not match the ones in the header frame.\");\n+        return NULL;\n+      }\n+\n     }\n     return off_start;\n   }\n@@ -1535,7 +1544,7 @@ blosc2_schunk* frame_to_schunk(blosc2_frame_s* frame, bool copy) {\n \n   // Get the compressed offsets\n   int32_t coffsets_cbytes = 0;\n-  uint8_t* coffsets = get_coffsets(frame, header_len, cbytes, &coffsets_cbytes);\n+  uint8_t* coffsets = get_coffsets(frame, header_len, cbytes, nchunks, &coffsets_cbytes);\n   if (coffsets == NULL) {\n     blosc2_schunk_free(schunk);\n     BLOSC_TRACE_ERROR(\"Cannot get the offsets for the frame.\");\n@@ -1698,10 +1707,11 @@ int sort_offset(const void* a, const void* b) {\n }\n \n \n-int get_coffset(blosc2_frame_s* frame, int32_t header_len, int64_t cbytes, int32_t nchunk, int64_t *offset) {\n+int get_coffset(blosc2_frame_s* frame, int32_t header_len, int64_t cbytes,\n+                int32_t nchunk, int32_t nchunks, int64_t *offset) {\n   int32_t off_cbytes;\n   // Get the offset to nchunk\n-  uint8_t *coffsets = get_coffsets(frame, header_len, cbytes, &off_cbytes);\n+  uint8_t *coffsets = get_coffsets(frame, header_len, cbytes, nchunks, &off_cbytes);\n   if (coffsets == NULL) {\n     BLOSC_TRACE_ERROR(\"Cannot get the offset for chunk %d for the frame.\", nchunk);\n     return BLOSC2_ERROR_DATA;\n@@ -1808,7 +1818,7 @@ int frame_get_chunk(blosc2_frame_s *frame, int nchunk, uint8_t **chunk, bool *ne\n   }\n \n   // Get the offset to nchunk\n-  rc = get_coffset(frame, header_len, cbytes, nchunk, &offset);\n+  rc = get_coffset(frame, header_len, cbytes, nchunk, nchunks, &offset);\n   if (rc < 0) {\n     BLOSC_TRACE_ERROR(\"Unable to get offset to chunk %d.\", nchunk);\n     return rc;\n@@ -1909,7 +1919,7 @@ int frame_get_lazychunk(blosc2_frame_s *frame, int nchunk, uint8_t **chunk, bool\n   }\n \n   // Get the offset to nchunk\n-  rc = get_coffset(frame, header_len, cbytes, nchunk, &offset);\n+  rc = get_coffset(frame, header_len, cbytes, nchunk, nchunks, &offset);\n   if (rc < 0) {\n     BLOSC_TRACE_ERROR(\"Unable to get offset to chunk %d.\", nchunk);\n     return rc;\n@@ -2136,7 +2146,7 @@ void* frame_append_chunk(blosc2_frame_s* frame, void* chunk, blosc2_schunk* schu\n   int64_t* offsets = (int64_t *) malloc((size_t)off_nbytes);\n   if (nchunks > 0) {\n     int32_t coffsets_cbytes;\n-    uint8_t *coffsets = get_coffsets(frame, header_len, cbytes, &coffsets_cbytes);\n+    uint8_t *coffsets = get_coffsets(frame, header_len, cbytes, nchunks, &coffsets_cbytes);\n     if (coffsets == NULL) {\n       BLOSC_TRACE_ERROR(\"Cannot get the offsets for the frame.\");\n       free(offsets);\n@@ -2311,7 +2321,7 @@ void* frame_insert_chunk(blosc2_frame_s* frame, int nchunk, void* chunk, blosc2_\n   int64_t* offsets = (int64_t *) malloc((size_t)off_nbytes);\n   if (nchunks > 0) {\n     int32_t coffsets_cbytes = 0;\n-    uint8_t *coffsets = get_coffsets(frame, header_len, cbytes, &coffsets_cbytes);\n+    uint8_t *coffsets = get_coffsets(frame, header_len, cbytes, nchunks, &coffsets_cbytes);\n     if (coffsets == NULL) {\n       BLOSC_TRACE_ERROR(\"Cannot get the offsets for the frame.\");\n       return NULL;\n@@ -2501,7 +2511,7 @@ void* frame_update_chunk(blosc2_frame_s* frame, int nchunk, void* chunk, blosc2_\n   int64_t* offsets = (int64_t *) malloc((size_t)off_nbytes);\n   if (nchunks > 0) {\n     int32_t coffsets_cbytes = 0;\n-    uint8_t *coffsets = get_coffsets(frame, header_len, cbytes, &coffsets_cbytes);\n+    uint8_t *coffsets = get_coffsets(frame, header_len, cbytes, nchunks, &coffsets_cbytes);\n     if (coffsets == NULL) {\n       BLOSC_TRACE_ERROR(\"Cannot get the offsets for the frame.\");\n       return NULL;\n@@ -2698,7 +2708,7 @@ int frame_reorder_offsets(blosc2_frame_s* frame, const int* offsets_order, blosc\n   int64_t* offsets = (int64_t *) malloc((size_t)off_nbytes);\n \n   int32_t coffsets_cbytes = 0;\n-  uint8_t *coffsets = get_coffsets(frame, header_len, cbytes, &coffsets_cbytes);\n+  uint8_t *coffsets = get_coffsets(frame, header_len, cbytes, nchunks, &coffsets_cbytes);\n   if (coffsets == NULL) {\n     BLOSC_TRACE_ERROR(\"Cannot get the offsets for the frame.\");\n     free(offsets);\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42494511-vul",
+      "digest": "sha256:bc6db98ee36dc9890edcf0fd61cf00e3802dd9d3e0eefc18770b25556ab00603"
+    },
+    "patched": {
+      "ref": "n132/arvo:42494511-fix",
+      "digest": "sha256:255afb851e3fc785f554021558e88edc27371b2c7207a0965050fa4d995a3be2"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/c-blosc2/internal-complibs/zstd-1.4.8/decompress/zstd_ddict.c:215",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/c-blosc2/internal-complibs/zstd-1.4.8/decompress/zstd_ddict.c:215"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

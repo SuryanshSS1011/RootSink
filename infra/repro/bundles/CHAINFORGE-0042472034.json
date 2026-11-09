@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042472034",
+  "chain": "CWE-1285->CWE-125",
+  "project": "skia",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42472034",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "eb82b5a3ee917654de6a60907e40ed8d3ef3d739",
+      "fix_commits": [
+        "eb82b5a3ee917654de6a60907e40ed8d3ef3d739"
+      ],
+      "repo": "https://skia.googlesource.com/skia.git"
+    },
+    "patch": "diff --git a/src/core/SkPath.cpp b/src/core/SkPath.cpp\nindex 1fc75d2..3debecf 100644\n--- a/src/core/SkPath.cpp\n+++ b/src/core/SkPath.cpp\n@@ -2803,7 +2803,11 @@\n     };\n \n     // Check to see if path changes direction more than three times as quick concave test\n-    int pointCount = fLastMoveToIndex > 0 ? fLastMoveToIndex : this->countPoints();\n+    int pointCount = this->countPoints();\n+    // last moveTo index may exceed point count if data comes from fuzzer (via SkImageFilter)\n+    if (0 < fLastMoveToIndex && fLastMoveToIndex < pointCount) {\n+        pointCount = fLastMoveToIndex;\n+    }\n     if (pointCount > 3) {\n         const SkPoint* points = fPathRef->points();\n         const SkPoint* last = &points[pointCount];\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42472034-vul",
+      "digest": "sha256:bdb2f90eadda791839b2940a14b12abd7e4a4077f663c06aacff047d76abcd0c"
+    },
+    "patched": {
+      "ref": "n132/arvo:42472034-fix",
+      "digest": "sha256:606679e1d5344c2d46020596d5d1cd4cd83ed490cd5910929b126446e2d6fac3"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/skia/out/Fuzz_mem_constraints/../../include/core/SkPoint.h:462",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/skia/out/Fuzz_mem_constraints/../../include/core/SkPoint.h:462"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

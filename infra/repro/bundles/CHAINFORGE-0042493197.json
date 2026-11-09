@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042493197",
+  "chain": "CWE-1284->CWE-125",
+  "project": "wolfssl",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42493197",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "e4f8545e36fb28249864ff7f3a73b6460f6882c3",
+      "fix_commits": [
+        "e4f8545e36fb28249864ff7f3a73b6460f6882c3"
+      ],
+      "repo": "https://github.com/wolfssl/wolfssl"
+    },
+    "patch": "diff --git a/wolfcrypt/src/dh.c b/wolfcrypt/src/dh.c\nindex 0c9f1827560..3315c2dfa74 100644\n--- a/wolfcrypt/src/dh.c\n+++ b/wolfcrypt/src/dh.c\n@@ -2456,7 +2456,12 @@ int wc_DhGenerateParams(WC_RNG *rng, int modSz, DhKey *dh)\n \n     if (ret == 0) {\n         /* at this point tmp generates a group of order q mod p */\n+#ifndef USE_FAST_MATH\n+        /* Exchanging is quick when the data pointer can be copied. */\n         mp_exch(&tmp, &dh->g);\n+#else\n+        mp_copy(&tmp, &dh->g);\n+#endif\n     }\n \n     /* clear the parameters if there was an error */\ndiff --git a/wolfcrypt/src/dsa.c b/wolfcrypt/src/dsa.c\nindex f62cec92d2c..dbfa010ef4e 100644\n--- a/wolfcrypt/src/dsa.c\n+++ b/wolfcrypt/src/dsa.c\n@@ -412,7 +412,12 @@ int wc_MakeDsaParameters(WC_RNG *rng, int modulus_size, DsaKey *dsa)\n     } while (mp_cmp_d(&tmp, 1) == MP_EQ);\n \n     /* at this point tmp generates a group of order q mod p */\n+#ifndef USE_FAST_MATH\n+    /* Exchanging is quick when the data pointer can be copied. */\n     mp_exch(&tmp, &dsa->g);\n+#else\n+    mp_copy(&tmp, &dsa->g);\n+#endif\n \n     mp_clear(&tmp);\n     mp_clear(&tmp2);\ndiff --git a/wolfcrypt/src/sp_int.c b/wolfcrypt/src/sp_int.c\nindex d51ab9a5751..4b760631d26 100644\n--- a/wolfcrypt/src/sp_int.c\n+++ b/wolfcrypt/src/sp_int.c\n@@ -2425,12 +2425,19 @@ int sp_exch(sp_int* a, sp_int* b)\n     if ((a == NULL) || (b == NULL)) {\n         err = MP_VAL;\n     }\n+    if ((err == MP_OKAY) && ((a->size < b->used) || (b->size < a->used))) {\n+        err = MP_VAL;\n+    }\n \n     ALLOC_SP_INT(t, a->used, err, NULL);\n     if (err == MP_OKAY) {\n+        int asize = a->size;\n+        int bsize = b->size;\n         XMEMCPY(t, a, MP_INT_SIZEOF(a->used));\n         XMEMCPY(a, b, MP_INT_SIZEOF(b->used));\n-        XMEMCPY(b, t, MP_INT_SIZEOF(a->used));\n+        XMEMCPY(b, t, MP_INT_SIZEOF(t->used));\n+        a->size = asize;\n+        b->size = bsize;\n     }\n \n     FREE_SP_INT(t, NULL);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42493197-vul",
+      "digest": "sha256:43694eeeb83f2a76858a9b0a6046d08b1c25dc2c499e1298657795af686a31ca"
+    },
+    "patched": {
+      "ref": "n132/arvo:42493197-fix",
+      "digest": "sha256:e316f3ce4688a2c2e8667ac930647f6c2dbc5bea258fe82c3c927beffe1c0b7b"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/wolfssl-sp-math-all/wolfcrypt/src/sp_int.c:2433",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/wolfssl-sp-math-all/wolfcrypt/src/sp_int.c:2433"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

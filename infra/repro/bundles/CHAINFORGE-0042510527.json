@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042510527",
+  "chain": "CWE-1284->CWE-125",
+  "project": "ndpi",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42510527",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "06a0abb6fdf8fb7a446ef5aafdf2c7d24608977f",
+      "fix_commits": [
+        "06a0abb6fdf8fb7a446ef5aafdf2c7d24608977f"
+      ],
+      "repo": "https://github.com/ntop/nDPI"
+    },
+    "patch": "diff --git a/src/lib/protocols/tinc.c b/src/lib/protocols/tinc.c\nindex 5948c4379b0..c366cba0115 100644\n--- a/src/lib/protocols/tinc.c\n+++ b/src/lib/protocols/tinc.c\n@@ -90,11 +90,11 @@ static void ndpi_check_tinc(struct ndpi_detection_module_struct *ndpi_struct, st\n \tu_int16_t i = 3;\n \tu_int8_t numbers_left = 4;\n \twhile(numbers_left) {\n-\t  while(packet_payload[i] >= '0' && packet_payload[i] <= '9') {\n+\t  while(i < payload_len && packet_payload[i] >= '0' && packet_payload[i] <= '9') {\n \t    i++;\n \t  }\n \n-\t  if(packet_payload[i++] == ' ') {\n+\t  if(i < payload_len && packet_payload[i++] == ' ') {\n \t    numbers_left--;\n \t  }\n \t  else break;\n@@ -102,12 +102,13 @@ static void ndpi_check_tinc(struct ndpi_detection_module_struct *ndpi_struct, st\n           \n \tif(numbers_left) break;\n           \n-\twhile((packet_payload[i] >= '0' && packet_payload[i] <= '9') ||\n-\t      (packet_payload[i] >= 'A' && packet_payload[i] <= 'Z')) {\n+\twhile(i < payload_len &&\n+\t      ((packet_payload[i] >= '0' && packet_payload[i] <= '9') ||\n+\t       (packet_payload[i] >= 'A' && packet_payload[i] <= 'Z'))) {\n \t  i++;\n \t}\n           \n-\tif(packet_payload[i] == '\\n') {\n+\tif(i < payload_len && packet_payload[i] == '\\n') {\n \t  if(++flow->tinc_state > 3) {\n \t    if(ndpi_struct->tinc_cache == NULL)\n \t      ndpi_struct->tinc_cache = cache_new(TINC_CACHE_MAX_SIZE);              \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42510527-vul",
+      "digest": "sha256:8bbda545c995615e22f3b71d91fea5464273407fb60b9d5236665b170bc841c6"
+    },
+    "patched": {
+      "ref": "n132/arvo:42510527-fix",
+      "digest": "sha256:3f661d5b932d2440f74497c89a742ae6e868c97280d5d57c2fb277d1bd9396b6"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/ndpi/src/lib/protocols/tinc.c:105",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/ndpi/src/lib/protocols/tinc.c:105"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

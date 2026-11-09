@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042508710",
+  "chain": "CWE-416->CWE-787",
+  "project": "aom",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42508710",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "ee9dbcb018f20f16348b22bc413dec1c9d901183",
+      "fix_commits": [
+        "ee9dbcb018f20f16348b22bc413dec1c9d901183"
+      ],
+      "repo": "https://aomedia.googlesource.com/aom"
+    },
+    "patch": "diff --git a/av1/decoder/decodeframe.c b/av1/decoder/decodeframe.c\nindex b2d4160..5d6f543 100644\n--- a/av1/decoder/decodeframe.c\n+++ b/av1/decoder/decodeframe.c\n@@ -1307,6 +1307,10 @@\n   }\n   subsize = get_partition_subsize(bsize, partition);\n   if (subsize == BLOCK_INVALID) {\n+    // When an internal error occurs ensure that xd->mi_row is set appropriately\n+    // w.r.t. current tile, which is used to signal processing of current row is\n+    // done.\n+    xd->mi_row = mi_row;\n     aom_internal_error(xd->error_info, AOM_CODEC_CORRUPT_FRAME,\n                        \"Partition is invalid for block size %dx%d\",\n                        block_size_wide[bsize], block_size_high[bsize]);\n@@ -1316,6 +1320,10 @@\n   const struct macroblockd_plane *const pd_u = &xd->plane[1];\n   if (get_plane_block_size(subsize, pd_u->subsampling_x, pd_u->subsampling_y) ==\n       BLOCK_INVALID) {\n+    // When an internal error occurs ensure that xd->mi_row is set appropriately\n+    // w.r.t. current tile, which is used to signal processing of current row is\n+    // done.\n+    xd->mi_row = mi_row;\n     aom_internal_error(xd->error_info, AOM_CODEC_CORRUPT_FRAME,\n                        \"Block size %dx%d invalid with this subsampling mode\",\n                        block_size_wide[subsize], block_size_high[subsize]);\n@@ -1393,19 +1401,30 @@\n }\n \n static AOM_INLINE void setup_bool_decoder(\n-    const uint8_t *data, const uint8_t *data_end, const size_t read_size,\n-    struct aom_internal_error_info *error_info, aom_reader *r,\n-    uint8_t allow_update_cdf) {\n+    MACROBLOCKD *const xd, const uint8_t *data, const uint8_t *data_end,\n+    const size_t read_size, struct aom_internal_error_info *error_info,\n+    aom_reader *r, uint8_t allow_update_cdf) {\n   // Validate the calculated partition length. If the buffer\n   // described by the partition can't be fully read, then restrict\n   // it to the portion that can be (for EC mode) or throw an error.\n-  if (!read_is_valid(data, read_size, data_end))\n+  if (!read_is_valid(data, read_size, data_end)) {\n+    // When internal error occurs ensure that xd->mi_row is set appropriately\n+    // w.r.t. current tile, which is used to signal processing of current row is\n+    // done in row-mt decoding.\n+    xd->mi_row = xd->tile.mi_row_start;\n+\n     aom_internal_error(error_info, AOM_CODEC_CORRUPT_FRAME,\n                        \"Truncated packet or corrupt tile length\");\n+  }\n+  if (aom_reader_init(r, data, read_size)) {\n+    // When internal error occurs ensure that xd->mi_row is set appropriately\n+    // w.r.t. current tile, which is used to signal processing of current row is\n+    // done in row-mt decoding.\n+    xd->mi_row = xd->tile.mi_row_start;\n \n-  if (aom_reader_init(r, data, read_size))\n     aom_internal_error(error_info, AOM_CODEC_MEM_ERROR,\n                        \"Failed to allocate bool decoder %d\", 1);\n+  }\n \n   r->allow_update_cdf = allow_update_cdf;\n }\n@@ -2824,8 +2843,9 @@\n       av1_zero(td->cb_buffer_base.dqcoeff);\n       av1_tile_init(&td->dcb.xd.tile, cm, row, col);\n       td->dcb.xd.current_base_qindex = cm->quant_params.base_qindex;\n-      setup_bool_decoder(tile_bs_buf->data, data_end, tile_bs_buf->size,\n-                         &pbi->error, td->bit_reader, allow_update_cdf);\n+      setup_bool_decoder(&td->dcb.xd, tile_bs_buf->data, data_end,\n+                         tile_bs_buf->size, &pbi->error, td->bit_reader,\n+                         allow_update_cdf);\n #if CONFIG_ACCOUNTING\n       if (pbi->acct_enabled) {\n         td->bit_reader->accounting = &pbi->accounting;\n@@ -2897,7 +2917,8 @@\n   MACROBLOCKD *const xd = &td->dcb.xd;\n   av1_tile_init(&xd->tile, cm, tile_row, tile_col);\n   xd->current_base_qindex = cm->quant_params.base_qindex;\n-  setup_bool_decoder(tile_buffer->data, thread_data->data_end,\n+\n+  setup_bool_decoder(xd, tile_buffer->data, thread_data->data_end,\n                      tile_buffer->size, &thread_data->error_info,\n                      td->bit_reader, allow_update_cdf);\n #if CONFIG_ACCOUNTING\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42508710-vul",
+      "digest": "sha256:2c4268af6e5340637935c56922baa1310373fbde79be80602859d69dbebd6e4f"
+    },
+    "patched": {
+      "ref": "n132/arvo:42508710-fix",
+      "digest": "sha256:3f23ad1dfef27cb8c14b791665cfe4133bd71dd0304221153599bd4b04e80892"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/aom/av1/decoder/decodeframe.c:2567",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/aom/av1/decoder/decodeframe.c:2567"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

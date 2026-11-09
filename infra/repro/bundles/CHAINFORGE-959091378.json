@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-959091378",
+  "chain": "CWE-129->CWE-125",
+  "project": "opensc",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42521948",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/OpenSC/OpenSC/commit/d0a2bdaac5dcecc905c7aad6579c46624cc0ebde",
+      "fix_commits": [
+        "d0a2bdaac5dcecc905c7aad6579c46624cc0ebde"
+      ],
+      "repo": "https://github.com/OpenSC/OpenSC"
+    },
+    "patch": "diff --git a/src/pkcs15init/pkcs15-oberthur.c b/src/pkcs15init/pkcs15-oberthur.c\nindex 9239541d07..990aa9c7d2 100644\n--- a/src/pkcs15init/pkcs15-oberthur.c\n+++ b/src/pkcs15init/pkcs15-oberthur.c\n@@ -134,6 +134,9 @@ cosm_delete_file(struct sc_pkcs15_card *p15card, struct sc_profile *profile,\n \n \t/* Select the parent DF */\n \tpath = df->path;\n+\tif (path.len < 2) {\n+\t\tLOG_FUNC_RETURN(ctx, SC_ERROR_INVALID_ARGUMENTS);\n+\t}\n \tpath.len -= 2;\n \n \trv = sc_select_file(p15card->card, &path, &parent);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42521948-vul",
+      "digest": "sha256:899d5cbc7c3f3c7a7818508bae593d01adf7e1f27888a1eefcc95053dafa18af"
+    },
+    "patched": {
+      "ref": "n132/arvo:42521948-fix",
+      "digest": "sha256:511a65cb86e7c9deca7e73262177e44482c66d1ec75b412f209ae71a58fb50f2"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "crash_site": "/src/opensc/src/libopensc/sc.c:467",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 129,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "site": "/src/opensc/src/libopensc/sc.c:467"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

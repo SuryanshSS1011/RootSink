@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042530604",
+  "chain": "CWE-20->CWE-787",
+  "project": "jq",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42530604",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "71c2ab509a8628dbbad4bc7b3f98a64aa90d3297",
+      "fix_commits": [
+        "71c2ab509a8628dbbad4bc7b3f98a64aa90d3297"
+      ],
+      "repo": "https://github.com/jqlang/jq"
+    },
+    "patch": "diff --git a/NEWS.md b/NEWS.md\nindex 913be89879..14a594ba70 100644\n--- a/NEWS.md\n+++ b/NEWS.md\n@@ -2,7 +2,7 @@\n \n ## Security\n \n-- CVE-2023-50246: ....\n+- CVE-2023-50246: Fix heap buffer overflow in jvp\\_literal\\_number\\_literal\n - CVE-2023-50268: fix stack-buffer-overflow if comparing nan with payload\n \n ## CLI changes\ndiff --git a/src/jv.c b/src/jv.c\nindex 6ca1e1d0fd..e23d8ec124 100644\n--- a/src/jv.c\n+++ b/src/jv.c\n@@ -635,7 +635,7 @@ static const char* jvp_literal_number_literal(jv n) {\n   }\n \n   if (plit->literal_data == NULL) {\n-    int len = jvp_dec_number_ptr(n)->digits + 14;\n+    int len = jvp_dec_number_ptr(n)->digits + 15 /* 14 + NUL */;\n     plit->literal_data = jv_mem_alloc(len);\n \n     // Preserve the actual precision as we have parsed it\ndiff --git a/tests/shtest b/tests/shtest\nindex a426c79f3b..14aafbf933 100755\n--- a/tests/shtest\n+++ b/tests/shtest\n@@ -609,4 +609,9 @@ if ! r=$($JQ --args -rn 1 -- '$ARGS.positional[0]' bar) || [ \"$r\" != 1 ]; then\n     exit 1\n fi\n \n+# CVE-2023-50246: No heap overflow for '-10E-1000000001'\n+$VALGRIND $Q $JQ . <<\\NUM\n+-10E-1000000001\n+NUM\n+\n exit 0\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42530604-vul",
+      "digest": "sha256:914d00d6a1956a8735983b4d649ebbea1b0d0e40b0b6c6ab1494f0dcef44e2a1"
+    },
+    "patched": {
+      "ref": "n132/arvo:42530604-fix",
+      "digest": "sha256:128c5c4bad2fe37c68dfbc1a018c211beea57f95ef2e490266d11053e5f10542"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/jq/src/decNumber/decNumber.c:3764",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/jq/src/decNumber/decNumber.c:3764"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

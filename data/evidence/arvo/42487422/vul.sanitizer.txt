@@ -1,0 +1,99 @@
+Accepting input from '/tmp/poc'
+Usage for fuzzing: honggfuzz -P [flags] -- /out/php-fuzz-execute
+=================================================================
+==7==ERROR: AddressSanitizer: heap-use-after-free on address 0x612000017a40 at pc 0x000000d4abd4 bp 0x7ffcd97a8430 sp 0x7ffcd97a8428
+READ of size 4 at 0x612000017a40 thread T0
+SCARINESS: 45 (4-byte-read-heap-use-after-free)
+    #0 0xd4abd3 in zend_gc_addref /src/php-src/Zend/zend_types.h:1160:9
+    #1 0xd49515 in zend_generator_update_current /src/php-src/Zend/zend_generators.c:701:5
+    #2 0xd4dcef in zend_generator_dtor_storage /src/php-src/Zend/zend_generators.c:241:3
+    #3 0xd4df7b in zend_generator_dtor_storage /src/php-src/Zend/zend_generators.c:236:4
+    #4 0xd7863e in zend_objects_store_call_destructors /src/php-src/Zend/zend_objects_API.c:56:7
+    #5 0xb23775 in shutdown_destructors /src/php-src/Zend/zend_execute_API.c:248:3
+    #6 0xb5d628 in zend_call_destructors /src/php-src/Zend/zend.c:1212:3
+    #7 0xa06a57 in php_request_shutdown /src/php-src/main/main.c:1756:3
+    #8 0xd923a8 in fuzzer_request_shutdown /src/php-src/sapi/fuzzer/fuzzer-sapi.c:196:2
+    #9 0xd929c5 in fuzzer_do_request_from_buffer /src/php-src/sapi/fuzzer/fuzzer-sapi.c:267:2
+    #10 0xd91d19 in LLVMFuzzerTestOneInput /src/php-src/sapi/fuzzer/fuzzer-execute.c:69:2
+    #11 0xe29e1b in main (/out/php-fuzz-execute+0xe29e1b)
+    #12 0x7f7fc35e383f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2083f)
+    #13 0x444ae8 in _start (/out/php-fuzz-execute+0x444ae8)
+
+DEDUP_TOKEN: zend_gc_addref--zend_generator_update_current--zend_generator_dtor_storage
+0x612000017a40 is located 0 bytes inside of 280-byte region [0x612000017a40,0x612000017b58)
+freed by thread T0 here:
+    #0 0x4c0e12 in free /src/llvm-project/compiler-rt/lib/asan/asan_malloc_linux.cpp:127:3
+    #1 0xad85dd in tracked_free /src/php-src/Zend/zend_alloc.c:2748:2
+    #2 0xad195e in _efree_custom /src/php-src/Zend/zend_alloc.c:2427:3
+    #3 0xad186f in _efree /src/php-src/Zend/zend_alloc.c:2547:3
+    #4 0xd79858 in zend_objects_store_del /src/php-src/Zend/zend_objects_API.c:197:3
+    #5 0xd485c2 in zend_object_release /src/php-src/Zend/zend_objects_API.h:75:3
+    #6 0xd4e0ed in zend_generator_dtor_storage /src/php-src/Zend/zend_generators.c:258:6
+    #7 0xd4df7b in zend_generator_dtor_storage /src/php-src/Zend/zend_generators.c:236:4
+    #8 0xd7863e in zend_objects_store_call_destructors /src/php-src/Zend/zend_objects_API.c:56:7
+    #9 0xb23775 in shutdown_destructors /src/php-src/Zend/zend_execute_API.c:248:3
+    #10 0xb5d628 in zend_call_destructors /src/php-src/Zend/zend.c:1212:3
+    #11 0xa06a57 in php_request_shutdown /src/php-src/main/main.c:1756:3
+    #12 0xd923a8 in fuzzer_request_shutdown /src/php-src/sapi/fuzzer/fuzzer-sapi.c:196:2
+    #13 0xd929c5 in fuzzer_do_request_from_buffer /src/php-src/sapi/fuzzer/fuzzer-sapi.c:267:2
+    #14 0xd91d19 in LLVMFuzzerTestOneInput /src/php-src/sapi/fuzzer/fuzzer-execute.c:69:2
+    #15 0xe29e1b in main (/out/php-fuzz-execute+0xe29e1b)
+
+DEDUP_TOKEN: free--tracked_free--_efree_custom
+previously allocated by thread T0 here:
+    #0 0x4c107d in malloc /src/llvm-project/compiler-rt/lib/asan/asan_malloc_linux.cpp:145:3
+    #1 0xad1f5d in __zend_malloc /src/php-src/Zend/zend_alloc.c:3030:14
+    #2 0xacee52 in tracked_malloc /src/php-src/Zend/zend_alloc.c:2733:14
+    #3 0xad1795 in _malloc_custom /src/php-src/Zend/zend_alloc.c:2418:10
+    #4 0xad169d in _emalloc /src/php-src/Zend/zend_alloc.c:2537:10
+    #5 0xd4d940 in zend_generator_create /src/php-src/Zend/zend_generators.c:442:14
+    #6 0xb6af44 in _object_and_properties_init /src/php-src/Zend/zend_API.c:1438:3
+    #7 0xb6b235 in object_init_ex /src/php-src/Zend/zend_API.c:1452:9
+    #8 0xca5008 in ZEND_GENERATOR_CREATE_SPEC_HANDLER /src/php-src/Zend/zend_vm_execute.h:2215:3
+    #9 0xd91e79 in fuzzer_execute_ex /src/php-src/sapi/fuzzer/fuzzer-execute.c:40:14
+    #10 0xc38ad6 in ZEND_DO_FCALL_SPEC_RETVAL_USED_HANDLER /src/php-src/Zend/zend_vm_execute.h:1925:4
+    #11 0xd91e79 in fuzzer_execute_ex /src/php-src/sapi/fuzzer/fuzzer-execute.c:40:14
+    #12 0xd4a207 in zend_generator_resume /src/php-src/Zend/zend_generators.c:860:4
+    #13 0xd4c38c in zim_Generator_next /src/php-src/Zend/zend_generators.c:1023:2
+    #14 0xc3813f in ZEND_DO_FCALL_SPEC_RETVAL_UNUSED_HANDLER /src/php-src/Zend/zend_vm_execute.h:1853:4
+    #15 0xd91e79 in fuzzer_execute_ex /src/php-src/sapi/fuzzer/fuzzer-execute.c:40:14
+    #16 0xbc6e46 in zend_execute /src/php-src/Zend/zend_vm_execute.h:59928:2
+    #17 0xd9290e in fuzzer_do_request_from_buffer /src/php-src/sapi/fuzzer/fuzzer-sapi.c:259:5
+    #18 0xd91d19 in LLVMFuzzerTestOneInput /src/php-src/sapi/fuzzer/fuzzer-execute.c:69:2
+    #19 0xe29e1b in main (/out/php-fuzz-execute+0xe29e1b)
+
+DEDUP_TOKEN: malloc--__zend_malloc--tracked_malloc
+SUMMARY: AddressSanitizer: heap-use-after-free /src/php-src/Zend/zend_types.h:1160:9 in zend_gc_addref
+Shadow bytes around the buggy address:
+  0x0c247fffaef0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c247fffaf00: 00 00 00 00 00 00 00 00 00 00 00 fa fa fa fa fa
+  0x0c247fffaf10: fa fa fa fa fa fa fa fa 00 00 00 00 00 00 00 00
+  0x0c247fffaf20: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c247fffaf30: 00 00 00 00 00 00 00 00 00 00 00 fa fa fa fa fa
+=>0x0c247fffaf40: fa fa fa fa fa fa fa fa[fd]fd fd fd fd fd fd fd
+  0x0c247fffaf50: fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd
+  0x0c247fffaf60: fd fd fd fd fd fd fd fd fd fd fd fa fa fa fa fa
+  0x0c247fffaf70: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c247fffaf80: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c247fffaf90: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+  Shadow gap:              cc
+==7==ABORTING

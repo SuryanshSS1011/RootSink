@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042475380",
+  "chain": "CWE-456->CWE-457",
+  "project": "imagemagick",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42475380",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "4f721c7e6c6b82dc62d341c0340fde518295d55b",
+      "fix_commits": [
+        "4f721c7e6c6b82dc62d341c0340fde518295d55b"
+      ],
+      "repo": "https://github.com/imagemagick/imagemagick"
+    },
+    "patch": "From 4f721c7e6c6b82dc62d341c0340fde518295d55b Mon Sep 17 00:00:00 2001\nFrom: Cristy <mikayla-grace@urban-warrior.org>\nDate: Mon, 20 May 2019 17:43:55 -0400\nSubject: [PATCH] https://bugs.chromium.org/p/oss-fuzz/issues/detail?id=14857\n\n---\n coders/tiff.c | 7 +++++--\n 1 file changed, 5 insertions(+), 2 deletions(-)\n\ndiff --git a/coders/tiff.c b/coders/tiff.c\nindex d9d5235..391b2de 100644\n--- a/coders/tiff.c\n+++ b/coders/tiff.c\n@@ -2122,6 +2122,7 @@ RestoreMSCWarning\n           sizeof(uint32),sizeof(*tile_pixels));\n         if (tile_pixels == (unsigned char *) NULL)\n           ThrowTIFFException(ResourceLimitError,\"MemoryAllocationFailed\");\n+        (void) memset(tile_pixels,0,TIFFTileSize(tiff)*sizeof(*tile_pixels));\n         for (y=0; y < (ssize_t) image->rows; y+=rows)\n         {\n           register ssize_t\n@@ -2478,8 +2479,10 @@ static void TIFFIgnoreTags(TIFF *tiff)\n   ignore=(TIFFFieldInfo *) AcquireQuantumMemory(count,sizeof(*ignore));\n   if (ignore == (TIFFFieldInfo *) NULL)\n     return;\n-  /* This also sets field_bit to 0 (FIELD_IGNORE) */\n-  memset(ignore,0,count*sizeof(*ignore));\n+  /*\n+    This also sets field_bit to 0 (FIELD_IGNORE).\n+  */\n+  (void) memset(ignore,0,count*sizeof(*ignore));\n   while (*p != '\\0')\n   {\n     while ((isspace((int) ((unsigned char) *p)) != 0))\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42475380-vul",
+      "digest": "sha256:611e342eeec878699900b46f3f182f821f018dbc40c69851073e97e7de8e132e"
+    },
+    "patched": {
+      "ref": "n132/arvo:42475380-fix",
+      "digest": "sha256:aa72486950d9779ab35874b4d5909fba7c323e54a7d27db15c72c4a76b957302"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/imagemagick/MagickCore/quantum-import.c:2048",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/imagemagick/MagickCore/quantum-import.c:2048"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

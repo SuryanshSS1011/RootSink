@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042536963",
+  "chain": "CWE-1285->CWE-125",
+  "project": "libxml2",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42536963",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "aa6aec19b094bb26e75c6582de2d429a8e134688",
+      "fix_commits": [
+        "aa6aec19b094bb26e75c6582de2d429a8e134688"
+      ],
+      "repo": "https://gitlab.gnome.org/GNOME/libxml2.git"
+    },
+    "patch": "diff --git a/parserInternals.c b/parserInternals.c\nindex 6d962c6f969f0a7dd9842fc6b8d65bfa643640b4..b8388abfa8b6f27ac8d8b8e0e3b80144dd6a16f6 100644\n--- a/parserInternals.c\n+++ b/parserInternals.c\n@@ -1299,6 +1299,7 @@ xmlInputSetEncodingHandler(xmlParserInputPtr input,\n     xmlParserInputBufferPtr in;\n     xmlBufPtr buf;\n     int nbchars;\n+    int code = XML_ERR_OK;\n \n     if ((input == NULL) || (input->buf == NULL)) {\n         xmlCharEncCloseFunc(handler);\n@@ -1348,7 +1349,7 @@ xmlInputSetEncodingHandler(xmlParserInputPtr input,\n     /*\n      * Is there already some content down the pipe to convert ?\n      */\n-    if (input->end > input->cur) {\n+    if (input->end > input->base) {\n         size_t processed;\n \n         /*\n@@ -1361,12 +1362,13 @@ xmlInputSetEncodingHandler(xmlParserInputPtr input,\n         in->rawconsumed = processed;\n \n         nbchars = xmlCharEncInput(in);\n-        xmlBufResetInput(in->buffer, input);\n         if (nbchars < 0)\n-            return(in->error);\n+            code = in->error;\n     }\n \n-    return(XML_ERR_OK);\n+    xmlBufResetInput(in->buffer, input);\n+\n+    return(code);\n }\n \n /**\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42536963-vul",
+      "digest": "sha256:61fac1c3378dcf9c5905b3069d1d312925b180e382dbd032c1502dca513f625d"
+    },
+    "patched": {
+      "ref": "n132/arvo:42536963-fix",
+      "digest": "sha256:bafdd52695903b8436fb01b5997b1189c4d0e8a8df2484681059d5a1b5116780"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/libxml2/HTMLparser.c:423",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/libxml2/HTMLparser.c:423"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

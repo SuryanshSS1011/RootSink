@@ -1,0 +1,75 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042498509",
+  "chain": "CWE-20->CWE-125",
+  "project": "h2o",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42498509",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "0b2425b41830e550dfc5d451b217ab4d44bd4985\na939ef6dbb33a7fea20de22a2a751cfc0632b4b2\n7d7d1bd49e4703d878b7926a13c0ac5695639c3c\n1785a2fe97eda2de3d065147a0a4e5b509f0e3c0",
+      "fix_commits": [
+        "0b2425b41830e550dfc5d451b217ab4d44bd4985",
+        "a939ef6dbb33a7fea20de22a2a751cfc0632b4b2",
+        "7d7d1bd49e4703d878b7926a13c0ac5695639c3c",
+        "1785a2fe97eda2de3d065147a0a4e5b509f0e3c0"
+      ],
+      "repo": "https://github.com/h2o/h2o"
+    },
+    "patch": "diff --git a/lib/http3/qpack.c b/lib/http3/qpack.c\nindex a1066cdd20..2664ab6444 100644\n--- a/lib/http3/qpack.c\n+++ b/lib/http3/qpack.c\n@@ -626,8 +626,8 @@ static h2o_iovec_t decode_header_value_literal(h2o_mem_pool_t *pool, unsigned *s\n                                                const uint8_t *src_end, const char **err_desc)\n {\n     h2o_iovec_t buf;\n-    int is_huff = (**src & 0x80) != 0;\n     int64_t len;\n+    const uint8_t *src_head = *src;\n \n     if (decode_int(&len, src, src_end, 7) != 0 || len > MAX_HEADER_VALUE_LENGTH) {\n         *err_desc = h2o_qpack_err_header_value_too_long;\n@@ -636,6 +636,8 @@ static h2o_iovec_t decode_header_value_literal(h2o_mem_pool_t *pool, unsigned *s\n     if (src_end - *src < len)\n         goto Fail;\n \n+    int is_huff = (*src_head & 0x80) != 0;\n+\n     buf.base = h2o_mem_alloc_pool(pool, char, is_huff ? len * 2 + 1 : len + 1);\n     if ((buf.len = decode_value(buf.base, soft_errors, is_huff, *src, len, err_desc)) == SIZE_MAX)\n         goto Fail;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42498509-vul",
+      "digest": "sha256:f790e62763b3b2ff7700a5ea9f245dcef74d55a2f9dda85724c8df1481c3b434"
+    },
+    "patched": {
+      "ref": "n132/arvo:42498509-fix",
+      "digest": "sha256:0ae6a68d8be329bcf9ae89fdcad8d5746793506534b3d47030f31a64230e03a4"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "ABRT",
+        "direction": null,
+        "crash_site": "/src/h2o/fuzz/driver_common.cc:83",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "ABRT",
+        "direction": null,
+        "site": "/src/h2o/fuzz/driver_common.cc:83"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

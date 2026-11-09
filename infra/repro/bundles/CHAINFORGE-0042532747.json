@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042532747",
+  "chain": "CWE-416->CWE-125",
+  "project": "libxml2",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42532747",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "2807df9a4aa14da5aef6d6ab7b43110d7c113820",
+      "fix_commits": [
+        "2807df9a4aa14da5aef6d6ab7b43110d7c113820"
+      ],
+      "repo": "https://gitlab.gnome.org/GNOME/libxml2.git"
+    },
+    "patch": "From 2807df9a4aa14da5aef6d6ab7b43110d7c113820 Mon Sep 17 00:00:00 2001\nFrom: Nick Wellnhofer <wellnhofer@aevum.de>\nDate: Tue, 6 Feb 2024 12:07:19 +0100\nSubject: [PATCH] valid: Fix another use-after-free in xmlAddIDSafe\n\nShort-lived regression.\n---\n valid.c | 10 ++++++----\n 1 file changed, 6 insertions(+), 4 deletions(-)\n\ndiff --git a/valid.c b/valid.c\nindex ed6eeb2..b1b0001 100644\n--- a/valid.c\n+++ b/valid.c\n@@ -2324,12 +2324,14 @@ xmlAddIDSafe(xmlDocPtr doc, const xmlChar *value, xmlAttrPtr attr,\n             /*\n              * Update the attribute to make entities work.\n              */\n-            if (ret->attr != NULL) {\n-                ret->attr->id = NULL;\n-                ret->attr = attr;\n+            if (!streaming) {\n+                if (ret->attr != NULL) {\n+                    ret->attr->id = NULL;\n+                    ret->attr = attr;\n+                }\n+                attr->id = ret;\n             }\n \t    attr->atype = XML_ATTRIBUTE_ID;\n-            attr->id = ret;\n             return(0);\n         }\n     }\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42532747-vul",
+      "digest": "sha256:9fd7f0648803d9d97bf0e76da84f9c5990aea2ef83f6290a9a21b84e4d85cf49"
+    },
+    "patched": {
+      "ref": "n132/arvo:42532747-fix",
+      "digest": "sha256:3efb8a14263c6b15419f0750ea9d11e985ecd67a7cb124866c4f7142babbef98"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/libxml2/valid.c:2745",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/libxml2/valid.c:2745"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

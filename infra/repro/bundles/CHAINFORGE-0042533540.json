@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042533540",
+  "chain": "CWE-1285->CWE-125",
+  "project": "aom",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42533540",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "08efc1491525624dc5f5ebf0e450227524a7db4f",
+      "fix_commits": [
+        "08efc1491525624dc5f5ebf0e450227524a7db4f"
+      ],
+      "repo": "https://aomedia.googlesource.com/aom"
+    },
+    "patch": "diff --git a/av1/decoder/decodeframe.c b/av1/decoder/decodeframe.c\nindex 19644f3..4e3fc45 100644\n--- a/av1/decoder/decodeframe.c\n+++ b/av1/decoder/decodeframe.c\n@@ -2303,8 +2303,16 @@\n       size_t tile_col_size;\n \n       if (!is_last) {\n+        if (tile_col_size_bytes > data_end - data) {\n+          aom_internal_error(&pbi->error, AOM_CODEC_CORRUPT_FRAME,\n+                             \"Not enough data to read tile_col_size\");\n+        }\n         tile_col_size = mem_get_varsize(data, tile_col_size_bytes);\n         data += tile_col_size_bytes;\n+        if (tile_col_size > (size_t)(data_end - data)) {\n+          aom_internal_error(&pbi->error, AOM_CODEC_CORRUPT_FRAME,\n+                             \"tile_col_data_end[%d] is out of bound\", c);\n+        }\n         tile_col_data_end[c] = data + tile_col_size;\n       } else {\n         tile_col_size = data_end - data;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42533540-vul",
+      "digest": "sha256:61cd20abd1b4e96b774844eb7cd3b6d65ba17d1ee694c7d28e78a2e7e8a9afdc"
+    },
+    "patched": {
+      "ref": "n132/arvo:42533540-fix",
+      "digest": "sha256:bb211d5c5fc643da6c2286952685a8f34f499daadcf15eebbe7c3ab0588e5c52"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/aom/aom_dsp/entdec.c:94",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/aom/aom_dsp/entdec.c:94"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

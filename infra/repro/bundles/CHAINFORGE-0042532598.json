@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042532598",
+  "chain": "CWE-1285->CWE-125",
+  "project": "htslib",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42532598",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "7278dabf370f5bb18b02c8fbbbf15ad59ce6712c",
+      "fix_commits": [
+        "7278dabf370f5bb18b02c8fbbbf15ad59ce6712c"
+      ],
+      "repo": "https://github.com/samtools/htslib"
+    },
+    "patch": "diff --git a/cram/cram_encode.c b/cram/cram_encode.c\nindex 9651abdec..4a762f7b0 100644\n--- a/cram/cram_encode.c\n+++ b/cram/cram_encode.c\n@@ -2799,15 +2799,22 @@ static sam_hrec_rg_t *cram_encode_aux(cram_fd *fd, bam_seq_t *b,\n         // RG:Z\n         if (aux[0] == 'R' && aux[1] == 'G' && aux[2] == 'Z') {\n             char *rg = &aux[3];\n+            aux = rg;\n+            while (aux < aux_end && *aux++);\n+            if (aux == aux_end && aux[-1] != '\\0') {\n+                hts_log_error(\"Unterminated RG:Z tag for read \\\"%s\\\"\",\n+                              bam_get_qname(b));\n+                goto err;\n+            }\n             brg = sam_hrecs_find_rg(fd->header->hrecs, rg);\n             if (brg) {\n-                while (aux < aux_end && *aux++);\n                 if (CRAM_MAJOR_VERS(fd->version) >= 4)\n                     BLOCK_APPEND(td_b, \"RG*\", 3);\n                 continue;\n             } else {\n                 // RG:Z tag will be stored verbatim\n                 hts_log_warning(\"Missing @RG header for RG \\\"%s\\\"\", rg);\n+                aux = rg - 3;\n             }\n         }\n \n@@ -2816,6 +2823,11 @@ static sam_hrec_rg_t *cram_encode_aux(cram_fd *fd, bam_seq_t *b,\n             if (cr->len && !no_ref && !(cr->flags & BAM_FUNMAP) && !verbatim_MD) {\n                 if (MD && MD->s && strncasecmp(MD->s, aux+3, orig + aux_size - (aux+3)) == 0) {\n                     while (aux < aux_end && *aux++);\n+                    if (aux == aux_end && aux[-1] != '\\0') {\n+                        hts_log_error(\"Unterminated MD:Z tag for read \\\"%s\\\"\",\n+                                      bam_get_qname(b));\n+                        goto err;\n+                    }\n                     if (CRAM_MAJOR_VERS(fd->version) >= 4)\n                         BLOCK_APPEND(td_b, \"MD*\", 3);\n                     continue;\n@@ -3093,6 +3105,12 @@ static sam_hrec_rg_t *cram_encode_aux(cram_fd *fd, bam_seq_t *b,\n             aux += 3;\n             aux_s = aux;\n             while (aux < aux_end && *aux++);\n+            if (aux == aux_end && aux[-1] != '\\0') {\n+                hts_log_error(\"Unterminated %c%c:%c tag for read \\\"%s\\\"\",\n+                              aux_s[-3], aux_s[-2], aux_s[-1],\n+                              bam_get_qname(b));\n+                goto err;\n+            }\n             if (codec->encode(s, codec, aux_s, aux - aux_s) < 0)\n                 goto err;\n             break;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42532598-vul",
+      "digest": "sha256:a4a0dd54211c604e406d92e69db76b22448928a145ca097fd30cff7318dcbe36"
+    },
+    "patched": {
+      "ref": "n132/arvo:42532598-fix",
+      "digest": "sha256:6a9a084e58ef90582e632032632f797c58b402f3e971f555b1a5aede7d014d65"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/htslib/hts.c:4994",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/htslib/hts.c:4994"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

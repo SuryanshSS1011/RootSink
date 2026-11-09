@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042491096",
+  "chain": "CWE-416->CWE-125",
+  "project": "selinux",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42491096",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "0451adebdf153eee1f69914141311114a0130982",
+      "fix_commits": [
+        "0451adebdf153eee1f69914141311114a0130982"
+      ],
+      "repo": "https://github.com/SELinuxProject/selinux"
+    },
+    "patch": "From 0451adebdf153eee1f69914141311114a0130982 Mon Sep 17 00:00:00 2001\nFrom: James Carter <jwcart2@gmail.com>\nDate: Mon, 8 Feb 2021 11:23:42 -0500\nSubject: [PATCH] libsepol/cil: Destroy disabled optional blocks after pass is\n complete\n\nNicolas Iooss reports:\n  I am continuing to investigate OSS-Fuzz crashes and the following one\n  is quite complex. Here is a CIL policy which triggers a\n  heap-use-after-free error in the CIL compiler:\n\n  (class CLASS (PERM2))\n  (classorder (CLASS))\n  (classpermission CLSPRM)\n  (optional o\n      (mlsvalidatetrans x (domby l1 h1))\n      (common CLSCOMMON (PERM1))\n      (classcommon CLASS CLSCOMMON)\n  )\n  (classpermissionset CLSPRM (CLASS (PERM1)))\n\n  The issue is that the mlsvalidatetrans fails to resolve in pass\n  CIL_PASS_MISC3, which comes after the resolution of classcommon (in\n  pass CIL_PASS_MISC2). So:\n\n  * In pass CIL_PASS_MISC2, the optional block still exists, the\n  classcommon is resolved and class CLASS is linked with common\n  CLSCOMMON.\n  * In pass CIL_PASS_MISC3, the optional block is destroyed, including\n  the common CLSCOMMON.\n  * When classpermissionset is resolved, function cil_resolve_classperms\n  uses \"common_symtab = &class->common->perms;\", which has been freed.\n  The use-after-free issue occurs in __cil_resolve_perms (in\n  libsepol/cil/src/cil_resolve_ast.c):\n\n    // common_symtab was freed\n    rc = cil_symtab_get_datum(common_symtab, curr->data, &perm_datum);\n\nThe fundamental problem here is that when the optional block is\ndisabled it is immediately destroyed in the middle of the pass, so\nthe class has not been reset and still refers to the now destroyed\ncommon when the classpermissionset is resolved later in the same pass.\n\nAdded a list, disabled_optionals, to struct cil_args_resolve which is\npassed when resolving the tree. When optionals are disabled, they are\nnow added to this list and then are destroyed after the tree has been\nreset between passes.\n\nReported-by: Nicolas Iooss <nicolas.iooss@m4x.org>\nSigned-off-by: James Carter <jwcart2@gmail.com>\nAcked-by: Nicolas Iooss <nicolas.iooss@m4x.org>\n---\n libsepol/cil/src/cil_resolve_ast.c | 11 ++++++++++-\n 1 file changed, 10 insertions(+), 1 deletion(-)\n\ndiff --git a/libsepol/cil/src/cil_resolve_ast.c b/libsepol/cil/src/cil_resolve_ast.c\nindex 208bc01..0e07856 100644\n--- a/libsepol/cil/src/cil_resolve_ast.c\n+++ b/libsepol/cil/src/cil_resolve_ast.c\n@@ -51,6 +51,7 @@ struct cil_args_resolve {\n \tstruct cil_db *db;\n \tenum cil_pass pass;\n \tuint32_t *changed;\n+\tstruct cil_list *disabled_optionals;\n \tstruct cil_tree_node *optstack;\n \tstruct cil_tree_node *boolif;\n \tstruct cil_tree_node *macro;\n@@ -3942,7 +3943,7 @@ int __cil_resolve_ast_last_child_helper(struct cil_tree_node *current, void *ext\n \n \t\tif (((struct cil_optional *)parent->data)->enabled == CIL_FALSE) {\n \t\t\t*(args->changed) = CIL_TRUE;\n-\t\t\tcil_tree_children_destroy(parent);\n+\t\t\tcil_list_append(args->disabled_optionals, CIL_NODE, parent);\n \t\t}\n \n \t\t/* pop off the stack */\n@@ -4005,6 +4006,7 @@ int cil_resolve_ast(struct cil_db *db, struct cil_tree_node *current)\n \textra_args.in_list = NULL;\n \textra_args.blockstack = NULL;\n \n+\tcil_list_init(&extra_args.disabled_optionals, CIL_NODE);\n \tcil_list_init(&extra_args.sidorder_lists, CIL_LIST_ITEM);\n \tcil_list_init(&extra_args.classorder_lists, CIL_LIST_ITEM);\n \tcil_list_init(&extra_args.unordered_classorder_lists, CIL_LIST_ITEM);\n@@ -4072,6 +4074,7 @@ int cil_resolve_ast(struct cil_db *db, struct cil_tree_node *current)\n \t\t}\n \n \t\tif (changed && (pass > CIL_PASS_CALL1)) {\n+\t\t\tstruct cil_list_item *item;\n \t\t\t/* Need to re-resolve because an optional was disabled that contained\n \t\t\t * one or more declarations. We only need to reset to the call1 pass \n \t\t\t * because things done in the preceding passes aren't allowed in \n@@ -4100,6 +4103,11 @@ int cil_resolve_ast(struct cil_db *db, struct cil_tree_node *current)\n \t\t\t\tcil_log(CIL_ERR, \"Failed to reset declarations\\n\");\n \t\t\t\tgoto exit;\n \t\t\t}\n+\t\t\tcil_list_for_each(item, extra_args.disabled_optionals) {\n+\t\t\t\tcil_tree_children_destroy(item->data);\n+\t\t\t}\n+\t\t\tcil_list_destroy(&extra_args.disabled_optionals, CIL_FALSE);\n+\t\t\tcil_list_init(&extra_args.disabled_optionals, CIL_NODE);\n \t\t}\n \n \t\t/* reset the arguments */\n@@ -4128,6 +4136,7 @@ exit:\n \t__cil_ordered_lists_destroy(&extra_args.catorder_lists);\n \t__cil_ordered_lists_destroy(&extra_args.sensitivityorder_lists);\n \t__cil_ordered_lists_destroy(&extra_args.unordered_classorder_lists);\n+\tcil_list_destroy(&extra_args.disabled_optionals, CIL_FALSE);\n \tcil_list_destroy(&extra_args.in_list, CIL_FALSE);\n \n \treturn rc;\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42491096-vul",
+      "digest": "sha256:b102aadfd15b39a9adefa6ac24572a6e407ff6d2fa3694894938ea41cbfaac1b"
+    },
+    "patched": {
+      "ref": "n132/arvo:42491096-fix",
+      "digest": "sha256:658dd1d76d5d2ddaaac70e61acb3dc94d8dcaa2ff3f0a959e01af0c7782b7fcc"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/selinux/libsepol/src/../cil/src/cil_symtab.c:119",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/selinux/libsepol/src/../cil/src/cil_symtab.c:119"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,63 @@
+Accepting input from '/tmp/poc'
+Usage for fuzzing: honggfuzz -P [flags] -- /out/avc_dec_fuzzer
+=================================================================
+==1675749==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x148ef2bf5000 at pc 0x0000005371d8 bp 0x7ffccff6a3a0 sp 0x7ffccff6a398
+READ of size 4 at 0x148ef2bf5000 thread T0
+SCARINESS: 17 (4-byte-read-heap-buffer-overflow)
+    #0 0x5371d7 in ih264d_get_bits_h264 /src/libavc/decoder/ih264d_bitstrm.c:94:9
+    #1 0x59245b in ih264d_parse_ave /src/libavc/decoder/ih264d_sei.c:470:60
+    #2 0x59338c in ih264d_parse_sei_message /src/libavc/decoder/ih264d_sei.c:779:21
+    #3 0x54c268 in ih264d_parse_nal_unit /src/libavc/decoder/ih264d_parse_headers.c:1277:36
+    #4 0x4d9800 in ih264d_video_decode /src/libavc/decoder/ih264d_api.c:2370:15
+    #5 0x4d23a9 in Codec::decodeFrame(unsigned char const*, unsigned long, unsigned long*) /src/libavc/fuzzer/avc_dec_fuzzer.cpp:313:9
+    #6 0x4d2ced in LLVMFuzzerTestOneInput /src/libavc/fuzzer/avc_dec_fuzzer.cpp:362:18
+    #7 0x4c79d7 in main (/out/avc_dec_fuzzer+0x4c79d7)
+    #8 0x148ef1c0982f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+    #9 0x41c0f8 in _start (/out/avc_dec_fuzzer+0x41c0f8)
+
+DEDUP_TOKEN: ih264d_get_bits_h264--ih264d_parse_ave--ih264d_parse_sei_message
+0x148ef2bf5000 is located 0 bytes to the right of 256000-byte region [0x148ef2bb6800,0x148ef2bf5000)
+allocated by thread T0 here:
+    #0 0x495777 in posix_memalign /src/llvm-project/compiler-rt/lib/asan/asan_malloc_linux.cpp:226:3
+    #1 0x4d0005 in iv_aligned_malloc(void*, int, int) /src/libavc/fuzzer/avc_dec_fuzzer.cpp:63:12
+    #2 0x4d6a13 in ih264d_allocate_static_bufs /src/libavc/decoder/ih264d_api.c:1546:14
+    #3 0x4d73a7 in ih264d_create /src/libavc/decoder/ih264d_api.c:1688:11
+    #4 0x4d034a in Codec::createCodec() /src/libavc/fuzzer/avc_dec_fuzzer.cpp:125:9
+    #5 0x4d2c41 in LLVMFuzzerTestOneInput /src/libavc/fuzzer/avc_dec_fuzzer.cpp:352:10
+    #6 0x4c79d7 in main (/out/avc_dec_fuzzer+0x4c79d7)
+
+DEDUP_TOKEN: posix_memalign--iv_aligned_malloc(void*, int, int)--ih264d_allocate_static_bufs
+SUMMARY: AddressSanitizer: heap-buffer-overflow /src/libavc/decoder/ih264d_bitstrm.c:94:9 in ih264d_get_bits_h264
+Shadow bytes around the buggy address:
+  0x02925e5769b0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x02925e5769c0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x02925e5769d0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x02925e5769e0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x02925e5769f0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x02925e576a00:[fa]fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x02925e576a10: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x02925e576a20: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x02925e576a30: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x02925e576a40: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x02925e576a50: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+  Shadow gap:              cc
+==1675749==ABORTING

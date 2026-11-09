@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042526340",
+  "chain": "CWE-416->CWE-125",
+  "project": "php-src",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42526340",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "7ecb2849261654fd5147d741540bec2ba81308af",
+      "fix_commits": [
+        "7ecb2849261654fd5147d741540bec2ba81308af"
+      ],
+      "repo": "https://github.com/php/php-src"
+    },
+    "patch": "diff --git a/NEWS b/NEWS\nindex fba7d288c12f..197f59b626a8 100644\n--- a/NEWS\n+++ b/NEWS\n@@ -76,6 +76,10 @@ PHP                                                                        NEWS\n - Intl:\n   . Fix memory leak in MessageFormatter::format() on failure. (Girgias)\n \n+- Libxml:\n+  . Fixed bug GHSA-3qrf-m4j2-pcrr (Security issue with external entity loading\n+    in XML without enabling it). (CVE-2023-3823) (nielsdos, ilutov)\n+\n - MBString:\n   . Fix GH-11300 (license issue: restricted unicode license headers).\n     (nielsdos)\n@@ -101,6 +105,8 @@ PHP                                                                        NEWS\n \n - Phar:\n   . Add missing check on EVP_VerifyUpdate() in phar util. (nielsdos)\n+  . Fixed bug GHSA-jqcx-ccgc-xwhv (Buffer mismanagement in phar_dir_read()).\n+    (CVE-2023-3824) (nielsdos)\n \n - PHPDBG:\n   . Fixed bug GH-9669 (phpdbg -h options doesn't list the -z option). (adsr)\ndiff --git a/ext/dom/tests/libxml_global_state_entity_loader_bypass.phpt b/ext/dom/tests/libxml_global_state_entity_loader_bypass.phpt\nindex b28afd4694eb..7fc2a249ac77 100644\n--- a/ext/dom/tests/libxml_global_state_entity_loader_bypass.phpt\n+++ b/ext/dom/tests/libxml_global_state_entity_loader_bypass.phpt\n@@ -5,6 +5,7 @@ GHSA-3qrf-m4j2-pcrr (libxml global state entity loader bypass)\n if (!extension_loaded('libxml')) die('skip libxml extension not available');\n if (!extension_loaded('dom')) die('skip dom extension not available');\n if (!extension_loaded('zend-test')) die('skip zend-test extension not available');\n+if (!function_exists('zend_test_override_libxml_global_state')) die('skip not for Windows');\n ?>\n --FILE--\n <?php\ndiff --git a/ext/simplexml/tests/libxml_global_state_entity_loader_bypass.phpt b/ext/simplexml/tests/libxml_global_state_entity_loader_bypass.phpt\nindex 2152e0123286..54f9d4941eb7 100644\n--- a/ext/simplexml/tests/libxml_global_state_entity_loader_bypass.phpt\n+++ b/ext/simplexml/tests/libxml_global_state_entity_loader_bypass.phpt\n@@ -5,6 +5,7 @@ GHSA-3qrf-m4j2-pcrr (libxml global state entity loader bypass)\n if (!extension_loaded('libxml')) die('skip libxml extension not available');\n if (!extension_loaded('simplexml')) die('skip simplexml extension not available');\n if (!extension_loaded('zend-test')) die('skip zend-test extension not available');\n+if (!function_exists('zend_test_override_libxml_global_state')) die('skip not for Windows');\n ?>\n --FILE--\n <?php\ndiff --git a/ext/xmlreader/tests/libxml_global_state_entity_loader_bypass.phpt b/ext/xmlreader/tests/libxml_global_state_entity_loader_bypass.phpt\nindex e9ffb04c2bb9..cb0297b6b1bc 100644\n--- a/ext/xmlreader/tests/libxml_global_state_entity_loader_bypass.phpt\n+++ b/ext/xmlreader/tests/libxml_global_state_entity_loader_bypass.phpt\n@@ -5,6 +5,7 @@ GHSA-3qrf-m4j2-pcrr (libxml global state entity loader bypass)\n if (!extension_loaded('libxml')) die('skip libxml extension not available');\n if (!extension_loaded('xmlreader')) die('skip xmlreader extension not available');\n if (!extension_loaded('zend-test')) die('skip zend-test extension not available');\n+if (!function_exists('zend_test_override_libxml_global_state')) die('skip not for Windows');\n ?>\n --FILE--\n <?php\ndiff --git a/ext/zend_test/test.c b/ext/zend_test/test.c\nindex fef29b081f97..8b2ca68e4e72 100644\n--- a/ext/zend_test/test.c\n+++ b/ext/zend_test/test.c\n@@ -32,7 +32,7 @@\n #include \"test.h\"\n #include \"test_arginfo.h\"\n \n-#ifdef HAVE_LIBXML\n+#if defined(HAVE_LIBXML) && !defined(PHP_WIN32)\n # include <libxml/globals.h>\n # include <libxml/parser.h>\n #endif\n@@ -311,6 +311,7 @@ static ZEND_FUNCTION(zend_get_current_func_name)\n     RETURN_STR(function_name);\n }\n \n+#if defined(HAVE_LIBXML) && !defined(PHP_WIN32)\n static ZEND_FUNCTION(zend_test_override_libxml_global_state)\n {\n \tZEND_PARSE_PARAMETERS_NONE();\n@@ -322,6 +323,7 @@ static ZEND_FUNCTION(zend_test_override_libxml_global_state)\n \t(void) xmlLineNumbersDefault(1);\n \t(void) xmlKeepBlanksDefault(0);\n }\n+#endif\n \n /* TESTS Z_PARAM_ITERABLE and Z_PARAM_ITERABLE_OR_NULL */\n static ZEND_FUNCTION(zend_iterable)\ndiff --git a/ext/zend_test/test.stub.php b/ext/zend_test/test.stub.php\nindex 4d7e4707fb0d..dabf89432425 100644\n--- a/ext/zend_test/test.stub.php\n+++ b/ext/zend_test/test.stub.php\n@@ -171,7 +171,7 @@ function zend_get_map_ptr_last(): int {}\n \n     function zend_test_crash(?string $message = null): void {}\n \n-#ifdef HAVE_LIBXML\n+#if defined(HAVE_LIBXML) && !defined(PHP_WIN32)\n function zend_test_override_libxml_global_state(): void {}\n #endif\n }\ndiff --git a/ext/zend_test/test_arginfo.h b/ext/zend_test/test_arginfo.h\nindex 196d4c63c2b6..c87d60e3b481 100644\n--- a/ext/zend_test/test_arginfo.h\n+++ b/ext/zend_test/test_arginfo.h\n@@ -107,7 +107,7 @@ ZEND_END_ARG_INFO()\n ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_ZendTestNS2_namespaced_func, 0, 0, _IS_BOOL, 0)\n ZEND_END_ARG_INFO()\n \n-#if defined(HAVE_LIBXML)\n+#if defined(HAVE_LIBXML) && !defined(PHP_WIN32)\n ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_zend_test_override_libxml_global_state, 0, 0, IS_VOID, 0)\n ZEND_END_ARG_INFO()\n #endif\n@@ -209,7 +209,7 @@ static ZEND_FUNCTION(ZendTestNS2_namespaced_func);\n static ZEND_FUNCTION(ZendTestNS2_namespaced_deprecated_func);\n static ZEND_FUNCTION(ZendTestNS2_ZendSubNS_namespaced_func);\n static ZEND_FUNCTION(ZendTestNS2_ZendSubNS_namespaced_deprecated_func);\n-#if defined(HAVE_LIBXML)\n+#if defined(HAVE_LIBXML) && !defined(PHP_WIN32)\n static ZEND_FUNCTION(zend_test_override_libxml_global_state);\n #endif\n static ZEND_METHOD(_ZendTestClass, is_object);\n@@ -269,7 +269,7 @@ static const zend_function_entry ext_functions[] = {\n \tZEND_NS_DEP_FALIAS(\"ZendTestNS2\\\\ZendSubNS\", namespaced_deprecated_func, ZendTestNS2_ZendSubNS_namespaced_deprecated_func, arginfo_ZendTestNS2_ZendSubNS_namespaced_deprecated_func)\n \tZEND_NS_FALIAS(\"ZendTestNS2\\\\ZendSubNS\", namespaced_aliased_func, zend_test_void_return, arginfo_ZendTestNS2_ZendSubNS_namespaced_aliased_func)\n \tZEND_NS_DEP_FALIAS(\"ZendTestNS2\\\\ZendSubNS\", namespaced_deprecated_aliased_func, zend_test_void_return, arginfo_ZendTestNS2_ZendSubNS_namespaced_deprecated_aliased_func)\n-#if defined(HAVE_LIBXML)\n+#if defined(HAVE_LIBXML) && !defined(PHP_WIN32)\n \tZEND_FE(zend_test_override_libxml_global_state, arginfo_zend_test_override_libxml_global_state)\n #endif\n \tZEND_FE_END\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42526340-vul",
+      "digest": "sha256:33a6c466682548fe162230199642ab9b998c09d29036dcb25e3a58f42b328593"
+    },
+    "patched": {
+      "ref": "n132/arvo:42526340-fix",
+      "digest": "sha256:895c931d6b8a4ca3a40a52dfc2dc178e7d69715f26fb917b55fdc010dc9ec27b"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/php-src/Zend/zend_types.h:1261",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/php-src/Zend/zend_types.h:1261"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

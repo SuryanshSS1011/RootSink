@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042497441",
+  "chain": "CWE-1284->CWE-787",
+  "project": "wolfssl",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42497441",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "cfef249041313a0b6a5229fca4a414aa8c053fa8",
+      "fix_commits": [
+        "cfef249041313a0b6a5229fca4a414aa8c053fa8"
+      ],
+      "repo": "https://github.com/wolfssl/wolfssl"
+    },
+    "patch": "diff --git a/wolfcrypt/src/asn.c b/wolfcrypt/src/asn.c\nindex 51ef95c163e..81e3eeeecfa 100644\n--- a/wolfcrypt/src/asn.c\n+++ b/wolfcrypt/src/asn.c\n@@ -17211,12 +17211,16 @@ static int DecodeSingleResponse(byte* source, word32* ioIndex, word32 size,\n     ret = GetOctetString(source, &idx, &length, size);\n     if (ret < 0)\n         return ret;\n+    if (length > (int)sizeof(single->issuerHash))\n+        return BUFFER_E;\n     XMEMCPY(single->issuerHash, source + idx, length);\n     idx += length;\n     /* Save reference to the hash of the issuer public key */\n     ret = GetOctetString(source, &idx, &length, size);\n     if (ret < 0)\n         return ret;\n+    if (length > (int)sizeof(single->issuerKeyHash))\n+        return BUFFER_E;\n     XMEMCPY(single->issuerKeyHash, source + idx, length);\n     idx += length;\n \n@@ -17468,8 +17472,10 @@ static int DecodeResponseData(byte* source,\n             if (single->next == NULL) {\n                 return MEMORY_E;\n             }\n+            CertStatus* status = single->status;\n             single = single->next;\n             XMEMSET(single, 0, sizeof(OcspEntry));\n+            single->status = status;\n             single->isDynamic = 1;\n         }\n     }\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42497441-vul",
+      "digest": "sha256:4d54cd63562ab61ee773e8b6808be6b0cf6853fc26e554432eddd2364632c6b8"
+    },
+    "patched": {
+      "ref": "n132/arvo:42497441-fix",
+      "digest": "sha256:3adc2835aa57395d786d17af53c6b883fd9dc638c11b8b35acb91e7339d7accc"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/wolf-ssl-ssh-fuzzers/oss-fuzz/projects/wolf-ssl-ssh/fuzzers/wolfssl/wolfssl/wolfcrypt/src/asn.c:17220",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/wolf-ssl-ssh-fuzzers/oss-fuzz/projects/wolf-ssl-ssh/fuzzers/wolfssl/wolfssl/wolfcrypt/src/asn.c:17220"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0384972943",
+  "chain": "CWE-1285->CWE-125",
+  "project": "ghostpdl",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "384972943",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "da32171815f62653d90da4e9e0302f2e57ab3bd3",
+      "fix_commits": [
+        "da32171815f62653d90da4e9e0302f2e57ab3bd3"
+      ],
+      "repo": "https://cgit.ghostscript.com/ghostpdl.git"
+    },
+    "patch": "From da32171815f62653d90da4e9e0302f2e57ab3bd3 Mon Sep 17 00:00:00 2001\nFrom: Ken Sharp <Ken.Sharp@artifex.com>\nDate: Thu, 2 Jan 2025 09:42:49 +0000\nSubject: [PATCH] Colour management - sanity check White Point reading of ICC\n profiles\n\nOSS-fuzz bug #384972943\n\nThe ICC profile reading code simply assumed that the media white point\nwould be well formed, if it wasn't then we could end up reading off the\nend of the profile.\n\nThis commit checks the available bytes before reading them. It won't\nstop malformed ICC profiles being misread, but ti prevents us hitting a\nbuffer overrun. I also checked the rest of the source file and couldn't\nfind any other cases.\n---\n base/gsicc_create.c | 30 +++++++++++++++++++++++++++++-\n 1 file changed, 29 insertions(+), 1 deletion(-)\n\ndiff --git a/base/gsicc_create.c b/base/gsicc_create.c\nindex 2d03e95..3d917b4 100644\n--- a/base/gsicc_create.c\n+++ b/base/gsicc_create.c\n@@ -1,4 +1,4 @@\n-/* Copyright (C) 2001-2024 Artifex Software, Inc.\n+/* Copyright (C) 2001-2025 Artifex Software, Inc.\n    All Rights Reserved.\n \n    This software is provided AS-IS with no warranty, either express or\n@@ -3272,22 +3272,50 @@ get_mediawp(cmm_profile_t *src_profile, byte *mediawhitept)\n     int tag_signature = -1;\n     int offset;\n     int k;\n+    int buffer_left = src_profile->buffer_size;\n+\n+    if (buffer_left < 128)\n+        return false;\n+    buffer_left -= 128;\n+\n+    if (buffer_left < 4)\n+        return false;\n \n     buffer += 4;\n+    buffer_left -= 4;\n \n     /* Get to the tag table */\n     for (k = 0; k < num_tags; k++) {\n+        if (buffer_left < 12)\n+            return false;\n+\n         tag_signature = readint32(buffer);\n         if (tag_signature == icSigMediaWhitePointTag)\n             break;\n         buffer += 12;\n+        buffer_left -= 12;\n     }\n     if (tag_signature != icSigMediaWhitePointTag)\n         return false;\n+\n+    if (buffer_left < 4)\n+        return false;\n+\n     buffer += 4;\n+    buffer_left -= 4;\n+\n     offset = readint32(buffer);\n+\n+    if (buffer_left < offset + 8)\n+        return false;\n+\n     buffer = &(src_profile->buffer[offset + 8]);  /* Add offset of 8 for XYZ tag and padding */\n+    buffer_left = src_profile->buffer_size - (offset + 8);\n+\n     /* Data is already in the proper format. Just get the bytes */\n+    if (buffer_left < 12)\n+        return false;\n+\n     memcpy(mediawhitept, buffer, 12);\n     return true;\n }\n-- \n2.55.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:384972943-vul",
+      "digest": "sha256:172fffbac4366a066887c4414cf0613201de528102fedfc4b89af14cb9399614"
+    },
+    "patched": {
+      "ref": "n132/arvo:384972943-fix",
+      "digest": "sha256:6976f7f4e4fb2f0143c2b232c4b9f42137722635f9c8b1585907b29ff95c5899"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/ghostpdl/./base/gsicc_create.c:3272",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/ghostpdl/./base/gsicc_create.c:3272"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

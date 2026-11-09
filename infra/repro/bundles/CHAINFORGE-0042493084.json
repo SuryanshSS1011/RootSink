@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042493084",
+  "chain": "CWE-1284->CWE-125",
+  "project": "wabt",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42493084",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "e808dfe3fc7ec890be4ef59d4772afaa19af4847",
+      "fix_commits": [
+        "e808dfe3fc7ec890be4ef59d4772afaa19af4847"
+      ],
+      "repo": "https://github.com/WebAssembly/wabt"
+    },
+    "patch": "diff --git a/src/common.h b/src/common.h\nindex d19a8ef28a..e2eb8445e2 100644\n--- a/src/common.h\n+++ b/src/common.h\n@@ -420,7 +420,7 @@ void InitStdio();\n extern const char* g_kind_name[];\n \n static WABT_INLINE const char* GetKindName(ExternalKind kind) {\n-  return static_cast<int>(kind) < kExternalKindCount\n+  return static_cast<size_t>(kind) < kExternalKindCount\n     ? g_kind_name[static_cast<size_t>(kind)]\n     : \"<error_kind>\";\n }\n@@ -430,7 +430,7 @@ static WABT_INLINE const char* GetKindName(ExternalKind kind) {\n extern const char* g_reloc_type_name[];\n \n static WABT_INLINE const char* GetRelocTypeName(RelocType reloc) {\n-  return static_cast<int>(reloc) < kRelocTypeCount\n+  return static_cast<size_t>(reloc) < kRelocTypeCount\n     ? g_reloc_type_name[static_cast<size_t>(reloc)]\n     : \"<error_reloc_type>\";\n }\ndiff --git a/test/binary/bad-reloc-type.txt b/test/binary/bad-reloc-type.txt\nnew file mode 100644\nindex 0000000000..5d3b876f4d\n--- /dev/null\n+++ b/test/binary/bad-reloc-type.txt\n@@ -0,0 +1,30 @@\n+;;; TOOL: run-objdump-gen-wasm\n+;;; ARGS: -x\n+magic\n+version\n+section(TYPE) { count[1] function params[0] results[0] }\n+section(\"reloc.BAD\") {\n+  reloc_section[0]\n+  reloc_count[1]\n+  reloc_type[leb_i32(0xffffffff)]\n+  reloc_offset[0]\n+  reloc_index[0]\n+}\n+(;; STDERR ;;;\n+0000023: warning: unknown reloc type: <error_reloc_type>\n+;;; STDERR ;;)\n+(;; STDOUT ;;;\n+\n+bad-reloc-type.wasm:\tfile format wasm 0x1\n+\n+Section Details:\n+\n+Type[1]:\n+ - type[0] () -> nil\n+Custom:\n+ - name: \"reloc.BAD\"\n+  - relocations for section: 0 (Type) [1]\n+\n+Code Disassembly:\n+\n+;;; STDOUT ;;)\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42493084-vul",
+      "digest": "sha256:007dadba88b883d491cbb44e2cde04bb5aeed79abcede185a4450f95fe263383"
+    },
+    "patched": {
+      "ref": "n132/arvo:42493084-fix",
+      "digest": "sha256:01354677aeec75e93efbdcab7187ec1017bb0658e1169bbc3370681b2df6f3f8"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "global-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/wabt/src/common.h:426",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "global-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/wabt/src/common.h:426"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

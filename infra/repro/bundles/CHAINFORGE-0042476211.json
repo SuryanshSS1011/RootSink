@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042476211",
+  "chain": "CWE-20->CWE-787",
+  "project": "ffmpeg",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42476211",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "c3ef24d9baf63f8c8794dfb2ef7192a64b586526",
+      "fix_commits": [
+        "c3ef24d9baf63f8c8794dfb2ef7192a64b586526"
+      ],
+      "repo": "https://git.ffmpeg.org/ffmpeg.git"
+    },
+    "patch": "From c3ef24d9baf63f8c8794dfb2ef7192a64b586526 Mon Sep 17 00:00:00 2001\nFrom: Michael Niedermayer <michael@niedermayer.cc>\nDate: Sat, 13 Jul 2019 19:57:21 +0200\nSubject: [PATCH] avformat/vividas: Check buffer size before allocation\n\nFixes: out of array access\nFixes: 15365/clusterfuzz-testcase-minimized-ffmpeg_DEMUXER_fuzzer-5716153105645568\n\nFound-by: continuous fuzzing process https://github.com/google/oss-fuzz/tree/master/projects/ffmpeg\nSigned-off-by: Michael Niedermayer <michael@niedermayer.cc>\n---\n libavformat/vividas.c | 3 +++\n 1 file changed, 3 insertions(+)\n\ndiff --git a/libavformat/vividas.c b/libavformat/vividas.c\nindex c0d39f0..184d24f 100644\n--- a/libavformat/vividas.c\n+++ b/libavformat/vividas.c\n@@ -251,6 +251,9 @@ static uint8_t *read_sb_block(AVIOContext *src, unsigned *size,\n         *key = tmpkey;\n     }\n \n+    if (n < 8)\n+        return NULL;\n+\n     buf = av_malloc(n);\n     if (!buf)\n         return NULL;\n-- \n2.55.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42476211-vul",
+      "digest": "sha256:7ebaf2d2adfef8dc96210b82f74f742a3b6e15f4230774522b6b8fcf4ca38f5f"
+    },
+    "patched": {
+      "ref": "n132/arvo:42476211-fix",
+      "digest": "sha256:8d2fec0dae59e36612fa4fcaa03fbcbaa3ef7da7ede7156405d98ec9d6d7cc0e"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/ffmpeg/libavformat/vividas.c:260",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/ffmpeg/libavformat/vividas.c:260"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

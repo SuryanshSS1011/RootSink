@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042506541",
+  "chain": "CWE-1284->CWE-787",
+  "project": "ghostpdl",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42506541",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "fabad29820734af831cf4f2ae6c4beb4179d4733",
+      "fix_commits": [
+        "fabad29820734af831cf4f2ae6c4beb4179d4733"
+      ],
+      "repo": "https://cgit.ghostscript.com/ghostpdl.git"
+    },
+    "patch": "From fabad29820734af831cf4f2ae6c4beb4179d4733 Mon Sep 17 00:00:00 2001\nFrom: Ken Sharp <ken.sharp@artifex.com>\nDate: Fri, 24 Dec 2021 11:30:15 +0000\nSubject: [PATCH] OSS-fuzz #42908 - limit debug string to available buffer size\n\n---\n pdf/pdf_optcontent.c | 4 ++--\n 1 file changed, 2 insertions(+), 2 deletions(-)\n\ndiff --git a/pdf/pdf_optcontent.c b/pdf/pdf_optcontent.c\nindex b928488..fbac4aa 100644\n--- a/pdf/pdf_optcontent.c\n+++ b/pdf/pdf_optcontent.c\n@@ -302,8 +302,8 @@ pdfi_oc_is_ocg_visible(pdf_context *ctx, pdf_dict *ocdict)\n             is_visible = pdfi_oc_check_OCG_usage(ctx, ocdict);\n     } else {\n         char str[100];\n-        memcpy(str, (const char *)type->data, type->length);\n-        str[type->length] = '\\0';\n+        memcpy(str, (const char *)type->data, type->length < 100 ? type->length : 99);\n+        str[type->length < 100 ? type->length : 99] = '\\0';\n         dmprintf1(ctx->memory, \"WARNING: OC dict type is %s, expected OCG or OCMD\\n\", str);\n     }\n \n-- \n2.55.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42506541-vul",
+      "digest": "sha256:919babf31c0c535b3db1038a2aa60767963b273a0044255fad3983d4a021af19"
+    },
+    "patched": {
+      "ref": "n132/arvo:42506541-fix",
+      "digest": "sha256:982f16246cc92ca0d65f6c82ef546dfbaaf6171523519a9a6e5853e80a7562ee"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/ghostpdl/./pdf/pdf_optcontent.c:305",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/ghostpdl/./pdf/pdf_optcontent.c:305"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

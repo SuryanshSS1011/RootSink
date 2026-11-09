@@ -1,0 +1,52 @@
+======================= INFO =========================
+This binary is built for AFL-fuzz.
+To run the target function on individual input(s) execute this:
+  /out/ofctl_parse_target < INPUT_FILE
+or
+  /out/ofctl_parse_target INPUT_FILE1 [INPUT_FILE2 ... ]
+To fuzz with afl-fuzz execute this:
+  afl-fuzz [afl-flags] /out/ofctl_parse_target [-N]
+afl-fuzz will run N iterations before re-spawning the process (default: 1000)
+======================================================
+Reading 3 bytes from /tmp/poc
+=================================================================
+==2805822==ERROR: AddressSanitizer: attempting double-free on 0x603000000040 in thread T0:
+SCARINESS: 42 (double-free)
+    #0 0x4ed7f0 in free /src/llvm/projects/compiler-rt/lib/asan/asan_malloc_linux.cc:124
+    #1 0x5a5cea in minimatch_destroy /src/openvswitch/lib/match.c:1783:5
+    #2 0x52e427 in ofctl_parse_flow /src/openvswitch/tests/oss-fuzz/ofctl_parse_target.c:65:9
+    #3 0x52e290 in LLVMFuzzerTestOneInput /src/openvswitch/tests/oss-fuzz/ofctl_parse_target.c:107:5
+    #4 0x52e98a in ExecuteFilesOnyByOne(int, char**) /src/libfuzzer/afl/afl_driver.cpp:301:5
+    #5 0x52eeee in main /src/libfuzzer/afl/afl_driver.cpp:339:12
+    #6 0x14ef337c582f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+    #7 0x41ee68 in _start (/out/ofctl_parse_target+0x41ee68)
+
+DEDUP_TOKEN: free--minimatch_destroy--ofctl_parse_flow
+0x603000000040 is located 0 bytes inside of 32-byte region [0x603000000040,0x603000000060)
+freed by thread T0 here:
+    #0 0x4ed7f0 in free /src/llvm/projects/compiler-rt/lib/asan/asan_malloc_linux.cc:124
+    #1 0x5a5cea in minimatch_destroy /src/openvswitch/lib/match.c:1783:5
+    #2 0x52e41b in ofctl_parse_flow /src/openvswitch/tests/oss-fuzz/ofctl_parse_target.c:64:9
+    #3 0x52e290 in LLVMFuzzerTestOneInput /src/openvswitch/tests/oss-fuzz/ofctl_parse_target.c:107:5
+    #4 0x52e98a in ExecuteFilesOnyByOne(int, char**) /src/libfuzzer/afl/afl_driver.cpp:301:5
+    #5 0x52eeee in main /src/libfuzzer/afl/afl_driver.cpp:339:12
+    #6 0x14ef337c582f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+
+DEDUP_TOKEN: free--minimatch_destroy--ofctl_parse_flow
+previously allocated by thread T0 here:
+    #0 0x4edbbf in __interceptor_malloc /src/llvm/projects/compiler-rt/lib/asan/asan_malloc_linux.cc:146
+    #1 0x615706 in xmalloc /src/openvswitch/lib/util.c:123:15
+    #2 0x63e910 in miniflow_alloc /src/openvswitch/lib/flow.c:3260:28
+    #3 0x5a58f8 in minimatch_init /src/openvswitch/lib/match.c:1737:5
+    #4 0x5b30f3 in parse_ofp_str__ /src/openvswitch/lib/ofp-flow.c:1759:5
+    #5 0x5ac9cd in parse_ofp_str /src/openvswitch/lib/ofp-flow.c:1790:13
+    #6 0x5b39ad in parse_ofp_flow_mod_str /src/openvswitch/lib/ofp-flow.c:1817:19
+    #7 0x52e3c4 in ofctl_parse_flow /src/openvswitch/tests/oss-fuzz/ofctl_parse_target.c:58:13
+    #8 0x52e290 in LLVMFuzzerTestOneInput /src/openvswitch/tests/oss-fuzz/ofctl_parse_target.c:107:5
+    #9 0x52e98a in ExecuteFilesOnyByOne(int, char**) /src/libfuzzer/afl/afl_driver.cpp:301:5
+    #10 0x52eeee in main /src/libfuzzer/afl/afl_driver.cpp:339:12
+    #11 0x14ef337c582f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+
+DEDUP_TOKEN: __interceptor_malloc--xmalloc--miniflow_alloc
+SUMMARY: AddressSanitizer: double-free /src/llvm/projects/compiler-rt/lib/asan/asan_malloc_linux.cc:124 in free
+==2805822==ABORTING

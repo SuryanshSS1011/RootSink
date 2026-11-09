@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042515156",
+  "chain": "CWE-416->CWE-125",
+  "project": "lcms",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42515156",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "617f3ae6f95cd448de7b34caef00ff51de4cf57f",
+      "fix_commits": [
+        "617f3ae6f95cd448de7b34caef00ff51de4cf57f"
+      ],
+      "repo": "https://github.com/mm2/Little-CMS"
+    },
+    "patch": "From 617f3ae6f95cd448de7b34caef00ff51de4cf57f Mon Sep 17 00:00:00 2001\nFrom: Marti Maria <marti.maria@littlecms.com>\nDate: Sat, 27 Aug 2022 11:49:44 +0200\nSubject: [PATCH] Fix a double free in case of error\n\ncmsReadTag already tracks its pointers so no need to free it\nAlso fixed a cosmetic warning (no functionality changes)\n---\n src/cmsio0.c | 5 +++--\n src/cmsio1.c | 3 +--\n 2 files changed, 4 insertions(+), 4 deletions(-)\n\ndiff --git a/src/cmsio0.c b/src/cmsio0.c\nindex 821b869..222f7c7 100644\n--- a/src/cmsio0.c\n+++ b/src/cmsio0.c\n@@ -742,9 +742,10 @@ cmsUInt32Number _validatedVersion(cmsUInt32Number DWord)\n static \n cmsBool validDeviceClass(cmsProfileClassSignature cl)\n {\n+    if ((int)cl == 0) return TRUE; // We allow zero because older lcms versions defaulted to that.\n+\n     switch (cl)\n-    {\n-    case 0: // We allow zero because older lcms versions defaulted to that.\n+    {    \n     case cmsSigInputClass:\n     case cmsSigDisplayClass:\n     case cmsSigOutputClass:\ndiff --git a/src/cmsio1.c b/src/cmsio1.c\nindex 4ef8671..2d7deee 100644\n--- a/src/cmsio1.c\n+++ b/src/cmsio1.c\n@@ -737,8 +737,7 @@ cmsPipeline* CMSEXPORT _cmsReadDevicelinkLUT(cmsHPROFILE hProfile, cmsUInt32Numb\n \n         return Lut;\n     Error:\n-        cmsPipelineFree(Lut);\n-        cmsFreeNamedColorList(nc);\n+        cmsPipelineFree(Lut);        \n         return NULL;\n     }\n \n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42515156-vul",
+      "digest": "sha256:6f6e14617654e3dc2577c7ffd7a52ffdc8fe242734eb273ea132f0acc782f572"
+    },
+    "patched": {
+      "ref": "n132/arvo:42515156-fix",
+      "digest": "sha256:992858adc697d6dd85184ec866162375ec84376ae218f3b2bc0b7475d8fb18e7"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/lcms/src/cmsnamed.c:577",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/lcms/src/cmsnamed.c:577"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042520314",
+  "chain": "CWE-1285->CWE-125",
+  "project": "readstat",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42520314",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "32f64d32dfcf526fd5d4384f5caec78ea4dc065a",
+      "fix_commits": [
+        "32f64d32dfcf526fd5d4384f5caec78ea4dc065a"
+      ],
+      "repo": "https://github.com/WizardMac/ReadStat"
+    },
+    "patch": "diff --git a/src/sas/readstat_sas7bcat_read.c b/src/sas/readstat_sas7bcat_read.c\nindex b3e14f0e..61a1e96e 100644\n--- a/src/sas/readstat_sas7bcat_read.c\n+++ b/src/sas/readstat_sas7bcat_read.c\n@@ -60,7 +60,7 @@ static readstat_error_t sas7bcat_parse_value_labels(const char *value_start, siz\n \n     /* Pass 1 -- find out the offset of the labels */\n     for (i=0; i<label_count_capacity; i++) {\n-        if (&lbp1[3] - value_start > value_labels_len || sas_read2(&lbp1[2], ctx->bswap) < 0) {\n+        if (&lbp1[4] - value_start > value_labels_len || sas_read2(&lbp1[2], ctx->bswap) < 0) {\n             retval = READSTAT_ERROR_PARSE;\n             goto cleanup;\n         }\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42520314-vul",
+      "digest": "sha256:5c3f1e0425a963eb059d57c93d67b845f2f5b9c49bccb4d1cdaeedae5d9d5117"
+    },
+    "patched": {
+      "ref": "n132/arvo:42520314-fix",
+      "digest": "sha256:bdd7e7bb77bc0d6299d48a292aea6dca5a2773ff812e64a42aa3f001eaef6ecb"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/readstat/src/sas/readstat_sas.c:152",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/readstat/src/sas/readstat_sas.c:152"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

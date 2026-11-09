@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042481492",
+  "chain": "CWE-20->CWE-125",
+  "project": "jbig2dec",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42481492",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "ce3e3aa738f1f5102fea63dfb9de15fea555c559",
+      "fix_commits": [
+        "ce3e3aa738f1f5102fea63dfb9de15fea555c559"
+      ],
+      "repo": "git://git.ghostscript.com/jbig2dec.git"
+    },
+    "patch": "From ce3e3aa738f1f5102fea63dfb9de15fea555c559 Mon Sep 17 00:00:00 2001\nFrom: Robin Watts <Robin.Watts@artifex.com>\nDate: Wed, 29 Jan 2020 12:40:14 +0000\nSubject: [PATCH] jbig2dec: Fix OSS-Fuzz issue 20358\n\nAvoid a signed/unsigned comparison which was implicitly casting\ngmax=-1 to unsigned, and hence making right larger than it should\nhave been.\n\nApply similar fixes to equivalent places in the code.\n---\n jbig2_generic.c | 6 +++---\n 1 file changed, 3 insertions(+), 3 deletions(-)\n\ndiff --git a/jbig2_generic.c b/jbig2_generic.c\nindex 66c04c6..8eb6477 100644\n--- a/jbig2_generic.c\n+++ b/jbig2_generic.c\n@@ -922,9 +922,9 @@ jbig2_decode_generic_template0_TPGDON(Jbig2Ctx *ctx,\n         gmin = params->gbat[6];\n     if (gmax < params->gbat[6])\n         gmax = params->gbat[6];\n-    if (left < -gmin)\n+    if ((int)left < -gmin)\n         left = -gmin;\n-    if (right < gmax)\n+    if ((int)right < gmax)\n         right = gmax;\n     /* We need to guarantee 9 pixels in the right margin to be able\n      * to use jbig2_image_get_pixels_fast. */\n@@ -943,7 +943,7 @@ jbig2_decode_generic_template0_TPGDON(Jbig2Ctx *ctx,\n         gmin = params->gbat[5];\n     if (params->gbat[7] < gmin)\n         gmin = params->gbat[7];\n-    if (top < -gmin)\n+    if ((int)top < -gmin)\n         top = -gmin;\n     /* So 0 <= y < top needs bounds checking. */\n \n-- \n2.55.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42481492-vul",
+      "digest": "sha256:2fd9c84e45047a3d0d686176f986d46f4309769da35e2cdb9ba028f290bfd81c"
+    },
+    "patched": {
+      "ref": "n132/arvo:42481492-fix",
+      "digest": "sha256:1fff909528ccd5d7be0531d87a037e8278a57e99725ba8d6245fff98d85574f3"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/jbig2dec/jbig2_image.h:60",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/jbig2dec/jbig2_image.h:60"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0369652814",
+  "chain": "CWE-1285->CWE-125",
+  "project": "ndpi",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "369652814",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "726bb6704ccdf247fc3ac4fc9802c17a15bed753",
+      "fix_commits": [
+        "726bb6704ccdf247fc3ac4fc9802c17a15bed753"
+      ],
+      "repo": "https://github.com/ntop/nDPI"
+    },
+    "patch": "diff --git a/src/lib/protocols/http.c b/src/lib/protocols/http.c\nindex 57f71e2fe1a..cb146fcc0fd 100644\n--- a/src/lib/protocols/http.c\n+++ b/src/lib/protocols/http.c\n@@ -967,8 +967,9 @@ static void check_content_type_and_change_protocol(struct ndpi_detection_module_\n   }\n \n   if(packet->upgrade_line.ptr != NULL) {\n-    if(flow->http.response_status_code == 101 &&\n-       memcmp((char *)packet->upgrade_line.ptr, \"websocket\", 9) == 0)\n+    if((flow->http.response_status_code == 101)\n+       && (packet->upgrade_line.len >= 9)\n+       && memcmp((char *)packet->upgrade_line.ptr, \"websocket\", 9) == 0)\n       flow->http.websocket = 1;\n   }\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:369652814-vul",
+      "digest": "sha256:a113573d84de9b79be0fb77902cdbde34a579620d5b9a6cb397ad555630d601e"
+    },
+    "patched": {
+      "ref": "n132/arvo:369652814-fix",
+      "digest": "sha256:39ff4a362f2b5acae180fed41d2e095eeea460c1d2a0e7e1d9ab8c8974adc2ba"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/ndpi/src/lib/protocols/http.c:971",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/ndpi/src/lib/protocols/http.c:971"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

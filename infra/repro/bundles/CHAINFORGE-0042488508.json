@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042488508",
+  "chain": "CWE-416->CWE-787",
+  "project": "libass",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42488508",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "017137471d0043e0321e377ed8da48e45a3ec632",
+      "fix_commits": [
+        "017137471d0043e0321e377ed8da48e45a3ec632"
+      ],
+      "repo": "https://github.com/libass/libass"
+    },
+    "patch": "diff --git a/libass/ass.c b/libass/ass.c\nindex 428a332ff..5be09a7cf 100644\n--- a/libass/ass.c\n+++ b/libass/ass.c\n@@ -857,7 +857,7 @@ static int decode_font(ASS_Track *track)\n         ass_msg(track->library, MSGL_ERR, \"Bad encoded data size\");\n         goto error_decode_font;\n     }\n-    buf = malloc(size / 4 * 3 + FFMAX(size % 4 - 1, 0));\n+    buf = malloc(size / 4 * 3 + FFMAX(size % 4, 1) - 1);\n     if (!buf)\n         goto error_decode_font;\n     q = buf;\n@@ -871,7 +871,7 @@ static int decode_font(ASS_Track *track)\n         q = decode_chars(p, q, 3);\n     }\n     dsize = q - buf;\n-    assert(dsize == size / 4 * 3 + FFMAX(size % 4 - 1, 0));\n+    assert(dsize == size / 4 * 3 + FFMAX(size % 4, 1) - 1);\n \n     if (track->library->extract_fonts) {\n         ass_add_font(track->library, track->parser_priv->fontname,\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42488508-vul",
+      "digest": "sha256:9a68fed31e41cff82f785897b3e474a13eb007eb303c19bd2d0a73f091d1fc64"
+    },
+    "patched": {
+      "ref": "n132/arvo:42488508-fix",
+      "digest": "sha256:4c6034c3cf39a88e97f5b24e56e7ddc186ef9c6a4c6da9ae20ede82ff4b0254d"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/libass/libass/ass.c:830",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/libass/libass/ass.c:830"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

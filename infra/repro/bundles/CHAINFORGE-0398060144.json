@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0398060144",
+  "chain": "CWE-416->CWE-125",
+  "project": "binutils-gdb",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "398060144",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "70b4fd3dc795f90014b7cb2f0c82c4f81edb889e",
+      "fix_commits": [
+        "70b4fd3dc795f90014b7cb2f0c82c4f81edb889e"
+      ],
+      "repo": "git://sourceware.org/git/binutils-gdb.git"
+    },
+    "patch": "diff --git a/gas/subsegs.c b/gas/subsegs.c\nindex e098ec4302a..bc80c850b76 100644\n--- a/gas/subsegs.c\n+++ b/gas/subsegs.c\n@@ -50,8 +50,21 @@ subsegs_end (struct obstack **obs)\n   for (; *obs; obs++)\n     _obstack_free (*obs, NULL);\n   _obstack_free (&frchains, NULL);\n-  bfd_set_section_userdata (bfd_abs_section_ptr, NULL);\n+  bfd_set_section_userdata (bfd_com_section_ptr, NULL);\n   bfd_set_section_userdata (bfd_und_section_ptr, NULL);\n+  bfd_set_section_userdata (bfd_abs_section_ptr, NULL);\n+  bfd_set_section_userdata (bfd_ind_section_ptr, NULL);\n+  /* Reverse bfd_std_section_init, so the sections look as they did\n+     initially.  This, and clearing out userdata above, is so we don't\n+     leave dangling pointers into freed memory for oss-fuzz to mess\n+     with.  */\n+  asymbol *global_syms = bfd_com_section_ptr->symbol;\n+  bfd_und_section_ptr->used_by_bfd = NULL;\n+  bfd_und_section_ptr->symbol = global_syms + (bfd_und_section_ptr\n+\t\t\t\t\t       - bfd_com_section_ptr);\n+  bfd_abs_section_ptr->used_by_bfd = NULL;\n+  bfd_abs_section_ptr->symbol = global_syms + (bfd_abs_section_ptr\n+\t\t\t\t\t       - bfd_com_section_ptr);\n }\n \f\n static void\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:398060144-vul",
+      "digest": "sha256:9999dbeee74962954d2937383410dc28ca64ab6a771cc01a56ce244998735e0c"
+    },
+    "patched": {
+      "ref": "n132/arvo:398060144-fix",
+      "digest": "sha256:646eb83aadadb1a432016889f2fc4c5a4f92fa4bdfe3fb4c8c0867d28b7de4e4"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/binutils-gdb/gas/messages.c:221",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/binutils-gdb/gas/messages.c:221"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

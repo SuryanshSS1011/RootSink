@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042513782",
+  "chain": "CWE-456->CWE-457",
+  "project": "mruby",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42513782",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "7d5475916cdcf4c54952f7c695363f3d3c682ee9",
+      "fix_commits": [
+        "7d5475916cdcf4c54952f7c695363f3d3c682ee9"
+      ],
+      "repo": "https://github.com/mruby/mruby"
+    },
+    "patch": "From 7d5475916cdcf4c54952f7c695363f3d3c682ee9 Mon Sep 17 00:00:00 2001\nFrom: \"Yukihiro \\\"Matz\\\" Matsumoto\" <matz@ruby.or.jp>\nDate: Mon, 25 Jul 2022 14:10:31 +0900\nSubject: [PATCH] bigint.c (udiv): avoid out of bound access in division.\n\n---\n mrbgems/mruby-bigint/core/bigint.c | 2 +-\n 1 file changed, 1 insertion(+), 1 deletion(-)\n\ndiff --git a/mrbgems/mruby-bigint/core/bigint.c b/mrbgems/mruby-bigint/core/bigint.c\nindex aa7dee0..545dd83 100644\n--- a/mrbgems/mruby-bigint/core/bigint.c\n+++ b/mrbgems/mruby-bigint/core/bigint.c\n@@ -441,7 +441,7 @@ udiv(mrb_state *mrb, mpz_t *qq, mpz_t *rr, mpz_t *xx, mpz_t *yy)\n   size_t xd = digits(&x);\n   mpz_realloc(mrb, &q, xd);\n   mp_limb2 z = y.p[yd-1];\n-  for (size_t j=(xd-yd);; j--) {\n+  for (size_t j=xd-yd-1;; j--) {\n     mp_limb2 qhat = (((mp_limb2)x.p[j+yd] << DIG_SIZE) + x.p[j+yd-1]) / z;\n     mp_limb2s b=0;\n     if (qhat) {\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42513782-vul",
+      "digest": "sha256:f821be83e0b8a242323c14cb47023d29c3a022d272f4b8be943dfcf49f7afab2"
+    },
+    "patched": {
+      "ref": "n132/arvo:42513782-fix",
+      "digest": "sha256:a63eb895b6b3f2a96e05dcdae9ead88b3d6f1d20ea2152582ec8b1e44fb9a9d0"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/mruby/mrbgems/mruby-bigint/core/bigint.c:435",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/mruby/mrbgems/mruby-bigint/core/bigint.c:435"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

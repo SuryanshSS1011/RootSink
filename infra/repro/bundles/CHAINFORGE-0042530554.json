@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042530554",
+  "chain": "CWE-1284->CWE-787",
+  "project": "radare2",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42530554",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "c7e91db654127765a2d2238752ce76a836b55e02",
+      "fix_commits": [
+        "c7e91db654127765a2d2238752ce76a836b55e02"
+      ],
+      "repo": "https://github.com/radareorg/radare2"
+    },
+    "patch": "diff --git a/libr/bin/format/objc/mach0_classes.c b/libr/bin/format/objc/mach0_classes.c\nindex a71e2a24f0177..917dfcc83f592 100644\n--- a/libr/bin/format/objc/mach0_classes.c\n+++ b/libr/bin/format/objc/mach0_classes.c\n@@ -630,7 +630,7 @@ static void iterate_list_of_lists(RBinFile *bf, OnList cb, void * ctx, mach0_ut\n \t\treturn;\n \t}\n \n-\tut32 entsize, count;\n+\tut32 count;\n \tut8 tmp[sizeof (ut32) * 2];\n \n \tif (r + left < r || r + sizeof (tmp) < r) {\n@@ -650,7 +650,7 @@ static void iterate_list_of_lists(RBinFile *bf, OnList cb, void * ctx, mach0_ut\n \t\treturn;\n \t}\n \n-\tentsize = r_read_ble (&tmp[0], bigendian, 32);\n+\tut32 entsize = r_read_ble (&tmp[0], bigendian, 32);\n \tcount = r_read_ble (&tmp[4], bigendian, 32);\n \tif (count < 1 || count > ST32_MAX) {\n \t\treturn;\n@@ -682,7 +682,14 @@ static void iterate_list_of_lists(RBinFile *bf, OnList cb, void * ctx, mach0_ut\n \t\tif (left < entsize) {\n \t\t\tbreak;\n \t\t}\n-\t\tif (r_buf_read_at (bf->buf, r, (ut8*)&entry, entsize) != entsize) {\n+\t\tsize_t mines = R_MIN (entsize, sizeof (entry));\n+\t\tif (entsize < sizeof (entry)) {\n+\t\t\tR_LOG_WARN (\"wrong lole size, breaking, not enough to read\");\n+\t\t\tbreak;\n+\t\t} else if (entsize != sizeof (entry)) {\n+\t\t\tR_LOG_WARN (\"wrong lole size. fuzzed blob?\");\n+\t\t}\n+\t\tif (r_buf_read_at (bf->buf, r, (ut8*)&entry, mines) != mines) {\n \t\t\tbreak;\n \t\t}\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42530554-vul",
+      "digest": "sha256:78e6de674a7df12de14ff856b621540f91017508aeef0ea7f6faec643a78ab20"
+    },
+    "patched": {
+      "ref": "n132/arvo:42530554-fix",
+      "digest": "sha256:7d6ca55dd4989514fe4514cb66566e6ce0414e76ca40e0e0cd441823b9b70839"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/radare2/libr/io/io_memory.c:82",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/radare2/libr/io/io_memory.c:82"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

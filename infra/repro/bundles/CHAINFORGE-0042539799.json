@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042539799",
+  "chain": "CWE-416->CWE-125",
+  "project": "openssl",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42539799",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "5f96a95e2562f026557f625e50c052e77c7bc2e8",
+      "fix_commits": [
+        "5f96a95e2562f026557f625e50c052e77c7bc2e8"
+      ],
+      "repo": "https://github.com/openssl/openssl"
+    },
+    "patch": "From 5f96a95e2562f026557f625e50c052e77c7bc2e8 Mon Sep 17 00:00:00 2001\nFrom: Kurt Roeckx <kurt@roeckx.be>\nDate: Sat, 12 May 2018 12:08:14 +0200\nSubject: [PATCH] Set sess to NULL after freeing it.\n\nFound by OSS-fuzz\n\nBug introduced in commit 61fb59238dad6452a37ec14513fae617a4faef29\n\nReviewed-by: Matt Caswell <matt@openssl.org>\nGH: #6235\n---\n ssl/t1_lib.c | 1 +\n 1 file changed, 1 insertion(+)\n\ndiff --git a/ssl/t1_lib.c b/ssl/t1_lib.c\nindex b312a14..c076782 100644\n--- a/ssl/t1_lib.c\n+++ b/ssl/t1_lib.c\n@@ -1384,6 +1384,7 @@ SSL_TICKET_STATUS tls_decrypt_ticket(SSL *s, const unsigned char *etick,\n         /* Some additional consistency checks */\n         if (slen != 0) {\n             SSL_SESSION_free(sess);\n+            sess = NULL;\n             ret = SSL_TICKET_NO_DECRYPT;\n             goto end;\n         }\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42539799-vul",
+      "digest": "sha256:dfe30ddd654715d859e60867356498f91a3a6cd7247888249cf6ea28cecff9d9"
+    },
+    "patched": {
+      "ref": "n132/arvo:42539799-fix",
+      "digest": "sha256:0a4e8bc4675007a1d3f06c24d716f0658159981e8d775a57323fdeb096a9e696"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/openssl/ssl/ssl_sess.c:593",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/openssl/ssl/ssl_sess.c:593"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

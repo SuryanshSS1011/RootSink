@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042510223",
+  "chain": "CWE-456->CWE-457",
+  "project": "libraw",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42510223",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "aa61a015845d12e19e5ee5fcfca28ef6b5cebf55",
+      "fix_commits": [
+        "aa61a015845d12e19e5ee5fcfca28ef6b5cebf55"
+      ],
+      "repo": "https://github.com/libraw/libraw"
+    },
+    "patch": "From aa61a015845d12e19e5ee5fcfca28ef6b5cebf55 Mon Sep 17 00:00:00 2001\nFrom: Aleks L <93376818+sashashura@users.noreply.github.com>\nDate: Sun, 24 Jul 2022 15:21:43 +0100\nSubject: [PATCH] Fixes Use-of-uninitialized-value in\n LibRaw::parse_fuji_compressed_header\n\nhttps://bugs.chromium.org/p/oss-fuzz/issues/detail?id=46224\n\nThe `uchar header[16];` in `LibRaw::parse_fuji_compressed_header` is not initialized (contains garbage) because the stream is eof.\n---\n src/decoders/fuji_compressed.cpp | 3 ++-\n 1 file changed, 2 insertions(+), 1 deletion(-)\n\ndiff --git a/src/decoders/fuji_compressed.cpp b/src/decoders/fuji_compressed.cpp\nindex 5f1dc02..aa9fb97 100644\n--- a/src/decoders/fuji_compressed.cpp\n+++ b/src/decoders/fuji_compressed.cpp\n@@ -1163,7 +1163,8 @@ void LibRaw::parse_fuji_compressed_header()\n   uchar header[16];\n \n   libraw_internal_data.internal_data.input->seek(libraw_internal_data.unpacker_data.data_offset, SEEK_SET);\n-  libraw_internal_data.internal_data.input->read(header, 1, sizeof(header));\n+  if (libraw_internal_data.internal_data.input->read(header, 1, sizeof(header)) != sizeof(header))\n+    return;\n \n   // read all header\n   signature = sgetn(2, header);\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42510223-vul",
+      "digest": "sha256:b1e99a862c650f2e6bb188476549b290bfc5ca847aff863d5943165ecd074df2"
+    },
+    "patched": {
+      "ref": "n132/arvo:42510223-fix",
+      "digest": "sha256:4366647e88180a394240b14de2eaebb437a06ea2e95343cde38fd1229848f365"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/libraw/src/decoders/fuji_compressed.cpp:1188",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/libraw/src/decoders/fuji_compressed.cpp:1188"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

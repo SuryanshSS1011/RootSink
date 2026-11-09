@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042531317",
+  "chain": "CWE-20->CWE-125",
+  "project": "gpac",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42531317",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "8a6e53e5231354b52feaffc02eae48204303157d",
+      "fix_commits": [
+        "8a6e53e5231354b52feaffc02eae48204303157d"
+      ],
+      "repo": "https://github.com/gpac/gpac"
+    },
+    "patch": "diff --git a/src/utils/url.c b/src/utils/url.c\nindex 6884a8d616..cbc7c20af7 100644\n--- a/src/utils/url.c\n+++ b/src/utils/url.c\n@@ -429,7 +429,7 @@ void gf_url_to_fs_path(char *sURL)\n {\n \tif (!strnicmp(sURL, \"file://\", 7)) {\n \t\t/*file:///C:\\ scheme*/\n-\t\tif ((sURL[7]=='/') && (sURL[9]==':')) {\n+\t\tif ((strlen(sURL)>=10) && (sURL[7]=='/') && (sURL[9]==':')) {\n \t\t\tmemmove(sURL, sURL+8, strlen(sURL)-7);\n \t\t} else {\n \t\t\tmemmove(sURL, sURL+7, strlen(sURL)-6);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42531317-vul",
+      "digest": "sha256:c3c1fbd930e12745d1c87c48155970fe25d69360102617d2bf85a99fdf068311"
+    },
+    "patched": {
+      "ref": "n132/arvo:42531317-fix",
+      "digest": "sha256:05c8810d506f343f45d207cb3f36663068a919ca6192b102ce2ac0dac8dc7560"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/gpac/src/utils/url.c:432",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/gpac/src/utils/url.c:432"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

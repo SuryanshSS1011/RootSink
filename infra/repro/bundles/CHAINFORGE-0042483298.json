@@ -1,0 +1,73 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042483298",
+  "chain": "CWE-416->CWE-787",
+  "project": "libzmq",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42483298",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "5fd07111964263bb8109790173a9ddeea0dd1943\n397ac80850bf8d010fae23dd215db0ee2c677306",
+      "fix_commits": [
+        "5fd07111964263bb8109790173a9ddeea0dd1943",
+        "397ac80850bf8d010fae23dd215db0ee2c677306"
+      ],
+      "repo": "https://github.com/zeromq/libzmq"
+    },
+    "patch": "diff --git a/src/decoder_allocators.hpp b/src/decoder_allocators.hpp\nindex f6b967be24..2620f1b8ec 100644\n--- a/src/decoder_allocators.hpp\n+++ b/src/decoder_allocators.hpp\n@@ -58,7 +58,8 @@ class c_single_allocator\n \n     std::size_t size () const { return _buf_size; }\n \n-    void resize (std::size_t new_size_) { _buf_size = new_size_; }\n+    //  This buffer is fixed, size must not be changed\n+    void resize (std::size_t new_size_) { LIBZMQ_UNUSED (new_size_); }\n \n   private:\n     std::size_t _buf_size;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42483298-vul",
+      "digest": "sha256:eb1c15d90e98c6cffdd3f32c980b6641ae67386dbe97dbb0923ae7ab245dafe6"
+    },
+    "patched": {
+      "ref": "n132/arvo:42483298-fix",
+      "digest": "sha256:353f6a0fbe58157131f8fe0ca76e885c4d2a94e68ffa0c175922672c7b32f636"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/libzmq/src/tcp.cpp:299",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/libzmq/src/tcp.cpp:299"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

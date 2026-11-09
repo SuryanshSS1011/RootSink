@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042479268",
+  "chain": "CWE-20->CWE-125",
+  "project": "libgit2",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42479268",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "6c6c15e935091a33f83d8de4ee5b0640339b2b89",
+      "fix_commits": [
+        "6c6c15e935091a33f83d8de4ee5b0640339b2b89"
+      ],
+      "repo": "https://github.com/libgit2/libgit2"
+    },
+    "patch": "diff --git a/src/patch_parse.c b/src/patch_parse.c\nindex a71843277f7..16f2f6832c4 100644\n--- a/src/patch_parse.c\n+++ b/src/patch_parse.c\n@@ -69,6 +69,10 @@ static int parse_header_path_buf(git_buf *path, git_patch_parse_ctx *ctx, size_t\n {\n \tint error;\n \n+\tif (!path_len)\n+\t\treturn git_parse_err(\"patch contains empty path at line %\"PRIuZ,\n+\t\t\t\t     ctx->parse_ctx.line_num);\n+\n \tif ((error = git_buf_put(path, ctx->parse_ctx.line, path_len)) < 0)\n \t\tgoto done;\n \ndiff --git a/tests/patch/parse.c b/tests/patch/parse.c\nindex fb185eb2a3e..ede5a96e293 100644\n--- a/tests/patch/parse.c\n+++ b/tests/patch/parse.c\n@@ -149,6 +149,13 @@ void test_patch_parse__lifetime_of_patch_does_not_depend_on_buffer(void)\n \tgit_patch_free(patch);\n }\n \n+void test_patch_parse__binary_file_with_missing_paths(void)\n+{\n+\tgit_patch *patch;\n+\tcl_git_fail(git_patch_from_buffer(&patch, PATCH_BINARY_FILE_WITH_MISSING_PATHS,\n+\t\t\t\t\t  strlen(PATCH_BINARY_FILE_WITH_MISSING_PATHS), NULL));\n+}\n+\n void test_patch_parse__memory_leak_on_multiple_paths(void)\n {\n \tgit_patch *patch;\ndiff --git a/tests/patch/patch_common.h b/tests/patch/patch_common.h\nindex 68b183d3823..4c053cbbf8b 100644\n--- a/tests/patch/patch_common.h\n+++ b/tests/patch/patch_common.h\n@@ -906,6 +906,12 @@\n \t\"+bb\\n\" \\\n \t\" c\\n\"\n \n+#define PATCH_BINARY_FILE_WITH_MISSING_PATHS \\\n+\t\"diff --git  \\n\" \\\n+\t\"--- \\n\" \\\n+\t\"+++ \\n\" \\\n+\t\"Binary files \"\n+\n #define PATCH_MULTIPLE_OLD_PATHS \\\n \t\"diff --git  \\n\" \\\n \t\"---  \\n\" \\\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42479268-vul",
+      "digest": "sha256:a8f6021393c7c2f0a53c41ada17ec44853017b0e3e0d6436e72b5a99ea4ee9ad"
+    },
+    "patched": {
+      "ref": "n132/arvo:42479268-fix",
+      "digest": "sha256:6d2ddb47601b36d7fabea1a1bd0d0f69b7bc9af5e5a7640a3d57fcaa1fb01203"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/libgit2/src/allocators/stdalloc.c:34",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/libgit2/src/allocators/stdalloc.c:34"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

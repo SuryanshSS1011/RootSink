@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042490692",
+  "chain": "CWE-416->CWE-125",
+  "project": "gdal",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42490692",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "e614649056c9b753594269c90b5360046cbd02bc",
+      "fix_commits": [
+        "e614649056c9b753594269c90b5360046cbd02bc"
+      ],
+      "repo": "https://github.com/OSGeo/gdal"
+    },
+    "patch": "From e614649056c9b753594269c90b5360046cbd02bc Mon Sep 17 00:00:00 2001\nFrom: Even Rouault <even.rouault@mines-paris.org>\nDate: Fri, 4 Aug 2017 19:04:52 +0000\nSubject: [PATCH] morphFromESRI(): fixes heap-after-free uses. Fixes\n https://bugs.chromium.org/p/oss-fuzz/issues/detail?id=2864. Credit to OSS\n Fuzz\n\ngit-svn-id: https://svn.osgeo.org/gdal/trunk@39753 f0d54148-0727-0410-94bb-9a71ac55c965\n---\n gdal/ogr/ogr_srs_esri.cpp | 9 ++++++++-\n 1 file changed, 8 insertions(+), 1 deletion(-)\n\ndiff --git a/gdal/ogr/ogr_srs_esri.cpp b/gdal/ogr/ogr_srs_esri.cpp\nindex 7a0704d..f9b98fe 100644\n--- a/gdal/ogr/ogr_srs_esri.cpp\n+++ b/gdal/ogr/ogr_srs_esri.cpp\n@@ -1669,6 +1669,8 @@ OGRErr OGRSpatialReference::morphToESRI()\n     if( pszProjection != NULL && EQUAL(pszProjection, SRS_PT_MERCATOR_2SP) )\n     {\n         SetNode( \"PROJCS|PROJECTION\", \"Mercator\" );\n+        if( (poProjCS = GetAttrNode( \"PROJCS\" )) != NULL )\n+            poProjCSNodeChild = poProjCS->GetChild(0);\n     }\n \n     // See #4861.\n@@ -1676,6 +1678,8 @@ OGRErr OGRSpatialReference::morphToESRI()\n              EQUAL(pszProjection, SRS_PT_MERCATOR_1SP) )\n     {\n         SetNode( \"PROJCS|PROJECTION\", \"Mercator\" );\n+        if( (poProjCS = GetAttrNode( \"PROJCS\" )) != NULL )\n+            poProjCSNodeChild = poProjCS->GetChild(0);\n \n         const double dfK0 = GetNormProjParm(SRS_PP_SCALE_FACTOR, 1.0);\n \n@@ -1782,7 +1786,10 @@ OGRErr OGRSpatialReference::morphToESRI()\n         CPLFree( newGcsName );\n         pszGcsName = GetAttrValue( \"GEOGCS\" );\n       }\n-      RemapGeogCSName(this, pszGcsName);\n+      if( pszGcsName != NULL )\n+      {\n+        RemapGeogCSName(this, pszGcsName);\n+      }\n \n       // Specific processing and remapping\n       pszProjection = GetAttrValue(\"PROJECTION\");\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42490692-vul",
+      "digest": "sha256:aba0c19712e8582f952cdc3fdd6d137eb4030469da9460cc22b1168400773195"
+    },
+    "patched": {
+      "ref": "n132/arvo:42490692-fix",
+      "digest": "sha256:d83f418af98785abc580ccc5d59893eeb5870600e1132831559992814f09b13d"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/gdal/gdal/ogr/ogr_spatialref.h:81",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/gdal/gdal/ogr/ogr_spatialref.h:81"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

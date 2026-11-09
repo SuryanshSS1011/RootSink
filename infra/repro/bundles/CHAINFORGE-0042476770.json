@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042476770",
+  "chain": "CWE-20->CWE-787",
+  "project": "openssl",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42476770",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "ed57f7f93508776b898e4c23b65d67f3479edaf1",
+      "fix_commits": [
+        "ed57f7f93508776b898e4c23b65d67f3479edaf1"
+      ],
+      "repo": "https://github.com/openssl/openssl"
+    },
+    "patch": "diff --git a/doc/man3/ERR_put_error.pod b/doc/man3/ERR_put_error.pod\nindex c2913d5af40b3..d9bbba99a06ac 100644\n--- a/doc/man3/ERR_put_error.pod\n+++ b/doc/man3/ERR_put_error.pod\n@@ -2,6 +2,7 @@\n \n =head1 NAME\n \n+ERR_raise, ERR_raise_data,\n ERR_put_error, ERR_put_func_error,\n ERR_add_error_data, ERR_add_error_vdata - record an error\n \n@@ -9,6 +10,9 @@ ERR_add_error_data, ERR_add_error_vdata - record an error\n \n  #include <openssl/err.h>\n \n+ void ERR_raise(int lib, int reason);\n+ void ERR_raise_data(int lib, int reason, const char *fmt, ...);\n+\n  void ERR_put_error(int lib, int func, int reason, const char *file, int line);\n  void ERR_put_func_error(int lib, const char *func, int reason,\n                          const char *file, int line);\n@@ -18,6 +22,16 @@ ERR_add_error_data, ERR_add_error_vdata - record an error\n \n =head1 DESCRIPTION\n \n+ERR_raise() adds a new error to the thread's error queue.  The\n+error occured in the library B<lib> for the reason given by the\n+B<reason> code.  Furthermore, the name of the file, the line, and name\n+of the function where the error occured is saved with the error\n+record.\n+\n+ERR_raise_data() does the same thing as ERR_raise(), but also lets the\n+caller specify additional information as a format string B<fmt> and an\n+arbitrary number of values, which are processed with L<BIO_snprintf(3)>.  \n+\n ERR_put_error() adds an error code to the thread's error queue. It\n signals that the error of reason code B<reason> occurred in function\n B<func> of library B<lib>, in line number B<line> of B<file>.\n@@ -64,8 +78,12 @@ the ASN1err() macro.\n \n =head1 RETURN VALUES\n \n-ERR_put_error() and ERR_add_error_data() return\n-no values.\n+ERR_raise(), ERR_put_error() and ERR_add_error_data()\n+return no values.\n+\n+=head1 NOTES\n+\n+ERR_raise() is implemented as a macro.\n \n =head1 SEE ALSO\n \n@@ -73,7 +91,7 @@ L<ERR_load_strings(3)>\n \n =head1 COPYRIGHT\n \n-Copyright 2000-2017 The OpenSSL Project Authors. All Rights Reserved.\n+Copyright 2000-2019 The OpenSSL Project Authors. All Rights Reserved.\n \n Licensed under the Apache License 2.0 (the \"License\").  You may not use\n this file except in compliance with the License.  You can obtain a copy\ndiff --git a/include/openssl/err.h b/include/openssl/err.h\nindex 90e14672a4104..7aac9b88d4a48 100644\n--- a/include/openssl/err.h\n+++ b/include/openssl/err.h\n@@ -108,49 +108,49 @@ typedef struct err_state_st {\n # define ERR_LIB_USER            128\n \n # if ! OPENSSL_API_3\n-#  define SYSerr(f,r)  ERR_PUT_error(ERR_LIB_SYS,0,(r),OPENSSL_FILE,OPENSSL_LINE)\n-#endif\n-# define FUNCerr(f,r)  ERR_PUT_func_error(ERR_LIB_SYS,(f),(r),OPENSSL_FILE,OPENSSL_LINE)\n-# define BNerr(f,r)   ERR_PUT_error(ERR_LIB_BN,0,(r),OPENSSL_FILE,OPENSSL_LINE)\n-# define RSAerr(f,r)  ERR_PUT_error(ERR_LIB_RSA,0,(r),OPENSSL_FILE,OPENSSL_LINE)\n-# define DHerr(f,r)   ERR_PUT_error(ERR_LIB_DH,0,(r),OPENSSL_FILE,OPENSSL_LINE)\n-# define EVPerr(f,r)  ERR_PUT_error(ERR_LIB_EVP,0,(r),OPENSSL_FILE,OPENSSL_LINE)\n-# define BUFerr(f,r)  ERR_PUT_error(ERR_LIB_BUF,0,(r),OPENSSL_FILE,OPENSSL_LINE)\n-# define OBJerr(f,r)  ERR_PUT_error(ERR_LIB_OBJ,0,(r),OPENSSL_FILE,OPENSSL_LINE)\n-# define PEMerr(f,r)  ERR_PUT_error(ERR_LIB_PEM,0,(r),OPENSSL_FILE,OPENSSL_LINE)\n-# define DSAerr(f,r)  ERR_PUT_error(ERR_LIB_DSA,0,(r),OPENSSL_FILE,OPENSSL_LINE)\n-# define X509err(f,r) ERR_PUT_error(ERR_LIB_X509,0,(r),OPENSSL_FILE,OPENSSL_LINE)\n-# define ASN1err(f,r) ERR_PUT_error(ERR_LIB_ASN1,0,(r),OPENSSL_FILE,OPENSSL_LINE)\n-# define CONFerr(f,r) ERR_PUT_error(ERR_LIB_CONF,0,(r),OPENSSL_FILE,OPENSSL_LINE)\n-# define CRYPTOerr(f,r) ERR_PUT_error(ERR_LIB_CRYPTO,0,(r),OPENSSL_FILE,OPENSSL_LINE)\n-# define ECerr(f,r)   ERR_PUT_error(ERR_LIB_EC,0,(r),OPENSSL_FILE,OPENSSL_LINE)\n-# define SSLerr(f,r)  ERR_PUT_error(ERR_LIB_SSL,0,(r),OPENSSL_FILE,OPENSSL_LINE)\n-# define BIOerr(f,r)  ERR_PUT_error(ERR_LIB_BIO,0,(r),OPENSSL_FILE,OPENSSL_LINE)\n-# define PKCS7err(f,r) ERR_PUT_error(ERR_LIB_PKCS7,0,(r),OPENSSL_FILE,OPENSSL_LINE)\n-# define X509V3err(f,r) ERR_PUT_error(ERR_LIB_X509V3,0,(r),OPENSSL_FILE,OPENSSL_LINE)\n-# define PKCS12err(f,r) ERR_PUT_error(ERR_LIB_PKCS12,0,(r),OPENSSL_FILE,OPENSSL_LINE)\n-# define RANDerr(f,r) ERR_PUT_error(ERR_LIB_RAND,0,(r),OPENSSL_FILE,OPENSSL_LINE)\n-# define DSOerr(f,r) ERR_PUT_error(ERR_LIB_DSO,0,(r),OPENSSL_FILE,OPENSSL_LINE)\n-# define ENGINEerr(f,r) ERR_PUT_error(ERR_LIB_ENGINE,0,(r),OPENSSL_FILE,OPENSSL_LINE)\n-# define OCSPerr(f,r) ERR_PUT_error(ERR_LIB_OCSP,0,(r),OPENSSL_FILE,OPENSSL_LINE)\n-# define UIerr(f,r) ERR_PUT_error(ERR_LIB_UI,0,(r),OPENSSL_FILE,OPENSSL_LINE)\n-# define COMPerr(f,r) ERR_PUT_error(ERR_LIB_COMP,0,(r),OPENSSL_FILE,OPENSSL_LINE)\n-# define ECDSAerr(f,r)  ERR_PUT_error(ERR_LIB_ECDSA,0,(r),OPENSSL_FILE,OPENSSL_LINE)\n-# define ECDHerr(f,r)  ERR_PUT_error(ERR_LIB_ECDH,0,(r),OPENSSL_FILE,OPENSSL_LINE)\n-# define OSSL_STOREerr(f,r) ERR_PUT_error(ERR_LIB_OSSL_STORE,0,(r),OPENSSL_FILE,OPENSSL_LINE)\n-# define FIPSerr(f,r) ERR_PUT_error(ERR_LIB_FIPS,0,(r),OPENSSL_FILE,OPENSSL_LINE)\n-# define CMSerr(f,r) ERR_PUT_error(ERR_LIB_CMS,0,(r),OPENSSL_FILE,OPENSSL_LINE)\n-# define CRMFerr(f,r) ERR_PUT_error(ERR_LIB_CRMF,0,(r),OPENSSL_FILE,OPENSSL_LINE)\n-# define CMPerr(f,r) ERR_PUT_error(ERR_LIB_CMP,0,(r),OPENSSL_FILE,OPENSSL_LINE)\n-# define TSerr(f,r) ERR_PUT_error(ERR_LIB_TS,0,(r),OPENSSL_FILE,OPENSSL_LINE)\n-# define HMACerr(f,r) ERR_PUT_error(ERR_LIB_HMAC,0,(r),OPENSSL_FILE,OPENSSL_LINE)\n-# define CTerr(f,r) ERR_PUT_error(ERR_LIB_CT,0,(r),OPENSSL_FILE,OPENSSL_LINE)\n-# define ASYNCerr(f,r) ERR_PUT_error(ERR_LIB_ASYNC,0,(r),OPENSSL_FILE,OPENSSL_LINE)\n-# define KDFerr(f,r) ERR_PUT_error(ERR_LIB_KDF,0,(r),OPENSSL_FILE,OPENSSL_LINE)\n-# define SM2err(f,r) ERR_PUT_error(ERR_LIB_SM2,0,(r),OPENSSL_FILE,OPENSSL_LINE)\n-# define ESSerr(f,r) ERR_PUT_error(ERR_LIB_ESS,0,(r),OPENSSL_FILE,OPENSSL_LINE)\n-# define PROPerr(f,r) ERR_PUT_error(ERR_LIB_PROP,0,(r),OPENSSL_FILE,OPENSSL_LINE)\n-# define PROVerr(f,r) ERR_PUT_error(ERR_LIB_PROV,0,(r),OPENSSL_FILE,OPENSSL_LINE)\n+#  define SYSerr(f,r)  ERR_raise(ERR_LIB_SYS,(r))\n+# endif\n+# define FUNCerr(f,r)  ERR_raise_data(ERR_LIB_SYS,(r),\"calling function %s\",(f))\n+# define BNerr(f,r)   ERR_raise(ERR_LIB_RSA,(r))\n+# define RSAerr(f,r)  ERR_raise(ERR_LIB_RSA,(r))\n+# define DHerr(f,r)   ERR_raise(ERR_LIB_DH,(r))\n+# define EVPerr(f,r)  ERR_raise(ERR_LIB_EVP,(r))\n+# define BUFerr(f,r)  ERR_raise(ERR_LIB_BUF,(r))\n+# define OBJerr(f,r)  ERR_raise(ERR_LIB_OBJ,(r))\n+# define PEMerr(f,r)  ERR_raise(ERR_LIB_PEM,(r))\n+# define DSAerr(f,r)  ERR_raise(ERR_LIB_DSA,(r))\n+# define X509err(f,r) ERR_raise(ERR_LIB_X509,(r))\n+# define ASN1err(f,r) ERR_raise(ERR_LIB_ASN1,(r))\n+# define CONFerr(f,r) ERR_raise(ERR_LIB_CONF,(r))\n+# define CRYPTOerr(f,r) ERR_raise(ERR_LIB_CRYPTO,(r))\n+# define ECerr(f,r)   ERR_raise(ERR_LIB_EC,(r))\n+# define SSLerr(f,r)  ERR_raise(ERR_LIB_SSL,(r))\n+# define BIOerr(f,r)  ERR_raise(ERR_LIB_BIO,(r))\n+# define PKCS7err(f,r) ERR_raise(ERR_LIB_PKCS7,(r))\n+# define X509V3err(f,r) ERR_raise(ERR_LIB_X509V3,(r))\n+# define PKCS12err(f,r) ERR_raise(ERR_LIB_PKCS12,(r))\n+# define RANDerr(f,r) ERR_raise(ERR_LIB_RAND,(r))\n+# define DSOerr(f,r) ERR_raise(ERR_LIB_DSO,(r))\n+# define ENGINEerr(f,r) ERR_raise(ERR_LIB_ENGINE,(r))\n+# define OCSPerr(f,r) ERR_raise(ERR_LIB_OCSP,(r))\n+# define UIerr(f,r) ERR_raise(ERR_LIB_UI,(r))\n+# define COMPerr(f,r) ERR_raise(ERR_LIB_COMP,(r))\n+# define ECDSAerr(f,r)  ERR_raise(ERR_LIB_ECDSA,(r))\n+# define ECDHerr(f,r)  ERR_raise(ERR_LIB_ECDH,(r))\n+# define OSSL_STOREerr(f,r) ERR_raise(ERR_LIB_OSSL_STORE,(r))\n+# define FIPSerr(f,r) ERR_raise(ERR_LIB_FIPS,(r))\n+# define CMSerr(f,r) ERR_raise(ERR_LIB_CMS,(r))\n+# define CRMFerr(f,r) ERR_raise(ERR_LIB_CRMF,(r))\n+# define CMPerr(f,r) ERR_raise(ERR_LIB_CMP,(r))\n+# define TSerr(f,r) ERR_raise(ERR_LIB_TS,(r))\n+# define HMACerr(f,r) ERR_raise(ERR_LIB_HMAC,(r))\n+# define CTerr(f,r) ERR_raise(ERR_LIB_CT,(r))\n+# define ASYNCerr(f,r) ERR_raise(ERR_LIB_ASYNC,(r))\n+# define KDFerr(f,r) ERR_raise(ERR_LIB_KDF,(r))\n+# define SM2err(f,r) ERR_raise(ERR_LIB_SM2,(r))\n+# define ESSerr(f,r) ERR_raise(ERR_LIB_ESS,(r))\n+# define PROPerr(f,r) ERR_raise(ERR_LIB_PROP,(r))\n+# define PROVerr(f,r) ERR_raise(ERR_LIB_PROV,(r))\n \n # define ERR_PACK(l,f,r) ( \\\n         (((unsigned int)(l) & 0x0FF) << 24L) | \\\n@@ -245,6 +245,13 @@ void ERR_set_debug(const char *file, int line, const char *func);\n void ERR_set_error(int lib, int reason, const char *fmt, ...);\n void ERR_vset_error(int lib, int reason, const char *fmt, va_list args);\n \n+/* Main error raising functions */\n+#define ERR_raise(lib, reason) ERR_raise_data((lib),(reason),NULL)\n+#define ERR_raise_data                                          \\\n+    (ERR_new(),                                                 \\\n+     ERR_set_debug(OPENSSL_FILE,OPENSSL_LINE,OPENSSL_FUNC),     \\\n+     ERR_set_error)\n+\n void ERR_put_error(int lib, int func, int reason, const char *file, int line);\n void ERR_put_func_error(int lib, const char *func, int reason,\n                         const char *file, int line);\ndiff --git a/util/private.num b/util/private.num\nindex 1e76dfb43c32c..3c00589c9b9a4 100644\n--- a/util/private.num\n+++ b/util/private.num\n@@ -196,6 +196,8 @@ ERR_GET_REASON                          define\n ERR_PACK                                define\n ERR_free_strings                        define deprecated 1.1.0\n ERR_load_crypto_strings                 define deprecated 1.1.0\n+ERR_raise                               define\n+ERR_raise_data                          define\n EVP_DigestSignUpdate                    define\n EVP_DigestVerifyUpdate                  define\n EVP_KDF_name                            define\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42476770-vul",
+      "digest": "sha256:a8e73e21753426afe863ec17377ed48493e4e5775269ee9ea3b2023bf44b715f"
+    },
+    "patched": {
+      "ref": "n132/arvo:42476770-fix",
+      "digest": "sha256:f1449959769ea3ca7734b8a980af16acbe10858d25761ebc2aee16dfdcecdc96"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/openssl/crypto/o_str.c:77",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/openssl/crypto/o_str.c:77"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

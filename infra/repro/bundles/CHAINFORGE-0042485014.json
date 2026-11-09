@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042485014",
+  "chain": "CWE-1284->CWE-125",
+  "project": "opensc",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42485014",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "7cf8087351c821aa1e617282db93ecb33d53d918",
+      "fix_commits": [
+        "7cf8087351c821aa1e617282db93ecb33d53d918"
+      ],
+      "repo": "https://github.com/OpenSC/OpenSC"
+    },
+    "patch": "diff --git a/src/libopensc/card-asepcos.c b/src/libopensc/card-asepcos.c\nindex b366250b2e..734984a5e0 100644\n--- a/src/libopensc/card-asepcos.c\n+++ b/src/libopensc/card-asepcos.c\n@@ -167,7 +167,7 @@ static int asepcos_parse_sec_attr(sc_card_t *card, sc_file_t *file, const u8 *bu\n {\n \tconst u8 *p = buf;\n \n-\twhile (len != 0) {\n+\twhile (len > 0) {\n \t\tunsigned int amode, tlen = 3;\n \t\tif (len < 5 || p[0] != 0x80 || p[1] != 0x01) {\n \t\t\tsc_log(card->ctx,  \"invalid access mode encoding\");\n@@ -184,13 +184,13 @@ static int asepcos_parse_sec_attr(sc_card_t *card, sc_file_t *file, const u8 *bu\n \t\t\tif (r != SC_SUCCESS) \n \t\t\t\treturn r;\n \t\t\ttlen += 2;\n-\t\t} else if (p[3] == 0xA0 && len >= 4U + p[4]) {\n+\t\t} else if (p[3] == 0xA0 && p[4] > 0 && len >= 4U + p[4]) {\n \t\t\t/* TODO: support OR expressions */\n \t\t\tint r = set_sec_attr(file, amode, p[5], SC_AC_CHV);\n \t\t\tif (r != SC_SUCCESS)\n \t\t\t\treturn r;\n \t\t\ttlen += 2 + p[4]; /* FIXME */\n-\t\t} else if (p[3] == 0xAF && len >= 4U + p[4]) {\n+\t\t} else if (p[3] == 0xAF && p[4] > 0 && len >= 4U + p[4]) {\n \t\t\t/* TODO: support AND expressions */\n \t\t\tint r = set_sec_attr(file, amode, p[5], SC_AC_CHV);\n \t\t\tif (r != SC_SUCCESS)\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42485014-vul",
+      "digest": "sha256:5a526188ee9de66d0cb59742741d9ea1ebc51b51e6ab9e917562ec66d3c5a7d9"
+    },
+    "patched": {
+      "ref": "n132/arvo:42485014-fix",
+      "digest": "sha256:af4aaf0eadb738d189cf85eb155672172e80d1346b2900143f0740533baef92d"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/opensc/src/libopensc/card-asepcos.c:189",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/opensc/src/libopensc/card-asepcos.c:189"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042530341",
+  "chain": "CWE-456->CWE-457",
+  "project": "pcre2",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42530341",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "7fe586b892c9e0cbf3b21d57cfd8135e2311e45c",
+      "fix_commits": [
+        "7fe586b892c9e0cbf3b21d57cfd8135e2311e45c"
+      ],
+      "repo": "https://github.com/PCRE2Project/pcre2"
+    },
+    "patch": "From 7fe586b892c9e0cbf3b21d57cfd8135e2311e45c Mon Sep 17 00:00:00 2001\nFrom: Philip Hazel <Philip.Hazel@gmail.com>\nDate: Mon, 20 Nov 2023 15:41:06 +0000\nSubject: [PATCH] Fix incorrect patch in c1306126\n\n---\n src/pcre2_compile.c  | 20 ++++++++++++++------\n testdata/testinput2  |  2 ++\n testdata/testoutput2 |  2 ++\n 3 files changed, 18 insertions(+), 6 deletions(-)\n\ndiff --git a/src/pcre2_compile.c b/src/pcre2_compile.c\nindex fdaf2ad..9e45580 100644\n--- a/src/pcre2_compile.c\n+++ b/src/pcre2_compile.c\n@@ -2782,6 +2782,7 @@ uint32_t *previous_callout = NULL;\n uint32_t *parsed_pattern = cb->parsed_pattern;\n uint32_t *parsed_pattern_end = cb->parsed_pattern_end;\n uint32_t *this_parsed_item = NULL;\n+uint32_t *prev_parsed_item = NULL;\n uint32_t meta_quantifier = 0;\n uint32_t add_after_mark = 0;\n uint32_t xoptions = cb->cx->extra_options;\n@@ -2867,11 +2868,10 @@ while (ptr < ptrend)\n   uint32_t xset, xunset, *xoptset;\n   uint32_t terminator;\n   uint32_t prev_meta_quantifier;\n-  uint32_t *prev_parsed_item = this_parsed_item; \n   BOOL prev_okquantifier;\n   PCRE2_SPTR tempptr;\n   PCRE2_SIZE offset;\n-  \n+\n   if (parsed_pattern >= parsed_pattern_end)\n     {\n     errorcode = ERR63;  /* Internal error (parsed pattern overflow) */\n@@ -2883,10 +2883,17 @@ while (ptr < ptrend)\n     errorcode = ERR19;\n     goto FAILED;        /* Parentheses too deeply nested */\n     }\n-    \n-  /* Remember where this item started */\n \n-  this_parsed_item = parsed_pattern;\n+  /* If the last time round this loop something was added, parsed_pattern will\n+  no longer be equal to this_parsed_item. Remember where the previous item\n+  started and reset for the next item. Note that sometimes round the loop,\n+  nothing gets added (e.g. for ignored white space). */\n+\n+  if (this_parsed_item != parsed_pattern)\n+    {\n+    prev_parsed_item = this_parsed_item;\n+    this_parsed_item = parsed_pattern;\n+    }\n \n   /* Get next input character, save its position for callout handling. */\n \n@@ -3440,7 +3447,8 @@ while (ptr < ptrend)\n \n     /* ---- Quantifier post-processing ---- */\n \n-    /* Check that a quantifier is allowed after the previous item. */\n+    /* Check that a quantifier is allowed after the previous item. This\n+    guarantees that there is a previous item. */\n \n     CHECK_QUANTIFIER:\n     if (!prev_okquantifier)\ndiff --git a/testdata/testinput2 b/testdata/testinput2\nindex ba292d8..da845c1 100644\n--- a/testdata/testinput2\n+++ b/testdata/testinput2\n@@ -6051,4 +6051,6 @@ a)\"xI\n # /|a(?0)/endanchored\n #    aaaa\n \n+/A +/extended\n+\n # End of testinput2\ndiff --git a/testdata/testoutput2 b/testdata/testoutput2\nindex 888f06a..85de4ae 100644\n--- a/testdata/testoutput2\n+++ b/testdata/testoutput2\n@@ -17932,6 +17932,8 @@ No match\n # /|a(?0)/endanchored\n #    aaaa\n \n+/A +/extended\n+\n # End of testinput2\n Error -70: PCRE2_ERROR_BADDATA (unknown error number)\n Error -62: bad serialized data\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42530341-vul",
+      "digest": "sha256:bca84b0237b63f16794869449ea4407198e3fcda01190da8f8d62189cd710e05"
+    },
+    "patched": {
+      "ref": "n132/arvo:42530341-fix",
+      "digest": "sha256:ac5cedef20c8e1f8768d58c8b7b8235cce7d175024b442534623373176b98b7e"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/pcre2/src/pcre2_compile.c:3458",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/pcre2/src/pcre2_compile.c:3458"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

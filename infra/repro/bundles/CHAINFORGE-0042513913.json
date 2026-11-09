@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042513913",
+  "chain": "CWE-416->CWE-125",
+  "project": "lcms",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42513913",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "f3f6b7bceb629bc4b6f1dea3e45b44dc3f8674af",
+      "fix_commits": [
+        "f3f6b7bceb629bc4b6f1dea3e45b44dc3f8674af"
+      ],
+      "repo": "https://github.com/mm2/Little-CMS"
+    },
+    "patch": "From f3f6b7bceb629bc4b6f1dea3e45b44dc3f8674af Mon Sep 17 00:00:00 2001\nFrom: Marti Maria <marti.maria@littlecms.com>\nDate: Fri, 26 Aug 2022 00:08:39 +0200\nSubject: [PATCH] Add some validations\n\nMakes no sense to accept profiles with absurd version numbers. That would keep fuzzers busy for a while.\n---\n include/lcms2.h |  2 +-\n src/cmsio0.c    | 35 +++++++++++++++++++++++++++++++++++\n src/cmsvirt.c   | 14 +++++++-------\n 3 files changed, 43 insertions(+), 8 deletions(-)\n\ndiff --git a/include/lcms2.h b/include/lcms2.h\nindex c72135a..331a16f 100644\n--- a/include/lcms2.h\n+++ b/include/lcms2.h\n@@ -152,7 +152,7 @@ typedef double               cmsFloat64Number;\n #endif\n \n // Handle \"register\" keyword\n-#if defined(CMS_NO_REGISTER_KEYWORD) \n+#if defined(CMS_NO_REGISTER_KEYWORD)\n #  define CMSREGISTER\n #else\n #  define CMSREGISTER register\ndiff --git a/src/cmsio0.c b/src/cmsio0.c\nindex 9c07aa1..821b869 100644\n--- a/src/cmsio0.c\n+++ b/src/cmsio0.c\n@@ -531,6 +531,9 @@ cmsHPROFILE CMSEXPORT cmsCreateProfilePlaceholder(cmsContext ContextID)\n     // Set default version\n     Icc ->Version =  0x02100000;\n     \n+    // Set default device class\n+    Icc->DeviceClass = cmsSigDisplayClass;\n+\n     // Set creation date/time\n     if (!_cmsGetTime(&Icc->Created))\n         goto Error;\n@@ -735,6 +738,28 @@ cmsUInt32Number _validatedVersion(cmsUInt32Number DWord)\n     return DWord;\n }\n \n+// Check device class\n+static \n+cmsBool validDeviceClass(cmsProfileClassSignature cl)\n+{\n+    switch (cl)\n+    {\n+    case 0: // We allow zero because older lcms versions defaulted to that.\n+    case cmsSigInputClass:\n+    case cmsSigDisplayClass:\n+    case cmsSigOutputClass:\n+    case cmsSigLinkClass:\n+    case cmsSigAbstractClass:\n+    case cmsSigColorSpaceClass:\n+    case cmsSigNamedColorClass:\n+        return TRUE;\n+\n+    default:\n+        return FALSE;\n+    }\n+\n+}\n+\n // Read profile header and validate it\n cmsBool _cmsReadHeader(_cmsICCPROFILE* Icc)\n {\n@@ -771,6 +796,16 @@ cmsBool _cmsReadHeader(_cmsICCPROFILE* Icc)\n     _cmsAdjustEndianess64(&Icc -> attributes, &Header.attributes);\n     Icc -> Version         = _cmsAdjustEndianess32(_validatedVersion(Header.version));\n \n+    if (Icc->Version > 0x5000000) {\n+        cmsSignalError(Icc->ContextID, cmsERROR_UNKNOWN_EXTENSION, \"Unsupported profile version '0x%x'\", Icc->Version);\n+        return FALSE;\n+    }\n+\n+    if (!validDeviceClass(Icc->DeviceClass)) {\n+        cmsSignalError(Icc->ContextID, cmsERROR_UNKNOWN_EXTENSION, \"Unsupported device class '0x%x'\", Icc->DeviceClass);\n+        return FALSE;\n+    }\n+\n     // Get size as reported in header\n     HeaderSize = _cmsAdjustEndianess32(Header.size);\n \ndiff --git a/src/cmsvirt.c b/src/cmsvirt.c\nindex bffb88e..4900a83 100644\n--- a/src/cmsvirt.c\n+++ b/src/cmsvirt.c\n@@ -114,7 +114,7 @@ cmsHPROFILE CMSEXPORT cmsCreateRGBProfileTHR(cmsContext ContextID,\n     if (!hICC)                          // can't allocate\n         return NULL;\n \n-    cmsSetProfileVersion(hICC, 4.3);\n+    cmsSetProfileVersion(hICC, 4.4);\n \n     cmsSetDeviceClass(hICC,      cmsSigDisplayClass);\n     cmsSetColorSpace(hICC,       cmsSigRgbData);\n@@ -235,7 +235,7 @@ cmsHPROFILE CMSEXPORT cmsCreateGrayProfileTHR(cmsContext ContextID,\n     if (!hICC)                          // can't allocate\n         return NULL;\n \n-    cmsSetProfileVersion(hICC, 4.3);\n+    cmsSetProfileVersion(hICC, 4.4);\n \n     cmsSetDeviceClass(hICC,      cmsSigDisplayClass);\n     cmsSetColorSpace(hICC,       cmsSigGrayData);\n@@ -297,7 +297,7 @@ cmsHPROFILE CMSEXPORT cmsCreateLinearizationDeviceLinkTHR(cmsContext ContextID,\n     if (!hICC)\n         return NULL;\n \n-    cmsSetProfileVersion(hICC, 4.3);\n+    cmsSetProfileVersion(hICC, 4.4);\n \n     cmsSetDeviceClass(hICC,      cmsSigLinkClass);\n     cmsSetColorSpace(hICC,       ColorSpace);\n@@ -416,7 +416,7 @@ cmsHPROFILE CMSEXPORT cmsCreateInkLimitingDeviceLinkTHR(cmsContext ContextID,\n     if (!hICC)                          // can't allocate\n         return NULL;\n \n-    cmsSetProfileVersion(hICC, 4.3);\n+    cmsSetProfileVersion(hICC, 4.4);\n \n     cmsSetDeviceClass(hICC,      cmsSigLinkClass);\n     cmsSetColorSpace(hICC,       ColorSpace);\n@@ -526,7 +526,7 @@ cmsHPROFILE CMSEXPORT cmsCreateLab4ProfileTHR(cmsContext ContextID, const cmsCIE\n     hProfile = cmsCreateRGBProfileTHR(ContextID, WhitePoint == NULL ? cmsD50_xyY() : WhitePoint, NULL, NULL);\n     if (hProfile == NULL) return NULL;\n \n-    cmsSetProfileVersion(hProfile, 4.3);\n+    cmsSetProfileVersion(hProfile, 4.4);\n \n     cmsSetDeviceClass(hProfile, cmsSigAbstractClass);\n     cmsSetColorSpace(hProfile,  cmsSigLabData);\n@@ -572,7 +572,7 @@ cmsHPROFILE CMSEXPORT cmsCreateXYZProfileTHR(cmsContext ContextID)\n     hProfile = cmsCreateRGBProfileTHR(ContextID, cmsD50_xyY(), NULL, NULL);\n     if (hProfile == NULL) return NULL;\n \n-    cmsSetProfileVersion(hProfile, 4.3);\n+    cmsSetProfileVersion(hProfile, 4.4);\n \n     cmsSetDeviceClass(hProfile, cmsSigAbstractClass);\n     cmsSetColorSpace(hProfile,  cmsSigXYZData);\n@@ -839,7 +839,7 @@ cmsHPROFILE CMSEXPORT cmsCreateNULLProfileTHR(cmsContext ContextID)\n     if (!hProfile)                          // can't allocate\n         return NULL;\n \n-    cmsSetProfileVersion(hProfile, 4.3);\n+    cmsSetProfileVersion(hProfile, 4.4);\n \n     if (!SetTextTags(hProfile, L\"NULL profile built-in\")) goto Error;\n \n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42513913-vul",
+      "digest": "sha256:8389fda0200a7d572cb74d72ac79ad40909eb0cee7d12bb7cff3b9088dc8ff4f"
+    },
+    "patched": {
+      "ref": "n132/arvo:42513913-fix",
+      "digest": "sha256:d97dc4742d3db6e1bcb2f550c9f6e6db863a3071b872255510c4e0a1a853b3f5"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/lcms/src/cmsnamed.c:577",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/lcms/src/cmsnamed.c:577"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

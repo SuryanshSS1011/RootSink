@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042520955",
+  "chain": "CWE-416->CWE-125",
+  "project": "mosquitto",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42520955",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "1df253e4e3c48079a196788dbacc9c1364c92162",
+      "fix_commits": [
+        "1df253e4e3c48079a196788dbacc9c1364c92162"
+      ],
+      "repo": "https://github.com/eclipse/mosquitto"
+    },
+    "patch": "From 1df253e4e3c48079a196788dbacc9c1364c92162 Mon Sep 17 00:00:00 2001\nFrom: \"Roger A. Light\" <roger@atchoo.org>\nDate: Sun, 12 Feb 2023 22:28:13 +0000\nSubject: [PATCH] Fix case where mixed default/non-default listener config\n could crash.\n\nThis effects only very unusual configs, and would cause a crash on\nstartup. It is not a security concern.\n\nFixes oss-fuzz #55886.\n---\n src/conf.c | 12 ++++++++++++\n 1 file changed, 12 insertions(+)\n\ndiff --git a/src/conf.c b/src/conf.c\nindex 4e6521b..72d3fe3 100644\n--- a/src/conf.c\n+++ b/src/conf.c\n@@ -144,7 +144,16 @@ static int config__check_bridges(struct mosquitto__config *config);\n static int config__add_listener(struct mosquitto__config *config)\n {\n \tstruct mosquitto__listener *listener;\n+\tint def_listener = -1;\n \n+\tif(config->default_listener){\n+\t\tfor(int i=0; i<config->listener_count; i++){\n+\t\t\tif(&config->listeners[i] == config->default_listener){\n+\t\t\t\tdef_listener = i;\n+\t\t\t\tbreak;\n+\t\t\t}\n+\t\t}\n+\t}\n \tconfig->listener_count++;\n \tconfig->listeners = mosquitto__realloc(config->listeners, sizeof(struct mosquitto__listener)*(size_t)config->listener_count);\n \tif(!config->listeners){\n@@ -158,6 +167,9 @@ static int config__add_listener(struct mosquitto__config *config)\n \t\tlog__printf(NULL, MOSQ_LOG_ERR, \"Error: Out of memory.\");\n \t\treturn MOSQ_ERR_NOMEM;\n \t}\n+\tif(def_listener != -1){\n+\t\tconfig->default_listener = &config->listeners[def_listener];\n+\t}\n \n \treturn MOSQ_ERR_SUCCESS;\n }\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42520955-vul",
+      "digest": "sha256:bde0438b79db8deccf642ea0e3db18e6fbe99681e8179a514b8f6b2a3539740d"
+    },
+    "patched": {
+      "ref": "n132/arvo:42520955-fix",
+      "digest": "sha256:f87972c04e152e213044a1e176de5b3e18c84f17d260f2c1145e254cafcfb937"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/mosquitto/src/conf.c:2098",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/mosquitto/src/conf.c:2098"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

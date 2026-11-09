@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042474468",
+  "chain": "CWE-416->CWE-125",
+  "project": "openh264",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42474468",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "3999b227fc2255371b786ccec62cba3f47af37f5",
+      "fix_commits": [
+        "3999b227fc2255371b786ccec62cba3f47af37f5"
+      ],
+      "repo": "https://github.com/cisco/openh264"
+    },
+    "patch": "From 3999b227fc2255371b786ccec62cba3f47af37f5 Mon Sep 17 00:00:00 2001\nFrom: xiaotiansf <xiaotianshimail@gmail.com>\nDate: Wed, 3 Apr 2019 10:53:18 -0700\nSubject: [PATCH] Fix oss-fuzzer 14035. Reset all B-frame's reference's\n references when IDR is lost to prevent temporal prediction from trying to\n access lost references.\n\n---\n codec/decoder/core/src/manage_dec_ref.cpp | 8 ++++++++\n 1 file changed, 8 insertions(+)\n\ndiff --git a/codec/decoder/core/src/manage_dec_ref.cpp b/codec/decoder/core/src/manage_dec_ref.cpp\nindex 56ee943..834dd2b 100644\n--- a/codec/decoder/core/src/manage_dec_ref.cpp\n+++ b/codec/decoder/core/src/manage_dec_ref.cpp\n@@ -126,6 +126,14 @@ static int32_t WelsCheckAndRecoverForFutureDecoding (PWelsDecoderContext pCtx) {\n         pRef->bIsComplete = false; // Set complete flag to false for lost IDR ref picture\n         pRef->iSpsId = pCtx->pSps->iSpsId;\n         pRef->iPpsId = pCtx->pPps->iPpsId;\n+        if (pCtx->eSliceType == B_SLICE) {\n+          //reset reference's references when IDR is lost\n+          for (int32_t list = LIST_0; list < LIST_A; ++list) {\n+            for (int32_t i = 0; i < 17; ++i) {\n+              pRef->pRefPic[list][i] = NULL;\n+            }\n+          }\n+        }\n         pCtx->iErrorCode |= dsDataErrorConcealed;\n         bool bCopyPrevious = ((ERROR_CON_FRAME_COPY_CROSS_IDR == pCtx->pParam->eEcActiveIdc)\n                               || (ERROR_CON_SLICE_COPY_CROSS_IDR == pCtx->pParam->eEcActiveIdc)\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42474468-vul",
+      "digest": "sha256:817bd1d74da55de96153c33aee887946a162adcb3dc4f4bc5e47651889ab6dab"
+    },
+    "patched": {
+      "ref": "n132/arvo:42474468-fix",
+      "digest": "sha256:2d68efe33913caddfdc039965ccc03c0df1bcc414157b92433262099b28e974d"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/openh264/codec/decoder/core/src/mv_pred.cpp:1113",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/openh264/codec/decoder/core/src/mv_pred.cpp:1113"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

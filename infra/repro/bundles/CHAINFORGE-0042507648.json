@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042507648",
+  "chain": "CWE-416->CWE-125",
+  "project": "ghostpdl",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42507648",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "9584d5caa7b3ad25f47cf0fa05a28ee6a8bff6c7",
+      "fix_commits": [
+        "9584d5caa7b3ad25f47cf0fa05a28ee6a8bff6c7"
+      ],
+      "repo": "https://cgit.ghostscript.com/ghostpdl.git"
+    },
+    "patch": "From 9584d5caa7b3ad25f47cf0fa05a28ee6a8bff6c7 Mon Sep 17 00:00:00 2001\nFrom: Chris Liddell <chris.liddell@artifex.com>\nDate: Fri, 21 Jan 2022 10:35:10 +0000\nSubject: [PATCH] Cleanup local pattern reference on error\n\npdfi_setcolorN() would skip cleaning up the local reference to a pattern if\nan error occurred, causing memory to leak.\n\nNoticed when investigating oss-fuzz issue: 43904\n---\n pdf/pdf_colour.c | 2 +-\n 1 file changed, 1 insertion(+), 1 deletion(-)\n\ndiff --git a/pdf/pdf_colour.c b/pdf/pdf_colour.c\nindex 5ca0fae..d34561e 100644\n--- a/pdf/pdf_colour.c\n+++ b/pdf/pdf_colour.c\n@@ -820,6 +820,7 @@ pdfi_setcolorN(pdf_context *ctx, pdf_dict *stream_dict, pdf_dict *page_dict, boo\n \n     code = gs_setcolor(ctx->pgs, &cc);\n \n+cleanupExit:\n     if (is_pattern)\n         /* cc is a local scope variable, holding a reference to a pattern.\n          * We need to count the refrence down before the variable goes out of scope\n@@ -827,7 +828,6 @@ pdfi_setcolorN(pdf_context *ctx, pdf_dict *stream_dict, pdf_dict *page_dict, boo\n          */\n         rc_decrement(cc.pattern, \"pdfi_setcolorN\");\n \n-cleanupExit:\n     if (!is_fill)\n         gs_swapcolors_quick(ctx->pgs);\n     return code;\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42507648-vul",
+      "digest": "sha256:a0f3c39a4722a30743425458305c439658d876ebd107b4fae109ca96a60287b4"
+    },
+    "patched": {
+      "ref": "n132/arvo:42507648-fix",
+      "digest": "sha256:5462b4ed5ad5b353c41d9980dc3e8ecbe3068db108390b409f53d007a8eb1d64"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/ghostpdl/./pdf/pdf_colour.c:315",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/ghostpdl/./pdf/pdf_colour.c:315"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

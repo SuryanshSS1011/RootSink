@@ -1,0 +1,60 @@
+Accepting input from '/tmp/poc'
+Usage for fuzzing: honggfuzz -P [flags] -- /out/broker_fuzz_test_config
+1791497762: Creating default listener due to 'tls_engine_kpass_sha1' option.
+1791497762: It is best practice to define a 'listener' first. Using the 'tls_engine_kpass_sha1' option without a listener will be disabled in the future.
+=================================================================
+==1940452==ERROR: AddressSanitizer: stack-buffer-overflow on address 0x1528b0a5fa34 at pc 0x000000593c59 bp 0x7ffe53b7a7b0 sp 0x7ffe53b7a7a8
+WRITE of size 1 at 0x1528b0a5fa34 thread T0
+SCARINESS: 46 (1-byte-write-stack-buffer-overflow)
+    #0 0x593c58 in mosquitto__hex2bin /src/mosquitto/src/../lib/util_mosq.c:185:17
+    #1 0x5939de in mosquitto__hex2bin_sha1 /src/mosquitto/src/../lib/util_mosq.c:159:5
+    #2 0x5061e6 in config__read_file_core /src/mosquitto/src/conf.c:2272:9
+    #3 0x4fb41a in config__read_file /src/mosquitto/src/conf.c:2500:7
+    #4 0x4f90b9 in config__read /src/mosquitto/src/conf.c
+    #5 0x4f82f1 in config__parse_args /src/mosquitto/src/conf.c:516:8
+    #6 0x4e9c4a in mosquitto_fuzz_main /src/mosquitto/src/mosquitto.c:357:7
+    #7 0x4df96f in run_broker(char*) /src/mosquitto/fuzzing/broker/broker_fuzz_test_config.cpp:42:2
+    #8 0x4dfb82 in LLVMFuzzerTestOneInput /src/mosquitto/fuzzing/broker/broker_fuzz_test_config.cpp:62:2
+    #9 0x4e020b in main (/out/broker_fuzz_test_config+0x4e020b)
+    #10 0x1528b1237082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 1878e6b475720c7c51969e69ab2d276fae6d1dee)
+    #11 0x420fad in _start (/out/broker_fuzz_test_config+0x420fad)
+
+DEDUP_TOKEN: mosquitto__hex2bin--mosquitto__hex2bin_sha1--config__read_file_core
+Address 0x1528b0a5fa34 is located in stack of thread T0 at offset 52 in frame
+    #0 0x59391f in mosquitto__hex2bin_sha1 /src/mosquitto/src/../lib/util_mosq.c:156
+
+DEDUP_TOKEN: mosquitto__hex2bin_sha1
+  This frame has 1 object(s):
+    [32, 52) 'tmp' (line 157) <== Memory access at offset 52 overflows this variable
+HINT: this may be a false positive if your program uses some custom stack unwind mechanism, swapcontext or vfork
+      (longjmp and C++ exceptions *are* supported)
+SUMMARY: AddressSanitizer: stack-buffer-overflow /src/mosquitto/src/../lib/util_mosq.c:185:17 in mosquitto__hex2bin
+Shadow bytes around the buggy address:
+  0x02a596143ef0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x02a596143f00: f1 f1 f1 f1 00 00 00 00 f3 f3 f3 f3 00 00 00 00
+  0x02a596143f10: f1 f1 f1 f1 00 f2 f2 f2 04 f3 f3 f3 00 00 00 00
+  0x02a596143f20: f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5
+  0x02a596143f30: f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5
+=>0x02a596143f40: f1 f1 f1 f1 00 00[04]f3 f3 f3 f3 f3 00 00 00 00
+  0x02a596143f50: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x02a596143f60: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x02a596143f70: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x02a596143f80: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x02a596143f90: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042528850",
+  "chain": "CWE-416->CWE-125",
+  "project": "libxml2",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42528850",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "97e99f411228fe4f65ebb60e4f2c56f9ee9cdb1c",
+      "fix_commits": [
+        "97e99f411228fe4f65ebb60e4f2c56f9ee9cdb1c"
+      ],
+      "repo": "https://gitlab.gnome.org/GNOME/libxml2.git"
+    },
+    "patch": "From 97e99f411228fe4f65ebb60e4f2c56f9ee9cdb1c Mon Sep 17 00:00:00 2001\nFrom: Nick Wellnhofer <wellnhofer@aevum.de>\nDate: Thu, 5 Oct 2023 17:11:24 +0200\nSubject: [PATCH] parser: Acknowledge that entities with namespaces are broken\n\nEntities which reference out-of-scope namespace have always been broken.\nxmlParseBalancedChunkMemoryInternal tried to reuse the namespaces\ncurrently in scope but these namespaces were ignored by the SAX handler.\nBesides, there could be different namespaces in scope when expanding the\nentity again. For example:\n\n    <!DOCTYPE doc [\n      <!ENTITY ent \"<ns:elem/>\">\n    ]>\n    <doc>\n      <decl1 xmlns:ns=\"urn:ns1\">\n        &ent;\n      </decl1>\n      <decl2 xmlns:ns=\"urn:ns2\">\n        &ent;\n      </decl2>\n    </doc>\n\nAdd some comments outlining possible solutions to this problem.\n\nFor now, we stop copying namespaces to the temporary parser context\nin xmlParseBalancedChunkMemoryInternal. This has never really worked\nand the recent changes contained a partial fix which uncovered other\nproblems like a use-after-free with the XML Reader interface, found\nby OSS-Fuzz.\n---\n parser.c | 86 ++++++++++++++++++++++++++++++++++++++++++--------------\n tree.c   |  9 ++++--\n 2 files changed, 71 insertions(+), 24 deletions(-)\n\ndiff --git a/parser.c b/parser.c\nindex 7de41a2..40972af 100644\n--- a/parser.c\n+++ b/parser.c\n@@ -7267,6 +7267,39 @@ xmlParseReference(xmlParserCtxtPtr ctxt) {\n      * of validating, or substituting entities were given. Doing so is\n      * far more secure as the parser will only process data coming from\n      * the document entity by default.\n+     *\n+     * FIXME: This doesn't work correctly since entities can be\n+     * expanded with different namespace declarations in scope.\n+     * For example:\n+     *\n+     * <!DOCTYPE doc [\n+     *   <!ENTITY ent \"<ns:elem/>\">\n+     * ]>\n+     * <doc>\n+     *   <decl1 xmlns:ns=\"urn:ns1\">\n+     *     &ent;\n+     *   </decl1>\n+     *   <decl2 xmlns:ns=\"urn:ns2\">\n+     *     &ent;\n+     *   </decl2>\n+     * </doc>\n+     *\n+     * Proposed fix:\n+     *\n+     * - Remove the ent->owner optimization which tries to avoid the\n+     *   initial copy of the entity. Always make entities own the\n+     *   subtree.\n+     * - Ignore current namespace declarations when parsing the\n+     *   entity. If a prefix can't be resolved, don't report an error\n+     *   but mark it as unresolved.\n+     * - Try to resolve these prefixes when expanding the entity.\n+     *   This will require a specialized version of xmlStaticCopyNode\n+     *   which can also make use of the namespace hash table to avoid\n+     *   quadratic behavior.\n+     *\n+     * Alternatively, we could simply reparse the entity on each\n+     * expansion like we already do with custom SAX callbacks.\n+     * External entity content should be cached in this case.\n      */\n     if (((ent->flags & XML_ENT_PARSED) == 0) &&\n         ((ent->etype != XML_EXTERNAL_GENERAL_PARSED_ENTITY) ||\n@@ -12876,7 +12909,9 @@ xmlParseBalancedChunkMemoryInternal(xmlParserCtxtPtr oldctxt,\n     xmlNodePtr content = NULL;\n     xmlNodePtr last = NULL;\n     xmlParserErrors ret = XML_ERR_OK;\n+#if 0\n     unsigned i;\n+#endif\n \n     if (((oldctxt->depth > 40) && ((oldctxt->options & XML_PARSE_HUGE) == 0)) ||\n         (oldctxt->depth >  100)) {\n@@ -12906,29 +12941,38 @@ xmlParseBalancedChunkMemoryInternal(xmlParserCtxtPtr oldctxt,\n     ctxt->str_xmlns = xmlDictLookup(ctxt->dict, BAD_CAST \"xmlns\", 5);\n     ctxt->str_xml_ns = xmlDictLookup(ctxt->dict, XML_XML_NAMESPACE, 36);\n \n-    /* propagate namespaces down the entity */\n-    if (oldctxt->nsdb != NULL) {\n-        for (i = 0; i < oldctxt->nsdb->hashSize; i++) {\n-            xmlParserNsBucket *bucket = &oldctxt->nsdb->hash[i];\n-            xmlHashedString hprefix, huri;\n-            const xmlChar **ns;\n-            xmlParserNsExtra *extra;\n-            unsigned nsIndex;\n-\n-            if ((bucket->hashValue != 0) &&\n-                (bucket->index != INT_MAX)) {\n-                nsIndex = bucket->index;\n-                ns = &oldctxt->nsTab[nsIndex * 2];\n-                extra = &oldctxt->nsdb->extra[nsIndex];\n-\n-                hprefix.name = ns[0];\n-                hprefix.hashValue = bucket->hashValue;\n-                huri.name = ns[1];\n-                huri.hashValue = extra->uriHashValue;\n-                xmlParserNsPush(ctxt, &hprefix, &huri, extra->saxData, 0);\n-            }\n+    /*\n+     * Propagate namespaces down the entity\n+     *\n+     * This is disabled for now. The pre-2.12 code was already broken\n+     * since the SAX handler was using xmlSearchNs which didn't see the\n+     * namespaces added here.\n+     *\n+     * Making entities and namespaces work correctly requires additional\n+     * changes, see xmlParseReference.\n+     */\n+#if 0\n+    for (i = 0; i < oldctxt->nsdb->hashSize; i++) {\n+        xmlParserNsBucket *bucket = &oldctxt->nsdb->hash[i];\n+        xmlHashedString hprefix, huri;\n+        const xmlChar **ns;\n+        xmlParserNsExtra *extra;\n+        unsigned nsIndex;\n+\n+        if ((bucket->hashValue != 0) &&\n+            (bucket->index != INT_MAX)) {\n+            nsIndex = bucket->index;\n+            ns = &oldctxt->nsTab[nsIndex * 2];\n+            extra = &oldctxt->nsdb->extra[nsIndex];\n+\n+            hprefix.name = ns[0];\n+            hprefix.hashValue = bucket->hashValue;\n+            huri.name = ns[1];\n+            huri.hashValue = extra->uriHashValue;\n+            xmlParserNsPush(ctxt, &hprefix, &huri, extra->saxData, 0);\n         }\n     }\n+#endif\n \n     oldsax = ctxt->sax;\n     ctxt->sax = oldctxt->sax;\ndiff --git a/tree.c b/tree.c\nindex fe02b41..a6264e8 100644\n--- a/tree.c\n+++ b/tree.c\n@@ -4206,7 +4206,10 @@ xmlStaticCopyNode(xmlNodePtr node, xmlDocPtr doc, xmlNodePtr parent,\n \t    /*\n \t     * Humm, we are copying an element whose namespace is defined\n \t     * out of the new tree scope. Search it in the original tree\n-\t     * and add it at the top of the new tree\n+\t     * and add it at the top of the new tree.\n+             *\n+             * TODO: Searching the original tree seems unnecessary. We\n+             * already have a namespace URI.\n \t     */\n \t    ns = xmlSearchNs(node->doc, node, node->ns->prefix);\n \t    if (ns != NULL) {\n@@ -4214,8 +4217,8 @@ xmlStaticCopyNode(xmlNodePtr node, xmlDocPtr doc, xmlNodePtr parent,\n \n \t\twhile (root->parent != NULL) root = root->parent;\n \t\tret->ns = xmlNewNs(root, ns->href, ns->prefix);\n-\t\t} else {\n-\t\t\tret->ns = xmlNewReconciledNs(doc, ret, node->ns);\n+            } else {\n+                ret->ns = xmlNewReconciledNs(doc, ret, node->ns);\n \t    }\n \t} else {\n \t    /*\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42528850-vul",
+      "digest": "sha256:03e39f418e18ef82ebdc5f60b6637bdb9755148e64cf4632931953f10818f6c7"
+    },
+    "patched": {
+      "ref": "n132/arvo:42528850-fix",
+      "digest": "sha256:76dc680ed1c1c9b92faad420ab8ec2c7317b98c5d2951cefd92f27ae3076b6c3"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/libxml2/tree.c:4204",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/libxml2/tree.c:4204"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

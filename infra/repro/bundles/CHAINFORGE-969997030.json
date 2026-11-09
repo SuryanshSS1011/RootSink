@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-969997030",
+  "chain": "CWE-456->CWE-457",
+  "project": "krb5",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "377530685",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/krb5/krb5/commit/ead2a8b253c7db8d17a0765044947c5fbd564bc4",
+      "fix_commits": [
+        "ead2a8b253c7db8d17a0765044947c5fbd564bc4"
+      ],
+      "repo": "https://github.com/krb5/krb5"
+    },
+    "patch": "diff --git a/src/configure.ac b/src/configure.ac\nindex 464648079ea..10a5d1a7418 100644\n--- a/src/configure.ac\n+++ b/src/configure.ac\n@@ -466,7 +466,7 @@ AC_CONFIG_HEADERS(include/autoconf.h, [echo timestamp > include/autoconf.stamp])\n AC_C_CONST\n AC_HEADER_DIRENT\n AC_FUNC_STRERROR_R\n-AC_CHECK_FUNCS(strdup setvbuf seteuid setresuid setreuid setegid setresgid setregid setsid flock fchmod chmod strptime geteuid setenv unsetenv getenv gmtime_r localtime_r bswap16 bswap64 mkstemp getusershell access getcwd srand48 srand srandom stat strchr strerror timegm explicit_bzero explicit_memset getresuid getresgid)\n+AC_CHECK_FUNCS(strdup setvbuf seteuid setresuid setreuid setegid setresgid setregid setsid flock fchmod chmod strptime geteuid setenv unsetenv getenv gmtime_r localtime_r bswap16 bswap64 mkstemp getusershell access getcwd srand48 srand srandom stat strchr strerror timegm explicit_bzero explicit_memset getresuid getresgid getentropy)\n \n AC_CHECK_FUNC(mkstemp,\n [MKSTEMP_ST_OBJ=\ndiff --git a/src/lib/crypto/krb/prng.c b/src/lib/crypto/krb/prng.c\nindex d6b79e2deac..a9c16681575 100644\n--- a/src/lib/crypto/krb/prng.c\n+++ b/src/lib/crypto/krb/prng.c\n@@ -96,7 +96,28 @@ read_entropy_from_device(const char *device, unsigned char *buf, size_t len)\n static krb5_boolean\n get_os_entropy(unsigned char *buf, size_t len)\n {\n-#if defined(__linux__) && defined(SYS_getrandom)\n+#if defined(HAVE_GETENTROPY)\n+    int r;\n+    size_t seg;\n+\n+    /* getentropy() has a maximum length of 256. */\n+    while (len > 0) {\n+        seg = (len > 256) ? 256 : len;\n+        r = getentropy(buf, seg);\n+        if (r != 0)\n+            break;\n+        len -= seg;\n+        buf += seg;\n+    }\n+    if (len == 0)\n+        return TRUE;\n+#elif defined(__linux__) && defined(SYS_getrandom)\n+    /*\n+     * Linux added SYS_getrandom in 3.17 (2014), but glibc did not have a\n+     * wrapper until 2.25 (2017).  This block can be deleted when that interval\n+     * is far in the past, along with the conditional include of\n+     * <sys/syscall.h> above.\n+     */\n     int r;\n \n     while (len > 0) {\n@@ -104,9 +125,6 @@ get_os_entropy(unsigned char *buf, size_t len)\n          * Pull from the /dev/urandom pool, but require it to have been seeded.\n          * This ensures strong randomness while only blocking during first\n          * system boot.\n-         *\n-         * glibc does not currently provide a binding for getrandom:\n-         * https://sourceware.org/bugzilla/show_bug.cgi?id=17252\n          */\n         errno = 0;\n         r = syscall(SYS_getrandom, buf, len, 0);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:377530685-vul",
+      "digest": "sha256:b40f0ff09f0799bcd328e510fa033fe6810ef1b41398edff58eb0adc53aab40d"
+    },
+    "patched": {
+      "ref": "n132/arvo:377530685-fix",
+      "digest": "sha256:29a5c3b45a14485b66accc9d40249620d3d895bf2d1721497012c5e254d54fb6"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/krb5/src/util/support/hashtab.c:215",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/krb5/src/util/support/hashtab.c:215"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

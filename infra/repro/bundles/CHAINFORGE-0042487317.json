@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042487317",
+  "chain": "CWE-416->CWE-125",
+  "project": "php-src",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42487317",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "989205e95cde4c43b562148a5f35fe32bb7af3da",
+      "fix_commits": [
+        "989205e95cde4c43b562148a5f35fe32bb7af3da"
+      ],
+      "repo": "https://github.com/php/php-src"
+    },
+    "patch": "From 989205e95cde4c43b562148a5f35fe32bb7af3da Mon Sep 17 00:00:00 2001\nFrom: Nikita Popov <nikita.ppv@gmail.com>\nDate: Mon, 12 Jul 2021 16:56:00 +0200\nSubject: [PATCH] Remove incorrect uses of zend_atoi()\n\nzend_atoi() parses integers with size suffixes (like \"128M\").\nThese just want to use a plain number, so use ZEND_ATOL instead.\n---\n Zend/zend.c           | 2 +-\n Zend/zend_alloc.c     | 6 +++---\n ext/session/session.c | 3 +--\n sapi/cli/php_cli.c    | 2 +-\n 4 files changed, 6 insertions(+), 7 deletions(-)\n\ndiff --git a/Zend/zend.c b/Zend/zend.c\nindex 5737f5ea..80913413 100644\n--- a/Zend/zend.c\n+++ b/Zend/zend.c\n@@ -896,7 +896,7 @@ void zend_startup(zend_utility_functions *utility_functions) /* {{{ */\n \t{\n \t\tchar *tmp = getenv(\"USE_ZEND_DTRACE\");\n \n-\t\tif (tmp && zend_atoi(tmp, 0)) {\n+\t\tif (tmp && ZEND_ATOL(tmp)) {\n \t\t\tzend_dtrace_enabled = 1;\n \t\t\tzend_compile_file = dtrace_compile_file;\n \t\t\tzend_execute_ex = dtrace_execute_ex;\ndiff --git a/Zend/zend_alloc.c b/Zend/zend_alloc.c\nindex 38608d0f..558221d5 100644\n--- a/Zend/zend_alloc.c\n+++ b/Zend/zend_alloc.c\n@@ -2801,8 +2801,8 @@ static void alloc_globals_ctor(zend_alloc_globals *alloc_globals)\n \n #if ZEND_MM_CUSTOM\n \ttmp = getenv(\"USE_ZEND_ALLOC\");\n-\tif (tmp && !zend_atoi(tmp, 0)) {\n-\t\tbool tracked = (tmp = getenv(\"USE_TRACKED_ALLOC\")) && zend_atoi(tmp, 0);\n+\tif (tmp && ZEND_ATOL(tmp)) {\n+\t\tbool tracked = (tmp = getenv(\"USE_TRACKED_ALLOC\")) && ZEND_ATOL(tmp);\n \t\tzend_mm_heap *mm_heap = alloc_globals->mm_heap = malloc(sizeof(zend_mm_heap));\n \t\tmemset(mm_heap, 0, sizeof(zend_mm_heap));\n \t\tmm_heap->use_custom_heap = ZEND_MM_CUSTOM_HEAP_STD;\n@@ -2827,7 +2827,7 @@ static void alloc_globals_ctor(zend_alloc_globals *alloc_globals)\n #endif\n \n \ttmp = getenv(\"USE_ZEND_ALLOC_HUGE_PAGES\");\n-\tif (tmp && zend_atoi(tmp, 0)) {\n+\tif (tmp && ZEND_ATOL(tmp)) {\n \t\tzend_mm_use_huge_pages = 1;\n \t}\n \talloc_globals->mm_heap = zend_mm_init();\ndiff --git a/ext/session/session.c b/ext/session/session.c\nindex c096e809..18444932 100644\n--- a/ext/session/session.c\n+++ b/ext/session/session.c\n@@ -769,8 +769,7 @@ static PHP_INI_MH(OnUpdateLazyWrite) /* {{{ */\n \n static PHP_INI_MH(OnUpdateRfc1867Freq) /* {{{ */\n {\n-\tint tmp;\n-\ttmp = zend_atoi(ZSTR_VAL(new_value), ZSTR_LEN(new_value));\n+\tint tmp = ZEND_ATOL(ZSTR_VAL(new_value));\n \tif(tmp < 0) {\n \t\tphp_error_docref(NULL, E_WARNING, \"session.upload_progress.freq must be greater than or equal to 0\");\n \t\treturn FAILURE;\ndiff --git a/sapi/cli/php_cli.c b/sapi/cli/php_cli.c\nindex 2a285d43..1c408ab2 100644\n--- a/sapi/cli/php_cli.c\n+++ b/sapi/cli/php_cli.c\n@@ -1196,7 +1196,7 @@ int main(int argc, char *argv[])\n #if defined(PHP_WIN32) && defined(_DEBUG)\n \t{\n \t\tchar *tmp = getenv(\"PHP_WIN32_DEBUG_HEAP\");\n-\t\tif (tmp && zend_atoi(tmp, 0)) {\n+\t\tif (tmp && ZEND_ATOL(tmp, 0)) {\n \t\t\tint tmp_flag;\n \t\t\t_CrtSetReportMode(_CRT_WARN, _CRTDBG_MODE_FILE);\n \t\t\t_CrtSetReportFile(_CRT_WARN, _CRTDBG_FILE_STDERR);\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42487317-vul",
+      "digest": "sha256:34a14feb159434802271dbe720a3d62c4bb2d13d05537506ef38344ad80d8d1f"
+    },
+    "patched": {
+      "ref": "n132/arvo:42487317-fix",
+      "digest": "sha256:a58dfc96c4a4305c5d70bc641e4e2fc52adfe71f35fd70042db7d6617a4349ca"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/php-src/Zend/zend_execute.h:127",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/php-src/Zend/zend_execute.h:127"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

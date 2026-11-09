@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042485834",
+  "chain": "CWE-20->CWE-125",
+  "project": "rnp",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42485834",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "03d578619513b7186624172538f655a59ab4204b",
+      "fix_commits": [
+        "03d578619513b7186624172538f655a59ab4204b"
+      ],
+      "repo": "https://github.com/rnpgp/rnp"
+    },
+    "patch": "diff --git a/src/librepgp/stream-armor.cpp b/src/librepgp/stream-armor.cpp\nindex 8838328818..e11bbba5fb 100644\n--- a/src/librepgp/stream-armor.cpp\n+++ b/src/librepgp/stream-armor.cpp\n@@ -140,7 +140,7 @@ armor_read_crc(pgp_source_t *src)\n     }\n \n     for (int i = 0; i < 4; i++) {\n-        if ((dec[i] = B64DEC[(int) crc[i + 1]]) >= 64) {\n+        if ((dec[i] = B64DEC[(uint8_t) crc[i + 1]]) >= 64) {\n             return false;\n         }\n     }\n@@ -279,7 +279,7 @@ armored_src_read(pgp_source_t *src, void *buf, size_t len, size_t *readres)\n                 param->eofb64 = true;\n                 break;\n             } else if (bval == 0xff) {\n-                RNP_LOG(\"wrong base64 character %c\", (char) *(bptr - 1));\n+                RNP_LOG(\"wrong base64 character 0x%02hhX\", *(bptr - 1));\n                 return false;\n             }\n         }\n@@ -550,7 +550,7 @@ armor_parse_header(pgp_source_t *src)\n \n     /* if there are non-whitespaces before the armor header then issue warning */\n     for (char *ch = hdr; ch < armhdr; ch++) {\n-        if (B64DEC[(int) *ch] != 0xfd) {\n+        if (B64DEC[(uint8_t) *ch] != 0xfd) {\n             RNP_LOG(\"extra data before the header line\");\n             break;\n         }\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42485834-vul",
+      "digest": "sha256:c47b5e36475378d842c52be45047afe48ff6e0612c829c46139072d866801719"
+    },
+    "patched": {
+      "ref": "n132/arvo:42485834-fix",
+      "digest": "sha256:eddac2fa137a5eb5e5b95e30fd80f5028a6f2ea2f8aefe9bf60ec9d166e3961b"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": "READ",
+        "crash_site": "/src/rnp/src/librepgp/stream-armor.cpp:553",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": "READ",
+        "site": "/src/rnp/src/librepgp/stream-armor.cpp:553"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

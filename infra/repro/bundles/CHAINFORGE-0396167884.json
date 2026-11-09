@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0396167884",
+  "chain": "CWE-20->CWE-125",
+  "project": "upx",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "396167884",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "3d402134f51fc508823edac17eb5eba769cac705",
+      "fix_commits": [
+        "3d402134f51fc508823edac17eb5eba769cac705"
+      ],
+      "repo": "https://github.com/upx/upx"
+    },
+    "patch": "diff --git a/src/p_lx_elf.cpp b/src/p_lx_elf.cpp\nindex cdcce010d4..9087c89235 100644\n--- a/src/p_lx_elf.cpp\n+++ b/src/p_lx_elf.cpp\n@@ -2427,11 +2427,15 @@ PackLinuxElf32::invert_pt_dynamic(Elf32_Dyn const *dynp, u32_t headway)\n     if (v_gsh && file_image) {\n         // Not similar to DT_HASH because DT_GNU_HASH is not small (0x6ffffef5).\n         gashtab = (unsigned const *)elf_find_dynamic(Elf32_Dyn::DT_GNU_HASH);\n-        if (!gashtab) {\n-            throwCantPack(\"bad DT_GNU_HASH %#x\", v_gsh);\n-        }\n         gashend = (unsigned const *)(void const *)(elf_find_table_size(\n             Elf32_Dyn::DT_GNU_HASH, Elf32_Shdr::SHT_GNU_HASH) + (char const *)gashtab);\n+        if (!gashtab || (char const *)gashend <= (char const *)&gashtab[4]\n+        ||  file_image.getSizeInBytes()\n+            < ((char const *)&gashtab[4] - (char *)&file_image[0]) )\n+        {\n+            throwCantPack(\"bad DT_GNU_HASH %#x\", v_gsh);\n+        }\n+\n         unsigned const n_bucket = get_te32(&gashtab[0]);\n         unsigned const symbias  = get_te32(&gashtab[1]);\n         unsigned const n_bitmask = get_te32(&gashtab[2]);\n@@ -8488,11 +8492,15 @@ PackLinuxElf64::invert_pt_dynamic(Elf64_Dyn const *dynp, upx_uint64_t headway)\n     if (v_gsh && file_image) {\n         // Not similar to DT_HASH because DT_GNU_HASH is not small (0x6ffffef5).\n         gashtab = (unsigned const *)elf_find_dynamic(Elf64_Dyn::DT_GNU_HASH);\n-        if (!gashtab) {\n-            throwCantPack(\"bad DT_GNU_HASH %#x\", v_gsh);\n-        }\n         gashend = (unsigned const *)(void const *)(elf_find_table_size(\n             Elf64_Dyn::DT_GNU_HASH, Elf64_Shdr::SHT_GNU_HASH) + (char const *)gashtab);\n+        if (!gashtab || (char const *)gashend <= (char const *)&gashtab[4]\n+        ||  file_image.getSizeInBytes()\n+            < ((char const *)&gashtab[4] - (char *)&file_image[0]) )\n+        {\n+            throwCantPack(\"bad DT_GNU_HASH %#x\", v_gsh);\n+        }\n+\n         unsigned const n_bucket = get_te32(&gashtab[0]);\n         unsigned const symbias  = get_te32(&gashtab[1]);\n         unsigned const n_bitmask = get_te32(&gashtab[2]);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:396167884-vul",
+      "digest": "sha256:a89f9a32f0e5559a5fbfec88a1763d2c4673e6f946c0752dda3a06bde333509c"
+    },
+    "patched": {
+      "ref": "n132/arvo:396167884-fix",
+      "digest": "sha256:b608e83f25942d8285a3138ad055fa0a95d4580118665d689fc6aa10b288959c"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/upx/src/util/../bele.h:132",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/upx/src/util/../bele.h:132"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042470745",
+  "chain": "CWE-416->CWE-125",
+  "project": "open62541",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42470745",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "21771329dd2f13568f458a925671f9db80bc8ade",
+      "fix_commits": [
+        "21771329dd2f13568f458a925671f9db80bc8ade"
+      ],
+      "repo": "https://github.com/open62541/open62541"
+    },
+    "patch": "From 21771329dd2f13568f458a925671f9db80bc8ade Mon Sep 17 00:00:00 2001\nFrom: Julius Pfrommer <julius.pfrommer@web.de>\nDate: Sat, 6 Oct 2018 15:36:45 +0200\nSubject: [PATCH] Subscription: Close subscriptions before closing the\n SecureChannel\n\n---\n src/server/ua_session.c         | 13 -------------\n src/server/ua_session_manager.c | 31 ++++++++++++++++++++++---------\n 2 files changed, 22 insertions(+), 22 deletions(-)\n\ndiff --git a/src/server/ua_session.c b/src/server/ua_session.c\nindex 075c9cc..34f16f6 100644\n--- a/src/server/ua_session.c\n+++ b/src/server/ua_session.c\n@@ -36,19 +36,6 @@ void UA_Session_deleteMembersCleanup(UA_Session *session, UA_Server* server) {\n         UA_BrowseDescription_deleteMembers(&cp->browseDescription);\n         UA_free(cp);\n     }\n-\n-#ifdef UA_ENABLE_SUBSCRIPTIONS\n-    UA_Subscription *sub, *tempsub;\n-    LIST_FOREACH_SAFE(sub, &session->serverSubscriptions, listEntry, tempsub) {\n-        UA_Session_deleteSubscription(server, session, sub->subscriptionId);\n-    }\n-\n-    UA_PublishResponseEntry *entry;\n-    while((entry = UA_Session_dequeuePublishReq(session))) {\n-        UA_PublishResponse_deleteMembers(&entry->response);\n-        UA_free(entry);\n-    }\n-#endif\n }\n \n void UA_Session_attachToSecureChannel(UA_Session *session, UA_SecureChannel *channel) {\ndiff --git a/src/server/ua_session_manager.c b/src/server/ua_session_manager.c\nindex 910c225..be7de86 100644\n--- a/src/server/ua_session_manager.c\n+++ b/src/server/ua_session_manager.c\n@@ -11,6 +11,7 @@\n \n #include \"ua_session_manager.h\"\n #include \"ua_server_internal.h\"\n+#include \"ua_subscription.h\"\n \n UA_StatusCode\n UA_SessionManager_init(UA_SessionManager *sm, UA_Server *server) {\n@@ -20,15 +21,6 @@ UA_SessionManager_init(UA_SessionManager *sm, UA_Server *server) {\n     return UA_STATUSCODE_GOOD;\n }\n \n-void UA_SessionManager_deleteMembers(UA_SessionManager *sm) {\n-    session_list_entry *current, *temp;\n-    LIST_FOREACH_SAFE(current, &sm->sessions, pointers, temp) {\n-        LIST_REMOVE(current, pointers);\n-        UA_Session_deleteMembersCleanup(&current->session, sm->server);\n-        UA_free(current);\n-    }\n-}\n-\n /* Delayed callback to free the session memory */\n static void\n removeSessionCallback(UA_Server *server, session_list_entry *entry) {\n@@ -37,6 +29,20 @@ removeSessionCallback(UA_Server *server, session_list_entry *entry) {\n \n static void\n removeSession(UA_SessionManager *sm, session_list_entry *sentry) {\n+    /* Remove the Subscriptions */\n+#ifdef UA_ENABLE_SUBSCRIPTIONS\n+    UA_Subscription *sub, *tempsub;\n+    LIST_FOREACH_SAFE(sub, &sentry->session.serverSubscriptions, listEntry, tempsub) {\n+        UA_Session_deleteSubscription(sm->server, &sentry->session, sub->subscriptionId);\n+    }\n+\n+    UA_PublishResponseEntry *entry;\n+    while((entry = UA_Session_dequeuePublishReq(&sentry->session))) {\n+        UA_PublishResponse_deleteMembers(&entry->response);\n+        UA_free(entry);\n+    }\n+#endif\n+\n     /* Detach the Session from the SecureChannel */\n     UA_Session_detachFromSecureChannel(&sentry->session);\n \n@@ -56,6 +62,13 @@ removeSession(UA_SessionManager *sm, session_list_entry *sentry) {\n     UA_WorkQueue_enqueueDelayed(&sm->server->workQueue, &sentry->cleanupCallback);\n }\n \n+void UA_SessionManager_deleteMembers(UA_SessionManager *sm) {\n+    session_list_entry *current, *temp;\n+    LIST_FOREACH_SAFE(current, &sm->sessions, pointers, temp) {\n+        removeSession(sm, current);\n+    }\n+}\n+\n void\n UA_SessionManager_cleanupTimedOut(UA_SessionManager *sm,\n                                   UA_DateTime nowMonotonic) {\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42470745-vul",
+      "digest": "sha256:6daaf9bb71c4a7e6cf6081ee3735a2f7772703ce63dd0fd83c9fac50d23051cb"
+    },
+    "patched": {
+      "ref": "n132/arvo:42470745-fix",
+      "digest": "sha256:5bb843a3640315438b537fa888db0c4be1d2aff15ec94d0c80cc792533e7ae61"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/open62541/src/ua_workqueue.c:251",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/open62541/src/ua_workqueue.c:251"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042499204",
+  "chain": "CWE-416->CWE-787",
+  "project": "proj.4",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42499204",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "1b1d3bd77237ac574e3d5c8f4c3cc50bdadac76a",
+      "fix_commits": [
+        "1b1d3bd77237ac574e3d5c8f4c3cc50bdadac76a"
+      ],
+      "repo": "https://github.com/OSGeo/proj.4"
+    },
+    "patch": "From 1b1d3bd77237ac574e3d5c8f4c3cc50bdadac76a Mon Sep 17 00:00:00 2001\nFrom: Thomas Knudsen <thokn@sdfe.dk>\nDate: Fri, 13 Oct 2017 11:40:56 +0200\nSubject: [PATCH] OSS-Fuzz issue 3630: Missing return in PJ_lsat.c\n\nResolves https://bugs.chromium.org/p/oss-fuzz/issues/detail?id=3630\n\nCredit to OSS-Fuzz\n---\n src/PJ_lsat.c | 2 +-\n 1 file changed, 1 insertion(+), 1 deletion(-)\n\ndiff --git a/src/PJ_lsat.c b/src/PJ_lsat.c\nindex 1b3778d..7319bee 100644\n--- a/src/PJ_lsat.c\n+++ b/src/PJ_lsat.c\n@@ -163,7 +163,7 @@ PJ *PROJECTION(lsat) {\n \n     path = pj_param(P->ctx, P->params, \"ipath\").i;\n     if (path <= 0 || path > (land <= 3 ? 251 : 233))\n-        pj_default_destructor(P, PJD_ERR_PATH_NOT_IN_RANGE);\n+        return pj_default_destructor(P, PJD_ERR_PATH_NOT_IN_RANGE);\n \n     if (land <= 3) {\n         P->lam0 = DEG_TO_RAD * 128.87 - M_TWOPI / 251. * path;\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42499204-vul",
+      "digest": "sha256:02f6b9c45b6a2102d8861c6fa30debe4cc5917de43906944536638741538cc25"
+    },
+    "patched": {
+      "ref": "n132/arvo:42499204-fix",
+      "digest": "sha256:da58545f1f969f818d3c999f0ea284d5ec80d48ab9fb604aac4d6cb17d4b08e2"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "WRITE",
+        "crash_site": "/src/proj.4/src/pj_init.c:715",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "WRITE",
+        "site": "/src/proj.4/src/pj_init.c:715"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042507671",
+  "chain": "CWE-1285->CWE-125",
+  "project": "ndpi",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42507671",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "9dcc4a2334fa10d7d0a3c019ee35dfde4c06e044",
+      "fix_commits": [
+        "9dcc4a2334fa10d7d0a3c019ee35dfde4c06e044"
+      ],
+      "repo": "https://github.com/ntop/nDPI"
+    },
+    "patch": "diff --git a/example/reader_util.c b/example/reader_util.c\nindex 136bef91437..d47b5a5ec6f 100644\n--- a/example/reader_util.c\n+++ b/example/reader_util.c\n@@ -2037,9 +2037,14 @@ struct ndpi_proto ndpi_workflow_process_packet(struct ndpi_workflow * workflow,\n \t    if(iph->version == 6) {\n \t      iph6 = (struct ndpi_ipv6hdr *)&packet[ip_offset];\n \t      iph = NULL;\n+              if(header->caplen < ip_offset + sizeof(struct ndpi_ipv6hdr))\n+\t        return(nproto);\n \t    } else if(iph->version != IPVERSION) {\n \t      // printf(\"WARNING: not good (packet_id=%u)!\\n\", (unsigned int)workflow->stats.raw_packet_count);\n \t      goto v4_warning;\n+\t    } else {\n+              if(header->caplen < ip_offset + sizeof(struct ndpi_iphdr))\n+\t        return(nproto);\n \t    }\n \t  }\n \t}\ndiff --git a/src/lib/protocols/kerberos.c b/src/lib/protocols/kerberos.c\nindex 98d91939163..65b35838f58 100644\n--- a/src/lib/protocols/kerberos.c\n+++ b/src/lib/protocols/kerberos.c\n@@ -230,7 +230,7 @@ void ndpi_search_kerberos(struct ndpi_detection_module_struct *ndpi_struct,\n \t\t    name_offset++;\n \t\t  }\n \n-\t\t  if(name_offset < packet->payload_packet_len - 1 &&\n+\t\t  if(name_offset < packet->payload_packet_len - 3 &&\n \t\t     packet->payload[name_offset+1] == 0x1b)\n \t\t  {\n \t\t    name_offset += 2;\ndiff --git a/src/lib/protocols/tls.c b/src/lib/protocols/tls.c\nindex 96ee3e6a285..1eefe2d0f02 100644\n--- a/src/lib/protocols/tls.c\n+++ b/src/lib/protocols/tls.c\n@@ -2052,7 +2052,8 @@ int processClientServerHello(struct ndpi_detection_module_struct *ndpi_struct,\n \t\tfor(i=0; ja3.client.alpn[i] != '\\0'; i++)\n \t\t  if(ja3.client.alpn[i] == ',') ja3.client.alpn[i] = '-';\n \n-\t      } else if(extension_id == 43 /* supported versions */) {\n+\t      } else if(extension_id == 43 /* supported versions */ &&\n+\t                offset+extension_offset < total_len) {\n \t\tu_int16_t s_offset = offset+extension_offset;\n \t\tu_int8_t version_len = packet->payload[s_offset];\n \t\tchar version_str[256];\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42507671-vul",
+      "digest": "sha256:0533abce1c6112bf3cb9a65f0a0cd734d66909ca66268e33895be21540da891f"
+    },
+    "patched": {
+      "ref": "n132/arvo:42507671-fix",
+      "digest": "sha256:fd1436da0e69a85b4ebc3387d6d4484c62fed9b523f1cbb12e7c2ff67e7f4b6d"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/ndpi/src/lib/protocols/kerberos.c:232",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/ndpi/src/lib/protocols/kerberos.c:232"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

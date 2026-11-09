@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-963593175",
+  "chain": "CWE-456->CWE-457",
+  "project": "skia",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42530277",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://skia.googlesource.com/skia.git/+/cbf66a22130a1fd13285bb65d3a0d7ee6b4e8ab3%5E%21/",
+      "fix_commits": [
+        "cbf66a22130a1fd13285bb65d3a0d7ee6b4e8ab3"
+      ],
+      "repo": "https://skia.googlesource.com/skia.git"
+    },
+    "patch": "From cbf66a22130a1fd13285bb65d3a0d7ee6b4e8ab3 Mon Sep 17 00:00:00 2001\nFrom: Leon Scroggins III <scroggo@google.com>\nDate: Fri, 16 Feb 2018 12:03:03 -0500\nSubject: [PATCH] Ensure all rows of a gif are initialized\n\nBug: oss-fuzz:6274\n\nEven if a frame does not have enough LZW blocks to decode all rows,\n(which is unknown until we actually decode them), it is marked complete\nonce there are no more LZW blocks.\n\nWhen decoding, even if we've decoded all LZW blocks, check fRowsDecoded\nto determine whether we've actually all the rows. Report the number of\nrows decoded so that SkCodec can fill in the remaining ones.\n\nChange-Id: I1d6e0c29e3c37649725836cf24a4a239e3266b76\nReviewed-on: https://skia-review.googlesource.com/106964\nCommit-Queue: Leon Scroggins <scroggo@google.com>\nReviewed-by: Mike Klein <mtklein@google.com>\n---\n resources/invalid_images/ossfuzz6274.gif | Bin 0 -> 45 bytes\n src/codec/SkGifCodec.cpp                 |   8 ++---\n tests/CodecTest.cpp                      |  37 +++++++++++++++++++++++\n 3 files changed, 41 insertions(+), 4 deletions(-)\n create mode 100644 resources/invalid_images/ossfuzz6274.gif\n\ndiff --git a/resources/invalid_images/ossfuzz6274.gif b/resources/invalid_images/ossfuzz6274.gif\nnew file mode 100644\nindex 0000000000000000000000000000000000000000..faa3b6e5755fce67d7a22aeac29a97362221f89d\nGIT binary patch\nliteral 45\nkcmZ?wbhEHbRA5kG_^5ya6n`@R2MRFgFaQBaUV(uD0MNz<q5uE@\n\nliteral 0\nHcmV?d00001\n\ndiff --git a/src/codec/SkGifCodec.cpp b/src/codec/SkGifCodec.cpp\nindex 1118ed0..dbff928 100644\n--- a/src/codec/SkGifCodec.cpp\n+++ b/src/codec/SkGifCodec.cpp\n@@ -332,6 +332,8 @@ SkCodec::Result SkGifCodec::onIncrementalDecode(int* rowsDecoded) {\n \n SkCodec::Result SkGifCodec::decodeFrame(bool firstAttempt, const Options& opts, int* rowsDecoded) {\n     const SkImageInfo& dstInfo = this->dstInfo();\n+    const int scaledHeight = get_scaled_dimension(dstInfo.height(), fSwizzler->sampleY());\n+\n     const int frameIndex = opts.fFrameIndex;\n     SkASSERT(frameIndex < fReader->imagesCount());\n     const SkGIFFrameContext* frameContext = fReader->frameContext(frameIndex);\n@@ -354,8 +356,6 @@ SkCodec::Result SkGifCodec::decodeFrame(bool firstAttempt, const Options& opts,\n                     || frameContext->interlaced() || !fCurrColorTableIsReal) {\n                 // fill ignores the width (replaces it with the actual, scaled width).\n                 // But we need to scale in Y.\n-                const int scaledHeight = get_scaled_dimension(dstInfo.height(),\n-                                                              fSwizzler->sampleY());\n                 auto fillInfo = dstInfo.makeWH(0, scaledHeight);\n                 fSwizzler->fill(fillInfo, fDst, fDstRowBytes, this->getFillValue(dstInfo),\n                                 opts.fZeroInitialized);\n@@ -370,7 +370,7 @@ SkCodec::Result SkGifCodec::decodeFrame(bool firstAttempt, const Options& opts,\n         fFilledBackground = filledBackground;\n         if (filledBackground) {\n             // Report the full (scaled) height, since the client will never need to fill.\n-            fRowsDecoded = get_scaled_dimension(dstInfo.height(), fSwizzler->sampleY());\n+            fRowsDecoded = scaledHeight;\n         } else {\n             // This will be updated by haveDecodedRow.\n             fRowsDecoded = 0;\n@@ -384,7 +384,7 @@ SkCodec::Result SkGifCodec::decodeFrame(bool firstAttempt, const Options& opts,\n \n     bool frameDecoded = false;\n     const bool fatalError = !fReader->decode(frameIndex, &frameDecoded);\n-    if (fatalError || !frameDecoded) {\n+    if (fatalError || !frameDecoded || fRowsDecoded != scaledHeight) {\n         if (rowsDecoded) {\n             *rowsDecoded = fRowsDecoded;\n         }\ndiff --git a/tests/CodecTest.cpp b/tests/CodecTest.cpp\nindex 290686f..6e0a88c 100644\n--- a/tests/CodecTest.cpp\n+++ b/tests/CodecTest.cpp\n@@ -10,6 +10,7 @@\n #include \"SkAndroidCodec.h\"\n #include \"SkAutoMalloc.h\"\n #include \"SkBitmap.h\"\n+#include \"SkCanvas.h\"\n #include \"SkCodec.h\"\n #include \"SkCodecImageGenerator.h\"\n #include \"SkColorSpace_XYZ.h\"\n@@ -27,6 +28,7 @@\n #include \"SkRandom.h\"\n #include \"SkStream.h\"\n #include \"SkStreamPriv.h\"\n+#include \"SkUnPreMultiply.h\"\n #include \"SkWebpEncoder.h\"\n #include \"Test.h\"\n \n@@ -1528,3 +1530,38 @@ DEF_TEST(Codec_webp_rowsDecoded, r) {\n \n     test_info(r, codec.get(), codec->getInfo(), SkCodec::kInvalidInput, nullptr);\n }\n+\n+DEF_TEST(Codec_ossfuzz6274, r) {\n+    if (GetResourcePath().isEmpty()) {\n+        return;\n+    }\n+\n+    const char* file = \"invalid_images/ossfuzz6274.gif\";\n+    auto image = GetResourceAsImage(file);\n+    if (!image) {\n+        ERRORF(r, \"Missing %s\", file);\n+        return;\n+    }\n+\n+    REPORTER_ASSERT(r, image->width()  == 32);\n+    REPORTER_ASSERT(r, image->height() == 32);\n+\n+    SkBitmap bm;\n+    if (!bm.tryAllocPixels(SkImageInfo::MakeN32Premul(32, 32))) {\n+        ERRORF(r, \"Failed to allocate pixels\");\n+        return;\n+    }\n+\n+    bm.eraseColor(SK_ColorTRANSPARENT);\n+\n+    SkCanvas canvas(bm);\n+    canvas.drawImage(image, 0, 0, nullptr);\n+\n+    for (int i = 0; i < image->width();  ++i)\n+    for (int j = 0; j < image->height(); ++j) {\n+        SkColor actual = SkUnPreMultiply::PMColorToColor(*bm.getAddr32(i, j));\n+        if (actual != SK_ColorTRANSPARENT) {\n+            ERRORF(r, \"did not initialize pixels! %i, %i is %x\", i, j, actual);\n+        }\n+    }\n+}\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42530277-vul",
+      "digest": "sha256:d6d457a0f0597cbe6a2f41f59fd78b7c5bc8fdc31bbc9fbc3d6b9d0ab1d100a1"
+    },
+    "patched": {
+      "ref": "n132/arvo:42530277-fix",
+      "digest": "sha256:a142ec7170ca768e6d06efaa22d6b7d770cc74482bdcdb025494fe00af10b7aa"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/skia/out/Fuzz/../../src/opts/SkBlitRow_opts.h:83",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/skia/out/Fuzz/../../src/opts/SkBlitRow_opts.h:83"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

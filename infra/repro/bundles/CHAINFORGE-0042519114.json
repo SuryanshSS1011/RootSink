@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042519114",
+  "chain": "CWE-1284->CWE-125",
+  "project": "libredwg",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42519114",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "a709cac8ca35686ddaeeddb54decc05d8de18ebf",
+      "fix_commits": [
+        "a709cac8ca35686ddaeeddb54decc05d8de18ebf"
+      ],
+      "repo": "https://github.com/LibreDWG/libredwg"
+    },
+    "patch": "diff --git a/src/decode.c b/src/decode.c\nindex bea824aecf..947cb07520 100644\n--- a/src/decode.c\n+++ b/src/decode.c\n@@ -766,6 +766,11 @@ decode_R13_R2000 (Bit_Chain *restrict dat, Dwg_Data *restrict dwg)\n           dat->bit = 0;\n         }\n \n+      if (dat->byte >= dat->size)\n+        {\n+          LOG_ERROR (\"Handles overflow @%lu\", dat->byte)\n+          return DWG_ERR_VALUEOUTOFBOUNDS;\n+        }\n       crc = bit_read_RS_LE (dat);\n       LOG_TRACE (\"\\nHandles page crc: %04X [RS_LE] (%lu-%lu = %u)\\n\", crc,\n                  startpos, startpos + section_size, section_size);\n@@ -4822,6 +4827,11 @@ dwg_decode_add_object (Dwg_Data *restrict dwg, Bit_Chain *dat,\n             \"Object number: %lu/%lX\",\n             (unsigned long)num, (unsigned long)num)\n \n+  if (dat->byte >= dat->size)\n+    {\n+      LOG_ERROR (\"MS size overflow @%lu\", dat->byte)\n+      return DWG_ERR_VALUEOUTOFBOUNDS;\n+    }\n   obj->size = bit_read_MS (dat);\n   LOG_INFO (\", Size: %d [MS]\", obj->size)\n   SINCE (R_2010)\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42519114-vul",
+      "digest": "sha256:f94380c5938fab8e71e9ac04063b61e4c31b160d21144dea71122da14deb2ae6"
+    },
+    "patched": {
+      "ref": "n132/arvo:42519114-fix",
+      "digest": "sha256:5d1ba9c79eaef4b996fa546f54ec6ac88983818a04f5567f8ab403e615be5477"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/libredwg/src/./dwg.spec:699",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/libredwg/src/./dwg.spec:699"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

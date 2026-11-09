@@ -1,0 +1,90 @@
+======================= INFO =========================
+This binary is built for AFL-fuzz.
+To run the target function on individual input(s) execute this:
+  /out/fuzz_binary_message < INPUT_FILE
+or
+  /out/fuzz_binary_message INPUT_FILE1 [INPUT_FILE2 ... ]
+To fuzz with afl-fuzz execute this:
+  afl-fuzz [afl-flags] /out/fuzz_binary_message [-N]
+afl-fuzz will run N iterations before re-spawning the process (default: 1000)
+======================================================
+Reading 2520 bytes from /tmp/poc
+=================================================================
+==7==ERROR: AddressSanitizer: heap-use-after-free on address 0x61300000c7d0 at pc 0x000000562713 bp 0x7ffd1aaf25c0 sp 0x7ffd1aaf25b8
+WRITE of size 8 at 0x61300000c7d0 thread T0
+SCARINESS: 52 (8-byte-write-heap-use-after-free)
+    #0 0x562712 in UA_Session_detachFromSecureChannel /src/open62541/src/server/ua_session.c:87:5
+    #1 0x562712 in UA_Session_deleteMembersCleanup /src/open62541/src/server/ua_session.c:49
+    #2 0x5f4d84 in removeSessionCallback /src/open62541/src/server/ua_session_manager.c:29:5
+    #3 0x5f0d55 in processDelayedCallbacks /src/open62541/src/server/ua_server_worker.c:180:9
+    #4 0x5f0d55 in UA_Server_run_shutdown /src/open62541/src/server/ua_server_worker.c:379
+    #5 0x5447b8 in LLVMFuzzerTestOneInput /src/open62541/tests/fuzz/fuzz_binary_message.cc:31:5
+    #6 0x6388ef in ExecuteFilesOnyByOne(int, char**) /src/libfuzzer/afl/afl_driver.cpp:279:5
+    #7 0x638e8f in main /src/libfuzzer/afl/afl_driver.cpp:316:12
+    #8 0x7f19f9cc782f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+    #9 0x444a38 in _start (/out/fuzz_binary_message+0x444a38)
+
+DEDUP_TOKEN: UA_Session_detachFromSecureChannel--UA_Session_deleteMembersCleanup--removeSessionCallback
+0x61300000c7d0 is located 16 bytes inside of 336-byte region [0x61300000c7c0,0x61300000c910)
+freed by thread T0 here:
+    #0 0x508638 in __interceptor_cfree.localalias.0 /src/llvm/projects/compiler-rt/lib/asan/asan_malloc_linux.cc:76
+    #1 0x5f0d55 in processDelayedCallbacks /src/open62541/src/server/ua_server_worker.c:180:9
+    #2 0x5f0d55 in UA_Server_run_shutdown /src/open62541/src/server/ua_server_worker.c:379
+    #3 0x5447b8 in LLVMFuzzerTestOneInput /src/open62541/tests/fuzz/fuzz_binary_message.cc:31:5
+    #4 0x6388ef in ExecuteFilesOnyByOne(int, char**) /src/libfuzzer/afl/afl_driver.cpp:279:5
+    #5 0x638e8f in main /src/libfuzzer/afl/afl_driver.cpp:316:12
+    #6 0x7f19f9cc782f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+
+DEDUP_TOKEN: __interceptor_cfree.localalias.0--processDelayedCallbacks--UA_Server_run_shutdown
+previously allocated by thread T0 here:
+    #0 0x5087f8 in malloc /src/llvm/projects/compiler-rt/lib/asan/asan_malloc_linux.cc:88
+    #1 0x5f46cb in UA_SessionManager_createSession /src/open62541/src/server/ua_session_manager.c:129:58
+    #2 0x5ff7f2 in Service_CreateSession /src/open62541/src/server/ua_services_session.c:136:9
+    #3 0x5ed60f in processMSG /src/open62541/src/server/ua_server_binary.c:431:9
+    #4 0x5ec87b in processSecureChannelMessage /src/open62541/src/server/ua_server_binary.c:594:18
+    #5 0x5618d9 in UA_SecureChannel_finalizeChunk /src/open62541/src/ua_securechannel.c:722:28
+    #6 0x5618d9 in UA_SecureChannel_processChunk /src/open62541/src/ua_securechannel.c:983
+    #7 0x5eb86b in processCompleteChunk /src/open62541/src/server/ua_server_binary.c:715:12
+    #8 0x55b545 in processChunk /src/open62541/src/ua_connection.c:135:12
+    #9 0x55b545 in UA_Connection_processChunks /src/open62541/src/ua_connection.c:160
+    #10 0x5eb58b in processBinaryMessage /src/open62541/src/server/ua_server_binary.c:729:28
+    #11 0x5eb58b in UA_Server_processBinaryMessage /src/open62541/src/server/ua_server_binary.c:749
+    #12 0x544799 in LLVMFuzzerTestOneInput /src/open62541/tests/fuzz/fuzz_binary_message.cc:28:5
+    #13 0x6388ef in ExecuteFilesOnyByOne(int, char**) /src/libfuzzer/afl/afl_driver.cpp:279:5
+    #14 0x638e8f in main /src/libfuzzer/afl/afl_driver.cpp:316:12
+    #15 0x7f19f9cc782f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+
+DEDUP_TOKEN: malloc--UA_SessionManager_createSession--Service_CreateSession
+SUMMARY: AddressSanitizer: heap-use-after-free /src/open62541/src/server/ua_session.c:87:5 in UA_Session_detachFromSecureChannel
+Shadow bytes around the buggy address:
+  0x0c267fff98a0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c267fff98b0: 00 00 00 00 00 fa fa fa fa fa fa fa fa fa fa fa
+  0x0c267fff98c0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c267fff98d0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c267fff98e0: 00 00 00 00 00 00 00 00 00 00 fa fa fa fa fa fa
+=>0x0c267fff98f0: fa fa fa fa fa fa fa fa fd fd[fd]fd fd fd fd fd
+  0x0c267fff9900: fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd
+  0x0c267fff9910: fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd
+  0x0c267fff9920: fd fd fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c267fff9930: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c267fff9940: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+==7==ABORTING

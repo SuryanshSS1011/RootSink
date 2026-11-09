@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042521170",
+  "chain": "CWE-456->CWE-457",
+  "project": "imagemagick",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42521170",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "02eee091d2023d91d15d271ac9e6fe049a6e4c5f",
+      "fix_commits": [
+        "02eee091d2023d91d15d271ac9e6fe049a6e4c5f"
+      ],
+      "repo": "https://github.com/imagemagick/imagemagick"
+    },
+    "patch": "From 02eee091d2023d91d15d271ac9e6fe049a6e4c5f Mon Sep 17 00:00:00 2001\nFrom: Cristy <urban-warrior@imagemagick.org>\nDate: Tue, 23 Jan 2018 07:59:15 -0500\nSubject: [PATCH] Eliminate uninitialized value Credit OSS Fuzz\n\n---\n coders/wpg.c | 7 ++++++-\n 1 file changed, 6 insertions(+), 1 deletion(-)\n\ndiff --git a/coders/wpg.c b/coders/wpg.c\nindex 0583842..eb4f547 100644\n--- a/coders/wpg.c\n+++ b/coders/wpg.c\n@@ -1391,7 +1391,12 @@ static Image *ReadWPGImage(const ImageInfo *image_info,\n \n                     for (i=0; i< (ssize_t) image->rows; i++)\n                     {\n-                      (void) ReadBlob(image,ldblk,BImgBuff);\n+                      ssize_t\n+                        count;\n+\n+                      count=ReadBlob(image,(size_t) ldblk,BImgBuff);\n+                      if (count != ldblk)\n+                        break;\n                       if (InsertRow(image,BImgBuff,i,bpp,exception) == MagickFalse)\n                         {\n                           if(BImgBuff)\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42521170-vul",
+      "digest": "sha256:4c1ad9cbef543c562e80f1a46508bc14e8b9ae5da161a828258130e6d9957f3a"
+    },
+    "patched": {
+      "ref": "n132/arvo:42521170-fix",
+      "digest": "sha256:822b2c78317fac22df4f4621fd35e751b954cab10a8db4960e423f8478438f55"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/imagemagick/./MagickCore/pixel-accessor.h:783",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/imagemagick/./MagickCore/pixel-accessor.h:783"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

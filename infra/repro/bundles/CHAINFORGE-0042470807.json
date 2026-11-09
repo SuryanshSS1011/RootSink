@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042470807",
+  "chain": "CWE-456->CWE-457",
+  "project": "openvswitch",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42470807",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "f54c5e5986cf8192c8741d5f482ab5d11ec55455",
+      "fix_commits": [
+        "f54c5e5986cf8192c8741d5f482ab5d11ec55455"
+      ],
+      "repo": "https://github.com/openvswitch/ovs"
+    },
+    "patch": "From f54c5e5986cf8192c8741d5f482ab5d11ec55455 Mon Sep 17 00:00:00 2001\nFrom: Ben Pfaff <blp@ovn.org>\nDate: Thu, 11 Oct 2018 12:44:33 -0700\nSubject: [PATCH] expr: Disallow < <= >= > comparisons against empty value set.\n\nOVN expression syntax does not allow a literal empty value set, like {}.\nRather, any literal value set has to have at least one value.  However,\nvalue sets that originate from address sets or from port groups can be\nempty.  In such a case, == and != comparisons are allowed but < <= >= >\nshould be errors.  The actual implementation failed to properly disallow\nthe latter and instead tried to access the first element of the value set,\na bad read.  This fixes the problem.\n\nReported-at: https://bugs.chromium.org/p/oss-fuzz/issues/detail?id=10731\nReported-at: https://bugs.chromium.org/p/oss-fuzz/issues/detail?id=10767\nSigned-off-by: Ben Pfaff <blp@ovn.org>\nReviewed-by: Yifeng Sun <pkusunyifeng@gmail.com>\n---\n ovn/lib/expr.c | 5 +++++\n tests/ovn.at   | 2 ++\n 2 files changed, 7 insertions(+)\n\ndiff --git a/ovn/lib/expr.c b/ovn/lib/expr.c\nindex b504752..8cfdf34 100644\n--- a/ovn/lib/expr.c\n+++ b/ovn/lib/expr.c\n@@ -581,6 +581,11 @@ make_cmp(struct expr_context *ctx,\n                         f->symbol->name);\n             goto exit;\n         }\n+        if (!cs->n_values) {\n+            lexer_error(ctx->lexer, \"Only == and != operators may be used \"\n+                        \"to compare a field against an empty value set.\");\n+            goto exit;\n+        }\n         if (cs->values[0].masked) {\n             lexer_error(ctx->lexer, \"Only == and != operators may be used \"\n                         \"with masked constants.  Consider using subfields \"\ndiff --git a/tests/ovn.at b/tests/ovn.at\nindex 886981d..71518d9 100644\n--- a/tests/ovn.at\n+++ b/tests/ovn.at\n@@ -355,6 +355,8 @@ ip4.src == {1.2.3.4, $set1, $unknownset} => Syntax error at `$unknownset' expect\n eth.src == {$set3, badmac, 00:00:00:00:00:01} => Syntax error at `badmac' expecting constant.\n \n ((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((())))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))) => Parentheses nested too deeply.\n+\n+ct_label > $set4 => Only == and != operators may be used to compare a field against an empty value set.\n ]])\n sed 's/ =>.*//' test-cases.txt > input.txt\n sed 's/.* => //' test-cases.txt > expout\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42470807-vul",
+      "digest": "sha256:73fdc23cd27b57a9393672d5ab6e51f3814d74bf84420ff281925a03db6af0fa"
+    },
+    "patched": {
+      "ref": "n132/arvo:42470807-fix",
+      "digest": "sha256:357a6962059d9f297a65923758ec9cd7775699c56bda164c8d9aa5cd91a96049"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/openvswitch/ovn/lib/expr.c:581",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/openvswitch/ovn/lib/expr.c:581"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

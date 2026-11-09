@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042522120",
+  "chain": "CWE-20->CWE-125",
+  "project": "wireshark",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42522120",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "450aa4e580314cdd55733858c72dcd4828a234b0",
+      "fix_commits": [
+        "450aa4e580314cdd55733858c72dcd4828a234b0"
+      ],
+      "repo": "https://github.com/wireshark/wireshark"
+    },
+    "patch": "diff --git a/epan/dissectors/packet-gsm_rlp.c b/epan/dissectors/packet-gsm_rlp.c\nindex 2f0fd7b9ce0..b212dbedccc 100644\n--- a/epan/dissectors/packet-gsm_rlp.c\n+++ b/epan/dissectors/packet-gsm_rlp.c\n@@ -257,6 +257,7 @@ dissect_gsmrlp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data _\n \t}\n \n \t/* FCS is always the last 3 bytes of the message */\n+\ttvb_ensure_bytes_exist(tvb, 0, reported_len - 3);\n \tguint32 fcs_computed = rlp_fcs_compute(tvb_get_ptr(tvb, 0, reported_len - 3), reported_len - 3);\n \tproto_tree_add_checksum(rlp_tree, tvb, reported_len - 3, hf_gsmrlp_fcs, hf_gsmrlp_fcs_status,\n \t\t\t\t&ei_gsmrlp_fcs_bad, pinfo, fcs_computed, ENC_BIG_ENDIAN, PROTO_CHECKSUM_VERIFY);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42522120-vul",
+      "digest": "sha256:8c670bf37e22cab5dd06148dd5db3fa8e91a460f24a8f00999e4406a1007c340"
+    },
+    "patched": {
+      "ref": "n132/arvo:42522120-fix",
+      "digest": "sha256:055bee7ae8a886a2a7312ee70febf2ecd4d7a52bbabe5d191d1e6394418839f1"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/wireshark/epan/dissectors/packet-gsm_rlp.c:170",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/wireshark/epan/dissectors/packet-gsm_rlp.c:170"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

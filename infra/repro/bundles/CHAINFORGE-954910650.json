@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-954910650",
+  "chain": "CWE-843->CWE-119",
+  "project": "kimageformats",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42488267",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://invent.kde.org/frameworks/kimageformats/-/commit/297ed9a2fe339bfe36916b9fce628c3242e5be0f",
+      "fix_commits": [
+        "297ed9a2fe339bfe36916b9fce628c3242e5be0f"
+      ],
+      "repo": "https://invent.kde.org/frameworks/kimageformats"
+    },
+    "patch": "diff --git a/src/imageformats/xcf.cpp b/src/imageformats/xcf.cpp\nindex 7373d31f7bd222f20cdfcdf9d52cb7268fc1b37c..fe228a3810c1ce701cd9aa0f1b080e1924b9a5f8 100644\n--- a/src/imageformats/xcf.cpp\n+++ b/src/imageformats/xcf.cpp\n@@ -537,6 +537,7 @@ inline QRgb qRgba(const QRgb rgb, int a)\n  */\n XCFImageFormat::XCFImageFormat()\n {\n+    static_assert(sizeof(QRgb) == 4, \"the code assumes sizeof(QRgb) == 4, if that's not your case, help us fix it :)\");\n }\n \n /*!\n@@ -1361,6 +1362,11 @@ bool XCFImageFormat::loadHierarchy(QDataStream &xcf_io, Layer &layer)\n         break;\n     }\n \n+    if (bpp > 4) {\n+        qCDebug(XCFPLUGIN) << \"bpp is\" << bpp << \"We don't support layers with bpp > 4\";\n+        return false;\n+    }\n+\n     // GIMP stores images in a \"mipmap\"-like format (multiple levels of\n     // increasingly lower resolution). Only the top level is used here,\n     // however.\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42488267-vul",
+      "digest": "sha256:484b1ffa3709ab4e15c26d707da547fd3338ec8d83aa78f42dd283eefdcecaf7"
+    },
+    "patched": {
+      "ref": "n132/arvo:42488267-fix",
+      "digest": "sha256:f62768b2c58ba38a62a0fa5f02749db6bb64965e17fca7981e7ce2ed721de4b8"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "crash_site": "/src/qtbase/src/gui/image/qimage.cpp:1042",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 843,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 119,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "site": "/src/qtbase/src/gui/image/qimage.cpp:1042"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,80 @@
+======================= INFO =========================
+This binary is built for AFL-fuzz.
+To run the target function on individual input(s) execute this:
+  /out/mrf_fuzzer < INPUT_FILE
+or
+  /out/mrf_fuzzer INPUT_FILE1 [INPUT_FILE2 ... ]
+To fuzz with afl-fuzz execute this:
+  afl-fuzz [afl-flags] /out/mrf_fuzzer [-N]
+afl-fuzz will run N iterations before re-spawning the process (default: 1000)
+======================================================
+Reading 416 bytes from /tmp/poc
+=================================================================
+==45966==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x7f673dc74800 at pc 0x0000005185be bp 0x7ffe53cd2760 sp 0x7ffe53cd2758
+WRITE of size 1 at 0x7f673dc74800 thread T0
+SCARINESS: 31 (1-byte-write-heap-buffer-overflow)
+    #0 0x5185bd in ExpandPacked8ToByte1(unsigned char const*, unsigned char*, long long) /src/gdal/gdal/frmts/gtiff/geotiff.cpp:6647:23
+    #1 0x516d4a in GTiffOddBitsBand::IReadBlock(int, int, void*) /src/gdal/gdal/frmts/gtiff/geotiff.cpp:6749:17
+    #2 0x7bab96 in GDALRasterBand::ReadBlock(int, int, void*) /src/gdal/gdal/gcore/gdalrasterband.cpp:550:19
+    #3 0xd20f3b in GDAL_MRF::DecompressTIF(GDAL_MRF::buf_mgr&, GDAL_MRF::buf_mgr&, GDAL_MRF::ILImage const&) /src/gdal/gdal/frmts/mrf/Tif_band.cpp:176:41
+    #4 0xf7623b in GDAL_MRF::GDALMRFRasterBand::IReadBlock(int, int, void*) /src/gdal/gdal/frmts/mrf/mrf_band.cpp:817:18
+    #5 0x7bcaba in GDALRasterBand::GetLockedBlockRef(int, int, int) /src/gdal/gdal/gcore/gdalrasterband.cpp:1318:20
+    #6 0x7ffbfd in GDALRasterBand::IRasterIO(GDALRWFlag, int, int, int, int, void*, int, int, GDALDataType, long long, long long, GDALRasterIOExtraArg*) /src/gdal/gdal/gcore/rasterio.cpp:358:27
+    #7 0x7ba337 in GDALRasterBand::RasterIO(GDALRWFlag, int, int, int, int, void*, int, int, GDALDataType, long long, long long, GDALRasterIOExtraArg*) /src/gdal/gdal/gcore/gdalrasterband.cpp:371:16
+    #8 0x7ba9bd in GDALRasterIO /src/gdal/gdal/gcore/gdalrasterband.cpp:405:21
+    #9 0xa243c3 in GDALChecksumImage /src/gdal/gdal/alg/gdalchecksum.cpp:155:17
+    #10 0x4e5815 in LLVMFuzzerTestOneInput /src/gdal/gdal/./fuzzers/gdal_fuzzer.cpp:238:17
+    #11 0x4e6d9a in ExecuteFilesOnyByOne /src/libfuzzer/afl/afl_driver.cpp:216:5
+    #12 0x4e6d9a in main /src/libfuzzer/afl/afl_driver.cpp:253
+    #13 0x7f673e06e82f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+    #14 0x43c0f8 in _start (/out/mrf_fuzzer+0x43c0f8)
+
+DEDUP_TOKEN: ExpandPacked8ToByte1(unsigned char const*, unsigned char*, long long)--GTiffOddBitsBand::IReadBlock(int, int, void*)--GDALRasterBand::ReadBlock(int, int, void*)
+0x7f673dc74800 is located 0 bytes to the right of 262144-byte region [0x7f673dc34800,0x7f673dc74800)
+allocated by thread T0 here:
+    #0 0x4b3ca7 in posix_memalign /src/llvm/projects/compiler-rt/lib/asan/asan_malloc_linux.cc:226:3
+    #1 0x96081f in VSIMallocAligned /src/gdal/gdal/port/cpl_vsisimple.cpp:896:9
+    #2 0x960927 in VSIMallocAlignedAutoVerbose /src/gdal/gdal/port/cpl_vsisimple.cpp:954:18
+    #3 0x7d88ce in GDALRasterBlock::Internalize() /src/gdal/gdal/gcore/gdalrasterblock.cpp:1053:20
+    #4 0x7bc906 in GDALRasterBand::GetLockedBlockRef(int, int, int) /src/gdal/gdal/gcore/gdalrasterband.cpp:1297:32
+    #5 0x7ffbfd in GDALRasterBand::IRasterIO(GDALRWFlag, int, int, int, int, void*, int, int, GDALDataType, long long, long long, GDALRasterIOExtraArg*) /src/gdal/gdal/gcore/rasterio.cpp:358:27
+    #6 0x7ba337 in GDALRasterBand::RasterIO(GDALRWFlag, int, int, int, int, void*, int, int, GDALDataType, long long, long long, GDALRasterIOExtraArg*) /src/gdal/gdal/gcore/gdalrasterband.cpp:371:16
+    #7 0x7ba9bd in GDALRasterIO /src/gdal/gdal/gcore/gdalrasterband.cpp:405:21
+    #8 0xa243c3 in GDALChecksumImage /src/gdal/gdal/alg/gdalchecksum.cpp:155:17
+    #9 0x4e5815 in LLVMFuzzerTestOneInput /src/gdal/gdal/./fuzzers/gdal_fuzzer.cpp:238:17
+    #10 0x4e6d9a in ExecuteFilesOnyByOne /src/libfuzzer/afl/afl_driver.cpp:216:5
+    #11 0x4e6d9a in main /src/libfuzzer/afl/afl_driver.cpp:253
+    #12 0x7f673e06e82f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+
+DEDUP_TOKEN: posix_memalign--VSIMallocAligned--VSIMallocAlignedAutoVerbose
+SUMMARY: AddressSanitizer: heap-buffer-overflow /src/gdal/gdal/frmts/gtiff/geotiff.cpp:6647:23 in ExpandPacked8ToByte1(unsigned char const*, unsigned char*, long long)
+Shadow bytes around the buggy address:
+  0x0fed67b868b0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0fed67b868c0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0fed67b868d0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0fed67b868e0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0fed67b868f0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x0fed67b86900:[fa]fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0fed67b86910: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0fed67b86920: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0fed67b86930: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0fed67b86940: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0fed67b86950: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca

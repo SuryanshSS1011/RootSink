@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042534486",
+  "chain": "CWE-456->CWE-457",
+  "project": "mruby",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42534486",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "75de0020587c8b91616e7e81f3c39c9cdc1b362a",
+      "fix_commits": [
+        "75de0020587c8b91616e7e81f3c39c9cdc1b362a"
+      ],
+      "repo": "https://github.com/mruby/mruby"
+    },
+    "patch": "From 75de0020587c8b91616e7e81f3c39c9cdc1b362a Mon Sep 17 00:00:00 2001\nFrom: \"Yukihiro \\\"Matz\\\" Matsumoto\" <matz@ruby.or.jp>\nDate: Sun, 16 Jun 2024 15:14:22 +0900\nSubject: [PATCH] mruby-complex: provide Complex#<=> in Ruby\n\n---\n mrbgems/mruby-complex/mrblib/complex.rb | 7 +++++++\n 1 file changed, 7 insertions(+)\n\ndiff --git a/mrbgems/mruby-complex/mrblib/complex.rb b/mrbgems/mruby-complex/mrblib/complex.rb\nindex e341efc..44b2180 100644\n--- a/mrbgems/mruby-complex/mrblib/complex.rb\n+++ b/mrbgems/mruby-complex/mrblib/complex.rb\n@@ -19,6 +19,13 @@ class Complex < Numeric\n     Complex(-real, -imaginary)\n   end\n \n+  def <=>(other)\n+    return nil unless other.kind_of?(Numeric)\n+    self.to_f <=> other.to_f\n+  rescue\n+    nil\n+  end\n+\n   def abs\n     Math.hypot imaginary, real\n   end\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42534486-vul",
+      "digest": "sha256:ff5d7507ce658ef4137307a3ea272d6e8027ebf3dae36fbf6009841e9e93f434"
+    },
+    "patched": {
+      "ref": "n132/arvo:42534486-fix",
+      "digest": "sha256:f71562e7f1b02ccaf40cd1eb19478678269a5963a9f15821cf5022c40077079e"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/mruby/src/gc.c:542",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/mruby/src/gc.c:542"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

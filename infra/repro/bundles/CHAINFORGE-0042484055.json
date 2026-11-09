@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042484055",
+  "chain": "CWE-1285->CWE-125",
+  "project": "opensc",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42484055",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "55fd3db2b5f2ecdb8d2bc148270b75ec6ff2ed2f",
+      "fix_commits": [
+        "55fd3db2b5f2ecdb8d2bc148270b75ec6ff2ed2f"
+      ],
+      "repo": "https://github.com/OpenSC/OpenSC"
+    },
+    "patch": "diff --git a/src/libopensc/card-oberthur.c b/src/libopensc/card-oberthur.c\nindex 530421a401..6bd5a5a647 100644\n--- a/src/libopensc/card-oberthur.c\n+++ b/src/libopensc/card-oberthur.c\n@@ -2164,11 +2164,15 @@ auth_read_binary(struct sc_card *card, unsigned int offset,\n \t\tkey.exponent = bn[0];\n \t\tkey.modulus = bn[1];\n \n-\t\tif (sc_pkcs15_encode_pubkey_rsa(card->ctx, &key, &out, &out_len)) {\n+\t\tif (sc_pkcs15_encode_pubkey_rsa(card->ctx, &key, &out, &out_len) != SC_SUCCESS) {\n \t\t\trv = SC_ERROR_INVALID_ASN1_OBJECT;\n \t\t\tLOG_TEST_GOTO_ERR(card->ctx, rv, \"cannot encode RSA public key\");\n \t\t}\n \t\telse {\n+\t\t\tif (out_len < offset) {\n+\t\t\t\trv = SC_ERROR_UNKNOWN_DATA_RECEIVED;\n+\t\t\t\tgoto err;\n+\t\t\t}\n \t\t\trv  = out_len - offset > count ? count : out_len - offset;\n \t\t\tmemcpy(buf, out + offset, rv);\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42484055-vul",
+      "digest": "sha256:a6ecdfe28746d503945825058ba2126072f5b04040d199c30d9840eaaa42f57e"
+    },
+    "patched": {
+      "ref": "n132/arvo:42484055-fix",
+      "digest": "sha256:db5c71fd7c1f31ca693e78b18360480f508b06e9fa78549dba1c1b4953b1d7f3"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/opensc/src/libopensc/card-oberthur.c:2154",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/opensc/src/libopensc/card-oberthur.c:2154"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

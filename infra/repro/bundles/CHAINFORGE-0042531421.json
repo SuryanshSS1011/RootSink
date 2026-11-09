@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042531421",
+  "chain": "CWE-1284->CWE-125",
+  "project": "librawspeed",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42531421",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "b79d3f2ab9df07be675d262474a70f59eae55a66",
+      "fix_commits": [
+        "b79d3f2ab9df07be675d262474a70f59eae55a66"
+      ],
+      "repo": "https://github.com/darktable-org/rawspeed"
+    },
+    "patch": "diff --git a/src/librawspeed/decoders/DngDecoder.cpp b/src/librawspeed/decoders/DngDecoder.cpp\nindex 657d7e87b..32402bd9d 100644\n--- a/src/librawspeed/decoders/DngDecoder.cpp\n+++ b/src/librawspeed/decoders/DngDecoder.cpp\n@@ -279,6 +279,10 @@ void DngDecoder::parseColorMatrix() const {\n   if (!mat)\n     return;\n \n+  // Color matrix size *MUST* be a multiple of 3 (number of channels in XYZ).\n+  if (mat->count % 3 != 0)\n+    return;\n+\n   const auto srat_vals = mat->getSRationalArray(mat->count);\n   bool Success = true;\n   mRaw->metadata.colorMatrix.reserve(mat->count);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42531421-vul",
+      "digest": "sha256:34e56fdc1b19e72cd2d2cc196f547c86b60ed9a2d4e0f506f511858bba64976d"
+    },
+    "patched": {
+      "ref": "n132/arvo:42531421-fix",
+      "digest": "sha256:296d6d37a39aff340d0acc8284e6bf4a23766b0c0592bbeaea41907eb6f262f6"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/librawspeed/src/librawspeed/adt/NotARational.h:40",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/librawspeed/src/librawspeed/adt/NotARational.h:40"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

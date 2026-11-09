@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042495356",
+  "chain": "CWE-20->CWE-787",
+  "project": "skcms",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42495356",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "411e27776f5c0ec8359508f0e2cabb1538375e53",
+      "fix_commits": [
+        "411e27776f5c0ec8359508f0e2cabb1538375e53"
+      ],
+      "repo": "https://skia.googlesource.com/skcms.git"
+    },
+    "patch": "diff --git a/profiles/fuzz/a2b_too_many_input_channels2.icc b/profiles/fuzz/a2b_too_many_input_channels2.icc\nnew file mode 100644\nindex 0000000..9b8a2ce\n--- /dev/null\n+++ b/profiles/fuzz/a2b_too_many_input_channels2.icc\nBinary files differ\ndiff --git a/profiles/fuzz/a2b_too_many_input_channels2.icc.txt b/profiles/fuzz/a2b_too_many_input_channels2.icc.txt\nnew file mode 100644\nindex 0000000..979baac\n--- /dev/null\n+++ b/profiles/fuzz/a2b_too_many_input_channels2.icc.txt\n@@ -0,0 +1 @@\n+Unable to parse ICC profile\ndiff --git a/skcms.cc b/skcms.cc\nindex aabe489..710f598 100644\n--- a/skcms.cc\n+++ b/skcms.cc\n@@ -606,18 +606,9 @@\n     // matrix in skcms_A2B is applied later in the pipe, so supporting this would require another\n     // field/flag.\n     a2b->matrix_channels = 0;\n-\n     a2b-> input_channels = mftTag-> input_channels[0];\n     a2b->output_channels = mftTag->output_channels[0];\n \n-    for (uint32_t i = 0; i < a2b->input_channels; ++i) {\n-        a2b->grid_points[i] = mftTag->grid_points[0];\n-    }\n-    // The grid only makes sense with at least two points along each axis\n-    if (a2b->grid_points[0] < 2) {\n-        return false;\n-    }\n-\n     // We require exactly three (ie XYZ/Lab/RGB) output channels\n     if (a2b->output_channels != ARRAY_COUNT(a2b->output_curves)) {\n         return false;\n@@ -627,25 +618,25 @@\n         return false;\n     }\n \n+    for (uint32_t i = 0; i < a2b->input_channels; ++i) {\n+        a2b->grid_points[i] = mftTag->grid_points[0];\n+    }\n+    // The grid only makes sense with at least two points along each axis\n+    if (a2b->grid_points[0] < 2) {\n+        return false;\n+    }\n     return true;\n }\n \n // All as the A2B version above, except where noted.\n static bool read_mft_common(const mft_CommonLayout* mftTag, skcms_B2A* b2a) {\n-    // All the same as A2B until the next comment...\n+    // Same as A2B.\n     b2a->matrix_channels = 0;\n-\n     b2a-> input_channels = mftTag-> input_channels[0];\n     b2a->output_channels = mftTag->output_channels[0];\n \n-    for (uint32_t i = 0; i < b2a->input_channels; ++i) {\n-        b2a->grid_points[i] = mftTag->grid_points[0];\n-    }\n-    if (b2a->grid_points[0] < 2) {\n-        return false;\n-    }\n \n-    // ...for B2A, exactly 3 *input* channels and 1-4 *output* channels.\n+    // For B2A, exactly 3 *input* channels and 1-4 *output* channels.\n     if (b2a->input_channels != ARRAY_COUNT(b2a->input_curves)) {\n         return false;\n     }\n@@ -653,6 +644,13 @@\n         return false;\n     }\n \n+    // Same as A2B.\n+    for (uint32_t i = 0; i < b2a->input_channels; ++i) {\n+        b2a->grid_points[i] = mftTag->grid_points[0];\n+    }\n+    if (b2a->grid_points[0] < 2) {\n+        return false;\n+    }\n     return true;\n }\n \ndiff --git a/tests.c b/tests.c\nindex 76fde3d..401777c 100644\n--- a/tests.c\n+++ b/tests.c\n@@ -647,6 +647,7 @@\n     \"profiles/fuzz/truncated_curv_tag.icc\",           // oss-fuzz:6103\n     \"profiles/fuzz/zero_a.icc\",                       // oss-fuzz:????\n     \"profiles/fuzz/a2b_too_many_input_channels.icc\",  // oss-fuzz:6521\n+    \"profiles/fuzz/a2b_too_many_input_channels2.icc\", // oss-fuzz:32765\n     \"profiles/fuzz/mangled_trc_tags.icc\",             // chromium:835666\n     \"profiles/fuzz/negative_g_para.icc\",              // chromium:836634\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42495356-vul",
+      "digest": "sha256:06ba88496db61e4df4e24cb102b54672731b1b6fc4f7295c82dcb8476c57a5fc"
+    },
+    "patched": {
+      "ref": "n132/arvo:42495356-fix",
+      "digest": "sha256:5087f6a7b4feb207f454f529db1cdb1720d597fa29ace65146d79cdf7ef0040a"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/skcms/skcms.cc:642",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/skcms/skcms.cc:642"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

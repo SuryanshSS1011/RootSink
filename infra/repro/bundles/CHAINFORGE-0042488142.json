@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042488142",
+  "chain": "CWE-456->CWE-457",
+  "project": "openh264",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42488142",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "b52786888ddce9d6bc06b7825ba9bffc65924e0c",
+      "fix_commits": [
+        "b52786888ddce9d6bc06b7825ba9bffc65924e0c"
+      ],
+      "repo": "https://github.com/cisco/openh264"
+    },
+    "patch": "From b52786888ddce9d6bc06b7825ba9bffc65924e0c Mon Sep 17 00:00:00 2001\nFrom: xiaotianshimail <xiaotianshimail@gmail.com>\nDate: Sat, 20 Feb 2021 15:42:56 -0800\nSubject: [PATCH] B Slice bitstream error concealment support. Fix OSS-FUZZ\n reported erors: 26285,26291,26296,26301,26302,26303,26319,26323,29431 and\n more\n\n---\n codec/decoder/core/inc/decoder_context.h      | 1 +\n codec/decoder/core/inc/mv_pred.h              | 4 ++++\n codec/decoder/core/src/decoder.cpp            | 2 ++\n codec/decoder/core/src/parse_mb_syn_cabac.cpp | 4 ++++\n codec/decoder/core/src/parse_mb_syn_cavlc.cpp | 4 ++++\n codec/decoder/plus/src/welsDecoderExt.cpp     | 8 +++-----\n 6 files changed, 18 insertions(+), 5 deletions(-)\n\ndiff --git a/codec/decoder/core/inc/decoder_context.h b/codec/decoder/core/inc/decoder_context.h\nindex a934601..7e8e9d7 100644\n--- a/codec/decoder/core/inc/decoder_context.h\n+++ b/codec/decoder/core/inc/decoder_context.h\n@@ -513,6 +513,7 @@ typedef struct TagWelsDecoderContext {\n   int16_t lastReadyHeightOffset[LIST_A][MAX_REF_PIC_COUNT]; //last ready reference MB offset\n   PPictInfo               pPictInfoList;\n   PPictReoderingStatus    pPictReoderingStatus;\n+  SBufferInfo*            pDstInfo;\n } SWelsDecoderContext, *PWelsDecoderContext;\n \n typedef struct tagSWelsDecThread {\ndiff --git a/codec/decoder/core/inc/mv_pred.h b/codec/decoder/core/inc/mv_pred.h\nindex bdbc7cd..943c38d 100644\n--- a/codec/decoder/core/inc/mv_pred.h\n+++ b/codec/decoder/core/inc/mv_pred.h\n@@ -44,6 +44,10 @@\n #include \"dec_frame.h\"\n #include \"decoder_context.h\"\n \n+#define RETURN_ERR_IF_NULL(pRefPic0) \\\n+if ( pRefPic0 == NULL) \\\n+  return GENERATE_ERROR_NO(ERR_LEVEL_MB_DATA, ERR_INFO_INVALID_REF_INDEX)\n+\n namespace WelsDec {\n \n /*!\ndiff --git a/codec/decoder/core/src/decoder.cpp b/codec/decoder/core/src/decoder.cpp\nindex 0bc8ea6..d22c276 100644\n--- a/codec/decoder/core/src/decoder.cpp\n+++ b/codec/decoder/core/src/decoder.cpp\n@@ -259,6 +259,7 @@ void DestroyPicBuff (PWelsDecoderContext pCtx, PPicBuff* ppPicBuf, CMemoryAlign*\n   PPicBuff pPicBuf = NULL;\n \n   ResetReorderingPictureBuffers (pCtx->pPictReoderingStatus, pCtx->pPictInfoList, false);\n+  if (pCtx->pDstInfo) pCtx->pDstInfo->iBufferStatus = 0;\n \n   if (NULL == ppPicBuf || NULL == *ppPicBuf)\n     return;\n@@ -303,6 +304,7 @@ void ResetReorderingPictureBuffers (PPictReoderingStatus pPictReoderingStatus, P\n       pPictInfo[i].bLastGOP = false;\n       pPictInfo[i].iPOC = IMinInt32;\n     }\n+    pPictInfo->sBufferInfo.iBufferStatus = 0;\n   }\n }\n \ndiff --git a/codec/decoder/core/src/parse_mb_syn_cabac.cpp b/codec/decoder/core/src/parse_mb_syn_cabac.cpp\nindex 690acd0..177a5e8 100644\n--- a/codec/decoder/core/src/parse_mb_syn_cabac.cpp\n+++ b/codec/decoder/core/src/parse_mb_syn_cabac.cpp\n@@ -774,6 +774,7 @@ int32_t ParseInterBMotionInfoCabac (PWelsDecoderContext pCtx, PWelsNeighAvail pN\n           if (pCtx->pParam->eEcActiveIdc != ERROR_CON_DISABLE) {\n             iRef[listIdx] = 0;\n             pCtx->iErrorCode |= dsBitstreamError;\n+            RETURN_ERR_IF_NULL(pCtx->sRefPic.pRefList[listIdx][iRef[listIdx]]);\n           } else {\n             return GENERATE_ERROR_NO (ERR_LEVEL_MB_DATA, ERR_INFO_INVALID_REF_INDEX);\n           }\n@@ -811,6 +812,7 @@ int32_t ParseInterBMotionInfoCabac (PWelsDecoderContext pCtx, PWelsNeighAvail pN\n             if (pCtx->pParam->eEcActiveIdc != ERROR_CON_DISABLE) {\n               ref_idx = 0;\n               pCtx->iErrorCode |= dsBitstreamError;\n+              RETURN_ERR_IF_NULL(pCtx->sRefPic.pRefList[listIdx][ref_idx]);\n             } else {\n               return GENERATE_ERROR_NO (ERR_LEVEL_MB_DATA, ERR_INFO_INVALID_REF_INDEX);\n             }\n@@ -855,6 +857,7 @@ int32_t ParseInterBMotionInfoCabac (PWelsDecoderContext pCtx, PWelsNeighAvail pN\n             if (pCtx->pParam->eEcActiveIdc != ERROR_CON_DISABLE) {\n               ref_idx = 0;\n               pCtx->iErrorCode |= dsBitstreamError;\n+              RETURN_ERR_IF_NULL(pCtx->sRefPic.pRefList[listIdx][ref_idx]);\n             } else {\n               return GENERATE_ERROR_NO (ERR_LEVEL_MB_DATA, ERR_INFO_INVALID_REF_INDEX);\n             }\n@@ -989,6 +992,7 @@ int32_t ParseInterBMotionInfoCabac (PWelsDecoderContext pCtx, PWelsNeighAvail pN\n               if (pCtx->pParam->eEcActiveIdc != ERROR_CON_DISABLE) {\n                 iref = 0;\n                 pCtx->iErrorCode |= dsBitstreamError;\n+                RETURN_ERR_IF_NULL(pCtx->sRefPic.pRefList[listIdx][iref]);\n               } else {\n                 return GENERATE_ERROR_NO (ERR_LEVEL_MB_DATA, ERR_INFO_INVALID_REF_INDEX);\n               }\ndiff --git a/codec/decoder/core/src/parse_mb_syn_cavlc.cpp b/codec/decoder/core/src/parse_mb_syn_cavlc.cpp\nindex ba3a46d..dc10d72 100644\n--- a/codec/decoder/core/src/parse_mb_syn_cavlc.cpp\n+++ b/codec/decoder/core/src/parse_mb_syn_cavlc.cpp\n@@ -1390,6 +1390,7 @@ int32_t ParseInterBInfo (PWelsDecoderContext pCtx, int16_t iMvArray[LIST_A][30][\n             if (pCtx->pParam->eEcActiveIdc != ERROR_CON_DISABLE) {\n               ref_idx_list[listIdx][0] = 0;\n               pCtx->iErrorCode |= dsBitstreamError;\n+              RETURN_ERR_IF_NULL(ppRefPic[listIdx][ref_idx_list[listIdx][0]]);\n             } else {\n               return GENERATE_ERROR_NO (ERR_LEVEL_MB_DATA, ERR_INFO_INVALID_REF_INDEX);\n             }\n@@ -1439,6 +1440,7 @@ int32_t ParseInterBInfo (PWelsDecoderContext pCtx, int16_t iMvArray[LIST_A][30][\n               if (pCtx->pParam->eEcActiveIdc != ERROR_CON_DISABLE) {\n                 iRefIdx = 0;\n                 pCtx->iErrorCode |= dsBitstreamError;\n+                RETURN_ERR_IF_NULL(ppRefPic[listIdx][iRefIdx]);\n               } else {\n                 return GENERATE_ERROR_NO (ERR_LEVEL_MB_DATA, ERR_INFO_INVALID_REF_INDEX);\n               }\n@@ -1498,6 +1500,7 @@ int32_t ParseInterBInfo (PWelsDecoderContext pCtx, int16_t iMvArray[LIST_A][30][\n               if (pCtx->pParam->eEcActiveIdc != ERROR_CON_DISABLE) {\n                 iRefIdx = 0;\n                 pCtx->iErrorCode |= dsBitstreamError;\n+                RETURN_ERR_IF_NULL(ppRefPic[listIdx][iRefIdx]);\n               } else {\n                 return GENERATE_ERROR_NO (ERR_LEVEL_MB_DATA, ERR_INFO_INVALID_REF_INDEX);\n               }\n@@ -1644,6 +1647,7 @@ int32_t ParseInterBInfo (PWelsDecoderContext pCtx, int16_t iMvArray[LIST_A][30][\n                 if (pCtx->pParam->eEcActiveIdc != ERROR_CON_DISABLE) {\n                   iref = 0;\n                   pCtx->iErrorCode |= dsBitstreamError;\n+                  RETURN_ERR_IF_NULL(ppRefPic[listIdx][iref]);\n                 } else {\n                   return GENERATE_ERROR_NO (ERR_LEVEL_MB_DATA, ERR_INFO_INVALID_REF_INDEX);\n                 }\ndiff --git a/codec/decoder/plus/src/welsDecoderExt.cpp b/codec/decoder/plus/src/welsDecoderExt.cpp\nindex 77b4327..da798e8 100644\n--- a/codec/decoder/plus/src/welsDecoderExt.cpp\n+++ b/codec/decoder/plus/src/welsDecoderExt.cpp\n@@ -450,6 +450,7 @@ int32_t CWelsDecoder::ResetDecoder (PWelsDecoderContext& pCtx) {\n       WelsLog (&m_pWelsTrace->m_sLogCtx, WELS_LOG_ERROR, \"ResetDecoder() failed as decoder context null\");\n     }\n     ResetReorderingPictureBuffers (&m_sReoderingStatus, m_sPictInfoList, false);\n+    if (pCtx->pDstInfo) pCtx->pDstInfo->iBufferStatus = 0;\n   }\n   return ERR_INFO_UNINIT;\n }\n@@ -461,6 +462,7 @@ int32_t CWelsDecoder::ThreadResetDecoder (PWelsDecoderContext& pCtx) {\n     WelsLog (&m_pWelsTrace->m_sLogCtx, WELS_LOG_INFO, \"ResetDecoder(), context error code is %d\", pCtx->iErrorCode);\n     memcpy (&sPrevParam, pCtx->pParam, sizeof (SDecodingParam));\n     ResetReorderingPictureBuffers (&m_sReoderingStatus, m_sPictInfoList, true);\n+    if (pCtx->pDstInfo) pCtx->pDstInfo->iBufferStatus = 0;\n     CloseDecoderThreads();\n     UninitDecoder();\n     InitDecoder (&sPrevParam);\n@@ -811,11 +813,6 @@ DECODING_STATE CWelsDecoder::DecodeFrame2WithCtx (PWelsDecoderContext pDecContex\n       }\n       return dsErrorFree;\n     }\n-    if ((pDecContext->iErrorCode & (dsBitstreamError | dsDataErrorConcealed)) && pDecContext->eSliceType == B_SLICE) {\n-      ResetReorderingPictureBuffers (&m_sReoderingStatus, m_sPictInfoList, true);\n-      WelsResetRefPic (pDecContext);\n-      return dsErrorFree;\n-    }\n     //for AVC bitstream (excluding AVC with temporal scalability, including TP), as long as error occur, SHOULD notify upper layer key frame loss.\n     if ((IS_PARAM_SETS_NALS (eNalType) || NAL_UNIT_CODED_SLICE_IDR == eNalType) ||\n         (VIDEO_BITSTREAM_AVC == pDecContext->eVideoType)) {\n@@ -910,6 +907,7 @@ DECODING_STATE CWelsDecoder::DecodeFrame2 (const unsigned char* kpSrc,\n     unsigned char** ppDst,\n     SBufferInfo* pDstInfo) {\n   PWelsDecoderContext pDecContext = m_pDecThrCtx[0].pCtx;\n+  pDecContext->pDstInfo = pDstInfo;\n   return DecodeFrame2WithCtx (pDecContext, kpSrc, kiSrcLen, ppDst, pDstInfo);\n }\n \n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42488142-vul",
+      "digest": "sha256:f7bd40b9df75236246f225c3f717c665479ac443dfdd0190b2ed03ac599a781d"
+    },
+    "patched": {
+      "ref": "n132/arvo:42488142-fix",
+      "digest": "sha256:1a4205f1f4edc27415c74d69ed8755dadea8f0cb12fe309ee2775b56c7e425d8"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/openh264/codec/decoder/core/src/mv_pred.cpp:334",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/openh264/codec/decoder/core/src/mv_pred.cpp:334"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

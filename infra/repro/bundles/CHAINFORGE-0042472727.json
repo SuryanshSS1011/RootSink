@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042472727",
+  "chain": "CWE-416->CWE-787",
+  "project": "libarchive",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42472727",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "4bd12b6f40cb4413c8970c52f15f3b6885b5e32f",
+      "fix_commits": [
+        "4bd12b6f40cb4413c8970c52f15f3b6885b5e32f"
+      ],
+      "repo": "https://github.com/libarchive/libarchive"
+    },
+    "patch": "diff --git a/libarchive/archive_read_support_format_rar5.c b/libarchive/archive_read_support_format_rar5.c\nindex 84d05c431e..cf897657ca 100644\n--- a/libarchive/archive_read_support_format_rar5.c\n+++ b/libarchive/archive_read_support_format_rar5.c\n@@ -2323,7 +2323,7 @@ static int parse_tables(struct archive_read* a, struct rar5* rar,\n                 int k;\n \n                 /* Fill zeroes. */\n-                for(k = 0; k < value + 2; k++) {\n+                for(k = 0; (k < value + 2) && (w < HUFF_BC); k++) {\n                     bit_length[w++] = 0;\n                 }\n             }\ndiff --git a/libarchive/test/test_read_format_rar5.c b/libarchive/test/test_read_format_rar5.c\nindex 9b684a73a9..d52b6002c5 100644\n--- a/libarchive/test/test_read_format_rar5.c\n+++ b/libarchive/test/test_read_format_rar5.c\n@@ -950,3 +950,18 @@ DEFINE_TEST(test_read_format_rar5_extra_field_version)\n \n     EPILOGUE();\n }\n+\n+DEFINE_TEST(test_read_format_rar5_readtables_overflow)\n+{\n+    uint8_t buf[16];\n+\n+    PROLOGUE(\"test_read_format_rar5_readtables_overflow.rar\");\n+\n+    assertA(0 == archive_read_next_header(a, &ae));\n+    /* This archive is invalid. However, processing it shouldn't cause any\n+     * buffer overflow errors during reading rar5 tables. */\n+    assertA(0 == archive_read_data(a, buf, sizeof(buf)));\n+    assertA(ARCHIVE_EOF == archive_read_next_header(a, &ae));\n+\n+    EPILOGUE();\n+}\ndiff --git a/libarchive/test/test_read_format_rar5_readtables_overflow.rar.uu b/libarchive/test/test_read_format_rar5_readtables_overflow.rar.uu\nnew file mode 100644\nindex 0000000000..611c2af237\n--- /dev/null\n+++ b/libarchive/test/test_read_format_rar5_readtables_overflow.rar.uu\n@@ -0,0 +1,15 @@\n+begin 644 test_read_format_rar5_readtables_overflow.rar\n+M4F%R(1H'`0\"-[P+2`)3+'_4`C>\\\"T@`\"T@\"4RQ_5]0#O0````,L?Q_T``(`\"\n+MT@\"4RQ_=V-C8`)3+']W=]0\"-\\`+2`)3+']WU`(WO`M(``M(`E,L?U?4`[P+2\n+M`)3+'\\?]``\"``M(`E,L?W=C8V`\"4RQ_=]0#V`(WO`M'UV,?8V-C8$=C8V-C8\n+MV(W8V-C8V-C8V-C8V-C8V-C8V-C8V-C8V-C8!]C8V-C8V-C8V-C8V-C8V-C8\n+MV-C8V-C8V-C(V-C8V-C2`)3+']W8V-C8V-C8V-C8V-C8V-C8@-C8V-C8V-C8\n+MV/+8V-C8V-C8V-C8`038V-C8V-C8V-C8V-C8V-C8V`?8V-C8V-C8V-C8!-C8\n+MV-C8V-C8V-C8V-C8V-C8V`?8V-C8V-C8V-C8V-C8`(`\"V`7V`(WO`M'U`]L?\n+MW?4`C>\\\"T@`\"T@\"4'__U`(WO`N``E,L?W84`C0`0T@\"4RQ_=V-C8V-C8V`\"4\n+MR_\\R]0#V`(W8V-C8V-C8V-C8V-C8V-C8V-C8V-C8V`?8V-C8V-C8V-C8V-C8\n+MV-C8V-C8V-C8V-C8R-C8V-C8T@\"4RQ_=V-C8V-C8V-C8V-C8V-C8V(#8V-C8\n+MV-C8````9-C8V-C8V!'8V-C8V-C8]]C8V-C8V-C8V-C8V/+8V-C8V-C8V-C8\n+=`038V-C8V-C8V-C8V-C8V-C8V`?8V-C8V-C8V-@`\n+`\n+end\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42472727-vul",
+      "digest": "sha256:d89f3703244d7174b7a15b9cc3852aa79f61150c2e0a70ef6b50e1f2e0070200"
+    },
+    "patched": {
+      "ref": "n132/arvo:42472727-fix",
+      "digest": "sha256:f0224c47f68d7a2fb875bbd100b074b49d3615551efd8301b588c0c65caabbc9"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/libarchive/libarchive/archive_read_support_format_rar5.c:2028",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/libarchive/libarchive/archive_read_support_format_rar5.c:2028"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042535766",
+  "chain": "CWE-20->CWE-787",
+  "project": "gdal",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42535766",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "0cb16a8ccb86c904c18b7f5c6d55b2db36c2275a",
+      "fix_commits": [
+        "0cb16a8ccb86c904c18b7f5c6d55b2db36c2275a"
+      ],
+      "repo": "https://github.com/OSGeo/gdal"
+    },
+    "patch": "diff --git a/autotest/gdrivers/grib.py b/autotest/gdrivers/grib.py\nindex 72242f4551f9..0df0b538945e 100755\n--- a/autotest/gdrivers/grib.py\n+++ b/autotest/gdrivers/grib.py\n@@ -1286,23 +1286,32 @@ def grib_grib2_write_data_encodings():\n     for encoding in encodings:\n         tmpfilename = '/vsimem/out.grb2'\n         gdal.ErrorReset()\n-        gdal.Translate( tmpfilename, test_ds, format = 'GRIB', creationOptions = ['DATA_ENCODING=' + encoding] )\n-        error_msg = gdal.GetLastErrorMsg()\n-        if error_msg != '':\n-            gdaltest.post_reason('did not expect error for %s, %s' % (str(filename), str(options)))\n-            return 'fail'\n-        out_ds = gdal.Open(tmpfilename)\n-        got_vals = struct.unpack(4 * 'd', out_ds.ReadRaster())\n-        out_ds = None\n-        gdal.Unlink(tmpfilename)\n-        if encoding == 'IEEE_FLOATING_POINT':\n-            expected_vals = (1.23, 1.45, 1.56, 1.78)\n+        options = ['DATA_ENCODING=' + encoding]\n+        if encoding == 'COMPLEX_PACKING':\n+            with gdaltest.error_handler():\n+                success = gdal.Translate( tmpfilename, test_ds, format = 'GRIB', creationOptions = options )\n+            if success:\n+                gdaltest.post_reason('expected error for %s, %s' % ('floating point data with dynamic < 1', str(options)))\n+                return 'fail'\n         else:\n-            expected_vals = (1.2300000190734863, 1.4487500190734863, 1.5581250190734863, 1.7807812690734863)\n-        if max([abs(got_vals[i] - expected_vals[i]) for i in range(4)]) > 1e-7:\n-            gdaltest.post_reason('did not get expected values')\n-            print(got_vals)\n-            return 'fail'\n+            gdal.Translate( tmpfilename, test_ds, format = 'GRIB', creationOptions = options )\n+            error_msg = gdal.GetLastErrorMsg()\n+            if error_msg != '':\n+                gdaltest.post_reason('did not expect error for %s, %s' % ('floating point data with dynamic < 1', str(options)))\n+                return 'fail'\n+            out_ds = gdal.Open(tmpfilename)\n+            got_vals = struct.unpack(4 * 'd', out_ds.ReadRaster())\n+            out_ds = None\n+            if encoding == 'IEEE_FLOATING_POINT':\n+                expected_vals = (1.23, 1.45, 1.56, 1.78)\n+            else:\n+                expected_vals = (1.2300000190734863, 1.4487500190734863, 1.5581250190734863, 1.7807812690734863)\n+            if max([abs(got_vals[i] - expected_vals[i]) for i in range(4)]) > 1e-7:\n+                gdaltest.post_reason('did not get expected values')\n+                print(got_vals)\n+                return 'fail'\n+        gdal.Unlink(tmpfilename)\n+\n     test_ds = None\n \n     # Test floating point data with very large dynamic\ndiff --git a/gdal/frmts/grib/degrib/g2clib/reduce.c b/gdal/frmts/grib/degrib/g2clib/reduce.c\nindex b20e33b85d04..37e0a585ec79 100644\n--- a/gdal/frmts/grib/degrib/g2clib/reduce.c\n+++ b/gdal/frmts/grib/degrib/g2clib/reduce.c\n@@ -111,6 +111,12 @@\n /*           NONE */\n \n \n+    if( *kbit <= 0 || *kbit > 32 )\n+    {\n+        *ier = 714;\n+        return 0;\n+    }\n+\n /*        NEWBOX( ) AND NEWBOXP( ) were AUTOMATIC ARRAYS. */\n     newbox = (integer *)calloc(*ndg,sizeof(integer));\n     newboxp = (integer *)calloc(*ndg,sizeof(integer));\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42535766-vul",
+      "digest": "sha256:d5fc108bc3198acdd7cd3d29a7a282a5a070ebcd29b88ac7817d9d0842cb9ab3"
+    },
+    "patched": {
+      "ref": "n132/arvo:42535766-fix",
+      "digest": "sha256:60081363bf89b46db99df013e82925b0062cb0839e497586fb156cc18da8be5e"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "global-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/gdal/gdal/frmts/grib/degrib/g2clib/reduce.c:155",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "global-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/gdal/gdal/frmts/grib/degrib/g2clib/reduce.c:155"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

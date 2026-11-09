@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042486539",
+  "chain": "CWE-20->CWE-125",
+  "project": "sleuthkit",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42486539",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "243274a82cc506507bc59083d63a0d3b7ced611e",
+      "fix_commits": [
+        "243274a82cc506507bc59083d63a0d3b7ced611e"
+      ],
+      "repo": "https://github.com/sleuthkit/sleuthkit"
+    },
+    "patch": "diff --git a/tsk/fs/ntfs.c b/tsk/fs/ntfs.c\nindex 7db5200e06..631fe2ff38 100755\n--- a/tsk/fs/ntfs.c\n+++ b/tsk/fs/ntfs.c\n@@ -658,7 +658,7 @@ ntfs_make_data_run(NTFS_INFO * ntfs, TSK_OFF_T start_vcn,\n          * An address offset of more than eight bytes will not fit in the\n          * 64-bit addr_offset field (and is likely corrupt)\n          */\n-        if (NTFS_RUNL_LENSZ(run) > 8) {\n+        if (NTFS_RUNL_OFFSZ(run) > 8) {\n             tsk_error_reset();\n             tsk_error_set_errno(TSK_ERR_FS_INODE_COR);\n             tsk_error_set_errstr\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42486539-vul",
+      "digest": "sha256:4e4ba85d0705635ab142291c1990d090c499ed621d9dd2d296efd60cee36f2b8"
+    },
+    "patched": {
+      "ref": "n132/arvo:42486539-fix",
+      "digest": "sha256:c6a9ee34c7f486b64f7945f50db8cf1e531ee0d099f3880c728322cf64e18aa7"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/sleuthkit/tsk/fs/ntfs.c:629",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/sleuthkit/tsk/fs/ntfs.c:629"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

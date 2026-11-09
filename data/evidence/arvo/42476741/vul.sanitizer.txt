@@ -1,0 +1,81 @@
+Reading 8471 bytes from /tmp/poc
+======================= INFO =========================
+This binary is built for AFL-fuzz.
+To run the target function on individual input(s) execute this:
+  /out/spng_read_fuzzer < INPUT_FILE
+or
+  /out/spng_read_fuzzer INPUT_FILE1 [INPUT_FILE2 ... ]
+To fuzz with afl-fuzz execute this:
+  afl-fuzz [afl-flags] /out/spng_read_fuzzer [-N]
+afl-fuzz will run N iterations before re-spawning the process (default: 1000)
+======================================================
+=================================================================
+==7==ERROR: AddressSanitizer: heap-use-after-free on address 0x625000002900 at pc 0x00000049501a bp 0x7fff425653b0 sp 0x7fff42564b78
+READ of size 8289 at 0x625000002900 thread T0
+SCARINESS: 54 (multi-byte-read-heap-use-after-free)
+    #0 0x495019 in __asan_memcpy /src/llvm/projects/compiler-rt/lib/asan/asan_interceptors_memintrinsics.cc:22:3
+    #1 0x4d0423 in read_chunks_after_idat /src/libspng/build/../spng.c:1560:13
+    #2 0x4cb3a0 in spng_decode_image /src/libspng/build/../spng.c:2258:11
+    #3 0x4c7ec6 in LLVMFuzzerTestOneInput /src/libspng/tests/spng_read_fuzzer.cc:65:8
+    #4 0x4c84fa in ExecuteFilesOnyByOne /src/libfuzzer/afl/afl_driver.cpp:216:5
+    #5 0x4c84fa in main /src/libfuzzer/afl/afl_driver.cpp:253
+    #6 0x7effdb0f282f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+    #7 0x41dc78 in _start (/out/spng_read_fuzzer+0x41dc78)
+
+DEDUP_TOKEN: __asan_memcpy--read_chunks_after_idat--spng_decode_image
+0x625000004900 is located 0 bytes to the right of 8192-byte region [0x625000002900,0x625000004900)
+freed by thread T0 here:
+    #0 0x495ef9 in realloc /src/llvm/projects/compiler-rt/lib/asan/asan_malloc_linux.cc:164:3
+    #1 0x4d7c28 in read_data /src/libspng/build/../spng.c:292:21
+    #2 0x4d7801 in read_chunk_bytes /src/libspng/build/../spng.c:385:11
+    #3 0x4d01f1 in read_chunks_after_idat /src/libspng/build/../spng.c:1497:15
+    #4 0x4cb3a0 in spng_decode_image /src/libspng/build/../spng.c:2258:11
+    #5 0x4c7ec6 in LLVMFuzzerTestOneInput /src/libspng/tests/spng_read_fuzzer.cc:65:8
+    #6 0x4c84fa in ExecuteFilesOnyByOne /src/libfuzzer/afl/afl_driver.cpp:216:5
+    #7 0x4c84fa in main /src/libfuzzer/afl/afl_driver.cpp:253
+    #8 0x7effdb0f282f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+
+DEDUP_TOKEN: realloc--read_data--read_chunk_bytes
+previously allocated by thread T0 here:
+    #0 0x495bdd in malloc /src/llvm/projects/compiler-rt/lib/asan/asan_malloc_linux.cc:145:3
+    #1 0x4d1b13 in spng_set_png_stream /src/libspng/build/../spng.c:2382:17
+    #2 0x4c7de2 in LLVMFuzzerTestOneInput /src/libspng/tests/spng_read_fuzzer.cc:46:22
+    #3 0x4c84fa in ExecuteFilesOnyByOne /src/libfuzzer/afl/afl_driver.cpp:216:5
+    #4 0x4c84fa in main /src/libfuzzer/afl/afl_driver.cpp:253
+    #5 0x7effdb0f282f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+
+DEDUP_TOKEN: malloc--spng_set_png_stream--LLVMFuzzerTestOneInput
+SUMMARY: AddressSanitizer: heap-use-after-free /src/llvm/projects/compiler-rt/lib/asan/asan_interceptors_memintrinsics.cc:22:3 in __asan_memcpy
+Shadow bytes around the buggy address:
+  0x0c4a7fff84d0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c4a7fff84e0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c4a7fff84f0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c4a7fff8500: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c4a7fff8510: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+=>0x0c4a7fff8520:[fd]fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd
+  0x0c4a7fff8530: fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd
+  0x0c4a7fff8540: fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd
+  0x0c4a7fff8550: fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd
+  0x0c4a7fff8560: fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd
+  0x0c4a7fff8570: fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+  Shadow gap:              cc
+==7==ABORTING

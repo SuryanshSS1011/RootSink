@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042477842",
+  "chain": "CWE-456->CWE-457",
+  "project": "libhevc",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42477842",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "4d36db275bb4d0abc410415f6d8f5af4bc179102",
+      "fix_commits": [
+        "4d36db275bb4d0abc410415f6d8f5af4bc179102"
+      ],
+      "repo": "https://android.googlesource.com/platform/external/libhevc"
+    },
+    "patch": "diff --git a/fuzzer/hevc_dec_fuzzer.cpp b/fuzzer/hevc_dec_fuzzer.cpp\nindex 561f8cb..5561bb1 100644\n--- a/fuzzer/hevc_dec_fuzzer.cpp\n+++ b/fuzzer/hevc_dec_fuzzer.cpp\n@@ -38,14 +38,24 @@\n     IV_YUV_420P,   IV_YUV_420SP_UV, IV_YUV_420SP_VU,\n     IV_YUV_422ILE, IV_RGB_565,      IV_RGBA_8888};\n \n+/* Decoder ignores invalid arch, i.e. for arm build, if SSSE3 is requested,\n+ * decoder defaults to a supported configuration. So same set of supported\n+ * architectures can be used in arm/arm64/x86 builds */\n+const IVD_ARCH_T supportedArchitectures[] = {\n+    ARCH_ARM_NONEON,  ARCH_ARM_A9Q,   ARCH_ARM_NEONINTR, ARCH_ARMV8_GENERIC,\n+    ARCH_X86_GENERIC, ARCH_X86_SSSE3, ARCH_X86_SSE42};\n+\n enum {\n   OFFSET_COLOR_FORMAT = 6,\n   OFFSET_NUM_CORES,\n+  OFFSET_ARCH,\n   /* Should be the last entry */\n   OFFSET_MAX,\n };\n \n+const static int kMaxNumDecodeCalls = 100;\n const static int kSupportedColorFormats = NELEMENTS(supportedColorFormats);\n+const static int kSupportedArchitectures = NELEMENTS(supportedArchitectures);\n const static int kMaxCores = 4;\n void *iv_aligned_malloc(void *ctxt, WORD32 alignment, WORD32 size) {\n   void *buf = NULL;\n@@ -76,6 +86,7 @@\n   IV_API_CALL_STATUS_T decodeFrame(const uint8_t *data, size_t size,\n                                    size_t *bytesConsumed);\n   void setParams(IVD_VIDEO_DECODE_MODE_T mode);\n+  void setArchitecture(IVD_ARCH_T arch);\n \n  private:\n   IV_COLOR_FORMAT_T mColorFormat;\n@@ -175,6 +186,20 @@\n   ivd_api_function(mCodec, (void *)&s_ctl_ip, (void *)&s_ctl_op);\n }\n \n+void Codec::setArchitecture(IVD_ARCH_T arch) {\n+  ihevcd_cxa_ctl_set_processor_ip_t s_ctl_ip;\n+  ihevcd_cxa_ctl_set_processor_op_t s_ctl_op;\n+\n+  s_ctl_ip.e_cmd = IVD_CMD_VIDEO_CTL;\n+  s_ctl_ip.e_sub_cmd =\n+      (IVD_CONTROL_API_COMMAND_TYPE_T)IHEVCD_CXA_CMD_CTL_SET_PROCESSOR;\n+  s_ctl_ip.u4_arch = arch;\n+  s_ctl_ip.u4_soc = SOC_GENERIC;\n+  s_ctl_ip.u4_size = sizeof(ihevcd_cxa_ctl_set_processor_ip_t);\n+  s_ctl_op.u4_size = sizeof(ihevcd_cxa_ctl_set_processor_op_t);\n+\n+  ivd_api_function(mCodec, (void *)&s_ctl_ip, (void *)&s_ctl_op);\n+}\n void Codec::freeFrame() {\n   for (int i = 0; i < mOutBufHandle.u4_num_bufs; i++) {\n     if (mOutBufHandle.pu1_bufs[i]) {\n@@ -304,7 +329,8 @@\n    * to feed next data */\n   if (!*bytesConsumed) *bytesConsumed = 4;\n \n-  if (mWidth != dec_op.u4_pic_wd || mHeight != dec_op.u4_pic_ht) {\n+  if (dec_op.u4_pic_wd && dec_op.u4_pic_ht &&\n+      (mWidth != dec_op.u4_pic_wd || mHeight != dec_op.u4_pic_ht)) {\n     mWidth = std::min(dec_op.u4_pic_wd, (UWORD32)10240);\n     mHeight = std::min(dec_op.u4_pic_ht, (UWORD32)10240);\n     allocFrame();\n@@ -319,19 +345,23 @@\n   }\n   size_t colorFormatOfst = std::min((size_t)OFFSET_COLOR_FORMAT, size - 1);\n   size_t numCoresOfst = std::min((size_t)OFFSET_NUM_CORES, size - 1);\n+  size_t architectureOfst = std::min((size_t)OFFSET_ARCH, size - 1);\n+  size_t architectureIdx = data[architectureOfst] % kSupportedArchitectures;\n+  IVD_ARCH_T arch = (IVD_ARCH_T)supportedArchitectures[architectureIdx];\n   size_t colorFormatIdx = data[colorFormatOfst] % kSupportedColorFormats;\n   IV_COLOR_FORMAT_T colorFormat =\n       (IV_COLOR_FORMAT_T)(supportedColorFormats[colorFormatIdx]);\n   uint32_t numCores = (data[numCoresOfst] % kMaxCores) + 1;\n-\n+  size_t numDecodeCalls = 0;\n   Codec *codec = new Codec(colorFormat, numCores);\n   codec->createCodec();\n+  codec->setArchitecture(arch);\n   codec->setCores();\n   codec->decodeHeader(data, size);\n   codec->setParams(IVD_DECODE_FRAME);\n   codec->allocFrame();\n \n-  while (size > 0) {\n+  while (size > 0 && numDecodeCalls < kMaxNumDecodeCalls) {\n     IV_API_CALL_STATUS_T ret;\n     size_t bytesConsumed;\n     ret = codec->decodeFrame(data, size, &bytesConsumed);\n@@ -339,6 +369,7 @@\n     bytesConsumed = std::min(size, bytesConsumed);\n     data += bytesConsumed;\n     size -= bytesConsumed;\n+    numDecodeCalls++;\n   }\n \n   codec->freeFrame();\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42477842-vul",
+      "digest": "sha256:1060ea0f6c76461adcf4930a493d1d90dbaafaed172d7aeca5ce8c6a87968d55"
+    },
+    "patched": {
+      "ref": "n132/arvo:42477842-fix",
+      "digest": "sha256:55220fa2d321328a8f76e5c3cd3eacbb6afc6180dc068c9a6df58e9b35d63879"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/libhevc/common/ihevc_recon.c:452",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/libhevc/common/ihevc_recon.c:452"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

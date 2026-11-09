@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042534620",
+  "chain": "CWE-20->CWE-125",
+  "project": "freetype",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42534620",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "dbdcd758895647028bbc56baf862a1cff07409ff",
+      "fix_commits": [
+        "dbdcd758895647028bbc56baf862a1cff07409ff"
+      ],
+      "repo": "https://github.com/freetype/freetype"
+    },
+    "patch": "diff --git a/src/cache/ftccache.h b/src/cache/ftccache.h\nindex ccbf97980..85d321c12 100644\n--- a/src/cache/ftccache.h\n+++ b/src/cache/ftccache.h\n@@ -87,6 +87,10 @@ FT_BEGIN_HEADER\n         ftc_get_top_node_for_hash( ( cache ), ( hash ) )\n #endif\n \n+  FT_LOCAL( void )\n+  ftc_node_destroy( FTC_Node     node,\n+                    FTC_Manager  manager );\n+\n \n   /*************************************************************************/\n   /*************************************************************************/\ndiff --git a/src/cache/ftccback.h b/src/cache/ftccback.h\nindex 79ba44ab9..a1d76baa7 100644\n--- a/src/cache/ftccback.h\n+++ b/src/cache/ftccback.h\n@@ -19,11 +19,7 @@\n #define FTCCBACK_H_\n \n #include <freetype/ftcache.h>\n-#include \"ftcmru.h\"\n-#include \"ftcimage.h\"\n-#include \"ftcmanag.h\"\n-#include \"ftcglyph.h\"\n-#include \"ftcsbits.h\"\n+#include \"ftccache.h\"\n \n FT_BEGIN_HEADER\n \n@@ -81,10 +77,6 @@ FT_BEGIN_HEADER\n   FT_LOCAL( void )\n   ftc_cache_done( FTC_Cache  cache );\n \n-  FT_LOCAL( void )\n-  ftc_node_destroy( FTC_Node     node,\n-                    FTC_Manager  manager );\n-\n FT_END_HEADER\n \n #endif /* FTCCBACK_H_ */\ndiff --git a/src/cache/ftcmanag.c b/src/cache/ftcmanag.c\nindex 881b460a8..c73601400 100644\n--- a/src/cache/ftcmanag.c\n+++ b/src/cache/ftcmanag.c\n@@ -22,7 +22,6 @@\n #include <freetype/internal/ftdebug.h>\n #include <freetype/ftsizes.h>\n \n-#include \"ftccback.h\"\n #include \"ftcerror.h\"\n \n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42534620-vul",
+      "digest": "sha256:35b5521cd1aa3e71d419b67d25c13de6814fe8427112ab1d3587e9cc2dfb6f12"
+    },
+    "patched": {
+      "ref": "n132/arvo:42534620-fix",
+      "digest": "sha256:309ad44bc8f2bc30c68a6b7f8a328270631a1da25c10623efb9c08d29097618c"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/xpdf-4.05/xpdf/Catalog.cc:302",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/xpdf-4.05/xpdf/Catalog.cc:302"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

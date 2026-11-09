@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042470954",
+  "chain": "CWE-1284->CWE-125",
+  "project": "openvswitch",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42470954",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "33a3ee6b39acd9799301ec6cc0069bc9e4b4428b",
+      "fix_commits": [
+        "33a3ee6b39acd9799301ec6cc0069bc9e4b4428b"
+      ],
+      "repo": "https://github.com/openvswitch/ovs"
+    },
+    "patch": "diff --git a/lib/odp-util.c b/lib/odp-util.c\nindex 627baaa397e..bb6669b37af 100644\n--- a/lib/odp-util.c\n+++ b/lib/odp-util.c\n@@ -2111,9 +2111,9 @@ parse_odp_push_nsh_action(const char *s, struct ofpbuf *actions)\n             struct ofpbuf b;\n             char buf[512];\n             size_t mdlen, padding;\n-            if (ovs_scan_len(s, &n, \"md2=0x%511[0-9a-fA-F]\", buf)) {\n-                ofpbuf_use_stub(&b, metadata,\n-                                NSH_CTX_HDRS_MAX_LEN);\n+            if (ovs_scan_len(s, &n, \"md2=0x%511[0-9a-fA-F]\", buf)\n+                && n/2 <= sizeof metadata) {\n+                ofpbuf_use_stub(&b, metadata, sizeof metadata);\n                 ofpbuf_put_hex(&b, buf, &mdlen);\n                 /* Pad metadata to 4 bytes. */\n                 padding = PAD_SIZE(mdlen, 4);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42470954-vul",
+      "digest": "sha256:4070045b621a2d8eaf8baf1045db438723e76851d8a067ae17782b81579fe53f"
+    },
+    "patched": {
+      "ref": "n132/arvo:42470954-fix",
+      "digest": "sha256:fa1314d37adb3f0a49cea143e81a6fee2fac1092bf23764988606121b959cff6"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/openvswitch/./lib/util.h:173",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/openvswitch/./lib/util.h:173"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

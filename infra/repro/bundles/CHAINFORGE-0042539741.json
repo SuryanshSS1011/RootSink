@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042539741",
+  "chain": "CWE-1285->CWE-125",
+  "project": "wireshark",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42539741",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "f440561b8c49c7863191c1ff2b36debed4d8d620",
+      "fix_commits": [
+        "f440561b8c49c7863191c1ff2b36debed4d8d620"
+      ],
+      "repo": "https://github.com/wireshark/wireshark"
+    },
+    "patch": "diff --git a/epan/crypt/dot11decrypt.c b/epan/crypt/dot11decrypt.c\nindex 28b3815803f..5dc393fa815 100644\n--- a/epan/crypt/dot11decrypt.c\n+++ b/epan/crypt/dot11decrypt.c\n@@ -17,6 +17,7 @@\n #include <wsutil/crc32.h>\n #include <wsutil/pint.h>\n \n+#include <epan/proto.h> /* for DISSECTOR_ASSERT. */\n #include <epan/tvbuff.h>\n #include <epan/to_str.h>\n #include <epan/strutil.h>\n@@ -529,6 +530,10 @@ static INT Dot11DecryptScanForKeys(\n #endif\n     DOT11DECRYPT_DEBUG_TRACE_START(\"Dot11DecryptScanForKeys\");\n \n+    /* Callers provide these guarantees, so let's make them explicit. */\n+    DISSECTOR_ASSERT(tot_len >= mac_header_len + DOT11DECRYPT_CRYPTED_DATA_MINLEN);\n+    DISSECTOR_ASSERT(tot_len <= DOT11DECRYPT_MAX_CAPLEN);\n+\n     /* cache offset in the packet data */\n     offset = mac_header_len;\n \n@@ -633,7 +638,9 @@ static INT Dot11DecryptScanForKeys(\n         guint status, offset_rsne = 0, offset_fte = 0, offset_link = 0, offset_timeout = 0;\n         DOT11DECRYPT_DEBUG_PRINT_LINE(\"Dot11DecryptScanForKeys\", \"Authentication: TDLS Action Frame\", DOT11DECRYPT_DEBUG_LEVEL_3);\n \n-        /* skip LLC header */\n+        /* Skip LLC header, after this we have at least\n+         * DOT11DECRYPT_CRYPTED_DATA_MINLEN-10 = 7 bytes in \"data[offset]\". That\n+         * TDLS payload contains a TDLS Action field (802.11-2016 9.6.13) */\n         offset+=10;\n \n         /* check if the packet is a TDLS response or confirm */\n@@ -642,11 +649,11 @@ static INT Dot11DecryptScanForKeys(\n             DOT11DECRYPT_DEBUG_PRINT_LINE(\"Dot11DecryptScanForKeys\", \"Not Response nor confirm\", DOT11DECRYPT_DEBUG_LEVEL_3);\n             return DOT11DECRYPT_RET_NO_VALID_HANDSHAKE;\n         }\n-\n-        /* check status */\n         offset++;\n+\n+        /* Check for SUCCESS (0) or SUCCESS_POWER_SAVE_MODE (85) Status Code */\n         status=pntoh16(data+offset);\n-        if (status!=0) {\n+        if (status != 0 && status != 85) {\n             DOT11DECRYPT_DEBUG_PRINT_LINE(\"Dot11DecryptScanForKeys\", \"TDLS setup not successfull\", DOT11DECRYPT_DEBUG_LEVEL_3);\n             return DOT11DECRYPT_RET_NO_VALID_HANDSHAKE;\n         }\n@@ -657,20 +664,33 @@ static INT Dot11DecryptScanForKeys(\n         /* search for RSN, Fast BSS Transition, Link Identifier and Timeout Interval IEs */\n \n         while(offset < (tot_len - 2)) {\n-            if (data[offset] == 48) {\n+            guint8 element_id = data[offset];\n+            guint8 length = data[offset + 1];\n+            guint min_length = length;\n+            switch (element_id) {\n+            case 48:    /* RSN (802.11-2016 9.4.2.35) */\n                 offset_rsne = offset;\n-            } else if (data[offset] == 55) {\n+                min_length = 1;\n+                break;\n+            case 55:    /* FTE (802.11-2016 9.4.2.48) */\n                 offset_fte = offset;\n-            } else if (data[offset] == 56) {\n+                /* Plus variable length optional parameter(s) */\n+                min_length = 2 + 16 + 32 + 32;\n+                break;\n+            case 56:    /* Timeout Interval (802.11-2016 9.4.2.49) */\n                 offset_timeout = offset;\n-            } else if (data[offset] == 101) {\n+                min_length = 1 + 4;\n+                break;\n+            case 101:   /* Link Identifier (802.11-2016 9.4.2.62) */\n                 offset_link = offset;\n+                min_length = 6 + 6 + 6;\n+                break;\n             }\n \n-            if (tot_len < offset + data[offset + 1] + 2) {\n+            if (length < min_length || tot_len < offset + 2 + length) {\n                 return DOT11DECRYPT_RET_NO_VALID_HANDSHAKE;\n             }\n-            offset += data[offset + 1] + 2;\n+            offset += 2 + length;\n         }\n \n         if (offset_rsne == 0 || offset_fte == 0 ||\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42539741-vul",
+      "digest": "sha256:bc8017ae39bb762bae58b6fd8d58f01a535485fce8bb98d78ab43b13917f2816"
+    },
+    "patched": {
+      "ref": "n132/arvo:42539741-fix",
+      "digest": "sha256:d27599a21651a39ff8ce8193d948f5875b5d6fc7755954b52440fa6b243e9999"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/wireshark/epan/crypt/dot11decrypt.c:2187",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/wireshark/epan/crypt/dot11decrypt.c:2187"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

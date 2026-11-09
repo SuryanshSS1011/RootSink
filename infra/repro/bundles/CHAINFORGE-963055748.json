@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-963055748",
+  "chain": "CWE-456->CWE-457",
+  "project": "harfbuzz",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42498403",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/harfbuzz/harfbuzz/commit/5f50f8837f918ca1d176355d1538e0e6c9703f41",
+      "fix_commits": [
+        "5f50f8837f918ca1d176355d1538e0e6c9703f41"
+      ],
+      "repo": "https://github.com/harfbuzz/harfbuzz"
+    },
+    "patch": "diff --git a/src/hb-ot-shape-complex-arabic.cc b/src/hb-ot-shape-complex-arabic.cc\nindex 28dd4e1fe2b..f7419611203 100644\n--- a/src/hb-ot-shape-complex-arabic.cc\n+++ b/src/hb-ot-shape-complex-arabic.cc\n@@ -676,7 +676,7 @@ reorder_marks_arabic (const hb_ot_shape_plan_t *plan,\n     DEBUG_MSG (ARABIC, buffer, \"Shifting %d's: %d %d\\n\", cc, i, j);\n     hb_glyph_info_t temp[HB_OT_SHAPE_COMPLEX_MAX_COMBINING_MARKS];\n     assert (j - i <= ARRAY_LENGTH (temp));\n-    buffer->merge_out_clusters (start, j);\n+    buffer->merge_clusters (start, j);\n     memmove (temp, &info[i], (j - i) * sizeof (hb_glyph_info_t));\n     memmove (&info[start + j - i], &info[start], (i - start) * sizeof (hb_glyph_info_t));\n     memmove (&info[start], temp, (j - i) * sizeof (hb_glyph_info_t));\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42498403-vul",
+      "digest": "sha256:5aac23678125d1fad1126d5736ad476cb8b4aa3f6259de774f60aeefea280c81"
+    },
+    "patched": {
+      "ref": "n132/arvo:42498403-fix",
+      "digest": "sha256:06ce48ff12642f3a252b2193895adc17a40c26891c4401c547110787e30f6427"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/harfbuzz/src/hb-buffer.cc:591",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/harfbuzz/src/hb-buffer.cc:591"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

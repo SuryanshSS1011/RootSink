@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-959103175",
+  "chain": "CWE-129->CWE-125",
+  "project": "imagemagick",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42538918",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/imagemagick/imagemagick/commit/416a5756be8188c12fecd529a712fd9a7b78259c",
+      "fix_commits": [
+        "416a5756be8188c12fecd529a712fd9a7b78259c"
+      ],
+      "repo": "https://github.com/imagemagick/imagemagick"
+    },
+    "patch": "diff --git a/coders/pix.c b/coders/pix.c\nindex e0f43baadcc..cc2b9eb8da9 100644\n--- a/coders/pix.c\n+++ b/coders/pix.c\n@@ -157,6 +157,9 @@ static Image *ReadPIXImage(const ImageInfo *image_info,ExceptionInfo *exception)\n       if (image->scene >= (image_info->scene+image_info->number_scenes-1))\n         break;\n     status=SetImageExtent(image,image->columns,image->rows,exception);\n+    if (status == MagickFalse)\n+      return(DestroyImageList(image));\n+    status=ResetImagePixels(image,exception);\n     if (status == MagickFalse)\n       return(DestroyImageList(image));\n     /*\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42538918-vul",
+      "digest": "sha256:2e22f3c66cc178cc66dd7631bfa70684d2ccb6e54b568a89645413668b625885"
+    },
+    "patched": {
+      "ref": "n132/arvo:42538918-fix",
+      "digest": "sha256:4336c1a79279d1fbb11c2d0537f7abd889b74b7930ee0add1c2d08bc18880789"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "crash_site": "/src/libraw/internal/dcraw_common.cpp:2879",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 129,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "site": "/src/libraw/internal/dcraw_common.cpp:2879"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

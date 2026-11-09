@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042505804",
+  "chain": "CWE-20->CWE-125",
+  "project": "flatbuffers",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42505804",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "4264daadd2487cd3e63cf83f5dca3f0ccc53af64",
+      "fix_commits": [
+        "4264daadd2487cd3e63cf83f5dca3f0ccc53af64"
+      ],
+      "repo": "https://github.com/google/flatbuffers"
+    },
+    "patch": "diff --git a/include/flatbuffers/flexbuffers.h b/include/flatbuffers/flexbuffers.h\nindex d0859ff9a2..09e4d774d6 100644\n--- a/include/flatbuffers/flexbuffers.h\n+++ b/include/flatbuffers/flexbuffers.h\n@@ -1562,9 +1562,9 @@ class Builder FLATBUFFERS_FINAL_CLASS {\n         }\n       }\n     }\n-    // If you get this assert, your fixed types are not one of:\n+    // If you get this assert, your typed types are not one of:\n     // Int / UInt / Float / Key.\n-    FLATBUFFERS_ASSERT(!fixed || IsTypedVectorElementType(vector_type));\n+    FLATBUFFERS_ASSERT(!typed || IsTypedVectorElementType(vector_type));\n     auto byte_width = Align(bit_width);\n     // Write vector. First the keys width/offset if available, and size.\n     if (keys) {\n@@ -1619,9 +1619,10 @@ class Builder FLATBUFFERS_FINAL_CLASS {\n     explicit StringOffsetCompare(const std::vector<uint8_t> &buf)\n         : buf_(&buf) {}\n     bool operator()(const StringOffset &a, const StringOffset &b) const {\n-      auto stra = reinterpret_cast<const char *>(buf_->data() + a.first);\n-      auto strb = reinterpret_cast<const char *>(buf_->data() + b.first);\n-      return strncmp(stra, strb, (std::min)(a.second, b.second) + 1) < 0;\n+      auto stra = buf_->data() + a.first;\n+      auto strb = buf_->data() + b.first;\n+      auto cr = memcmp(stra, strb, (std::min)(a.second, b.second) + 1);\n+      return cr < 0 || (cr == 0 && a.second < b.second);\n     }\n     const std::vector<uint8_t> *buf_;\n   };\n@@ -1696,20 +1697,18 @@ class Verifier FLATBUFFERS_FINAL_CLASS {\n                  off <= static_cast<uint64_t>(p - buf_);\n   }\n \n-  bool AlreadyVerified(const uint8_t *p) {\n-    return reuse_tracker_ && (*reuse_tracker_)[p - buf_];\n-  }\n-\n-  void MarkVerified(const uint8_t *p) {\n-    if (reuse_tracker_)\n-      (*reuse_tracker_)[p - buf_] = true;\n+  bool CheckVerified(const uint8_t *p) {\n+    if (!reuse_tracker_) return false;\n+    if ((*reuse_tracker_)[p - buf_]) return true;\n+    (*reuse_tracker_)[p - buf_] = true;\n+    return false;\n   }\n \n   bool VerifyVector(const uint8_t *p, Type elem_type, uint8_t size_byte_width,\n                     uint8_t elem_byte_width) {\n     // Any kind of nesting goes thru this function, so guard against that\n     // here.\n-    if (AlreadyVerified(p))\n+    if (CheckVerified(p))\n       return true;\n     if (!VerifyBeforePointer(p, size_byte_width))\n       return false;\n@@ -1721,22 +1720,19 @@ class Verifier FLATBUFFERS_FINAL_CLASS {\n     auto byte_size = num_elems * elem_byte_width;\n     if (!VerifyFromPointer(p, byte_size))\n       return false;\n-    if (!IsInline(elem_type)) {\n-      if (elem_type == FBT_NULL) {\n-        // Verify type bytes after the vector.\n-        if (!VerifyFromPointer(p + byte_size, num_elems)) return false;\n-        auto v = Vector(p, size_byte_width);\n-        for (size_t i = 0; i < num_elems; i++)\n-          if (!VerifyRef(v[i])) return false;\n-      } else if (elem_type == FBT_KEY) {\n-        auto v = TypedVector(p, elem_byte_width, FBT_KEY);\n-        for (size_t i = 0; i < num_elems; i++)\n-          if (!VerifyRef(v[i])) return false;\n-      } else {\n-        FLATBUFFERS_ASSERT(false);\n-      }\n+    if (elem_type == FBT_NULL) {\n+      // Verify type bytes after the vector.\n+      if (!VerifyFromPointer(p + byte_size, num_elems)) return false;\n+      auto v = Vector(p, size_byte_width);\n+      for (size_t i = 0; i < num_elems; i++)\n+        if (!VerifyRef(v[i])) return false;\n+    } else if (elem_type == FBT_KEY) {\n+      auto v = TypedVector(p, elem_byte_width, FBT_KEY);\n+      for (size_t i = 0; i < num_elems; i++)\n+        if (!VerifyRef(v[i])) return false;\n+    } else {\n+      FLATBUFFERS_ASSERT(IsInline(elem_type));\n     }\n-    MarkVerified(p);\n     return true;\n   }\n \n@@ -1757,8 +1753,8 @@ class Verifier FLATBUFFERS_FINAL_CLASS {\n   }\n \n   bool VerifyKey(const uint8_t* p) {\n-    if (AlreadyVerified(p)) return true;\n-    MarkVerified(p);\n+    if (CheckVerified(p))\n+      return true;\n     while (p < buf_ + size_)\n       if (*p++) return true;\n     return false;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42505804-vul",
+      "digest": "sha256:b3273af419201f970d248ca0733a9e56d187351884e7b720ec9137112e1b3a29"
+    },
+    "patched": {
+      "ref": "n132/arvo:42505804-fix",
+      "digest": "sha256:ad68ae1647c5fd9de8202e780532d32cb2a1bb09595bd6ec1b14a462beda527c"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/flatbuffers/tests/fuzzer/../../include/flatbuffers/util.h:580",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/flatbuffers/tests/fuzzer/../../include/flatbuffers/util.h:580"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

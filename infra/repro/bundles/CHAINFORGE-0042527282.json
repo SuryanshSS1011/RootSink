@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042527282",
+  "chain": "CWE-1285->CWE-125",
+  "project": "ntopng",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42527282",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "92e1afc047c3063a0ff69219838138157f114c6f",
+      "fix_commits": [
+        "92e1afc047c3063a0ff69219838138157f114c6f"
+      ],
+      "repo": "https://github.com/ntop/ntopng"
+    },
+    "patch": "diff --git a/src/IEC104Stats.cpp b/src/IEC104Stats.cpp\nindex 3d0203fb8880..fbe4b73a5034 100644\n--- a/src/IEC104Stats.cpp\n+++ b/src/IEC104Stats.cpp\n@@ -65,13 +65,11 @@ void IEC104Stats::processPacket(Flow *f, bool tx_direction,\n     else\n       stats.reverse_msgs++;\n \n-    while (offset /* Skip START byte */ < payload_len) {\n+    while ((offset+1) /* Skip START byte */ < payload_len) {\n       /* https://infosys.beckhoff.com/english.php?content=../content/1033/tcplclibiec870_5_104/html/tcplclibiec870_5_104_objref_overview.htm&id\n        */\n-      u_int8_t len = payload[offset],\n-               pdu_type = ((payload[offset + 1] & 0x01) == 0)\n-                              ? 0\n-                              : (payload[offset + 1] & 0x03);\n+      u_int8_t len = payload[offset];\n+      u_int8_t pdu_type = ((payload[offset + 1] & 0x01) == 0) ? 0 : (payload[offset + 1] & 0x03);\n \n #ifdef DEBUG_IEC60870\n       ntop->getTrace()->traceEvent(TRACE_WARNING, \"[%s] %02X %02X %02X %02X\",\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42527282-vul",
+      "digest": "sha256:1d2c49c95d04339344320cddfe33ee2b634c64ea67084c653628efe69d608fe8"
+    },
+    "patched": {
+      "ref": "n132/arvo:42527282-fix",
+      "digest": "sha256:c5e4796e55f520bed84ad07b776a14ccf292ed7c32d1520d0381a82f430f5c3b"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/ntopng/src/IEC104Stats.cpp:72",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/ntopng/src/IEC104Stats.cpp:72"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

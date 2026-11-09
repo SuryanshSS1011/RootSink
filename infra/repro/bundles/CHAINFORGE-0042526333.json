@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042526333",
+  "chain": "CWE-20->CWE-787",
+  "project": "libraw",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42526333",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "3baa51068767ae2070c4661e00a3b77d5c3139b7",
+      "fix_commits": [
+        "3baa51068767ae2070c4661e00a3b77d5c3139b7"
+      ],
+      "repo": "https://github.com/libraw/libraw"
+    },
+    "patch": "diff --git a/src/demosaic/xtrans_demosaic.cpp b/src/demosaic/xtrans_demosaic.cpp\nindex 5dbc3c3f6..2d96c62ef 100644\n--- a/src/demosaic/xtrans_demosaic.cpp\n+++ b/src/demosaic/xtrans_demosaic.cpp\n@@ -265,6 +265,10 @@ void LibRaw::xtrans_interpolate(int passes)\n                 {\n                     rix = &rgb[0][row - top][col - left];\n                     int h = fcol(row, col + 1);\n+\n+\t\t\t\t\tif (h == 1) // Incorrect pattern\n+                      break;\n+\n                     float diff[6];\n                     memset(diff, 0, sizeof diff);\n                     for (int i = 1, d = 0; d < 6; d++, i ^= LIBRAW_AHD_TILE ^ 1, h ^= 2)\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42526333-vul",
+      "digest": "sha256:b6b3fd8f09c4bc2c317810e8a97a861b7837f7aa79d5cd6113bf01a28221b0e0"
+    },
+    "patched": {
+      "ref": "n132/arvo:42526333-fix",
+      "digest": "sha256:495df8cb6fd0876688cdb6c4051fbcc88cd609530bde72cc1352947730bfae4b"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/libraw/src/demosaic/xtrans_demosaic.cpp:275",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/libraw/src/demosaic/xtrans_demosaic.cpp:275"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

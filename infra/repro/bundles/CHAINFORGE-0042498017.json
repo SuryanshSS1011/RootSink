@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042498017",
+  "chain": "CWE-456->CWE-457",
+  "project": "libjxl",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42498017",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "4f97fa00ed1432e910817813b07f7d16817e353b",
+      "fix_commits": [
+        "4f97fa00ed1432e910817813b07f7d16817e353b"
+      ],
+      "repo": "https://github.com/libjxl/libjxl"
+    },
+    "patch": "From 4f97fa00ed1432e910817813b07f7d16817e353b Mon Sep 17 00:00:00 2001\nFrom: Evgenii Kliuchnikov <eustas@google.com>\nDate: Thu, 24 Jun 2021 11:23:53 +0000\nSubject: [PATCH] Fix another MSAN false-alarm.\n\nItems are processed lane-wise and stored element-wise (for last vector).\n---\n lib/jxl/dec_reconstruct.cc | 37 ++++++++++++++++++-------------------\n 1 file changed, 18 insertions(+), 19 deletions(-)\n\ndiff --git a/lib/jxl/dec_reconstruct.cc b/lib/jxl/dec_reconstruct.cc\nindex 8f62cf6..68cb06a 100644\n--- a/lib/jxl/dec_reconstruct.cc\n+++ b/lib/jxl/dec_reconstruct.cc\n@@ -226,25 +226,20 @@ void FloatToRGBA8(const Image3F& input, const Rect& input_rect, bool is_rgba,\n     auto zero = Zero(d);\n     auto one = Set(d, 1.0f);\n     auto mul = Set(d, 255.0f);\n-#if MEMORY_SANITIZER\n-    // Avoid use-of-uninitialized-value for loads past the end of the image's\n-    // initialized data.\n-    auto safe_load = [&](const float* ptr, size_t x) {\n-      uint32_t kMask[8] = {~0u, ~0u, ~0u, ~0u, 0, 0, 0, 0};\n-      size_t n = std::min<size_t>(Lanes(d), output_buf_rect.xsize() - x);\n-      auto mask = BitCast(d, LoadU(du, kMask + Lanes(d) - n));\n-      return Load(d, ptr + x) & mask;\n-    };\n-#else\n-    auto safe_load = [](const float* ptr, size_t x) {\n-      return Load(D(), ptr + x);\n-    };\n-#endif\n-    for (size_t x = 0; x < output_buf_rect.xsize(); x += Lanes(d)) {\n-      auto rf = Clamp(zero, safe_load(row_in_r, x), one) * mul;\n-      auto gf = Clamp(zero, safe_load(row_in_g, x), one) * mul;\n-      auto bf = Clamp(zero, safe_load(row_in_b, x), one) * mul;\n-      auto af = row_in_a ? Clamp(zero, safe_load(row_in_a, x), one) * mul\n+\n+    // All calculations are lane-wise, still some might require value-dependent\n+    // behaviour (e.g. NearestInt). Temporary unposion last vector tail.\n+    size_t xsize = output_buf_rect.xsize();\n+    size_t xsize_v = RoundUpTo(xsize, Lanes(d));\n+    UnpoisonMemory(row_in_r + xsize, sizeof(float) * (xsize_v - xsize));\n+    UnpoisonMemory(row_in_g + xsize, sizeof(float) * (xsize_v - xsize));\n+    UnpoisonMemory(row_in_b + xsize, sizeof(float) * (xsize_v - xsize));\n+    UnpoisonMemory(row_in_a + xsize, sizeof(float) * (xsize_v - xsize));\n+    for (size_t x = 0; x < xsize; x += Lanes(d)) {\n+      auto rf = Clamp(zero, Load(d, row_in_r + x), one) * mul;\n+      auto gf = Clamp(zero, Load(d, row_in_g + x), one) * mul;\n+      auto bf = Clamp(zero, Load(d, row_in_b + x), one) * mul;\n+      auto af = row_in_a ? Clamp(zero, Load(d, row_in_a + x), one) * mul\n                          : Set(d, 255.0f);\n       auto r8 = U8FromU32(BitCast(du, NearestInt(rf)));\n       auto g8 = U8FromU32(BitCast(du, NearestInt(gf)));\n@@ -259,6 +254,10 @@ void FloatToRGBA8(const Image3F& input, const Rect& input_rect, bool is_rgba,\n                   output_buf + base_ptr + bytes * x);\n       }\n     }\n+    PoisonMemory(row_in_r + xsize, sizeof(float) * (xsize_v - xsize));\n+    PoisonMemory(row_in_g + xsize, sizeof(float) * (xsize_v - xsize));\n+    PoisonMemory(row_in_b + xsize, sizeof(float) * (xsize_v - xsize));\n+    PoisonMemory(row_in_a + xsize, sizeof(float) * (xsize_v - xsize));\n   }\n }\n \n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42498017-vul",
+      "digest": "sha256:d8d687c6f892d1956c9a2318b6388bdfc4b7ee7d297c8cb2044d3036f1d43893"
+    },
+    "patched": {
+      "ref": "n132/arvo:42498017-fix",
+      "digest": "sha256:ad543a0362e9a9901e5666f98cb3c0029867c12c209bba60fa7af25476a4b66d"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/libjxl/third_party/highway/hwy/ops/x86_128-inl.h:3075",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/libjxl/third_party/highway/hwy/ops/x86_128-inl.h:3075"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

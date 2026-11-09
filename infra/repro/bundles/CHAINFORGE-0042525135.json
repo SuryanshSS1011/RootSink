@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042525135",
+  "chain": "CWE-1285->CWE-125",
+  "project": "PcapPlusPlus",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42525135",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "0725fa175ab2a7cb78a6c48d3b4d113eb7221810",
+      "fix_commits": [
+        "0725fa175ab2a7cb78a6c48d3b4d113eb7221810"
+      ],
+      "repo": "https://github.com/seladb/PcapPlusPlus"
+    },
+    "patch": "diff --git a/Packet++/header/TLVData.h b/Packet++/header/TLVData.h\nindex 1e4d79c335..f1731e4388 100644\n--- a/Packet++/header/TLVData.h\n+++ b/Packet++/header/TLVData.h\n@@ -288,18 +288,18 @@ namespace pcpp\n \t\t\tif (record.isNull())\n \t\t\t\treturn resRec;\n \n-\t\t\t// record pointer is out-bounds of the TLV records memory\n-\t\t\tif ((record.getRecordBasePtr() - tlvDataBasePtr) < 0)\n-\t\t\t\treturn resRec;\n-\n-\t\t\t// record pointer is out-bounds of the TLV records memory\n-\t\t\tif (record.getRecordBasePtr() - tlvDataBasePtr + (int)record.getTotalSize() >= (int)tlvDataLen)\n-\t\t\t\treturn resRec;\n-\n \t\t\tresRec.assign(record.getRecordBasePtr() + record.getTotalSize());\n \t\t\tif (resRec.getTotalSize() == 0)\n \t\t\t\tresRec.assign(NULL);\n \n+\t\t\t// resRec pointer is out-bounds of the TLV records memory\n+\t\t\tif ((resRec.getRecordBasePtr() - tlvDataBasePtr) < 0)\n+\t\t\t\tresRec.assign(NULL);\n+\n+\t\t\t// resRec pointer is out-bounds of the TLV records memory\n+\t\t\tif (!resRec.isNull() && resRec.getRecordBasePtr() + resRec.getTotalSize() > tlvDataBasePtr + tlvDataLen)\n+\t\t\t\tresRec.assign(NULL);\n+\n \t\t\treturn resRec;\n \t\t}\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42525135-vul",
+      "digest": "sha256:ab2fcd75ddfce846ea7fd7dc31f6bea993940f5ca9e87e536906083fc27aa7d8"
+    },
+    "patched": {
+      "ref": "n132/arvo:42525135-fix",
+      "digest": "sha256:0743c251d90818d40e99f6e69cee27adc36c73e92446a06c50966302d948ebcb"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/PcapPlusPlus/Packet++/header/IPv4Layer.h:491",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/PcapPlusPlus/Packet++/header/IPv4Layer.h:491"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

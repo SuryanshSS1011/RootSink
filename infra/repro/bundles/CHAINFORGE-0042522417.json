@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042522417",
+  "chain": "CWE-20->CWE-125",
+  "project": "p11-kit",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42522417",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "d7c318845405fa7ea33154082b437e4a87ee3699",
+      "fix_commits": [
+        "d7c318845405fa7ea33154082b437e4a87ee3699"
+      ],
+      "repo": "https://github.com/p11-glue/p11-kit"
+    },
+    "patch": "diff --git a/p11-kit/virtual.c b/p11-kit/virtual.c\nindex 8b91ca75..7da527c4 100644\n--- a/p11-kit/virtual.c\n+++ b/p11-kit/virtual.c\n@@ -3415,6 +3415,8 @@ base_C_MessageSignFinal (CK_X_FUNCTION_LIST *self,\n {\n \tp11_virtual *virt = (p11_virtual *)self;\n \tCK_FUNCTION_LIST_3_0 *funcs = virt->lower_module;\n+\tif (funcs->version.major < 3)\n+\t\treturn CKR_FUNCTION_NOT_SUPPORTED;\n \treturn funcs->C_MessageSignFinal (session);\n }\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42522417-vul",
+      "digest": "sha256:9cfb6a9bd06a8f42191e2d1cad74068cf7f419c1835a29b135c37ee4510eef20"
+    },
+    "patched": {
+      "ref": "n132/arvo:42522417-fix",
+      "digest": "sha256:2989462a2246cbb380ae91664fc0a9fa3800acd167768be33fb868efb54fc8ef"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "global-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/p11-kit/p11-kit/virtual.c:3399",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "global-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/p11-kit/p11-kit/virtual.c:3399"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

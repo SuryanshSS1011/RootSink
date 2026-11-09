@@ -1,0 +1,82 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-30042526087",
+  "chain": "CWE-1285->CWE-190->CWE-125",
+  "project": "libdwarf",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42526087",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "c8c5073f35b1efdcc610ecf369c78f87fdd34714",
+      "fix_commits": [
+        "c8c5073f35b1efdcc610ecf369c78f87fdd34714"
+      ],
+      "repo": "https://github.com/davea42/libdwarf-code"
+    },
+    "patch": "diff --git a/src/lib/libdwarf/dwarf_line_table_reader_common.h b/src/lib/libdwarf/dwarf_line_table_reader_common.h\nindex bed58b33a..a0f61fcda 100644\n--- a/src/lib/libdwarf/dwarf_line_table_reader_common.h\n+++ b/src/lib/libdwarf/dwarf_line_table_reader_common.h\n@@ -28,6 +28,7 @@\n    Fifth Floor, Boston MA 02110-1301, USA.\n \n */\n+#include <stdio.h>\n \n /*  This is #included twice. Once for\n     libdwarf callers and one for dwarfdump which prints\n@@ -660,7 +661,24 @@ _dwarf_read_line_table_header(Dwarf_Debug dbg,\n         line_ptr += local_length_size;\n         /* Later tests will deal with the == case as required. */\n         if (line_ptr > line_ptr_end) {\n-            _dwarf_error(dbg, err, DW_DLE_LINE_OFFSET_BAD);\n+            _dwarf_error_string(dbg, err, DW_DLE_LINE_OFFSET_BAD,\n+                \"DW_DLE_LINE_OFFSET_BAD \"\n+                \"The line table pointer points past end \"\n+                \"of line table.\");\n+            return DW_DLV_ERROR;\n+        }\n+        if (actuals_table_offset > dbg->de_filesize) {\n+            _dwarf_error_string(dbg, err, DW_DLE_LINE_OFFSET_BAD,\n+                \"DW_DLE_LINE_OFFSET_BAD \"\n+                \"The line table actuals offset is larger than \"\n+                \" the size of the object file. Corrupt DWARF\");\n+            return DW_DLV_ERROR;\n+        }\n+        if ((line_ptr+actuals_table_offset) > line_ptr_end) {\n+            _dwarf_error_string(dbg, err, DW_DLE_LINE_OFFSET_BAD,\n+                \"DW_DLE_LINE_OFFSET_BAD \"\n+                \"The line table actuals offset is too large \"\n+                \"to be real.\"); \n             return DW_DLV_ERROR;\n         }\n     }\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42526087-vul",
+      "digest": "sha256:64d455499405575d8ce06ea76caa3ace3fe154b8c43074703a6a16b5838c7aaa"
+    },
+    "patched": {
+      "ref": "n132/arvo:42526087-fix",
+      "digest": "sha256:95ae8266c01a9c17000932f993dcb0954b50dfe34e26d7e13c380c87776f0590"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/libdwarf/src/lib/libdwarf/dwarf_line_table_reader_common.h:1229",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 190,
+      "role": "intermediate",
+      "witness": {
+        "method": "ubsan-rebuild",
+        "recipe": "SANITIZER=undefined compile && $ENTRYPOINT",
+        "ubsan_options": "print_stacktrace=1:halt_on_error=0:silence_unsigned_overflow=0:symbolize=1"
+      },
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/libdwarf/src/lib/libdwarf/dwarf_line_table_reader_common.h:1229"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

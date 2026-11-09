@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042470283",
+  "chain": "CWE-20->CWE-787",
+  "project": "aom",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42470283",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "32017745b0b4cb6d69ced6250dd67d9faf6282f8",
+      "fix_commits": [
+        "32017745b0b4cb6d69ced6250dd67d9faf6282f8"
+      ],
+      "repo": "https://aomedia.googlesource.com/aom"
+    },
+    "patch": "diff --git a/av1/common/thread_common.c b/av1/common/thread_common.c\nindex 1206cdd..8df4c9a 100644\n--- a/av1/common/thread_common.c\n+++ b/av1/common/thread_common.c\n@@ -716,10 +716,12 @@\n   int num_rows_lr = 0;\n \n   for (int plane = 0; plane < num_planes; plane++) {\n+    if (cm->rst_info[plane].frame_restoration_type == RESTORE_NONE) continue;\n+\n     const AV1PixelRect tile_rect = ctxt[plane].tile_rect;\n     const int max_tile_h = tile_rect.bottom - tile_rect.top;\n \n-    const int unit_size = cm->seq_params.sb_size == BLOCK_128X128 ? 128 : 64;\n+    const int unit_size = cm->rst_info[plane].restoration_unit_size;\n \n     num_rows_lr =\n         AOMMAX(num_rows_lr, av1_lr_count_units_in_tile(unit_size, max_tile_h));\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42470283-vul",
+      "digest": "sha256:8f22a353d84b021ca8c5dabb1311d8b17e7d688bec7d1177741a95fc59d87f40"
+    },
+    "patched": {
+      "ref": "n132/arvo:42470283-fix",
+      "digest": "sha256:ad6c8872a844e8baa315663c2e10cbcb90145d5eb8be409e4557e2d3ffc97481"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/aom/av1/common/thread_common.c:599",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/aom/av1/common/thread_common.c:599"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,82 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-30042528658",
+  "chain": "CWE-1284->CWE-190->CWE-125",
+  "project": "mruby",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42528658",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "097681b4d458899dff945138ea39ae125df3e16a",
+      "fix_commits": [
+        "097681b4d458899dff945138ea39ae125df3e16a"
+      ],
+      "repo": "https://github.com/mruby/mruby"
+    },
+    "patch": "diff --git a/mrbgems/mruby-pack/src/pack.c b/mrbgems/mruby-pack/src/pack.c\nindex 26c2890b07..08db9091b9 100644\n--- a/mrbgems/mruby-pack/src/pack.c\n+++ b/mrbgems/mruby-pack/src/pack.c\n@@ -921,7 +921,7 @@ unpack_bstr(mrb_state *mrb, const void *src, int slen, mrb_value ary, int count,\n \n   const char *sptr0 = (const char*)src;\n   const char *sptr = sptr0;\n-  if (count == -1)\n+  if (count == -1 || count > slen * 8)\n     count = slen * 8;\n \n   mrb_value dst = mrb_str_new(mrb, NULL, count);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42528658-vul",
+      "digest": "sha256:4d8ddf0c51f44f43783d7279a8117cb661756549a96deb8f32540aebe695d5ae"
+    },
+    "patched": {
+      "ref": "n132/arvo:42528658-fix",
+      "digest": "sha256:f7ef5d7f4bc521901f1ffb10068dcbb1879e221380288771cdeba7d4ad2ed979"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/mruby/mrbgems/mruby-pack/src/pack.c:940",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 190,
+      "role": "intermediate",
+      "witness": {
+        "method": "ubsan-rebuild",
+        "recipe": "SANITIZER=undefined compile && $ENTRYPOINT",
+        "ubsan_options": "print_stacktrace=1:halt_on_error=0:silence_unsigned_overflow=0:symbolize=1"
+      },
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/mruby/mrbgems/mruby-pack/src/pack.c:940"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

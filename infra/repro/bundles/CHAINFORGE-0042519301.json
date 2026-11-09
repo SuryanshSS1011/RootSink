@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042519301",
+  "chain": "CWE-20->CWE-787",
+  "project": "binutils-preconditions",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42519301",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "316f735a0e5c11295549a47145a8dbc91d5b95f1",
+      "fix_commits": [
+        "316f735a0e5c11295549a47145a8dbc91d5b95f1"
+      ],
+      "repo": "https://github.com/DavidKorczynski/binutils-preconditions"
+    },
+    "patch": "diff --git a/ada_addr2line.h b/ada_addr2line.h\nindex d58cfee..396dae3 100644\n--- a/ada_addr2line.h\n+++ b/ada_addr2line.h\n@@ -70,6 +70,7 @@ int fuzz_preconditions_check(const char *file_name, const char *target) {\n   }\n \n   if (! bfd_check_format_matches (abfd, bfd_object, &matching)) {\n+    free (matching);\n     bfd_close(abfd);\n     return 0;\n   }\n@@ -79,4 +80,3 @@ int fuzz_preconditions_check(const char *file_name, const char *target) {\n   bfd_close(abfd);\n   return retval;\n }\n-\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42519301-vul",
+      "digest": "sha256:b3f4d2b3eea3274e8d3b2779208009ca27f94b932309dd0c0fc65335578444c7"
+    },
+    "patched": {
+      "ref": "n132/arvo:42519301-fix",
+      "digest": "sha256:06f051fb6b776a39188346a050b96db221cb8e83cb2449885a6faa71f108156a"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/binutils-gdb/bfd/libbfd.c:633",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/binutils-gdb/bfd/libbfd.c:633"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

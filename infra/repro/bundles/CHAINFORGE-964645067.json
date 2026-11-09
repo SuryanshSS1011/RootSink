@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-964645067",
+  "chain": "CWE-456->CWE-457",
+  "project": "flac",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42511668",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/xiph/flac/commit/69cf76c58e797d093cea73b1f8ad1ff55ec2786d",
+      "fix_commits": [
+        "69cf76c58e797d093cea73b1f8ad1ff55ec2786d"
+      ],
+      "repo": "https://github.com/xiph/flac"
+    },
+    "patch": "diff --git a/src/libFLAC/stream_decoder.c b/src/libFLAC/stream_decoder.c\nindex afc3923a28..f085e3be3d 100644\n--- a/src/libFLAC/stream_decoder.c\n+++ b/src/libFLAC/stream_decoder.c\n@@ -1525,7 +1525,8 @@ FLAC__bool read_metadata_(FLAC__StreamDecoder *decoder)\n \t\t\t\t * We cannot know whether the length or the content was\n \t\t\t\t * corrupt, so stop parsing metadata */\n \t\t\t\tsend_error_to_client_(decoder, FLAC__STREAM_DECODER_ERROR_STATUS_BAD_METADATA);\n-\t\t\t\tdecoder->protected_->state = FLAC__STREAM_DECODER_SEARCH_FOR_FRAME_SYNC;\n+\t\t\t\tif(decoder->protected_->state == FLAC__STREAM_DECODER_READ_METADATA)\n+\t\t\t\t\tdecoder->protected_->state = FLAC__STREAM_DECODER_SEARCH_FOR_FRAME_SYNC;\n \t\t\t\tok = false;\n \t\t\t}\n \t\t\tFLAC__bitreader_remove_limit(decoder->private_->input);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42511668-vul",
+      "digest": "sha256:125743aaed2d989be978408a6d06965950a3d7c423ba69e911877a03e4f1f1ac"
+    },
+    "patched": {
+      "ref": "n132/arvo:42511668-fix",
+      "digest": "sha256:760ec53c08b6ae12f45cc60c94c757996383c0ea47e8eb3b95fca010f0545208"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/flac/src/libFLAC/stream_decoder.c:2019",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/flac/src/libFLAC/stream_decoder.c:2019"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

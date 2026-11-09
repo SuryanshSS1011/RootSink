@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042479691",
+  "chain": "CWE-1284->CWE-125",
+  "project": "ndpi",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42479691",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "6d7f3976f33b0d4fbbece60d6b7d549b13107674",
+      "fix_commits": [
+        "6d7f3976f33b0d4fbbece60d6b7d549b13107674"
+      ],
+      "repo": "https://github.com/ntop/nDPI"
+    },
+    "patch": "diff --git a/src/lib/protocols/dns.c b/src/lib/protocols/dns.c\nindex 3fbb399156f..6ef1b951738 100644\n--- a/src/lib/protocols/dns.c\n+++ b/src/lib/protocols/dns.c\n@@ -279,8 +279,11 @@ static void ndpi_search_dns(struct ndpi_detection_module_struct *ndpi_struct, st\n       if(j && j < max_len) flow->host_server_name[j++] = '.';\n \n       while(j < max_len && cl != 0) {\n+\tu_int32_t shift;\n+\t\n \tc = flow->packet.payload[off++];\n-\tflow->host_server_name[j++] = tolower((dns_validchar[c >> 5] & (1 << (c & 0x1f))) ? c : '_');\n+\tshift = 1 << (c & 0x1f);\n+\tflow->host_server_name[j++] = tolower((dns_validchar[c >> 5] & shift) ? c : '_');\n \tcl--;\n       }\n     }\ndiff --git a/src/lib/protocols/stun.c b/src/lib/protocols/stun.c\nindex e95965f6b9a..d5114204fc5 100644\n--- a/src/lib/protocols/stun.c\n+++ b/src/lib/protocols/stun.c\n@@ -350,9 +350,13 @@ static ndpi_int_stun_t ndpi_int_check_stun(struct ndpi_detection_module_struct *\n \n             memset(flow->host_server_name, 0, sizeof(flow->host_server_name));\n \n-            for(j=0; j<i; j++)\n-              flow->host_server_name[j] = payload[k++];\n-\n+            for(j=0; j<i; j++) {\n+\t      if((k+i) < payload_length)\n+\t\tflow->host_server_name[j] = payload[k++];\n+\t      else\n+\t\tbreak;\n+\t    }\n+\t    \n #ifdef DEBUG_STUN\n             printf(\"==> [%s]\\n\", flow->host_server_name);\n #endif\ndiff --git a/src/lib/protocols/tls.c b/src/lib/protocols/tls.c\nindex fb9ad4c454a..f46686bb9ca 100644\n--- a/src/lib/protocols/tls.c\n+++ b/src/lib/protocols/tls.c\n@@ -593,14 +593,17 @@ int getTLScertificate(struct ndpi_detection_module_struct *ndpi_struct,\n \n \t\t      len = (packet->payload[offset+extension_offset+3] << 8) + packet->payload[offset+extension_offset+4];\n \t\t      len = (u_int)ndpi_min(len, buffer_len-1);\n-\t\t      strncpy(buffer, (char*)&packet->payload[offset+extension_offset+5], len);\n-\t\t      buffer[len] = '\\0';\n \n-\t\t      stripCertificateTrailer(buffer, buffer_len);\n-\n-\t\t      if(!ndpi_struct->disable_metadata_export) {\n-\t\t\tsnprintf(flow->protos.stun_ssl.ssl.client_certificate,\n-\t\t\t\t sizeof(flow->protos.stun_ssl.ssl.client_certificate), \"%s\", buffer);\n+\t\t      if((offset+extension_offset+5+len) < packet->payload_packet_len) {\n+\t\t\tstrncpy(buffer, (char*)&packet->payload[offset+extension_offset+5], len);\n+\t\t\tbuffer[len] = '\\0';\n+\t\t\t\n+\t\t\tstripCertificateTrailer(buffer, buffer_len);\n+\t\t\t\n+\t\t\tif(!ndpi_struct->disable_metadata_export) {\n+\t\t\t  snprintf(flow->protos.stun_ssl.ssl.client_certificate,\n+\t\t\t\t   sizeof(flow->protos.stun_ssl.ssl.client_certificate), \"%s\", buffer);\n+\t\t\t}\n \t\t      }\n \t\t    } else if(extension_id == 10 /* supported groups */) {\n \t\t      u_int16_t s_offset = offset+extension_offset + 2;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42479691-vul",
+      "digest": "sha256:96bf4d0d86ee63d027b6b6165e97c0341438a75fb5bf2682fc342d9de60eeace"
+    },
+    "patched": {
+      "ref": "n132/arvo:42479691-fix",
+      "digest": "sha256:470cad36b9b1272fc42feb14bdfbd1252cb0d0bd5abfb24bf556073245b5720a"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/ndpi/src/lib/protocols/stun.c:354",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/ndpi/src/lib/protocols/stun.c:354"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

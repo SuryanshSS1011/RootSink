@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042493540",
+  "chain": "CWE-20->CWE-787",
+  "project": "ffmpeg",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42493540",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "87d87e6587deec1fa8ed5f5c6901535becdb0358",
+      "fix_commits": [
+        "87d87e6587deec1fa8ed5f5c6901535becdb0358"
+      ],
+      "repo": "https://git.ffmpeg.org/ffmpeg.git"
+    },
+    "patch": "From 87d87e6587deec1fa8ed5f5c6901535becdb0358 Mon Sep 17 00:00:00 2001\nFrom: Michael Niedermayer <michael@niedermayer.cc>\nDate: Mon, 22 Mar 2021 15:22:35 +0100\nSubject: [PATCH] avcodec/mpegvideo: Update chroma_?_shift in\n ff_mpv_common_frame_size_change()\n\nFixes: out of array access\nFixes: 31201/clusterfuzz-testcase-minimized-ffmpeg_AV_CODEC_ID_MPEG4_fuzzer-4627865612189696.fuzz\n\nFound-by: continuous fuzzing process https://github.com/google/oss-fuzz/tree/master/projects/ffmpeg\nSigned-off-by: Michael Niedermayer <michael@niedermayer.cc>\n---\n libavcodec/mpegvideo.c | 7 +++++++\n 1 file changed, 7 insertions(+)\n\ndiff --git a/libavcodec/mpegvideo.c b/libavcodec/mpegvideo.c\nindex 988dd18..728e591 100644\n--- a/libavcodec/mpegvideo.c\n+++ b/libavcodec/mpegvideo.c\n@@ -1069,6 +1069,13 @@ int ff_mpv_common_frame_size_change(MpegEncContext *s)\n         (err = av_image_check_size(s->width, s->height, 0, s->avctx)) < 0)\n         return err;\n \n+    /* set chroma shifts */\n+    err = av_pix_fmt_get_chroma_sub_sample(s->avctx->pix_fmt,\n+                                           &s->chroma_x_shift,\n+                                           &s->chroma_y_shift);\n+    if (err < 0)\n+        return err;\n+\n     if ((err = init_context_frame(s)))\n         return err;\n \n-- \n2.55.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42493540-vul",
+      "digest": "sha256:634d567d12dbc841f3b1b9e5b3c8031f999d1cccf681e4f90693d2b9f0130731"
+    },
+    "patched": {
+      "ref": "n132/arvo:42493540-fix",
+      "digest": "sha256:511f78c3e214e41f49d3dd2abce9f463841d3b2f1d69f48e857ef3dbbd2e2830"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/ffmpeg/libavcodec/simple_idct_template.c:285",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/ffmpeg/libavcodec/simple_idct_template.c:285"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042502057",
+  "chain": "CWE-1285->CWE-125",
+  "project": "sleuthkit",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42502057",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "675093ee08b1cc970419946760ca6340edfca272",
+      "fix_commits": [
+        "675093ee08b1cc970419946760ca6340edfca272"
+      ],
+      "repo": "https://github.com/sleuthkit/sleuthkit"
+    },
+    "patch": "diff --git a/tsk/fs/ext2fs.c b/tsk/fs/ext2fs.c\nindex 9039b696a4..5ca571b274 100755\n--- a/tsk/fs/ext2fs.c\n+++ b/tsk/fs/ext2fs.c\n@@ -637,7 +637,7 @@ ext4_load_attrs_inline(TSK_FS_FILE *fs_file, const uint8_t * ea_buf, size_t ea_b\n                 // The offset is from the beginning of the entries, i.e., four bytes into the buffer.\n                 uint16_t offset = tsk_getu16(fs_file->fs_info->endian, ea_entry->val_off);\n                 uint32_t size = tsk_getu32(fs_file->fs_info->endian, ea_entry->val_size);\n-                if (4 + offset + size <= ea_buf_len) {\n+                if ((ea_buf_len >= 4) && (offset < ea_buf_len - 4) && (size <= ea_buf_len - 4 - offset)) {\n                     ea_inline_data = &(ea_buf[4 + offset]);\n                     ea_inline_data_len = size;\n                     break;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42502057-vul",
+      "digest": "sha256:846ff8dc5381732f9a0c66492756369397fa167c7d04239350ccab713724194a"
+    },
+    "patched": {
+      "ref": "n132/arvo:42502057-fix",
+      "digest": "sha256:c0d0a9e9c1f63f4a5ed6179363930585fe7663ff7f2622607046b4912aa7181e"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/sleuthkit/tsk/fs/ext2fs.c:674",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/sleuthkit/tsk/fs/ext2fs.c:674"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

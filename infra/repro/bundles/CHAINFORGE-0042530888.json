@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042530888",
+  "chain": "CWE-1284->CWE-125",
+  "project": "curl",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42530888",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "d52dc4760f6d9ca1937eefa2093058a952465128",
+      "fix_commits": [
+        "d52dc4760f6d9ca1937eefa2093058a952465128"
+      ],
+      "repo": "https://github.com/curl/curl"
+    },
+    "patch": "diff --git a/lib/transfer.c b/lib/transfer.c\nindex c46ac25f4ba7..fd9af315594c 100644\n--- a/lib/transfer.c\n+++ b/lib/transfer.c\n@@ -808,10 +808,15 @@ static CURLcode readwrite_data(struct Curl_easy *data,\n \n     } /* if(!header and data to read) */\n \n-    if(conn->handler->readwrite &&\n-       (excess > 0 && !conn->bits.stream_was_rewound)) {\n+    if(conn->handler->readwrite && excess && !conn->bits.stream_was_rewound) {\n       /* Parse the excess data */\n       k->str += nread;\n+\n+      if(&k->str[excess] > &k->buf[data->set.buffer_size]) {\n+        /* the excess amount was too excessive(!), make sure\n+           it doesn't read out of buffer */\n+        excess = &k->buf[data->set.buffer_size] - k->str;\n+      }\n       nread = (ssize_t)excess;\n \n       result = conn->handler->readwrite(data, conn, &nread, &readmore);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42530888-vul",
+      "digest": "sha256:922732432bf0f83c74d3552f9c936d7083a24d31212630ae6474bbe025167255"
+    },
+    "patched": {
+      "ref": "n132/arvo:42530888-fix",
+      "digest": "sha256:d2ba367e41bf9cc5acb794abdcec00ce716c418d94d97713ef79f7f3ad95a0b2"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/curl/lib/rtsp.c:716",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/curl/lib/rtsp.c:716"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

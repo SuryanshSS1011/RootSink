@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042522440",
+  "chain": "CWE-456->CWE-457",
+  "project": "libxml2",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42522440",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "62f199ed7d1c99999030810495bd12fd5b86fee1",
+      "fix_commits": [
+        "62f199ed7d1c99999030810495bd12fd5b86fee1"
+      ],
+      "repo": "https://gitlab.gnome.org/GNOME/libxml2.git"
+    },
+    "patch": "From 62f199ed7d1c99999030810495bd12fd5b86fee1 Mon Sep 17 00:00:00 2001\nFrom: Nick Wellnhofer <wellnhofer@aevum.de>\nDate: Fri, 17 Mar 2023 12:40:46 +0100\nSubject: [PATCH] malloc-fail: Add error check in htmlParseHTMLAttribute\n\nThis function must return NULL is an error occurs.\n\nFound by OSS-Fuzz, see #344.\n---\n HTMLparser.c | 4 ++++\n 1 file changed, 4 insertions(+)\n\ndiff --git a/HTMLparser.c b/HTMLparser.c\nindex 67c3938..67253dc 100644\n--- a/HTMLparser.c\n+++ b/HTMLparser.c\n@@ -2844,6 +2844,10 @@ htmlParseHTMLAttribute(htmlParserCtxtPtr ctxt, const xmlChar stop) {\n \t\tout = &buffer[indx];\n \t    }\n \t    c = CUR_CHAR(l);\n+            if (ctxt->instate == XML_PARSER_EOF) {\n+                xmlFree(buffer);\n+                return(NULL);\n+            }\n \t    if      (c <    0x80)\n \t\t    { *out++  = c;                bits= -6; }\n \t    else if (c <   0x800)\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42522440-vul",
+      "digest": "sha256:1318393c9f7d49b45152fb37f416cee7de069eb93477326fe78c29db74a6e26b"
+    },
+    "patched": {
+      "ref": "n132/arvo:42522440-fix",
+      "digest": "sha256:b37066a582cb9b717e7f70f6bf901be306d54358bcbda94edf7de769dd203b86"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/libxml2/HTMLparser.c:2761",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/libxml2/HTMLparser.c:2761"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

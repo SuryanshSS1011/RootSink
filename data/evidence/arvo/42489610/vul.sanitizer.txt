@@ -1,0 +1,91 @@
+======================= INFO =========================
+This binary is built for AFL-fuzz.
+To run the target function on individual input(s) execute this:
+  /out/fuzzer-wolfssh-client < INPUT_FILE
+or
+  /out/fuzzer-wolfssh-client INPUT_FILE1 [INPUT_FILE2 ... ]
+To fuzz with afl-fuzz execute this:
+  afl-fuzz [afl-flags] /out/fuzzer-wolfssh-client [-N]
+afl-fuzz will run N iterations before re-spawning the process (default: 1000)
+======================================================
+Reading 4154 bytes from /tmp/poc
+=================================================================
+==1632743==ERROR: AddressSanitizer: stack-buffer-overflow on address 0x150d48e98878 at pc 0x000000589074 bp 0x7ffcf9086f50 sp 0x7ffcf9086f48
+READ of size 8 at 0x150d48e98878 thread T0
+SCARINESS: 38 (8-byte-read-stack-buffer-overflow)
+    #0 0x589073 in fp_read_unsigned_bin /src/wolf-ssl-ssh-fuzzers/oss-fuzz/projects/wolf-ssl-ssh/fuzzers/wolfssh/wolfssl/wolfcrypt/src/tfm.c:3639:3
+    #1 0x58a40a in mp_read_unsigned_bin /src/wolf-ssl-ssh-fuzzers/oss-fuzz/projects/wolf-ssl-ssh/fuzzers/wolfssh/wolfssl/wolfcrypt/src/tfm.c:4300:10
+    #2 0x564698 in wc_RsaPublicKeyDecodeRaw /src/wolf-ssl-ssh-fuzzers/oss-fuzz/projects/wolf-ssl-ssh/fuzzers/wolfssh/wolfssl/wolfcrypt/src/asn.c:4418:9
+    #3 0x4f6ad5 in DoKexDhReply /src/wolf-ssl-ssh-fuzzers/oss-fuzz/projects/wolf-ssl-ssh/fuzzers/wolfssh/wolfssh/src/internal.c:3003:23
+    #4 0x4e0058 in DoPacket /src/wolf-ssl-ssh-fuzzers/oss-fuzz/projects/wolf-ssl-ssh/fuzzers/wolfssh/wolfssh/src/internal.c
+    #5 0x4dddf0 in DoReceive /src/wolf-ssl-ssh-fuzzers/oss-fuzz/projects/wolf-ssl-ssh/fuzzers/wolfssh/wolfssh/src/internal.c:5882:23
+    #6 0x4d2398 in wolfSSH_connect /src/wolf-ssl-ssh-fuzzers/oss-fuzz/projects/wolf-ssl-ssh/fuzzers/wolfssh/wolfssh/src/ssh.c:744:21
+    #7 0x4ccfd0 in LLVMFuzzerTestOneInput /src/wolf-ssl-ssh-fuzzers/oss-fuzz/projects/wolf-ssl-ssh/fuzzers/wolfssh/wolfssh/wolfssh-fuzzers/client.c:35:17
+    #8 0x4cd84e in ExecuteFilesOnyByOne /src/libfuzzer/afl/afl_driver.cpp:207:5
+    #9 0x4cd84e in main /src/libfuzzer/afl/afl_driver.cpp:244:12
+    #10 0x150d47ddc83f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2083f)
+    #11 0x41e828 in _start (/out/fuzzer-wolfssh-client+0x41e828)
+
+DEDUP_TOKEN: fp_read_unsigned_bin--mp_read_unsigned_bin--wc_RsaPublicKeyDecodeRaw
+Address 0x150d48e98878 is located in stack of thread T0 at offset 120 in frame
+    #0 0x4f52bf in DoKexDhReply /src/wolf-ssl-ssh-fuzzers/oss-fuzz/projects/wolf-ssl-ssh/fuzzers/wolfssh/wolfssh/src/internal.c:2756
+
+DEDUP_TOKEN: DoKexDhReply
+  This frame has 21 object(s):
+    [32, 36) 'pubKeySz' (line 2759)
+    [48, 52) 'fSz' (line 2761)
+    [64, 68) 'sigSz' (line 2763)
+    [80, 84) 'scratch' (line 2764)
+    [96, 100) 'scratchLen' (line 2765)
+    [112, 113) 'kPad' (line 2766)
+    [128, 8952) 'sigKeyBlock' (line 2767) <== Memory access at offset 120 underflows this variable
+    [9216, 9220) 'begin' (line 2783)
+    [9232, 9236) 'eSz302' (line 2978)
+    [9248, 9252) 'nSz' (line 2980)
+    [9264, 9268) 'pubKeyIdx' (line 2981)
+    [9280, 9288) 'q' (line 3018)
+    [9312, 9316) 'qSz' (line 3019)
+    [9328, 9332) 'pubKeyIdx352' (line 3019)
+    [9344, 13768) 'key437' (line 3082)
+    [14032, 14040) 'r' (line 3195)
+    [14064, 14072) 's' (line 3196)
+    [14096, 14100) 'rSz' (line 3197)
+    [14112, 14116) 'sSz' (line 3197)
+    [14128, 14132) 'asnSigSz' (line 3197)
+    [14144, 14400) 'asnSig' (line 3198)
+HINT: this may be a false positive if your program uses some custom stack unwind mechanism, swapcontext or vfork
+      (longjmp and C++ exceptions *are* supported)
+SUMMARY: AddressSanitizer: stack-buffer-overflow /src/wolf-ssl-ssh-fuzzers/oss-fuzz/projects/wolf-ssl-ssh/fuzzers/wolfssh/wolfssl/wolfcrypt/src/tfm.c:3639:3 in fp_read_unsigned_bin
+Shadow bytes around the buggy address:
+  0x02a2291cb0b0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x02a2291cb0c0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x02a2291cb0d0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x02a2291cb0e0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x02a2291cb0f0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x02a2291cb100: f1 f1 f1 f1 04 f2 04 f2 04 f2 04 f2 04 f2 01[f2]
+  0x02a2291cb110: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x02a2291cb120: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x02a2291cb130: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x02a2291cb140: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x02a2291cb150: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+  Shadow gap:              cc
+==1632743==ABORTING

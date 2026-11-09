@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-968231229",
+  "chain": "CWE-456->CWE-457",
+  "project": "gnutls",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42493137",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://gitlab.com/gnutls/gnutls/-/commit/12897fd34dbd37a77e4adb60750344e451c44679",
+      "fix_commits": [
+        "12897fd34dbd37a77e4adb60750344e451c44679"
+      ],
+      "repo": "https://gitlab.com/gnutls/gnutls"
+    },
+    "patch": "diff --git a/configure.ac b/configure.ac\nindex cbaa5a9e97b2889c4b935b6577461452c87bac63..1be13664af61f30d8f6a2825d92d9f95ea85d526 100644\n--- a/configure.ac\n+++ b/configure.ac\n@@ -156,6 +156,12 @@ if test \"$use_accel\" != \"no\"; then\n case $host_cpu in\n   armv8 | aarch64)\n       hw_accel=\"aarch64\"\n+      case $host_os in\n+        *_ilp32)\n+\t  dnl ILP32 not supported in assembler yet\n+\t  hw_accel=\"none\"\n+        ;;\n+      esac\n   ;;\n   i?86 | x86_64 | amd64)\n       AC_CHECK_HEADERS(cpuid.h)\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42493137-vul",
+      "digest": "sha256:92ffe2c1cfc9e941a36bd9cc1c20591ce8f44221a5ce2c554929b234dfcd5726"
+    },
+    "patched": {
+      "ref": "n132/arvo:42493137-fix",
+      "digest": "sha256:b45c9e0a647ea47e14632008b1e955e34e3a11285cda447e31058434f942a729"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/gmp/mpn/tdiv_qr.c:113",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/gmp/mpn/tdiv_qr.c:113"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

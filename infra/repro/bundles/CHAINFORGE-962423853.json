@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-962423853",
+  "chain": "CWE-456->CWE-457",
+  "project": "lcms",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42515697",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/mm2/Little-CMS/commit/caab4c07e60022a0f776b543eaa30785e2bb42ed",
+      "fix_commits": [
+        "caab4c07e60022a0f776b543eaa30785e2bb42ed"
+      ],
+      "repo": "https://github.com/mm2/Little-CMS"
+    },
+    "patch": "diff --git a/src/cmssamp.c b/src/cmssamp.c\nindex f5957d168..124deffaa 100644\n--- a/src/cmssamp.c\n+++ b/src/cmssamp.c\n@@ -123,10 +123,9 @@ cmsBool  BlackPointAsDarkerColorant(cmsHPROFILE    hInput,\n     // Convert black to Lab\n     cmsDoTransform(xform, Black, &Lab, 1);\n \n-    // Force it to be neutral, clip to max. L* of 50\n+    // Force it to be neutral, check for inconsistences\n     Lab.a = Lab.b = 0;\n-    if (Lab.L > 50) Lab.L = 50;\n-    if (Lab.L < 0) Lab.L = 0;\n+    if (Lab.L > 50 || Lab.L < 0) Lab.L = 0;\n \n     // Free the resources\n     cmsDeleteTransform(xform);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42515697-vul",
+      "digest": "sha256:bedeba3899bd5583ad7e0c29d3c1616abab6f718af2d56d4e4c9b8e9497a791d"
+    },
+    "patched": {
+      "ref": "n132/arvo:42515697-fix",
+      "digest": "sha256:795c2b96fb7d8fc0c4da97c334da27ed679647df4be4a97aa89fa2332197b290"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/lcms/src/cmspack.c:1710",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/lcms/src/cmspack.c:1710"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

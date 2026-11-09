@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042517640",
+  "chain": "CWE-20->CWE-787",
+  "project": "libraw",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42517640",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "a50a568b786da111a0406e4861813949c0058bf4",
+      "fix_commits": [
+        "a50a568b786da111a0406e4861813949c0058bf4"
+      ],
+      "repo": "https://github.com/libraw/libraw"
+    },
+    "patch": "diff --git a/src/utils/open.cpp b/src/utils/open.cpp\nindex 7bb9645b9..2adca43b5 100644\n--- a/src/utils/open.cpp\n+++ b/src/utils/open.cpp\n@@ -479,6 +479,13 @@ int LibRaw::open_datastream(LibRaw_abstract_datastream *stream)\n \n \t  identify();\n \n+\t  // Fuji layout files: either DNG or unpacked_load_raw should be used\n+\t  if (libraw_internal_data.internal_output_params.fuji_width || libraw_internal_data.unpacker_data.fuji_layout)\n+\t  {\n+        if (!imgdata.idata.dng_version && load_raw != &LibRaw::unpacked_load_raw)\n+          return LIBRAW_FILE_UNSUPPORTED;\n+\t  }\n+\n \t  // promote the old single thumbnail to the thumbs_list if not present already\n \t  if (imgdata.thumbs_list.thumbcount < LIBRAW_THUMBNAIL_MAXCOUNT)\n \t  {\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42517640-vul",
+      "digest": "sha256:cd37c186ad079d324ad3be8ff4da96339de81ef470b07ecfd61166d6eb862b1e"
+    },
+    "patched": {
+      "ref": "n132/arvo:42517640-fix",
+      "digest": "sha256:c8286da6e62ebd1ce297390987421c1bea3f467a3fcaf8648caf1c95aee43827"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/libraw/src/preprocessing/raw2image.cpp:150",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/libraw/src/preprocessing/raw2image.cpp:150"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

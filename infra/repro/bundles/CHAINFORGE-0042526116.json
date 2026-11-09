@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042526116",
+  "chain": "CWE-456->CWE-457",
+  "project": "binutils-gdb",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42526116",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "22e90ac5af46c01ee4972cf04e835266862bbb35",
+      "fix_commits": [
+        "22e90ac5af46c01ee4972cf04e835266862bbb35"
+      ],
+      "repo": "git://sourceware.org/git/binutils-gdb.git"
+    },
+    "patch": "diff --git a/bfd/elfcode.h b/bfd/elfcode.h\nindex aae66bce..b2277921 100644\n--- a/bfd/elfcode.h\n+++ b/bfd/elfcode.h\n@@ -819,6 +819,7 @@ elf_object_p (bfd *abfd)\n \tgoto got_no_match;\n       if (bfd_seek (abfd, (file_ptr) i_ehdrp->e_phoff, SEEK_SET) != 0)\n \tgoto got_no_match;\n+      bool eu_strip_broken_phdrs = false;\n       i_phdr = elf_tdata (abfd)->phdr;\n       for (i = 0; i < i_ehdrp->e_phnum; i++, i_phdr++)\n \t{\n@@ -839,21 +840,31 @@ elf_object_p (bfd *abfd)\n \t\t  abfd->read_only = 1;\n \t\t}\n \t    }\n-\t  if (i_phdr->p_filesz != 0)\n-\t    {\n-\t      if ((i_phdr->p_offset + i_phdr->p_filesz) > filesize)\n-\t\tgoto got_no_match;\n-\t      /* Try to reconstruct dynamic symbol table from PT_DYNAMIC\n-\t\t segment if there is no section header.  */\n-\t      if (i_phdr->p_type == PT_DYNAMIC\n-\t\t  && i_ehdrp->e_shstrndx == 0\n-\t\t  && i_ehdrp->e_shoff == 0\n-\t\t  && !_bfd_elf_get_dynamic_symbols (abfd, i_phdr,\n-\t\t\t\t\t\t    elf_tdata (abfd)->phdr,\n-\t\t\t\t\t\t    i_ehdrp->e_phnum,\n-\t\t\t\t\t\t    filesize))\n-\t\tgoto got_no_match;\n-\t    }\n+\t  /* Detect eu-strip -f debug files, which have program\n+\t     headers that describe the original file.  */\n+\t  if (i_phdr->p_filesz != 0\n+\t      && (i_phdr->p_filesz > filesize\n+\t\t  || i_phdr->p_offset > filesize - i_phdr->p_filesz))\n+\t    eu_strip_broken_phdrs = true;\n+\t}\n+      if (!eu_strip_broken_phdrs\n+\t  && i_ehdrp->e_shoff == 0\n+\t  && i_ehdrp->e_shstrndx == 0)\n+\t{\n+\t  /* Try to reconstruct dynamic symbol table from PT_DYNAMIC\n+\t     segment if there is no section header.  */\n+\t  i_phdr = elf_tdata (abfd)->phdr;\n+\t  for (i = 0; i < i_ehdrp->e_phnum; i++, i_phdr++)\n+\t    if (i_phdr->p_type == PT_DYNAMIC)\n+\t      {\n+\t\tif (i_phdr->p_filesz != 0\n+\t\t    && !_bfd_elf_get_dynamic_symbols (abfd, i_phdr,\n+\t\t\t\t\t\t      elf_tdata (abfd)->phdr,\n+\t\t\t\t\t\t      i_ehdrp->e_phnum,\n+\t\t\t\t\t\t      filesize))\n+\t\t  goto got_no_match;\n+\t\tbreak;\n+\t      }\n \t}\n     }\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42526116-vul",
+      "digest": "sha256:fd32991ef12903f083366bdbce5685fca17831ee9b04a8b5c45b46005be6922f"
+    },
+    "patched": {
+      "ref": "n132/arvo:42526116-fix",
+      "digest": "sha256:46da57b6e19d79cbdeec876273b71d883f2f20db51b0889b63aa3bf31fb4b63f"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/binutils-gdb/bfd/elf.c:1899",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/binutils-gdb/bfd/elf.c:1899"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

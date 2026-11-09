@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042492491",
+  "chain": "CWE-416->CWE-125",
+  "project": "libssh2",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42492491",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "cde13f6201c56cc571489a7d7164b7205d688cf9",
+      "fix_commits": [
+        "cde13f6201c56cc571489a7d7164b7205d688cf9"
+      ],
+      "repo": "https://github.com/libssh2/libssh2"
+    },
+    "patch": "diff --git a/src/kex.c b/src/kex.c\nindex 2e86b65688..ed00c6a3d2 100644\n--- a/src/kex.c\n+++ b/src/kex.c\n@@ -3286,24 +3286,40 @@ kex_agree_instr(unsigned char *haystack, unsigned long haystack_len,\n                 const unsigned char *needle, unsigned long needle_len)\n {\n     unsigned char *s;\n+    unsigned char *end_haystack;\n+    unsigned long left;\n+\n+    if(haystack == NULL || needle == NULL) {\n+        return NULL;\n+    }\n \n     /* Haystack too short to bother trying */\n-    if(haystack_len < needle_len) {\n+    if(haystack_len < needle_len || needle_len == 0) {\n         return NULL;\n     }\n \n+    s = haystack;\n+    end_haystack = &haystack[haystack_len];\n+    left = end_haystack - s;\n+\n     /* Needle at start of haystack */\n     if((strncmp((char *) haystack, (char *) needle, needle_len) == 0) &&\n         (needle_len == haystack_len || haystack[needle_len] == ',')) {\n         return haystack;\n     }\n \n-    s = haystack;\n     /* Search until we run out of comas or we run out of haystack,\n        whichever comes first */\n-    while((s = (unsigned char *) strchr((char *) s, ','))\n-           && ((haystack_len - (s - haystack)) > needle_len)) {\n-        s++;\n+    while((s = (unsigned char *) memchr((char *) s, ',', left))) {\n+        /* Advance buffer past coma if we can */\n+        left = end_haystack - s;\n+        if((left >= 1) && (left <= haystack_len) && (left > needle_len)) {\n+            s++;\n+        }\n+        else {\n+            return NULL;\n+        }\n+\n         /* Needle at X position */\n         if((strncmp((char *) s, (char *) needle, needle_len) == 0) &&\n             (((s - haystack) + needle_len) == haystack_len\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42492491-vul",
+      "digest": "sha256:9e104028edfefb6b4ef5440957a8cf0d0cca3f7c73172ec87c1fe3ddf110b8d3"
+    },
+    "patched": {
+      "ref": "n132/arvo:42492491-fix",
+      "digest": "sha256:4bf80eedf8d8c718eee1b0bc9cb18d74b69ef531e4f9b6c0cec51c6d074f436f"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/libssh2/src/kex.c:3304",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/libssh2/src/kex.c:3304"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042536498",
+  "chain": "CWE-416->CWE-125",
+  "project": "gdal",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42536498",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "959fbed58acaf922199d2940ed365033e290cdef",
+      "fix_commits": [
+        "959fbed58acaf922199d2940ed365033e290cdef"
+      ],
+      "repo": "https://github.com/OSGeo/gdal"
+    },
+    "patch": "From 959fbed58acaf922199d2940ed365033e290cdef Mon Sep 17 00:00:00 2001\nFrom: Even Rouault <even.rouault@mines-paris.org>\nDate: Sat, 17 Mar 2018 11:12:47 +0000\nSubject: [PATCH] VRTRawLink: fix recent use-after-free error (plus another\n older memory leak). Fixes\n https://bugs.chromium.org/p/oss-fuzz/issues/detail?id=6987. Credit to OSS\n Fuzz\n\ngit-svn-id: https://svn.osgeo.org/gdal/trunk@41840 f0d54148-0727-0410-94bb-9a71ac55c965\n---\n autotest/gdrivers/vrtrawlink.py     | 57 +++++++++++++++++++++++++++++\n gdal/frmts/vrt/vrtrawrasterband.cpp |  3 +-\n 2 files changed, 59 insertions(+), 1 deletion(-)\n\ndiff --git a/autotest/gdrivers/vrtrawlink.py b/autotest/gdrivers/vrtrawlink.py\nindex 516f0ed..0503c99 100755\n--- a/autotest/gdrivers/vrtrawlink.py\n+++ b/autotest/gdrivers/vrtrawlink.py\n@@ -305,6 +305,60 @@ def vrtrawlink_7():\n \n     return 'success'\n \n+###############################################################################\n+# Test error case (too much memory allocation)\n+\n+def vrtrawlink_8():\n+\n+    for i in range(2):\n+        with gdaltest.error_handler():\n+            ds = gdal.Open(\"\"\"<VRTDataset rasterXSize=\"200000\" rasterYSize=\"1\">\n+        <VRTRasterBand dataType=\"Byte\" band=\"1\" subClass=\"VRTRawRasterBand\">\n+            <SourceFilename relativetoVRT=\"0\">data/small.raw</SourceFilename>\n+            <ImageOffset>0</ImageOffset>\n+            <PixelOffset>200000</PixelOffset>\n+            <LineOffset>1</LineOffset>\n+            <ByteOrder>LSB</ByteOrder>\n+        </VRTRasterBand>\n+        </VRTDataset>\"\"\")\n+        if ds:\n+            return 'fail'\n+\n+    return 'success'\n+\n+###############################################################################\n+# Test error case (inexisting file)\n+\n+def vrtrawlink_9():\n+\n+    with gdaltest.error_handler():\n+        ds = gdal.Open(\"\"\"<VRTDataset rasterXSize=\"1 rasterYSize=\"1\">\n+    <VRTRasterBand dataType=\"Byte\" band=\"1\" subClass=\"VRTRawRasterBand\">\n+        <SourceFilename relativetoVRT=\"0\">i/do/not/exist</SourceFilename>\n+    </VRTRasterBand>\n+    </VRTDataset>\"\"\")\n+    if ds:\n+        return 'fail'\n+\n+    return 'success'\n+\n+###############################################################################\n+# Test error case (invalid byte order)\n+\n+def vrtrawlink_10():\n+\n+    with gdaltest.error_handler():\n+        ds = gdal.Open(\"\"\"<VRTDataset rasterXSize=\"1 rasterYSize=\"1\">\n+    <VRTRasterBand dataType=\"Byte\" band=\"1\" subClass=\"VRTRawRasterBand\">\n+        <SourceFilename relativetoVRT=\"0\">data/small.raw</SourceFilename>\n+        <ByteOrder>invalid</ByteOrder>\n+    </VRTRasterBand>\n+    </VRTDataset>\"\"\")\n+    if ds:\n+        return 'fail'\n+\n+    return 'success'\n+\n ###############################################################################\n # Cleanup.\n \n@@ -329,6 +383,9 @@ gdaltest_list = [\n     vrtrawlink_5,\n     vrtrawlink_6,\n     vrtrawlink_7,\n+    vrtrawlink_8,\n+    vrtrawlink_9,\n+    vrtrawlink_10,\n     vrtrawlink_cleanup ]\n \n if __name__ == '__main__':\ndiff --git a/gdal/frmts/vrt/vrtrawrasterband.cpp b/gdal/frmts/vrt/vrtrawrasterband.cpp\nindex 9c959f4..74f39ec 100644\n--- a/gdal/frmts/vrt/vrtrawrasterband.cpp\n+++ b/gdal/frmts/vrt/vrtrawrasterband.cpp\n@@ -246,7 +246,7 @@ CPLErr VRTRawRasterBand::SetRawLink( const char *pszFilename,\n                         nPixelOffset, nLineOffset, nImageOffset, 0,\n                         reinterpret_cast<VSILFILE*>(fp)) )\n     {\n-        VSIFCloseL(reinterpret_cast<VSILFILE*>(fp));\n+        CPLCloseShared(fp);\n         return CE_Failure;\n     }\n \n@@ -269,6 +269,7 @@ CPLErr VRTRawRasterBand::SetRawLink( const char *pszFilename,\n             CPLError( CE_Failure, CPLE_AppDefined,\n                       \"Illegal ByteOrder value '%s', should be LSB or MSB.\",\n                       pszByteOrder );\n+            CPLCloseShared(fp);\n             return CE_Failure;\n         }\n     }\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42536498-vul",
+      "digest": "sha256:4854cef91b45b11f86dce2e5df6913470f6cf3d36e24468e544bb141f899f971"
+    },
+    "patched": {
+      "ref": "n132/arvo:42536498-fix",
+      "digest": "sha256:2652566030d9cb8edad7901c8753c11ad84b63ee524f193042b9093954520f66"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/gdal/gdal/port/cpl_vsil.cpp:992",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/gdal/gdal/port/cpl_vsil.cpp:992"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

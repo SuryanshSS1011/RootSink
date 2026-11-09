@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042490721",
+  "chain": "CWE-20->CWE-787",
+  "project": "php-src",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42490721",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "c56701690a184c13fa850e9946f09bac7172c604",
+      "fix_commits": [
+        "c56701690a184c13fa850e9946f09bac7172c604"
+      ],
+      "repo": "https://github.com/php/php-src"
+    },
+    "patch": "diff --git a/ext/standard/array.c b/ext/standard/array.c\nindex f99af846114d..3967d832429d 100644\n--- a/ext/standard/array.c\n+++ b/ext/standard/array.c\n@@ -2756,7 +2756,7 @@ PHP_FUNCTION(range)\n \t\thigh = (unsigned char)Z_STRVAL_P(zhigh)[0];\n \n \t\tif (low > high) {\t\t/* Negative Steps */\n-\t\t\tif (lstep <= 0) {\n+\t\t\tif (low - high < lstep || lstep <= 0) {\n \t\t\t\terr = 1;\n \t\t\t\tgoto err;\n \t\t\t}\n@@ -2773,7 +2773,7 @@ PHP_FUNCTION(range)\n \t\t\t\t}\n \t\t\t} ZEND_HASH_FILL_END();\n \t\t} else if (high > low) {\t/* Positive Steps */\n-\t\t\tif (lstep <= 0) {\n+\t\t\tif (high - low < lstep || lstep <= 0) {\n \t\t\t\terr = 1;\n \t\t\t\tgoto err;\n \t\t\t}\ndiff --git a/ext/standard/tests/array/range_errors.phpt b/ext/standard/tests/array/range_errors.phpt\nindex dd8b69a82a66..7bc552ee978f 100644\n--- a/ext/standard/tests/array/range_errors.phpt\n+++ b/ext/standard/tests/array/range_errors.phpt\n@@ -47,6 +47,20 @@ try {\n     echo $e->getMessage(), \"\\n\";\n }\n \n+echo \"\\n\\n-- Testing ( (low < high) && (high-low < step) ) for characters --\\n\";\n+try {\n+    var_dump(range('a', 'z', 100));\n+} catch (\\ValueError $e) {\n+    echo $e->getMessage(), \"\\n\";\n+}\n+\n+echo \"\\n\\n-- Testing ( (low > high) && (low-high < step) ) for characters --\\n\";\n+try {\n+    var_dump(range('z', 'a', 100));\n+} catch (\\ValueError $e) {\n+    echo $e->getMessage(), \"\\n\";\n+}\n+\n echo \"\\n-- Testing other conditions --\\n\";\n try {\n     var_dump( range(-1, -2, 2) );\n@@ -97,6 +111,14 @@ range(): Argument #3 ($step) must not exceed the specified range\n -- Testing ( (low > high) && (low-high < step) ) --\n range(): Argument #3 ($step) must not exceed the specified range\n \n+\n+-- Testing ( (low < high) && (high-low < step) ) for characters --\n+range(): Argument #3 ($step) must not exceed the specified range\n+\n+\n+-- Testing ( (low > high) && (low-high < step) ) for characters --\n+range(): Argument #3 ($step) must not exceed the specified range\n+\n -- Testing other conditions --\n range(): Argument #3 ($step) must not exceed the specified range\n range(): Argument #3 ($step) must be of type int|float, string given\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42490721-vul",
+      "digest": "sha256:0ad1a2e6fbba5bcc741457587dbf599caccb258b50ea9c3ef85ac71b90bdc0f1"
+    },
+    "patched": {
+      "ref": "n132/arvo:42490721-fix",
+      "digest": "sha256:28982a4a6f14da832bc7715bff3890e97f56d38cfdf416fde9c5d0008e22d34e"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/php-src/ext/standard/array.c:2818",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/php-src/ext/standard/array.c:2818"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

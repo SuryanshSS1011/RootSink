@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-951598883",
+  "chain": "CWE-129->CWE-125",
+  "project": "imagemagick",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42498779",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/imagemagick/imagemagick/commit/7ef309b6e091b0b3a5f2fc803efce5ae86d045a4",
+      "fix_commits": [
+        "7ef309b6e091b0b3a5f2fc803efce5ae86d045a4"
+      ],
+      "repo": "https://github.com/imagemagick/imagemagick"
+    },
+    "patch": "diff --git a/coders/heic.c b/coders/heic.c\nindex 846f5c75750..891b830f360 100644\n--- a/coders/heic.c\n+++ b/coders/heic.c\n@@ -286,6 +286,8 @@ static MagickBooleanType ReadHEICImageHandle(const ImageInfo *image_info,\n   */\n   image->columns=(size_t) heif_image_handle_get_width(image_handle);\n   image->rows=(size_t) heif_image_handle_get_height(image_handle);\n+  if (heif_image_handle_has_alpha_channel(image_handle) != 0)\n+    image->alpha_trait=BlendPixelTrait;\n   image->depth=8;\n #if LIBHEIF_NUMERIC_VERSION > 0x01040000\n   {\n@@ -297,8 +299,6 @@ static MagickBooleanType ReadHEICImageHandle(const ImageInfo *image_info,\n       image->depth=(size_t) bits_per_pixel;\n   }\n #endif\n-  if (heif_image_handle_has_alpha_channel(image_handle))\n-    image->alpha_trait=BlendPixelTrait;\n   preserve_orientation=IsStringTrue(GetImageOption(image_info,\n     \"heic:preserve-orientation\"));\n   if (preserve_orientation == MagickFalse)\n@@ -463,6 +463,9 @@ static void ReadHEICDepthImage(const ImageInfo *image_info,Image *image,\n static Image *ReadHEICImage(const ImageInfo *image_info,\n   ExceptionInfo *exception)\n {\n+  enum heif_filetype_result\n+    filetype_check;\n+\n   heif_item_id\n     primary_image_id;\n \n@@ -472,9 +475,8 @@ static Image *ReadHEICImage(const ImageInfo *image_info,\n   MagickBooleanType\n     status;\n \n-  size_t\n-    count,\n-    length;\n+  ssize_t\n+    count;\n \n   struct heif_context\n     *heif_context;\n@@ -485,8 +487,8 @@ static Image *ReadHEICImage(const ImageInfo *image_info,\n   struct heif_image_handle\n     *image_handle;\n \n-  void\n-    *container;\n+  unsigned char\n+    magic[12];\n \n   /*\n     Open image file.\n@@ -502,38 +504,30 @@ static Image *ReadHEICImage(const ImageInfo *image_info,\n   status=OpenBlob(image_info,image,ReadBinaryBlobMode,exception);\n   if (status == MagickFalse)\n     return(DestroyImageList(image));\n-  if (GetBlobSize(image) > (MagickSizeType) MAGICK_SSIZE_MAX)\n-    ThrowReaderException(ResourceLimitError,\"MemoryAllocationFailed\");\n-  length=(size_t) GetBlobSize(image);\n-  container=AcquireMagickMemory(length);\n-  if (container == (void *) NULL)\n-    ThrowReaderException(ResourceLimitError,\"MemoryAllocationFailed\");\n-  if (ReadBlob(image,length,container) != (ssize_t) length)\n-    {\n-      container=RelinquishMagickMemory(container);\n-      ThrowReaderException(CorruptImageError,\"InsufficientImageDataInFile\");\n-    }\n-#if LIBHEIF_NUMERIC_VERSION >= 0x010b0000\n-  if (heif_has_compatible_brand((unsigned char *) container,(int) length,\"avif\") != MagickFalse)\n-    (void) CopyMagickString(image->magick,\"AVIF\",MagickPathExtent);\n-#endif\n+  if (ReadBlob(image,12,magic) != 12)\n+    ThrowReaderException(CorruptImageError,\"InsufficientImageDataInFile\");\n+  filetype_check=heif_check_filetype(magic,12);\n+  if (filetype_check == heif_filetype_no)\n+    ThrowReaderException(CoderError,\"ImageTypeNotSupported\");\n+  if (filetype_check == heif_filetype_yes_unsupported)\n+    ThrowReaderException(CoderError,\"ImageTypeNotSupported\");\n   /*\n     Decode HEIF image.\n   */\n   heif_context=heif_context_alloc();\n-  error=heif_context_read_from_memory_without_copy(heif_context,container,\n-    length,NULL);\n+  if (heif_context == (struct heif_context *) NULL)\n+    ThrowReaderException(ResourceLimitError,\"MemoryAllocationFailed\");\n+  error=heif_context_read_from_file(heif_context,image->filename,\n+    (const struct heif_reading_options *) NULL);\n   if (IsHEIFSuccess(image,&error,exception) == MagickFalse)\n     {\n       heif_context_free(heif_context);\n-      container=RelinquishMagickMemory(container);\n       return(DestroyImageList(image));\n     }\n   error=heif_context_get_primary_image_ID(heif_context,&primary_image_id);\n   if (IsHEIFSuccess(image,&error,exception) == MagickFalse)\n     {\n       heif_context_free(heif_context);\n-      container=RelinquishMagickMemory(container);\n       return(DestroyImageList(image));\n     }\n   error=heif_context_get_image_handle(heif_context,primary_image_id,\n@@ -541,7 +535,6 @@ static Image *ReadHEICImage(const ImageInfo *image_info,\n   if (IsHEIFSuccess(image,&error,exception) == MagickFalse)\n     {\n       heif_context_free(heif_context);\n-      container=RelinquishMagickMemory(container);\n       return(DestroyImageList(image));\n     }\n   status=ReadHEICImageHandle(image_info,image,image_handle,exception);\n@@ -559,7 +552,6 @@ static Image *ReadHEICImage(const ImageInfo *image_info,\n       if (ids == (heif_item_id *) NULL)\n         {\n           heif_context_free(heif_context);\n-          container=RelinquishMagickMemory(container);\n           return(DestroyImageList(image));\n         }\n       (void) heif_context_get_list_of_top_level_image_IDs(heif_context,ids,\n@@ -599,13 +591,11 @@ static Image *ReadHEICImage(const ImageInfo *image_info,\n   if (IsHEIFSuccess(image,&error,exception) == MagickFalse)\n     {\n       heif_context_free(heif_context);\n-      container=RelinquishMagickMemory(container);\n       return(DestroyImageList(image));\n     }\n   ReadHEICDepthImage(image_info,image,image_handle,exception);\n   heif_image_handle_release(image_handle);\n   heif_context_free(heif_context);\n-  container=RelinquishMagickMemory(container);\n   if (status == MagickFalse)\n     return(DestroyImageList(image));\n   (void) CloseBlob(image);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42498779-vul",
+      "digest": "sha256:a357b38cbb3cf17aa2fb06a2072abeaab921aed64353c8c13850a9375f5f6cb3"
+    },
+    "patched": {
+      "ref": "n132/arvo:42498779-fix",
+      "digest": "sha256:68b76520083f2e682f7b15270d0a411b381c3c96330ea271c2199ccb64d0e19d"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "crash_site": "/src/libde265/libde265/vui.cc:213",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 129,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "site": "/src/libde265/libde265/vui.cc:213"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

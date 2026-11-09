@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042472894",
+  "chain": "CWE-456->CWE-457",
+  "project": "graphicsmagick",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42472894",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "ad1788726baa52bf10e08526e44227f6f3bd95f5",
+      "fix_commits": [
+        "ad1788726baa52bf10e08526e44227f6f3bd95f5"
+      ],
+      "repo": "https://foss.heptapod.net/graphicsmagick/graphicsmagick"
+    },
+    "patch": "diff --git a/ChangeLog b/ChangeLog\nindex 827ab542df6ef5fad54f28933acf06dc546d2e94_Q2hhbmdlTG9n..ad1788726baa52bf10e08526e44227f6f3bd95f5_Q2hhbmdlTG9n 100644\n--- a/ChangeLog\n+++ b/ChangeLog\n@@ -4,6 +4,8 @@\n \tlength of dash pattern array, which is terminated by value 0.0.\n \tFixes SourceForge issue #591 \"Heap buffer overflow in\n \tDrawDashPolygon when parsing SVG images\".\n+\t(DrawPrimitive): Add arithmetic overflow checks when converting\n+\tcomputed coordinates from 'double' to 'long'.\n \n \t* coders/jpeg.c (ReadJPEGImage): JPEG files are observed to\n \tprovide compression ratios as high as 2500 so allow for that.\ndiff --git a/magick/render.c b/magick/render.c\nindex 827ab542df6ef5fad54f28933acf06dc546d2e94_bWFnaWNrL3JlbmRlci5j..ad1788726baa52bf10e08526e44227f6f3bd95f5_bWFnaWNrL3JlbmRlci5j 100644\n--- a/magick/render.c\n+++ b/magick/render.c\n@@ -5378,6 +5378,9 @@\n   MonitorHandler\n     handler;\n \n+  double\n+    dvalue;\n+\n   register long\n     i,\n     x;\n@@ -5399,8 +5402,24 @@\n       (void) LogMagickEvent(RenderEvent,GetMagickModule(),\"  end draw-primitive\");\n       return status;\n     }\n-  x=(long) ceil(primitive_info->point.x-0.5);\n-  y=(long) ceil(primitive_info->point.y-0.5);\n+  dvalue=ceil(primitive_info->point.x-0.5);\n+  if (((dvalue < (double) LONG_MIN)) || (dvalue > (double) LONG_MAX))\n+    {\n+      char double_str[18];\n+      FormatString(double_str,\"%g\",dvalue);\n+      ThrowException(&image->exception,DrawError,PrimitiveArithmeticOverflow,double_str);\n+      return MagickFail;\n+    }\n+  x=(long) dvalue;\n+  dvalue=ceil(primitive_info->point.y-0.5);\n+  if (((dvalue < (double) LONG_MIN)) || (dvalue > (double) LONG_MAX))\n+    {\n+      char double_str[18];\n+      FormatString(double_str,\"%g\",dvalue);\n+      ThrowException(&image->exception,DrawError,PrimitiveArithmeticOverflow,double_str);\n+      return MagickFail;\n+    }\n+  y=(long) dvalue;\n   switch (primitive_info->primitive)\n   {\n     case PointPrimitive:\ndiff --git a/www/Changelog.html b/www/Changelog.html\nindex 827ab542df6ef5fad54f28933acf06dc546d2e94_d3d3L0NoYW5nZWxvZy5odG1s..ad1788726baa52bf10e08526e44227f6f3bd95f5_d3d3L0NoYW5nZWxvZy5odG1s 100644\n--- a/www/Changelog.html\n+++ b/www/Changelog.html\n@@ -41,7 +41,9 @@\n <li>magick/render.c (DrawDashPolygon): Avoid reading one beyond\n length of dash pattern array, which is terminated by value 0.0.\n Fixes SourceForge issue #591 &quot;Heap buffer overflow in\n-DrawDashPolygon when parsing SVG images&quot;.</li>\n+DrawDashPolygon when parsing SVG images&quot;.\n+(DrawPrimitive): Add arithmetic overflow checks when converting\n+computed coordinates from 'double' to 'long'.</li>\n <li>coders/jpeg.c (ReadJPEGImage): JPEG files are observed to\n provide compression ratios as high as 2500 so allow for that.\n Also, the test for &quot;Unreasonable dimensions&quot; delivered yesterday\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42472894-vul",
+      "digest": "sha256:b3dfa1eaacb3ee4faa09f9be2b5f36af0810ae5ff117bf238eee0bdba14c405c"
+    },
+    "patched": {
+      "ref": "n132/arvo:42472894-fix",
+      "digest": "sha256:7d7e5d458f14e9d4309fb2f233adc06a9373ad3255fc59c98db6348ba219ecc2"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/graphicsmagick/magick/render.c:4825",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/graphicsmagick/magick/render.c:4825"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

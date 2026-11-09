@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042522513",
+  "chain": "CWE-456->CWE-457",
+  "project": "imagemagick",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42522513",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "8bb46b3381f8440fbf90bd88e1909dc83e089790",
+      "fix_commits": [
+        "8bb46b3381f8440fbf90bd88e1909dc83e089790"
+      ],
+      "repo": "https://github.com/imagemagick/imagemagick"
+    },
+    "patch": "From 8bb46b3381f8440fbf90bd88e1909dc83e089790 Mon Sep 17 00:00:00 2001\nFrom: Cristy <urban-warrior@imagemagick.org>\nDate: Fri, 26 Jan 2018 20:38:11 -0500\nSubject: [PATCH] Eliminate use of uninitialized value in GetFillAlpha() Credit\n OSS Fuzz\n\n---\n MagickCore/draw.c | 2 +-\n 1 file changed, 1 insertion(+), 1 deletion(-)\n\ndiff --git a/MagickCore/draw.c b/MagickCore/draw.c\nindex 68dbb74..ad2c281 100644\n--- a/MagickCore/draw.c\n+++ b/MagickCore/draw.c\n@@ -3941,7 +3941,7 @@ static double GetFillAlpha(PolygonInfo *polygon_info,const double mid,\n         continue;\n       }\n     i=(ssize_t) MagickMax((double) p->highwater,1.0);\n-    for ( ; i < (ssize_t) p->number_points; i++)\n+    for ( ; i < (ssize_t) (p->number_points-1); i++)\n       if ((double) y <= p->points[i].y)\n         break;\n     q=p->points+i-1;\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42522513-vul",
+      "digest": "sha256:b4dd98b7df1043c79126d60df53eb0c3bcb1149ff8658b9310e3b8fe43cda062"
+    },
+    "patched": {
+      "ref": "n132/arvo:42522513-fix",
+      "digest": "sha256:62622be605769e563eef84b0eab7b3be5105d05bae9ab1ad0ad7ba8a9e37023f"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/imagemagick/MagickCore/draw.c:3948",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/imagemagick/MagickCore/draw.c:3948"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

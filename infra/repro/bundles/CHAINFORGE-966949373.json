@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-966949373",
+  "chain": "CWE-456->CWE-457",
+  "project": "skia",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42470340",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://skia.googlesource.com/skia.git/+/f19e3f48b5fb00432adc80055d4f820837f35398%5E%21/",
+      "fix_commits": [
+        "f19e3f48b5fb00432adc80055d4f820837f35398"
+      ],
+      "repo": "https://skia.googlesource.com/skia.git"
+    },
+    "patch": "From f19e3f48b5fb00432adc80055d4f820837f35398 Mon Sep 17 00:00:00 2001\nFrom: Mike Klein <mtklein@google.com>\nDate: Mon, 17 Sep 2018 15:36:54 -0400\nSubject: [PATCH] simplify src->dst matrix init\n\nsrc->toXYZD50() and dst->fromXYZD5() always work now.\n\nAnd if they've somehow got a non-3x3 matrix, fine...  we'll just handle\nit wrong.  It's better to initialize the src->dst 3x3 with what we've\ngot and ignore the outer row and column than to leave it uninitialized\nor zero or identity.\n\nBug: oss-fuzz:10305\n\nChange-Id: I1904a4e297758412a1cc442e88a45b5ec2be9fb5\nReviewed-on: https://skia-review.googlesource.com/154867\nAuto-Submit: Mike Klein <mtklein@google.com>\nReviewed-by: Brian Osman <brianosman@google.com>\nCommit-Queue: Brian Osman <brianosman@google.com>\n---\n src/core/SkColorSpaceXformSteps.cpp | 13 ++++---------\n 1 file changed, 4 insertions(+), 9 deletions(-)\n\ndiff --git a/src/core/SkColorSpaceXformSteps.cpp b/src/core/SkColorSpaceXformSteps.cpp\nindex 313aee4..e8e0685 100644\n--- a/src/core/SkColorSpaceXformSteps.cpp\n+++ b/src/core/SkColorSpaceXformSteps.cpp\n@@ -34,16 +34,11 @@ SkColorSpaceXformSteps::SkColorSpaceXformSteps(SkColorSpace* src, SkAlphaType sr\n     this->flags.encode          = !dst->gammaIsLinear();\n     this->flags.premul          = srcAT != kOpaque_SkAlphaType && dstAT == kPremul_SkAlphaType;\n \n-    if (this->flags.gamut_transform && src->toXYZD50() && dst->fromXYZD50()) {\n+    if (this->flags.gamut_transform) {\n         auto xform = SkMatrix44(*dst->fromXYZD50(), *src->toXYZD50());\n-        if (xform.get(3,0) == 0 && xform.get(3,1) == 0 && xform.get(3,2) == 0 &&\n-            xform.get(3,3) == 1 &&\n-            xform.get(0,3) == 0 && xform.get(1,3) == 0 && xform.get(2,3) == 0) {\n-\n-            for (int r = 0; r < 3; r++)\n-            for (int c = 0; c < 3; c++) {\n-                this->src_to_dst_matrix[3*c+r] = xform.get(r,c);\n-            }\n+        for (int r = 0; r < 3; r++)\n+        for (int c = 0; c < 3; c++) {\n+            this->src_to_dst_matrix[3*c+r] = xform.get(r,c);\n         }\n     }\n \n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42470340-vul",
+      "digest": "sha256:01d56fab3bd908ec8964616228d8cfd377fd5a76c4a9fc5f8800c4b46ab75488"
+    },
+    "patched": {
+      "ref": "n132/arvo:42470340-fix",
+      "digest": "sha256:f735984525d96d60eda50d63aad982272ff2b2dfd59cb010ab25ede442add8f3"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/skia/out/Fuzz/../../include/core/SkScalar.h:153",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/skia/out/Fuzz/../../include/core/SkScalar.h:153"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

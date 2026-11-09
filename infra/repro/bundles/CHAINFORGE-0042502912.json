@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042502912",
+  "chain": "CWE-20->CWE-125",
+  "project": "geos",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42502912",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "f34802132cd4b0365e295e653a6c9ab10ee61983",
+      "fix_commits": [
+        "f34802132cd4b0365e295e653a6c9ab10ee61983"
+      ],
+      "repo": "https://git.osgeo.org/gitea/geos/geos.git"
+    },
+    "patch": "diff --git a/src/deps/CMakeLists.txt b/src/deps/CMakeLists.txt\nindex d8a1c3de4..a8be0a558 100644\n--- a/src/deps/CMakeLists.txt\n+++ b/src/deps/CMakeLists.txt\n@@ -11,7 +11,10 @@\n file(GLOB_RECURSE _sources ${CMAKE_CURRENT_LIST_DIR}/*.c  CONFIGURE_DEPEND)\n add_library(ryu STATIC ${_sources})\n target_include_directories(ryu PUBLIC ${CMAKE_CURRENT_LIST_DIR})\n-set_target_properties(ryu PROPERTIES POSITION_INDEPENDENT_CODE ON)\n+set_target_properties(ryu PROPERTIES\n+  POSITION_INDEPENDENT_CODE ON\n+  C_STANDARD 99\n+)\n unset(_sources)\n \n target_include_directories(geos\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42502912-vul",
+      "digest": "sha256:1eb326f30c6a90c3b92af70a9a050cd2cc5d1c3187aa9cd8929ed2cf1277731a"
+    },
+    "patched": {
+      "ref": "n132/arvo:42502912-fix",
+      "digest": "sha256:2b64f1fa517d6724ba4eb7b1f6acf38933ebaa9d283a4b105dc3a1ea25ee07eb"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/geos/src/operation/valid/PolygonNode.cpp:106",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/geos/src/operation/valid/PolygonNode.cpp:106"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

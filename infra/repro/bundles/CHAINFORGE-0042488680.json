@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042488680",
+  "chain": "CWE-416->CWE-787",
+  "project": "arrow",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42488680",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "64396aa487fc24cd26b62a9b92e13a952c6ecf74",
+      "fix_commits": [
+        "64396aa487fc24cd26b62a9b92e13a952c6ecf74"
+      ],
+      "repo": "https://github.com/apache/arrow"
+    },
+    "patch": "diff --git a/cpp/src/parquet/level_conversion.cc b/cpp/src/parquet/level_conversion.cc\nindex fadd56e1de98..ffdca476ddd2 100644\n--- a/cpp/src/parquet/level_conversion.cc\n+++ b/cpp/src/parquet/level_conversion.cc\n@@ -23,6 +23,7 @@\n #include \"arrow/util/bit_util.h\"\n #include \"arrow/util/cpu_info.h\"\n #include \"arrow/util/logging.h\"\n+#include \"arrow/util/optional.h\"\n #include \"parquet/exception.h\"\n \n #include \"parquet/level_comparison.h\"\n@@ -35,16 +36,17 @@ namespace internal {\n namespace {\n \n using ::arrow::internal::CpuInfo;\n+using ::arrow::util::optional;\n \n template <typename OffsetType>\n void DefRepLevelsToListInfo(const int16_t* def_levels, const int16_t* rep_levels,\n                             int64_t num_def_levels, LevelInfo level_info,\n                             ValidityBitmapInputOutput* output, OffsetType* offsets) {\n   OffsetType* orig_pos = offsets;\n-  std::unique_ptr<::arrow::internal::FirstTimeBitmapWriter> valid_bits_writer;\n+  optional<::arrow::internal::FirstTimeBitmapWriter> valid_bits_writer;\n   if (output->valid_bits) {\n-    valid_bits_writer.reset(new ::arrow::internal::FirstTimeBitmapWriter(\n-        output->valid_bits, output->valid_bits_offset, num_def_levels));\n+    valid_bits_writer.emplace(output->valid_bits, output->valid_bits_offset,\n+                              output->values_read_upper_bound);\n   }\n   for (int x = 0; x < num_def_levels; x++) {\n     // Skip items that belong to empty or null ancestor lists and further nested lists.\n@@ -65,7 +67,7 @@ void DefRepLevelsToListInfo(const int16_t* def_levels, const int16_t* rep_levels\n       }\n     } else {\n       if (ARROW_PREDICT_FALSE(\n-              (valid_bits_writer != nullptr &&\n+              (valid_bits_writer.has_value() &&\n                valid_bits_writer->position() >= output->values_read_upper_bound) ||\n               (offsets - orig_pos) >= output->values_read_upper_bound)) {\n         std::stringstream ss;\n@@ -92,7 +94,7 @@ void DefRepLevelsToListInfo(const int16_t* def_levels, const int16_t* rep_levels\n         }\n       }\n \n-      if (valid_bits_writer != nullptr) {\n+      if (valid_bits_writer.has_value()) {\n         // the level_info def level for lists reflects element present level.\n         // the prior level distinguishes between empty lists.\n         if (def_levels[x] >= level_info.def_level - 1) {\n@@ -105,12 +107,12 @@ void DefRepLevelsToListInfo(const int16_t* def_levels, const int16_t* rep_levels\n       }\n     }\n   }\n-  if (valid_bits_writer != nullptr) {\n+  if (valid_bits_writer.has_value()) {\n     valid_bits_writer->Finish();\n   }\n   if (offsets != nullptr) {\n     output->values_read = offsets - orig_pos;\n-  } else if (valid_bits_writer != nullptr) {\n+  } else if (valid_bits_writer.has_value()) {\n     output->values_read = valid_bits_writer->position();\n   }\n   if (output->null_count > 0 && level_info.null_slot_usage > 1) {\ndiff --git a/cpp/src/parquet/level_conversion.h b/cpp/src/parquet/level_conversion.h\nindex d406724ce160..d4d68457a13d 100644\n--- a/cpp/src/parquet/level_conversion.h\n+++ b/cpp/src/parquet/level_conversion.h\n@@ -138,13 +138,13 @@ struct PARQUET_EXPORT LevelInfo {\n struct PARQUET_EXPORT ValidityBitmapInputOutput {\n   // Input only.\n   // The maximum number of values_read expected (actual\n-  // values read must be less than or equal to this value.\n+  // values read must be less than or equal to this value).\n   // If this number is exceeded methods will throw a\n   // ParquetException. Exceeding this limit indicates\n   // either a corrupt or incorrectly written file.\n   int64_t values_read_upper_bound = 0;\n   // Output only. The number of values added to the encountered\n-  // (this is logicallyt he count of the number of elements\n+  // (this is logically the count of the number of elements\n   // for an Arrow array).\n   int64_t values_read = 0;\n   // Input/Output. The number of nulls encountered.\ndiff --git a/testing b/testing\nindex 860376d4e586..3ab0d53528a0 160000\n--- a/testing\n+++ b/testing\n@@ -1 +1 @@\n-Subproject commit 860376d4e586a3ac34ec93089889da624ead6c2a\n+Subproject commit 3ab0d53528a050c370a31c3741574250a6e88a4d\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42488680-vul",
+      "digest": "sha256:86a0fd06163371b3f9bb9d64c5663f1953e3a5738c19bdc852003d3cf08cb158"
+    },
+    "patched": {
+      "ref": "n132/arvo:42488680-fix",
+      "digest": "sha256:9a3308bac30b49d82dce9468800119f3c832e67113debc2a0bef1c142bc8a1a2"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/arrow/cpp/src/arrow/util/bitmap_writer.h:166",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/arrow/cpp/src/arrow/util/bitmap_writer.h:166"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

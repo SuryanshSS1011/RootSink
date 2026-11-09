@@ -1,0 +1,67 @@
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 2016223616
+INFO: Loaded 1 modules   (35501 inline 8-bit counters): 35501 [0xc59dc0, 0xc6286d), 
+INFO: Loaded 1 PC tables (35501 PCs): 35501 [0xb14210,0xb9ece0), 
+/out/commit_graph_fuzzer: Running 1 inputs 1 time(s) each.
+Running: /tmp/poc
+=================================================================
+==875095==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x61a000000bfd at pc 0x0000004c82cc bp 0x7ffcb534f510 sp 0x7ffcb534ecc0
+READ of size 20 at 0x61a000000bfd thread T0
+SCARINESS: 26 (multi-byte-read-heap-buffer-overflow)
+    #0 0x4c82cb in MemcmpInterceptorCommon(void*, int (*)(void const*, void const*, unsigned long), void const*, void const*, unsigned long) /src/llvm-project/compiler-rt/lib/asan/../sanitizer_common/sanitizer_common_interceptors.inc:861:7
+    #1 0x4c867b in memcmp /src/llvm-project/compiler-rt/lib/asan/../sanitizer_common/sanitizer_common_interceptors.inc:892:10
+    #2 0x5be4f4 in git_oid_raw_cmp /src/libgit2/src/libgit2/oid.h:153:9
+    #3 0x5b5672 in commit_graph_parse_oid_lookup /src/libgit2/src/libgit2/commit_graph.c:153:7
+    #4 0x5b4ade in git_commit_graph_file_parse /src/libgit2/src/libgit2/commit_graph.c:285:10
+    #5 0x56c952 in LLVMFuzzerTestOneInput /src/libgit2/build/../fuzzers/commit_graph_fuzzer.c:70:6
+    #6 0x43dff3 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:611:15
+    #7 0x429752 in fuzzer::RunOneTest(fuzzer::Fuzzer*, char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:324:6
+    #8 0x42effc in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:860:9
+    #9 0x458532 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #10 0x148279cff082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 1878e6b475720c7c51969e69ab2d276fae6d1dee)
+    #11 0x41f91d in _start (/out/commit_graph_fuzzer+0x41f91d)
+
+DEDUP_TOKEN: MemcmpInterceptorCommon(void*, int (*)(void const*, void const*, unsigned long), void const*, void const*, unsigned long)--memcmp--git_oid_raw_cmp
+0x61a000000bfd is located 0 bytes to the right of 1405-byte region [0x61a000000680,0x61a000000bfd)
+allocated by thread T0 here:
+    #0 0x52f186 in __interceptor_malloc /src/llvm-project/compiler-rt/lib/asan/asan_malloc_linux.cpp:69:3
+    #1 0x4adb87 in operator new(unsigned long) cxa_noexception.cpp
+    #2 0x429752 in fuzzer::RunOneTest(fuzzer::Fuzzer*, char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:324:6
+    #3 0x42effc in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:860:9
+    #4 0x458532 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #5 0x148279cff082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 1878e6b475720c7c51969e69ab2d276fae6d1dee)
+
+DEDUP_TOKEN: __interceptor_malloc--operator new(unsigned long)--fuzzer::RunOneTest(fuzzer::Fuzzer*, char const*, unsigned long)
+SUMMARY: AddressSanitizer: heap-buffer-overflow /src/llvm-project/compiler-rt/lib/asan/../sanitizer_common/sanitizer_common_interceptors.inc:861:7 in MemcmpInterceptorCommon(void*, int (*)(void const*, void const*, unsigned long), void const*, void const*, unsigned long)
+Shadow bytes around the buggy address:
+  0x0c347fff8120: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c347fff8130: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c347fff8140: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c347fff8150: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c347fff8160: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x0c347fff8170: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00[05]
+  0x0c347fff8180: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c347fff8190: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c347fff81a0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c347fff81b0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c347fff81c0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+==875095==ABORTING

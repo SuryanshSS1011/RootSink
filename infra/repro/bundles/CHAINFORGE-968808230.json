@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-968808230",
+  "chain": "CWE-456->CWE-457",
+  "project": "cpython3",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42537225",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/python/cpython/commit/a9bb3c7b3bd8ba90de87d03cd4d614dca764b116",
+      "fix_commits": [
+        "a9bb3c7b3bd8ba90de87d03cd4d614dca764b116"
+      ],
+      "repo": "https://github.com/python/cpython"
+    },
+    "patch": "diff --git a/.github/workflows/build.yml b/.github/workflows/build.yml\nindex 7ad596437507e0c..fc5b98f02206264 100644\n--- a/.github/workflows/build.yml\n+++ b/.github/workflows/build.yml\n@@ -307,7 +307,7 @@ jobs:\n       with:\n         save: false\n     - name: Configure CPython\n-      run: ./configure --config-cache --with-pydebug --with-openssl=$OPENSSL_DIR\n+      run: ./configure --config-cache --enable-slower-safety --with-pydebug --with-openssl=$OPENSSL_DIR\n     - name: Build CPython\n       run: make -j4\n     - name: Display build info\n@@ -380,6 +380,7 @@ jobs:\n         ../cpython-ro-srcdir/configure \\\n           --config-cache \\\n           --with-pydebug \\\n+          --enable-slower-safety \\\n           --with-openssl=$OPENSSL_DIR\n     - name: Build CPython out-of-tree\n       working-directory: ${{ env.CPYTHON_BUILDDIR }}\ndiff --git a/.github/workflows/reusable-macos.yml b/.github/workflows/reusable-macos.yml\nindex f825d1a7b3f69a1..0f189960dbea616 100644\n--- a/.github/workflows/reusable-macos.yml\n+++ b/.github/workflows/reusable-macos.yml\n@@ -53,6 +53,7 @@ jobs:\n         ./configure \\\n           --config-cache \\\n           --with-pydebug \\\n+          --enable-slower-safety \\\n           ${{ inputs.free-threading && '--disable-gil' || '' }} \\\n           --prefix=/opt/python-dev \\\n           --with-openssl=\"$(brew --prefix openssl@3.0)\"\ndiff --git a/.github/workflows/reusable-ubuntu.yml b/.github/workflows/reusable-ubuntu.yml\nindex 018a1d80497659e..54d7765d159d495 100644\n--- a/.github/workflows/reusable-ubuntu.yml\n+++ b/.github/workflows/reusable-ubuntu.yml\n@@ -69,6 +69,7 @@ jobs:\n         ../cpython-ro-srcdir/configure\n         --config-cache\n         --with-pydebug\n+        --enable-slower-safety\n         --with-openssl=$OPENSSL_DIR\n         ${{ fromJSON(inputs.free-threading) && '--disable-gil' || '' }}\n     - name: Build CPython out-of-tree\ndiff --git a/Doc/using/configure.rst b/Doc/using/configure.rst\nindex a69343d402eb8d4..32adfb0ba6e5fc3 100644\n--- a/Doc/using/configure.rst\n+++ b/Doc/using/configure.rst\n@@ -907,6 +907,25 @@ Security Options\n       The settings ``python`` and *STRING* also set TLS 1.2 as minimum\n       protocol version.\n \n+.. option:: --disable-safety\n+\n+   Disable compiler options that are recommended by `OpenSSF`_ for security reasons with no performance overhead.\n+   If this option is not enabled, CPython will be built based on safety compiler options with no slow down.\n+\n+   .. _OpenSSF: https://openssf.org/\n+\n+   .. versionadded:: 3.14\n+\n+.. option:: --enable-slower-safety\n+\n+   Enable compiler options that are recommended by `OpenSSF`_ for security reasons which require overhead.\n+   If this option is not enabled, CPython will not be built based on safety compiler options which performance impact.\n+\n+   .. _OpenSSF: https://openssf.org/\n+\n+   .. versionadded:: 3.14\n+\n+\n macOS Options\n -------------\n \ndiff --git a/Misc/NEWS.d/next/Build/2024-07-19-10-14-31.gh-issue-121996.IEb2sz.rst b/Misc/NEWS.d/next/Build/2024-07-19-10-14-31.gh-issue-121996.IEb2sz.rst\nnew file mode 100644\nindex 000000000000000..171efe8388bc0d9\n--- /dev/null\n+++ b/Misc/NEWS.d/next/Build/2024-07-19-10-14-31.gh-issue-121996.IEb2sz.rst\n@@ -0,0 +1,2 @@\n+Introduce ./configure --disable-safety and --enable-slower-safety options.\n+Patch by Donghee Na.\ndiff --git a/configure b/configure\nindex afa338902ecd712..7b3dfa71a2a192a 100755\n--- a/configure\n+++ b/configure\n@@ -1094,6 +1094,8 @@ enable_optimizations\n with_lto\n enable_bolt\n with_strict_overflow\n+enable_safety\n+enable_slower_safety\n with_dsymutil\n with_address_sanitizer\n with_memory_sanitizer\n@@ -1826,6 +1828,10 @@ Optional Features:\n                           (default is no)\n   --enable-bolt           enable usage of the llvm-bolt post-link optimizer\n                           (default is no)\n+  --disable-safety        disable usage of the security compiler options with\n+                          no performance overhead\n+  --enable-slower-safety  enable usage of the security compiler options with\n+                          performance overhead\n   --enable-loadable-sqlite-extensions\n                           support loadable extensions in the sqlite3 module,\n                           see Doc/library/sqlite3.rst (default is no)\n@@ -9666,7 +9672,28 @@ fi\n \n # Enable flags that warn and protect for potential security vulnerabilities.\n # These flags should be enabled by default for all builds.\n-{ printf \"%s\\n\" \"$as_me:${as_lineno-$LINENO}: checking whether C compiler accepts -fstack-protector-strong\" >&5\n+\n+{ printf \"%s\\n\" \"$as_me:${as_lineno-$LINENO}: checking for --disable-safety\" >&5\n+printf %s \"checking for --disable-safety... \" >&6; }\n+# Check whether --enable-safety was given.\n+if test ${enable_safety+y}\n+then :\n+  enableval=$enable_safety; if test \"x$enable_safety\" = xyes\n+then :\n+  disable_safety=no\n+else $as_nop\n+  disable_saftey=yes\n+fi\n+else $as_nop\n+  disable_saftey=no\n+fi\n+\n+{ printf \"%s\\n\" \"$as_me:${as_lineno-$LINENO}: result: $disable_safety\" >&5\n+printf \"%s\\n\" \"$disable_safety\" >&6; }\n+\n+if test \"$disable_safety\" = \"no\"\n+then\n+  { printf \"%s\\n\" \"$as_me:${as_lineno-$LINENO}: checking whether C compiler accepts -fstack-protector-strong\" >&5\n printf %s \"checking whether C compiler accepts -fstack-protector-strong... \" >&6; }\n if test ${ax_cv_check_cflags__Werror__fstack_protector_strong+y}\n then :\n@@ -9705,7 +9732,7 @@ else $as_nop\n printf \"%s\\n\" \"$as_me: WARNING: -fstack-protector-strong not supported\" >&2;}\n fi\n \n-{ printf \"%s\\n\" \"$as_me:${as_lineno-$LINENO}: checking whether C compiler accepts -Wtrampolines\" >&5\n+  { printf \"%s\\n\" \"$as_me:${as_lineno-$LINENO}: checking whether C compiler accepts -Wtrampolines\" >&5\n printf %s \"checking whether C compiler accepts -Wtrampolines... \" >&6; }\n if test ${ax_cv_check_cflags__Werror__Wtrampolines+y}\n then :\n@@ -9744,7 +9771,22 @@ else $as_nop\n printf \"%s\\n\" \"$as_me: WARNING: -Wtrampolines not supported\" >&2;}\n fi\n \n-{ printf \"%s\\n\" \"$as_me:${as_lineno-$LINENO}: checking whether C compiler accepts -D_FORTIFY_SOURCE=3\" >&5\n+fi\n+\n+{ printf \"%s\\n\" \"$as_me:${as_lineno-$LINENO}: checking for --enable-slower-safety\" >&5\n+printf %s \"checking for --enable-slower-safety... \" >&6; }\n+# Check whether --enable-slower-safety was given.\n+if test ${enable_slower_safety+y}\n+then :\n+  enableval=$enable_slower_safety;\n+fi\n+\n+{ printf \"%s\\n\" \"$as_me:${as_lineno-$LINENO}: result: $enable_slower_safety\" >&5\n+printf \"%s\\n\" \"$enable_slower_safety\" >&6; }\n+\n+if test \"$enable_slower_safety\" = \"yes\"\n+then\n+  { printf \"%s\\n\" \"$as_me:${as_lineno-$LINENO}: checking whether C compiler accepts -D_FORTIFY_SOURCE=3\" >&5\n printf %s \"checking whether C compiler accepts -D_FORTIFY_SOURCE=3... \" >&6; }\n if test ${ax_cv_check_cflags___D_FORTIFY_SOURCE_3+y}\n then :\n@@ -9783,6 +9825,7 @@ else $as_nop\n printf \"%s\\n\" \"$as_me: WARNING: -D_FORTIFY_SOURCE=3 not supported\" >&2;}\n fi\n \n+fi\n \n case $GCC in\n yes)\ndiff --git a/configure.ac b/configure.ac\nindex d695cb7a96e1af4..1275c199a7cf1c2 100644\n--- a/configure.ac\n+++ b/configure.ac\n@@ -2499,9 +2499,28 @@ AS_VAR_IF([with_strict_overflow], [yes],\n \n # Enable flags that warn and protect for potential security vulnerabilities.\n # These flags should be enabled by default for all builds.\n-AX_CHECK_COMPILE_FLAG([-fstack-protector-strong], [BASECFLAGS=\"$BASECFLAGS -fstack-protector-strong\"], [AC_MSG_WARN([-fstack-protector-strong not supported])], [-Werror])\n-AX_CHECK_COMPILE_FLAG([-Wtrampolines], [BASECFLAGS=\"$BASECFLAGS -Wtrampolines\"], [AC_MSG_WARN([-Wtrampolines not supported])], [-Werror])\n-AX_CHECK_COMPILE_FLAG([-D_FORTIFY_SOURCE=3], [BASECFLAGS=\"$BASECFLAGS -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=3\"], [AC_MSG_WARN([-D_FORTIFY_SOURCE=3 not supported])])\n+\n+AC_MSG_CHECKING([for --disable-safety])\n+AC_ARG_ENABLE([safety],\n+  [AS_HELP_STRING([--disable-safety], [disable usage of the security compiler options with no performance overhead])],\n+  [AS_VAR_IF([enable_safety], [yes], [disable_safety=no], [disable_saftey=yes])], [disable_saftey=no])\n+AC_MSG_RESULT([$disable_safety])\n+\n+if test \"$disable_safety\" = \"no\"\n+then\n+  AX_CHECK_COMPILE_FLAG([-fstack-protector-strong], [BASECFLAGS=\"$BASECFLAGS -fstack-protector-strong\"], [AC_MSG_WARN([-fstack-protector-strong not supported])], [-Werror])\n+  AX_CHECK_COMPILE_FLAG([-Wtrampolines], [BASECFLAGS=\"$BASECFLAGS -Wtrampolines\"], [AC_MSG_WARN([-Wtrampolines not supported])], [-Werror])\n+fi\n+\n+AC_MSG_CHECKING([for --enable-slower-safety])\n+AC_ARG_ENABLE([slower-safety],\n+  [AS_HELP_STRING([--enable-slower-safety], [enable usage of the security compiler options with performance overhead])],[])\n+AC_MSG_RESULT([$enable_slower_safety])\n+\n+if test \"$enable_slower_safety\" = \"yes\"\n+then\n+  AX_CHECK_COMPILE_FLAG([-D_FORTIFY_SOURCE=3], [BASECFLAGS=\"$BASECFLAGS -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=3\"], [AC_MSG_WARN([-D_FORTIFY_SOURCE=3 not supported])])\n+fi\n \n case $GCC in\n yes)\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42537225-vul",
+      "digest": "sha256:b8f3c780c7cdf81ba5c41311326587e9b3b5eefd578c8cc8eb1a7ecff4a811a5"
+    },
+    "patched": {
+      "ref": "n132/arvo:42537225-fix",
+      "digest": "sha256:e45e1b22fe8a10aa0053a39546bd24d165cee13a8a6d0189c303240f3e9bcaf9"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/cpython3/Parser/tokenizer/helpers.c:208",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/cpython3/Parser/tokenizer/helpers.c:208"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

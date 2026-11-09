@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-966919978",
+  "chain": "CWE-456->CWE-457",
+  "project": "libxml2",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42470158",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://gitlab.gnome.org/GNOME/libxml2/-/commit/074180119fc90d5fd04ef9e8a5ee1910d6f9ad8e",
+      "fix_commits": [
+        "074180119fc90d5fd04ef9e8a5ee1910d6f9ad8e"
+      ],
+      "repo": "https://gitlab.gnome.org/GNOME/libxml2"
+    },
+    "patch": "diff --git a/SAX2.c b/SAX2.c\nindex 5cbb700af54d55c2b664fa8aebec14e64ba727f2..0f0ad2a473304278a7bd9e99f584d14aa8cb6b45 100644\n--- a/SAX2.c\n+++ b/SAX2.c\n@@ -2805,7 +2805,8 @@ xmlSAX2CDataBlock(void *ctx, const xmlChar *value, int len)\n \txmlTextConcat(lastChild, value, len);\n     } else {\n \tret = xmlNewCDataBlock(ctxt->myDoc, value, len);\n-\txmlAddChild(ctxt->node, ret);\n+\tif (xmlAddChild(ctxt->node, ret) == NULL)\n+\t\txmlFreeNode(ret);\n     }\n }\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42470158-vul",
+      "digest": "sha256:fe30aaa68d1b813c51b45adfbb9cce561cddf1a9fd329cc324e1eaeec78af3f0"
+    },
+    "patched": {
+      "ref": "n132/arvo:42470158-fix",
+      "digest": "sha256:80695593f53d3f4a9bc27c437fae9cfd830ec1886c1a090283311b9311203a9c"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/libxml2/parser.c:10877",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/libxml2/parser.c:10877"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

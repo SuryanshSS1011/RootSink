@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042508737",
+  "chain": "CWE-1284->CWE-125",
+  "project": "opensips",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42508737",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "a880e1faee1df2b23054de13689de97b2ec08f28",
+      "fix_commits": [
+        "a880e1faee1df2b23054de13689de97b2ec08f28"
+      ],
+      "repo": "https://github.com/OpenSIPS/opensips"
+    },
+    "patch": "diff --git a/parser/msg_parser.c b/parser/msg_parser.c\nindex ff935281498..adf08e697d0 100644\n--- a/parser/msg_parser.c\n+++ b/parser/msg_parser.c\n@@ -724,8 +724,8 @@ int parse_msg(char* buf, unsigned int len, struct sip_msg* msg)\n \thdr_flags_t flags;\n \n \t/* eat crlf from the beginning */\n-\tfor (tmp=buf; (*tmp=='\\n' || *tmp=='\\r')&&\n-\t\t\t(unsigned int)(tmp-buf) < len ; tmp++);\n+\tfor (tmp=buf; (unsigned int)(tmp-buf) < len\n+\t        && (*tmp=='\\n' || *tmp=='\\r'); tmp++);\n \toffset=tmp-buf;\n \tfl=&(msg->first_line);\n \trest=parse_first_line(tmp, len-offset, fl);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42508737-vul",
+      "digest": "sha256:df7702a88e0559185f8c53dc946748f8915c9d9d36a1ad0e869b0ce14ed82cc6"
+    },
+    "patched": {
+      "ref": "n132/arvo:42508737-fix",
+      "digest": "sha256:025039aa789565ab8e5ed5c70b21bf7e2383274e6e878d16376058263e1a9d8c"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/opensips/parser/msg_parser.c:704",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/opensips/parser/msg_parser.c:704"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

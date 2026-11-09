@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042496772",
+  "chain": "CWE-1285->CWE-125",
+  "project": "cpython3",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42496772",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "45862f9f5ef5d3c9da37f35e4fe4b18618530cfa",
+      "fix_commits": [
+        "45862f9f5ef5d3c9da37f35e4fe4b18618530cfa"
+      ],
+      "repo": "https://github.com/python/cpython"
+    },
+    "patch": "diff --git a/Python/ceval.c b/Python/ceval.c\nindex f7450670691dd1d..8e1c5bdf033074e 100644\n--- a/Python/ceval.c\n+++ b/Python/ceval.c\n@@ -4794,8 +4794,10 @@ scan_back_to_entry_start(unsigned char *p) {\n }\n \n static inline unsigned char *\n-skip_to_next_entry(unsigned char *p) {\n-    for (; (p[0]&128) == 0; p++);\n+skip_to_next_entry(unsigned char *p, unsigned char *end) {\n+    while (p < end && ((p[0] & 128) == 0)) {\n+        p++;\n+    }\n     return p;\n }\n \n@@ -4863,7 +4865,7 @@ get_exception_handler(PyCodeObject *code, int index)\n             parse_block(scan, &res);\n             return res;\n         }\n-        scan = skip_to_next_entry(scan);\n+        scan = skip_to_next_entry(scan, end);\n     }\n     res.b_handler = -1;\n     return res;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42496772-vul",
+      "digest": "sha256:8419bd97b3e3e1c8bbf37dd131fef4bdd904eb8219dc236ae9c198503b2345e0"
+    },
+    "patched": {
+      "ref": "n132/arvo:42496772-fix",
+      "digest": "sha256:7f7b459ecc5fc5f2f97963d72a5fef3ada87fdbd865d8167dec7c601427a9e97"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/cpython3/Python/ceval.c:4798",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/cpython3/Python/ceval.c:4798"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

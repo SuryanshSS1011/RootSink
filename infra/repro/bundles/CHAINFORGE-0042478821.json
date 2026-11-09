@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042478821",
+  "chain": "CWE-416->CWE-125",
+  "project": "curl",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42478821",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "02c6b984cb7a2e01f290544a53a24d30fc7ab32e",
+      "fix_commits": [
+        "02c6b984cb7a2e01f290544a53a24d30fc7ab32e"
+      ],
+      "repo": "https://github.com/curl/curl"
+    },
+    "patch": "From 02c6b984cb7a2e01f290544a53a24d30fc7ab32e Mon Sep 17 00:00:00 2001\nFrom: Daniel Stenberg <daniel@haxx.se>\nDate: Thu, 3 Oct 2019 13:24:43 +0200\nSubject: [PATCH] urlapi: fix use-after-free bug\n\nFollow-up from 2c20109a9b5d04\n\nAdded test 663 to verify.\n\nReported by OSS-Fuzz\nBug: https://crbug.com/oss-fuzz/17954\n\nCloses #4453\n---\n lib/urlapi.c            | 71 ++++++++++++++++++------------------\n tests/data/Makefile.inc |  2 +-\n tests/data/test663      | 79 +++++++++++++++++++++++++++++++++++++++++\n 3 files changed, 116 insertions(+), 36 deletions(-)\n create mode 100644 tests/data/test663\n\ndiff --git a/lib/urlapi.c b/lib/urlapi.c\nindex a57c5e7..fa514bc 100644\n--- a/lib/urlapi.c\n+++ b/lib/urlapi.c\n@@ -64,6 +64,7 @@ struct Curl_URL {\n   char *fragment;\n \n   char *scratch; /* temporary scratch area */\n+  char *temppath; /* temporary path pointer */\n   long portnum; /* the numerical version */\n };\n \n@@ -82,6 +83,7 @@ static void free_urlhandle(struct Curl_URL *u)\n   free(u->query);\n   free(u->fragment);\n   free(u->scratch);\n+  free(u->temppath);\n }\n \n /* move the full contents of one handle onto another and\n@@ -858,43 +860,53 @@ static CURLUcode seturl(const char *url, CURLU *u, unsigned int flags)\n       return CURLUE_OUT_OF_MEMORY;\n     path_alloced = TRUE;\n     strcpy_url(newp, path, TRUE); /* consider it relative */\n-    path = newp;\n+    u->temppath = path = newp;\n   }\n \n   fragment = strchr(path, '#');\n-  if(fragment)\n+  if(fragment) {\n     *fragment++ = 0;\n+    if(fragment[0]) {\n+      u->fragment = strdup(fragment);\n+      if(!u->fragment)\n+        return CURLUE_OUT_OF_MEMORY;\n+    }\n+  }\n \n   query = strchr(path, '?');\n-  if(query)\n+  if(query) {\n     *query++ = 0;\n+    /* done even if the query part is a blank string */\n+    u->query = strdup(query);\n+    if(!u->query)\n+      return CURLUE_OUT_OF_MEMORY;\n+  }\n \n   if(!path[0])\n-    /* if there's no path set, unset */\n+    /* if there's no path left set, unset */\n     path = NULL;\n-  else if(!(flags & CURLU_PATH_AS_IS)) {\n-    /* sanitise paths and remove ../ and ./ sequences according to RFC3986 */\n-    char *newp = Curl_dedotdotify(path);\n-    if(!newp) {\n-      if(path_alloced)\n-        free(path);\n-      return CURLUE_OUT_OF_MEMORY;\n-    }\n+  else {\n+    if(!(flags & CURLU_PATH_AS_IS)) {\n+      /* remove ../ and ./ sequences according to RFC3986 */\n+      char *newp = Curl_dedotdotify(path);\n+      if(!newp)\n+        return CURLUE_OUT_OF_MEMORY;\n \n-    if(strcmp(newp, path)) {\n-      /* if we got a new version */\n-      if(path_alloced)\n-        free(path);\n-      path = newp;\n-      path_alloced = TRUE;\n+      if(strcmp(newp, path)) {\n+        /* if we got a new version */\n+        if(path_alloced)\n+          Curl_safefree(u->temppath);\n+        u->temppath = path = newp;\n+        path_alloced = TRUE;\n+      }\n+      else\n+        free(newp);\n     }\n-    else\n-      free(newp);\n-  }\n-  if(path) {\n+\n     u->path = path_alloced?path:strdup(path);\n     if(!u->path)\n       return CURLUE_OUT_OF_MEMORY;\n+    u->temppath = NULL; /* used now */\n   }\n \n   if(hostname) {\n@@ -926,19 +938,8 @@ static CURLUcode seturl(const char *url, CURLU *u, unsigned int flags)\n       return CURLUE_OUT_OF_MEMORY;\n   }\n \n-  if(query) {\n-    u->query = strdup(query);\n-    if(!u->query)\n-      return CURLUE_OUT_OF_MEMORY;\n-  }\n-  if(fragment && fragment[0]) {\n-    u->fragment = strdup(fragment);\n-    if(!u->fragment)\n-      return CURLUE_OUT_OF_MEMORY;\n-  }\n-\n-  free(u->scratch);\n-  u->scratch = NULL;\n+  Curl_safefree(u->scratch);\n+  Curl_safefree(u->temppath);\n \n   return CURLUE_OK;\n }\ndiff --git a/tests/data/Makefile.inc b/tests/data/Makefile.inc\nindex 7d23732..5b0af4e 100644\n--- a/tests/data/Makefile.inc\n+++ b/tests/data/Makefile.inc\n@@ -84,7 +84,7 @@ test626 test627 test628 test629 test630 test631 test632 test633 test634 \\\n test635 test636 test637 test638 test639 test640 test641 test642 \\\n test643 test644 test645 test646 test647 test648 test649 test650 test651 \\\n test652 test653 test654 test655 test656 test658 test659 test660 test661 \\\n-test662 \\\n+test662 test663 \\\n \\\n test700 test701 test702 test703 test704 test705 test706 test707 test708 \\\n test709 test710 test711 test712 test713 test714 test715 test716 test717 \\\ndiff --git a/tests/data/test663 b/tests/data/test663\nnew file mode 100644\nindex 0000000..b9648fd\n--- /dev/null\n+++ b/tests/data/test663\n@@ -0,0 +1,79 @@\n+#\n+# This test is crafted to reproduce oss-fuzz bug\n+# https://crbug.com/oss-fuzz/17954\n+#\n+<testcase>\n+<info>\n+<keywords>\n+HTTP\n+HTTP GET\n+followlocation\n+</keywords>\n+</info>\n+#\n+# Server-side\n+<reply>\n+<data>\n+HTTP/1.1 302 OK\n+Location: http://example.net/there/it/is/../../tes t case=/6630002? yes no\n+Date: Thu, 09 Nov 2010 14:49:00 GMT\n+Content-Length: 0\n+\n+</data>\n+<data2>\n+HTTP/1.1 200 OK\n+Location: this should be ignored\n+Date: Thu, 09 Nov 2010 14:49:00 GMT\n+Content-Length: 5\n+\n+body\n+</data2>\n+<datacheck>\n+HTTP/1.1 302 OK\n+Location: http://example.net/there/it/is/../../tes t case=/6630002? yes no\n+Date: Thu, 09 Nov 2010 14:49:00 GMT\n+Content-Length: 0\n+\n+HTTP/1.1 200 OK\n+Location: this should be ignored\n+Date: Thu, 09 Nov 2010 14:49:00 GMT\n+Content-Length: 5\n+\n+body\n+</datacheck>\n+</reply>\n+\n+#\n+# Client-side\n+<client>\n+<server>\n+http\n+</server>\n+ <name>\n+HTTP redirect with dotdots and whitespaces in absolute Location: URL\n+ </name>\n+ <command>\n+http://example.com/please/../gimme/663?foobar#hello -L -x http://%HOSTIP:%HTTPPORT\n+</command>\n+</client>\n+\n+#\n+# Verify data after the test has been \"shot\"\n+<verify>\n+<strip>\n+^User-Agent:.*\n+</strip>\n+<protocol>\n+GET http://example.com/gimme/663?foobar HTTP/1.1\n+Host: example.com\n+Accept: */*\n+Proxy-Connection: Keep-Alive\n+\n+GET http://example.net/there/tes%20t%20case=/6630002?+yes+no HTTP/1.1\n+Host: example.net\n+Accept: */*\n+Proxy-Connection: Keep-Alive\n+\n+</protocol>\n+</verify>\n+</testcase>\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42478821-vul",
+      "digest": "sha256:fb90f054f300e5aff13fd8ba81a512a029c3178ea537b1a86a46b7d6f08a98e9"
+    },
+    "patched": {
+      "ref": "n132/arvo:42478821-fix",
+      "digest": "sha256:cd8c4384f09646f3c885a7292ac371ee0058586a33656c7e819ddd61c424c1d4"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/curl/lib/urlapi.c:934",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/curl/lib/urlapi.c:934"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

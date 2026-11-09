@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042536354",
+  "chain": "CWE-456->CWE-457",
+  "project": "librawspeed",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42536354",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "d24332f4f33029ddb5a5d9ab3f07461f60905390",
+      "fix_commits": [
+        "d24332f4f33029ddb5a5d9ab3f07461f60905390"
+      ],
+      "repo": "https://github.com/darktable-org/rawspeed"
+    },
+    "patch": "From d24332f4f33029ddb5a5d9ab3f07461f60905390 Mon Sep 17 00:00:00 2001\nFrom: Roman Lebedev <lebedev.ri@gmail.com>\nDate: Mon, 19 Mar 2018 20:41:20 +0300\nSubject: [PATCH] Cr2Decompressor::decodeN_X_Y(): use c-p-p when checking slice\n widths\n\n---\n src/librawspeed/decompressors/Cr2Decompressor.cpp | 2 +-\n 1 file changed, 1 insertion(+), 1 deletion(-)\n\ndiff --git a/src/librawspeed/decompressors/Cr2Decompressor.cpp b/src/librawspeed/decompressors/Cr2Decompressor.cpp\nindex 91a20a9..54cfed9 100644\n--- a/src/librawspeed/decompressors/Cr2Decompressor.cpp\n+++ b/src/librawspeed/decompressors/Cr2Decompressor.cpp\n@@ -177,7 +177,7 @@ void Cr2Decompressor::decodeN_X_Y()\n   }\n \n   if (frame.h * std::accumulate(slicesWidths.begin(), slicesWidths.end(), 0) <\n-      mRaw->dim.area())\n+      mRaw->getCpp() * mRaw->dim.area())\n     ThrowRDE(\"Incorrrect slice height / slice widths! Less than image size.\");\n \n   unsigned processedPixels = 0;\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42536354-vul",
+      "digest": "sha256:8011def141748778588ea59739a4ff6a4f3a536572f7e93d344710afd7158216"
+    },
+    "patched": {
+      "ref": "n132/arvo:42536354-fix",
+      "digest": "sha256:9888670de61a6774088ece21d8232e229f46d199b13a746deca3231019f9ee72"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/librawspeed/src/librawspeed/common/RawImage.cpp:174",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/librawspeed/src/librawspeed/common/RawImage.cpp:174"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

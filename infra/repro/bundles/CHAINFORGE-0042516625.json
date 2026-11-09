@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042516625",
+  "chain": "CWE-1285->CWE-125",
+  "project": "hunspell",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42516625",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "7357713ba5d529f3ff70c654b703429fc9cb55a4",
+      "fix_commits": [
+        "7357713ba5d529f3ff70c654b703429fc9cb55a4"
+      ],
+      "repo": "https://github.com/hunspell/hunspell"
+    },
+    "patch": "diff --git a/src/hunspell/affixmgr.cxx b/src/hunspell/affixmgr.cxx\nindex f32a456a9..0793b671b 100644\n--- a/src/hunspell/affixmgr.cxx\n+++ b/src/hunspell/affixmgr.cxx\n@@ -1353,7 +1353,7 @@ int AffixMgr::cpdpat_check(const char* word,\n int AffixMgr::cpdcase_check(const char* word, int pos) {\n   if (utf8) {\n     const char* p;\n-    for (p = word + pos - 1; (*p & 0xc0) == 0x80; p--)\n+    for (p = word + pos - 1; p > word && (*p & 0xc0) == 0x80; p--)\n       ;\n     std::string pair(p);\n     std::vector<w_char> pair_u;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42516625-vul",
+      "digest": "sha256:2a0e7d71a4dd0a76c29d266caab767deab7c92dbbc61829a8a5222a64e43361d"
+    },
+    "patched": {
+      "ref": "n132/arvo:42516625-fix",
+      "digest": "sha256:c1932ae17adb6fb5ecad9f7eb9eb577f29cd6f37882a45f502a0272086652df4"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/hunspell/src/hunspell/affixmgr.cxx:1351",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/hunspell/src/hunspell/affixmgr.cxx:1351"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

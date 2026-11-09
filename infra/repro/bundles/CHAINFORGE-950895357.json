@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-950895357",
+  "chain": "CWE-843->CWE-119",
+  "project": "serenity",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42518789",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/SerenityOS/serenity/commit/0016f63547f70f969eeb6030d8d7433b05cae934",
+      "fix_commits": [
+        "0016f63547f70f969eeb6030d8d7433b05cae934"
+      ],
+      "repo": "https://github.com/SerenityOS/serenity"
+    },
+    "patch": "diff --git a/AK/Array.h b/AK/Array.h\nindex 26c0a225b50606..3bb11998a37f76 100644\n--- a/AK/Array.h\n+++ b/AK/Array.h\n@@ -13,6 +13,16 @@\n \n namespace AK {\n \n+namespace Detail {\n+// This type serves as the storage of 0-sized `AK::Array`s. While zero-length `T[0]`\n+// is accepted as a GNU extension, it causes problems with UBSan in Clang 16.\n+template<typename T>\n+struct EmptyArrayStorage {\n+    T& operator[](size_t) const { VERIFY_NOT_REACHED(); }\n+    constexpr operator T*() const { return nullptr; }\n+};\n+}\n+\n template<typename T, size_t Size>\n struct Array {\n     using ValueType = T;\n@@ -109,7 +119,7 @@ struct Array {\n         return value;\n     }\n \n-    T __data[Size];\n+    Conditional<Size == 0, Detail::EmptyArrayStorage<T>, T[Size]> __data;\n };\n \n template<typename T, typename... Types>\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42518789-vul",
+      "digest": "sha256:b89de5d6f6b6a8012df1934044647b26fd0bc129301dc90a2810875f3f0363c4"
+    },
+    "patched": {
+      "ref": "n132/arvo:42518789-fix",
+      "digest": "sha256:12514888e8140c2518f84c7b84aa86bd25bcd79e7b3e14051ee36b0602e63328"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "crash_site": "/src/serenity/Meta/Lagom/../../AK/Format.h:269",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 843,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 119,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "site": "/src/serenity/Meta/Lagom/../../AK/Format.h:269"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

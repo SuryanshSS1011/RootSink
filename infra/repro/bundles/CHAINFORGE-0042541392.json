@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042541392",
+  "chain": "CWE-456->CWE-457",
+  "project": "mupdf",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42541392",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "dc8f364a1289bb8235afec4dae78a08e5d6d6155",
+      "fix_commits": [
+        "dc8f364a1289bb8235afec4dae78a08e5d6d6155"
+      ],
+      "repo": "git://git.ghostscript.com/jbig2dec.git"
+    },
+    "patch": "From dc8f364a1289bb8235afec4dae78a08e5d6d6155 Mon Sep 17 00:00:00 2001\nFrom: Sebastian Rasmussen <sebras@gmail.com>\nDate: Fri, 3 Aug 2018 19:10:09 +0800\nSubject: [PATCH] jbig2dec: When reading past the end of a word stream, return\n 0.\n\nPreviously the returned value would be uninitialized, leading\nto issues detected by valgrind later on in the parsing.\n---\n jbig2.c | 4 +++-\n 1 file changed, 3 insertions(+), 1 deletion(-)\n\ndiff --git a/jbig2.c b/jbig2.c\nindex ab507a7..0768536 100644\n--- a/jbig2.c\n+++ b/jbig2.c\n@@ -451,8 +451,10 @@ jbig2_word_stream_buf_get_next_word(Jbig2WordStream *self, size_t offset, uint32\n \n     if (self == NULL || word == NULL)\n         return -1;\n-    if (offset >= z->size)\n+    if (offset >= z->size) {\n+        *word = 0;\n         return 0;\n+    }\n \n     if (offset < z->size) {\n         val |= data[offset] << 24;\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42541392-vul",
+      "digest": "sha256:5c9a0042e08e4a9edcffb88909f27c3e239fc4e7004f7e9d43f8e48636bcda9b"
+    },
+    "patched": {
+      "ref": "n132/arvo:42541392-fix",
+      "digest": "sha256:7493a76d58f6040374239600df4c7e099ebfeb1141c972e1af48d3d63d511a81"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/mupdf/thirdparty/jbig2dec/jbig2_arith.c:71",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/mupdf/thirdparty/jbig2dec/jbig2_arith.c:71"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042510065",
+  "chain": "CWE-416->CWE-125",
+  "project": "imagemagick",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42510065",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "052cb94517a1fcf4d8e1f21c2bb1340417b19177",
+      "fix_commits": [
+        "052cb94517a1fcf4d8e1f21c2bb1340417b19177"
+      ],
+      "repo": "https://github.com/imagemagick/imagemagick"
+    },
+    "patch": "From 052cb94517a1fcf4d8e1f21c2bb1340417b19177 Mon Sep 17 00:00:00 2001\nFrom: Cristy <urban-warrior@imagemagick.org>\nDate: Mon, 28 Mar 2022 12:50:55 -0400\nSubject: [PATCH] do not set ICC properties unless the value is non-null\n\n---\n MagickCore/property.c | 19 ++++++++++++-------\n 1 file changed, 12 insertions(+), 7 deletions(-)\n\ndiff --git a/MagickCore/property.c b/MagickCore/property.c\nindex 3241faf..6eb7c43 100644\n--- a/MagickCore/property.c\n+++ b/MagickCore/property.c\n@@ -1730,8 +1730,9 @@ static MagickBooleanType GetICCProperty(const Image *image,const char *property,\n           {\n             extent=cmsGetProfileInfoASCII(icc_profile,cmsInfoDescription,\"en\",\n               \"US\",info,MagickMin(MagickPathExtent-1,extent));\n-            (void) SetImageProperty((Image *) image,\"icc:description\",info,\n-              exception);\n+            if (*info != '\\0')\n+              (void) SetImageProperty((Image *) image,\"icc:description\",info,\n+                exception);\n          }\n         extent=cmsGetProfileInfoASCII(icc_profile,cmsInfoManufacturer,\"en\",\"US\",\n           NULL,0);\n@@ -1739,8 +1740,9 @@ static MagickBooleanType GetICCProperty(const Image *image,const char *property,\n           {\n             extent=cmsGetProfileInfoASCII(icc_profile,cmsInfoManufacturer,\"en\",\n               \"US\",info,MagickMin(MagickPathExtent-1,extent));\n-            (void) SetImageProperty((Image *) image,\"icc:manufacturer\",info,\n-              exception);\n+            if (*info != '\\0')\n+              (void) SetImageProperty((Image *) image,\"icc:manufacturer\",info,\n+                exception);\n           }\n         extent=cmsGetProfileInfoASCII(icc_profile,cmsInfoModel,\"en\",\"US\",\n           NULL,0);\n@@ -1748,7 +1750,9 @@ static MagickBooleanType GetICCProperty(const Image *image,const char *property,\n           {\n             extent=cmsGetProfileInfoASCII(icc_profile,cmsInfoModel,\"en\",\"US\",\n               info,MagickMin(MagickPathExtent-1,extent));\n-            (void) SetImageProperty((Image *) image,\"icc:model\",info,exception);\n+            if (*info != '\\0')\n+              (void) SetImageProperty((Image *) image,\"icc:model\",info,\n+                exception);\n           }\n         extent=cmsGetProfileInfoASCII(icc_profile,cmsInfoCopyright,\"en\",\"US\",\n           NULL,0);\n@@ -1756,8 +1760,9 @@ static MagickBooleanType GetICCProperty(const Image *image,const char *property,\n           {\n             extent=cmsGetProfileInfoASCII(icc_profile,cmsInfoCopyright,\"en\",\n               \"US\",info,MagickMin(MagickPathExtent-1,extent));\n-            (void) SetImageProperty((Image *) image,\"icc:copyright\",info,\n-              exception);\n+            if (*info != '\\0')\n+              (void) SetImageProperty((Image *) image,\"icc:copyright\",info,\n+                exception);\n           }\n #endif\n         (void) cmsCloseProfile(icc_profile);\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42510065-vul",
+      "digest": "sha256:9984dabd1662fc925fb0a32207501dc6917c5690815fd03653a18a24590b65b1"
+    },
+    "patched": {
+      "ref": "n132/arvo:42510065-fix",
+      "digest": "sha256:c31d91808e84b2c00906abb8157a69a6a67e5483ffd3c12b537a761a6591dbee"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/imagemagick/MagickCore/locale.c:1416",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/imagemagick/MagickCore/locale.c:1416"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

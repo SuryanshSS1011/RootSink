@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042471108",
+  "chain": "CWE-416->CWE-125",
+  "project": "libgit2",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42471108",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "0e26717a57169d1222bdebef3f0caa728fd85b75",
+      "fix_commits": [
+        "0e26717a57169d1222bdebef3f0caa728fd85b75"
+      ],
+      "repo": "https://github.com/libgit2/libgit2"
+    },
+    "patch": "diff --git a/ci/test.ps1 b/ci/test.ps1\nindex 7a55bff7983..1cf02118f13 100644\n--- a/ci/test.ps1\n+++ b/ci/test.ps1\n@@ -7,7 +7,7 @@ $PSDefaultParameterValues['*:ErrorAction'] = 'Stop'\n \n $SourceDir = Split-Path (Split-Path (Get-Variable MyInvocation).Value.MyCommand.Path)\n $BuildDir = Get-Location\n-$Success = $true\n+$global:Success = $true\n \n if ($Env:SKIP_TESTS) { exit }\n \n@@ -25,7 +25,7 @@ function run_test {\n \tWrite-Host $TestCommand\n \tInvoke-Expression $TestCommand\n \n-\tif ($LastExitCode -ne 0) { $Success = $false }\n+\tif ($LastExitCode -ne 0) { $global:Success = $false }\n }\n \n Write-Host \"##############################################################################\"\n@@ -69,4 +69,4 @@ if (-not $Env:SKIP_PROXY_TESTS) {\n \ttaskkill /F /IM javaw.exe\n }\n \n-if (-not $Success) { exit 1 }\n+if (-Not $global:Success) { exit 1 }\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42471108-vul",
+      "digest": "sha256:8a5bd8848d85ca1975688a3718e692d4fbb7cdc1afd1b6b4c524b43730f92c49"
+    },
+    "patched": {
+      "ref": "n132/arvo:42471108-fix",
+      "digest": "sha256:73e92249db5b7ae7dec179b0d75685cf725a94721a5dc70a99eaee193a24031a"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/libgit2/src/buffer.c:506",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/libgit2/src/buffer.c:506"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

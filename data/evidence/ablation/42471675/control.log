@@ -1,0 +1,80 @@
+======================= INFO =========================
+This binary is built for AFL-fuzz.
+To run the target function on individual input(s) execute this:
+  /out/av1_dec_fuzzer < INPUT_FILE
+or
+  /out/av1_dec_fuzzer INPUT_FILE1 [INPUT_FILE2 ... ]
+To fuzz with afl-fuzz execute this:
+  afl-fuzz [afl-flags] /out/av1_dec_fuzzer [-N]
+afl-fuzz will run N iterations before re-spawning the process (default: 1000)
+======================================================
+Reading 95 bytes from /tmp/poc
+=================================================================
+==1902==ERROR: AddressSanitizer: stack-buffer-overflow on address 0x7fe268a033f1 at pc 0x00000079e87a bp 0x7ffc9aaec470 sp 0x7ffc9aaec468
+READ of size 16 at 0x7fe268a033f1 thread T0
+SCARINESS: 41 (multi-byte-read-stack-buffer-overflow)
+    #0 0x79e879 in highbd_dr_prediction_z1_64xN_avx2 /src/aom/aom_dsp/x86/intrapred_avx2.c
+    #1 0x798dcf in av1_highbd_dr_prediction_z1_avx2 /src/aom/aom_dsp/x86/intrapred_avx2.c:1507:7
+    #2 0x8e2ba4 in highbd_dr_predictor /src/aom/av1/common/reconintra.c:774:5
+    #3 0x8e2ba4 in build_intra_predictors_high /src/aom/av1/common/reconintra.c:1299
+    #4 0x8e2ba4 in av1_predict_intra_block /src/aom/av1/common/reconintra.c:1573
+    #5 0x8e41a1 in av1_predict_intra_block_facade /src/aom/av1/common/reconintra.c:1640:3
+    #6 0x57ac72 in predict_and_reconstruct_intra_block /src/aom/av1/decoder/decodeframe.c:225:3
+    #7 0x592317 in decode_token_recon_block /src/aom/av1/decoder/decodeframe.c:1155:15
+    #8 0x5882c9 in decode_partition /src/aom/av1/decoder/decodeframe.c:1799:26
+    #9 0x588688 in decode_partition /src/aom/av1/decoder/decodeframe.c:1809:7
+    #10 0x595b3d in decode_tile /src/aom/av1/decoder/decodeframe.c:3102:7
+    #11 0x56b3bc in decode_tiles /src/aom/av1/decoder/decodeframe.c:3236:7
+    #12 0x56b3bc in av1_decode_tg_tiles_and_wrapup /src/aom/av1/decoder/decodeframe.c:5565
+    #13 0x5d1ae7 in read_one_tile_group_obu /src/aom/av1/decoder/obu.c:351:3
+    #14 0x5d1ae7 in aom_decode_frame_from_obus /src/aom/av1/decoder/obu.c:825
+    #15 0x5bffd9 in av1_receive_compressed_data /src/aom/av1/decoder/decoder.c:516:7
+    #16 0x54fb16 in frame_worker_hook /src/aom/av1/av1_dx_iface.c:353:16
+    #17 0x7d3174 in execute /src/aom/aom_util/aom_thread.c:163:27
+    #18 0x5437d5 in decode_one /src/aom/av1/av1_dx_iface.c:491:3
+    #19 0x5437d5 in decoder_decode /src/aom/av1/av1_dx_iface.c:619
+    #20 0x53b260 in aom_codec_decode /src/aom/aom/src/aom_decoder.c:106:11
+    #21 0x539588 in LLVMFuzzerTestOneInput /src/av1_dec_fuzzer.cc:58:9
+    #22 0x53731a in ExecuteFilesOnyByOne(int, char**) /src/libfuzzer/afl/afl_driver.cpp:301:5
+    #23 0x53787e in main /src/libfuzzer/afl/afl_driver.cpp:339:12
+    #24 0x7fe26796982f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+    #25 0x423828 in _start (/out/av1_dec_fuzzer+0x423828)
+
+DEDUP_TOKEN: highbd_dr_prediction_z1_64xN_avx2--av1_highbd_dr_prediction_z1_avx2--highbd_dr_predictor
+Address 0x7fe268a033f1 is located in stack of thread T0 at offset 3057 in frame
+    #0 0x8dd5ff in av1_predict_intra_block /src/aom/av1/common/reconintra.c:1500
+
+DEDUP_TOKEN: av1_predict_intra_block
+  This frame has 5 object(s):
+    [32, 2210) 'buffer.i.i' (line 897)
+    [2352, 2672) 'left_data.i463' (line 1137)
+    [2736, 3056) 'above_data.i464' (line 1138) <== Memory access at offset 3057 overflows this variable
+    [3120, 3280) 'left_data.i' (line 1324)
+    [3344, 3504) 'above_data.i' (line 1325)
+HINT: this may be a false positive if your program uses some custom stack unwind mechanism, swapcontext or vfork
+      (longjmp and C++ exceptions *are* supported)
+SUMMARY: AddressSanitizer: stack-buffer-overflow /src/aom/aom_dsp/x86/intrapred_avx2.c in highbd_dr_prediction_z1_64xN_avx2
+Shadow bytes around the buggy address:
+  0x0ffccd138620: f2 f2 f2 f2 f2 f2 00 00 00 00 00 00 00 00 00 00
+  0x0ffccd138630: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0ffccd138640: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 f2 f2
+  0x0ffccd138650: f2 f2 f2 f2 f2 f2 00 00 00 00 00 00 00 00 00 00
+  0x0ffccd138660: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x0ffccd138670: 00 00 00 00 00 00 00 00 00 00 00 00 00 00[f2]f2
+  0x0ffccd138680: f2 f2 f2 f2 f2 f2 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8
+  0x0ffccd138690: f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f2 f2 f2 f2 f2 f2
+  0x0ffccd1386a0: f2 f2 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8
+  0x0ffccd1386b0: f8 f8 f8 f8 f8 f8 f3 f3 f3 f3 f3 f3 f3 f3 f3 f3
+  0x0ffccd1386c0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6

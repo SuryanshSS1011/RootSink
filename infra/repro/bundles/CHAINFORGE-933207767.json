@@ -1,0 +1,82 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-933207767",
+  "chain": "CWE-1284->CWE-190->CWE-119",
+  "project": "arduinojson",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42536073",
+    "commit_range": {
+      "introduced": null,
+      "fixed": null,
+      "fix_commits": [
+        "208e7a33043784d4b9939fb236c84f56cd58e6f5"
+      ],
+      "repo": "https://github.com/bblanchon/ArduinoJson"
+    },
+    "patch": "diff --git a/extras/tests/MixedConfiguration/string_length_size_2.cpp b/extras/tests/MixedConfiguration/string_length_size_2.cpp\nindex a9a24cbfd..2c1315b08 100644\n--- a/extras/tests/MixedConfiguration/string_length_size_2.cpp\n+++ b/extras/tests/MixedConfiguration/string_length_size_2.cpp\n@@ -112,6 +112,15 @@ TEST_CASE(\"ARDUINOJSON_STRING_LENGTH_SIZE == 2\") {\n       REQUIRE(err == DeserializationError::NoMemory);\n     }\n \n+    // https://oss-fuzz.com/testcase?key=5354792971993088\n+    SECTION(\"doesn't overflow if binary size == 0xFFFF\") {\n+      auto input = \"\\xc5\\xff\\xff\"_s;\n+\n+      auto err = deserializeMsgPack(doc, input);\n+\n+      REQUIRE(err == DeserializationError::NoMemory);\n+    }\n+\n     SECTION(\"returns Ok if extension size <= 65531\") {\n       auto input = \"\\xc8\\xff\\xfb\\x01\" + std::string(65531, '?');\n \n@@ -120,7 +129,7 @@ TEST_CASE(\"ARDUINOJSON_STRING_LENGTH_SIZE == 2\") {\n       REQUIRE(err == DeserializationError::Ok);\n     }\n \n-    SECTION(\"returns NoMemory if binary size >= 65532\") {\n+    SECTION(\"returns NoMemory if extension size >= 65532\") {\n       auto input = \"\\xc8\\xff\\xfc\\x01\" + std::string(65532, '?');\n \n       auto err = deserializeMsgPack(doc, input);\ndiff --git a/extras/tests/MixedConfiguration/string_length_size_4.cpp b/extras/tests/MixedConfiguration/string_length_size_4.cpp\nindex 36c69f366..4059c3d48 100644\n--- a/extras/tests/MixedConfiguration/string_length_size_4.cpp\n+++ b/extras/tests/MixedConfiguration/string_length_size_4.cpp\n@@ -72,6 +72,23 @@ TEST_CASE(\"ARDUINOJSON_STRING_LENGTH_SIZE == 4\") {\n \n       REQUIRE(err == DeserializationError::Ok);\n     }\n+\n+    // https://oss-fuzz.com/testcase?key=5354792971993088\n+    SECTION(\"doesn't overflow if binary size == 0xFFFFFFFF\") {\n+      auto input = \"\\xc6\\xff\\xff\\xff\\xff\"_s;\n+\n+      auto err = deserializeMsgPack(doc, input);\n+\n+      REQUIRE(err == DeserializationError::NoMemory);\n+    }\n+\n+    SECTION(\"doesn't overflow if string size == 0xFFFFFFFF\") {\n+      auto input = \"\\xdb\\xff\\xff\\xff\\xff???????????????????\"_s;\n+\n+      auto err = deserializeMsgPack(doc, input);\n+\n+      REQUIRE(err != DeserializationError::Ok);\n+    }\n   }\n \n   SECTION(\"bin 32 deserialization\") {\ndiff --git a/src/ArduinoJson/Memory/StringNode.hpp b/src/ArduinoJson/Memory/StringNode.hpp\nindex 7b8f6af39..f60cc2e64 100644\n--- a/src/ArduinoJson/Memory/StringNode.hpp\n+++ b/src/ArduinoJson/Memory/StringNode.hpp\n@@ -35,8 +35,10 @@ struct StringNode {\n   static StringNode* create(size_t length, Allocator* allocator) {\n     if (length > maxLength)\n       return nullptr;\n-    auto node = reinterpret_cast<StringNode*>(\n-        allocator->allocate(sizeForLength(length)));\n+    auto size = sizeForLength(length);\n+    if (size < length)  // integer overflow\n+      return nullptr;   // (not testable on 64-bit)\n+    auto node = reinterpret_cast<StringNode*>(allocator->allocate(size));\n     if (node) {\n       node->length = length_type(length);\n       node->references = 1;\ndiff --git a/src/ArduinoJson/MsgPack/MsgPackDeserializer.hpp b/src/ArduinoJson/MsgPack/MsgPackDeserializer.hpp\nindex f94e2ed05..4d30629c6 100644\n--- a/src/ArduinoJson/MsgPack/MsgPackDeserializer.hpp\n+++ b/src/ArduinoJson/MsgPack/MsgPackDeserializer.hpp\n@@ -198,8 +198,13 @@ class MsgPackDeserializer {\n       if (err)\n         return err;\n \n+      uint32_t size32 = 0;\n       for (size_t i = 0; i < sizeBytes; i++)\n-        size = (size << 8) | header[i + 1];\n+        size32 = (size32 << 8) | header[i + 1];\n+\n+      size = size_t(size32);\n+      if (size < size32)                        // integer overflow\n+        return DeserializationError::NoMemory;  // (not testable on 32/64-bit)\n     }\n \n     // array 16, 32 and fixarray\n@@ -366,7 +371,11 @@ class MsgPackDeserializer {\n   DeserializationError::Code readRawString(VariantData* variant,\n                                            const void* header,\n                                            uint8_t headerSize, size_t n) {\n-    char* p = stringBuffer_.reserve(headerSize + n);\n+    auto totalSize = size_t(headerSize + n);\n+    if (totalSize < n)                        // integer overflow\n+      return DeserializationError::NoMemory;  // (not testable on 64-bit)\n+\n+    char* p = stringBuffer_.reserve(totalSize);\n     if (!p)\n       return DeserializationError::NoMemory;\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42536073-vul",
+      "digest": "sha256:f6fed4bbfc398ffa6085f2bd6cd9395b2249b99b2512c6e652f0ced80a8c3a4f"
+    },
+    "patched": {
+      "ref": "n132/arvo:42536073-fix",
+      "digest": "sha256:d014b196cfe9c0c863ebf5e4030742484e9c3671418736578f2c14a4b40c7320"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/arduinojson/extras/fuzzing/../../src/ArduinoJson/Deserialization/Readers/IteratorReader.hpp:29",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 190,
+      "role": "intermediate",
+      "witness": {
+        "method": "ubsan-rebuild",
+        "recipe": "SANITIZER=undefined compile && $ENTRYPOINT",
+        "ubsan_options": "print_stacktrace=1:halt_on_error=0:silence_unsigned_overflow=0:symbolize=1"
+      },
+      "witnessed": false
+    },
+    {
+      "cwe_id": 119,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/arduinojson/extras/fuzzing/../../src/ArduinoJson/Deserialization/Readers/IteratorReader.hpp:29"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

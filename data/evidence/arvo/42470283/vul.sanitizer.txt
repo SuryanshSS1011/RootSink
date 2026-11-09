@@ -1,0 +1,92 @@
+======================= INFO =========================
+This binary is built for AFL-fuzz.
+To run the target function on individual input(s) execute this:
+  /out/av1_dec_fuzzer_threaded < INPUT_FILE
+or
+  /out/av1_dec_fuzzer_threaded INPUT_FILE1 [INPUT_FILE2 ... ]
+To fuzz with afl-fuzz execute this:
+  afl-fuzz [afl-flags] /out/av1_dec_fuzzer_threaded [-N]
+afl-fuzz will run N iterations before re-spawning the process (default: 1000)
+======================================================
+Reading 219 bytes from /tmp/poc
+Warning: Read invalid frame size (875693108)
+=================================================================
+==2160575==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x60b00000041c at pc 0x0000008c93c5 bp 0x7ffd0c604390 sp 0x7ffd0c604388
+WRITE of size 4 at 0x60b00000041c thread T0
+SCARINESS: 36 (4-byte-write-heap-buffer-overflow)
+    #0 0x8c93c4 in enqueue_lr_jobs /src/aom/av1/common/thread_common.c:599:55
+    #1 0x8c93c4 in foreach_rest_unit_in_planes_mt /src/aom/av1/common/thread_common.c:743
+    #2 0x8c93c4 in av1_loop_restoration_filter_frame_mt /src/aom/av1/common/thread_common.c:780
+    #3 0x56cf1b in av1_decode_tg_tiles_and_wrapup /src/aom/av1/decoder/decodeframe.c
+    #4 0x5ccd99 in read_one_tile_group_obu /src/aom/av1/decoder/obu.c:342:3
+    #5 0x5ccd99 in aom_decode_frame_from_obus /src/aom/av1/decoder/obu.c:783
+    #6 0x5bcfeb in av1_receive_compressed_data /src/aom/av1/decoder/decoder.c:499:7
+    #7 0x54e146 in frame_worker_hook /src/aom/av1/av1_dx_iface.c:348:16
+    #8 0x7930a4 in execute /src/aom/aom_util/aom_thread.c:135:27
+    #9 0x54200f in decode_one /src/aom/av1/av1_dx_iface.c:505:3
+    #10 0x54200f in decoder_decode /src/aom/av1/av1_dx_iface.c:589
+    #11 0x53a683 in aom_codec_decode /src/aom/aom/src/aom_decoder.c:111:11
+    #12 0x538e34 in LLVMFuzzerTestOneInput /src/av1_dec_fuzzer.cc:56:9
+    #13 0x536d51 in ExecuteFilesOnyByOne(int, char**) /src/libfuzzer/afl/afl_driver.cpp:301:5
+    #14 0x5372fe in main /src/libfuzzer/afl/afl_driver.cpp:339:12
+    #15 0x1531945fd82f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+    #16 0x4237e8 in _start (/out/av1_dec_fuzzer_threaded+0x4237e8)
+
+DEDUP_TOKEN: enqueue_lr_jobs--foreach_rest_unit_in_planes_mt--av1_loop_restoration_filter_frame_mt
+0x60b00000041c is located 1 bytes to the right of 107-byte region [0x60b0000003b0,0x60b00000041b)
+allocated by thread T0 here:
+    #0 0x4f251f in malloc /src/llvm/projects/compiler-rt/lib/asan/asan_malloc_linux.cc:146
+    #1 0x53fe7e in aom_memalign /src/aom/aom_mem/aom_mem.c:55:22
+    #2 0x53fe7e in aom_malloc /src/aom/aom_mem/aom_mem.c:63
+    #3 0x8c82c0 in loop_restoration_alloc /src/aom/av1/common/thread_common.c:499:3
+    #4 0x8c82c0 in foreach_rest_unit_in_planes_mt /src/aom/av1/common/thread_common.c:733
+    #5 0x8c82c0 in av1_loop_restoration_filter_frame_mt /src/aom/av1/common/thread_common.c:780
+    #6 0x56cf1b in av1_decode_tg_tiles_and_wrapup /src/aom/av1/decoder/decodeframe.c
+    #7 0x5ccd99 in read_one_tile_group_obu /src/aom/av1/decoder/obu.c:342:3
+    #8 0x5ccd99 in aom_decode_frame_from_obus /src/aom/av1/decoder/obu.c:783
+    #9 0x5bcfeb in av1_receive_compressed_data /src/aom/av1/decoder/decoder.c:499:7
+    #10 0x54e146 in frame_worker_hook /src/aom/av1/av1_dx_iface.c:348:16
+    #11 0x7930a4 in execute /src/aom/aom_util/aom_thread.c:135:27
+    #12 0x54200f in decode_one /src/aom/av1/av1_dx_iface.c:505:3
+    #13 0x54200f in decoder_decode /src/aom/av1/av1_dx_iface.c:589
+    #14 0x53a683 in aom_codec_decode /src/aom/aom/src/aom_decoder.c:111:11
+    #15 0x538e34 in LLVMFuzzerTestOneInput /src/av1_dec_fuzzer.cc:56:9
+    #16 0x536d51 in ExecuteFilesOnyByOne(int, char**) /src/libfuzzer/afl/afl_driver.cpp:301:5
+    #17 0x5372fe in main /src/libfuzzer/afl/afl_driver.cpp:339:12
+    #18 0x1531945fd82f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+
+DEDUP_TOKEN: malloc--aom_memalign--aom_malloc
+SUMMARY: AddressSanitizer: heap-buffer-overflow /src/aom/av1/common/thread_common.c:599:55 in enqueue_lr_jobs
+Shadow bytes around the buggy address:
+  0x0c167fff8030: fa fa fa fa 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c167fff8040: 07 fa fa fa fa fa fa fa fa fa 00 00 00 00 00 00
+  0x0c167fff8050: 00 00 00 00 00 00 07 fa fa fa fa fa fa fa fa fa
+  0x0c167fff8060: 00 00 00 00 00 00 00 00 00 00 00 00 07 fa fa fa
+  0x0c167fff8070: fa fa fa fa fa fa 00 00 00 00 00 00 00 00 00 00
+=>0x0c167fff8080: 00 00 00[03]fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c167fff8090: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c167fff80a0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c167fff80b0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c167fff80c0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c167fff80d0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+  Shadow gap:              cc
+==2160575==ABORTING

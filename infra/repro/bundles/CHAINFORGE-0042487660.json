@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042487660",
+  "chain": "CWE-416->CWE-125",
+  "project": "libavif",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42487660",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "468ded88b6ee5ccc4ce1ed029a7d310e5764947c",
+      "fix_commits": [
+        "468ded88b6ee5ccc4ce1ed029a7d310e5764947c"
+      ],
+      "repo": "https://github.com/AOMediaCodec/libavif"
+    },
+    "patch": "From 468ded88b6ee5ccc4ce1ed029a7d310e5764947c Mon Sep 17 00:00:00 2001\nFrom: Joe Drago <jdrago@netflix.com>\nDate: Thu, 24 Sep 2020 12:52:51 -0700\nSubject: [PATCH] Fix avifParse error flow, and guarantee that ftyp, moov, and\n meta boxes are unique at the file container level\n\n---\n include/avif/internal.h |  7 +++++++\n src/read.c              | 12 ++++++++----\n 2 files changed, 15 insertions(+), 4 deletions(-)\n\ndiff --git a/include/avif/internal.h b/include/avif/internal.h\nindex 9042a85..0edf2f3 100644\n--- a/include/avif/internal.h\n+++ b/include/avif/internal.h\n@@ -21,6 +21,13 @@ extern \"C\" {\n             return AVIF_FALSE; \\\n     } while (0)\n \n+// Used instead of CHECK if needing to return a specific error on failure, instead of AVIF_FALSE\n+#define CHECKERR(A, ERR) \\\n+    do {                 \\\n+        if (!(A))        \\\n+            return ERR;  \\\n+    } while (0)\n+\n // ---------------------------------------------------------------------------\n // URNs and Content-Types\n \ndiff --git a/src/read.c b/src/read.c\nindex be53466..3407bdd 100644\n--- a/src/read.c\n+++ b/src/read.c\n@@ -2031,6 +2031,7 @@ static avifResult avifParse(avifDecoder * decoder)\n     avifResult readResult;\n     size_t parseOffset = 0;\n     avifDecoderData * data = decoder->data;\n+    uint32_t uniqueBoxFlags = 0;\n \n     for (;;) {\n         // Read just enough to get the next box header (a max of 32 bytes)\n@@ -2048,7 +2049,7 @@ static avifResult avifParse(avifDecoder * decoder)\n         // Parse the header, and find out how many bytes it actually was\n         BEGIN_STREAM(headerStream, headerContents.data, headerContents.size);\n         avifBoxHeader header;\n-        CHECK(avifROStreamReadBoxHeaderPartial(&headerStream, &header));\n+        CHECKERR(avifROStreamReadBoxHeaderPartial(&headerStream, &header), AVIF_RESULT_BMFF_PARSE_FAILED);\n         parseOffset += headerStream.offset;\n \n         // Try to get the remainder of the box, if necessary\n@@ -2067,12 +2068,15 @@ static avifResult avifParse(avifDecoder * decoder)\n         }\n \n         if (!memcmp(header.type, \"ftyp\", 4)) {\n+            CHECKERR(uniqueBoxSeen(&uniqueBoxFlags, 0), AVIF_RESULT_BMFF_PARSE_FAILED);\n             avifRWDataSet(&data->ftypData, boxContents.data, boxContents.size);\n-            CHECK(avifParseFileTypeBox(&data->ftyp, data->ftypData.data, data->ftypData.size));\n+            CHECKERR(avifParseFileTypeBox(&data->ftyp, data->ftypData.data, data->ftypData.size), AVIF_RESULT_BMFF_PARSE_FAILED);\n         } else if (!memcmp(header.type, \"meta\", 4)) {\n-            CHECK(avifParseMetaBox(data->meta, boxContents.data, boxContents.size));\n+            CHECKERR(uniqueBoxSeen(&uniqueBoxFlags, 1), AVIF_RESULT_BMFF_PARSE_FAILED);\n+            CHECKERR(avifParseMetaBox(data->meta, boxContents.data, boxContents.size), AVIF_RESULT_BMFF_PARSE_FAILED);\n         } else if (!memcmp(header.type, \"moov\", 4)) {\n-            CHECK(avifParseMoovBox(data, boxContents.data, boxContents.size));\n+            CHECKERR(uniqueBoxSeen(&uniqueBoxFlags, 2), AVIF_RESULT_BMFF_PARSE_FAILED);\n+            CHECKERR(avifParseMoovBox(data, boxContents.data, boxContents.size), AVIF_RESULT_BMFF_PARSE_FAILED);\n         }\n \n         parseOffset += header.size;\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42487660-vul",
+      "digest": "sha256:a0b27f2ee456adab0d57288d74706c57504d90dad3fec70b263b55bb1b77b96d"
+    },
+    "patched": {
+      "ref": "n132/arvo:42487660-fix",
+      "digest": "sha256:c323bab6779a9fbb6bd1290f7983b9810a7ea171a43ffe3b25a15e3f0d64ba78"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/libavif/build/../src/read.c:2091",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/libavif/build/../src/read.c:2091"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

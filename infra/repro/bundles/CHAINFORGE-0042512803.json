@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042512803",
+  "chain": "CWE-20->CWE-125",
+  "project": "ghostpdl",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42512803",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "e950d1fa30cda37cae4cc0553a4d24135fc09695",
+      "fix_commits": [
+        "e950d1fa30cda37cae4cc0553a4d24135fc09695"
+      ],
+      "repo": "https://cgit.ghostscript.com/ghostpdl.git"
+    },
+    "patch": "From e950d1fa30cda37cae4cc0553a4d24135fc09695 Mon Sep 17 00:00:00 2001\nFrom: Chris Liddell <chris.liddell@artifex.com>\nDate: Mon, 4 Jul 2022 14:02:54 +0100\nSubject: [PATCH] oss-fuzz 48547/48528/48526: Various TTF hinter fixes\n\nA couple of opcode functions in the bytecode interpreter were not bounds\nchecking the values they used.\n\nIf a bytcode execution context initialisation encountered an out of memory\nerror part way through, the remainder of the context would be left\nuninitialised which could then lead to a later crash when cleaning up the\npartially initialised context.\n---\n base/ttinterp.c | 29 +++++++++++++++++++++++++----\n base/ttobjs.c   | 18 +++++++++++++++++-\n 2 files changed, 42 insertions(+), 5 deletions(-)\n\ndiff --git a/base/ttinterp.c b/base/ttinterp.c\nindex fe44a84..63846c8 100644\n--- a/base/ttinterp.c\n+++ b/base/ttinterp.c\n@@ -1,4 +1,4 @@\n-/* Copyright (C) 2001-2021 Artifex Software, Inc.\n+/* Copyright (C) 2001-2022 Artifex Software, Inc.\n    All Rights Reserved.\n \n    This software is provided AS-IS with no warranty, either express or\n@@ -1825,6 +1825,12 @@ static int nInstrCount=0;\n   {\n     if ( args[1] == 0 )\n     {\n+      if ( BOUNDS(CUR.IP + args[0], CUR.codeSize ) )\n+      {\n+        CUR.error = TT_Err_Invalid_Reference;\n+        return;\n+      }\n+\n       CUR.IP      += (Int)(args[0]);\n       CUR.step_ins = FALSE;\n \n@@ -4378,9 +4384,15 @@ static int nInstrCount=0;\n         end_point   = CUR.pts.contours[contour];\n         first_point = point;\n \n-        while ( point <= end_point && (CUR.pts.touch[point] & mask) == 0 )\n+        while ( point <= end_point && point < CUR.pts.n_points && (CUR.pts.touch[point] & mask) == 0 )\n           point++;\n \n+        if (BOUNDS(point, CUR.pts.n_points ))\n+        {\n+            CUR.error = TT_Err_Invalid_Reference;\n+            return;\n+        }\n+\n         if ( point <= end_point )\n         {\n           first_touched = point;\n@@ -4392,12 +4404,21 @@ static int nInstrCount=0;\n           {\n             if ( (CUR.pts.touch[point] & mask) != 0 )\n             {\n-              Interp( (Int)(cur_touched + 1),\n+              if (BOUNDS(cur_touched,  CUR.pts.n_points)\n+               || BOUNDS(point, CUR.pts.n_points))\n+              {\n+                 CUR.error = TT_Err_Invalid_Reference;\n+                 return;\n+              }\n+              else\n+              {\n+                Interp( (Int)(cur_touched + 1),\n                       (Int)(point - 1),\n                       (Int)cur_touched,\n                       (Int)point,\n                       &V );\n-              cur_touched = point;\n+                cur_touched = point;\n+              }\n             }\n \n             point++;\ndiff --git a/base/ttobjs.c b/base/ttobjs.c\nindex 75eacb9..26029f3 100644\n--- a/base/ttobjs.c\n+++ b/base/ttobjs.c\n@@ -1,4 +1,4 @@\n-/* Copyright (C) 2001-2021 Artifex Software, Inc.\n+/* Copyright (C) 2001-2022 Artifex Software, Inc.\n    All Rights Reserved.\n \n    This software is provided AS-IS with no warranty, either express or\n@@ -303,6 +303,22 @@ static int free_aux(ttfMemory *mem, void *ptr)\n    if (n_points < 100)\n        n_points = 100; /* Bug 689907 */\n \n+   exec->pts.cur_x = NULL;\n+   exec->pts.cur_y = NULL;\n+   exec->pts.org_x = NULL;\n+   exec->pts.org_y = NULL;\n+   exec->pts.touch = NULL;\n+   exec->pts.contours = NULL;\n+   exec->twilight.cur_y = NULL;\n+   exec->twilight.cur_x = NULL;\n+   exec->twilight.org_y = NULL;\n+   exec->twilight.org_x = NULL;\n+   exec->twilight.touch = NULL;\n+   exec->twilight.contours = NULL;\n+\n+   exec->n_contours = exec->n_points = 0;\n+   exec->twilight.n_points = 0;\n+\n    if ( ALLOC_ARRAY( exec->callStack, exec->callSize, callSize, TCallRecord ) ||\n         /* reserve interpreter call stack */\n \n-- \n2.55.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42512803-vul",
+      "digest": "sha256:957b55a86accc7e56ede4695e683a2b86b5c53aff0efacff5a781b1e37f544f2"
+    },
+    "patched": {
+      "ref": "n132/arvo:42512803-fix",
+      "digest": "sha256:1c447700c3e0d959b4dc0c0cc9eb761ed706aeb0065e08c42718ded6b060a16e"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/ghostpdl/./base/ttinterp.c:1832",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/ghostpdl/./base/ttinterp.c:1832"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

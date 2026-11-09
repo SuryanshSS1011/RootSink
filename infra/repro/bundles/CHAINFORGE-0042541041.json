@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042541041",
+  "chain": "CWE-1285->CWE-787",
+  "project": "imagemagick",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42541041",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "9e53a942c9c972954c33b7effbafa5197f539265",
+      "fix_commits": [
+        "9e53a942c9c972954c33b7effbafa5197f539265"
+      ],
+      "repo": "https://github.com/imagemagick/imagemagick"
+    },
+    "patch": "diff --git a/MagickCore/draw.c b/MagickCore/draw.c\nindex e4690577877..29aad764db7 100644\n--- a/MagickCore/draw.c\n+++ b/MagickCore/draw.c\n@@ -2293,6 +2293,7 @@ static SplayTreeInfo *GetMVGMacros(const char *primitive)\n             */\n             GetNextToken(q,&q,extent,token);\n             start=q;\n+            end=q;\n             (void) CopyMagickString(name,token,MagickPathExtent);\n             n=0;\n             for (p=q; *q != '\\0'; )\n@@ -2316,7 +2317,7 @@ static SplayTreeInfo *GetMVGMacros(const char *primitive)\n                 }\n               if (LocaleCompare(token,\"push\") == 0)\n                 n++;\n-              if (n < 0)\n+              if ((n < 0) && (end > start))\n                 {\n                   char\n                     *macro;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42541041-vul",
+      "digest": "sha256:aa43a7a09ee470411a6d2832a058f6224ce17bee8c222dd7230ebe5ba39b06da"
+    },
+    "patched": {
+      "ref": "n132/arvo:42541041-fix",
+      "digest": "sha256:1d2a4fc423c1484e89c4146cd0295d3e61c379f76e0173670e6e11fcd0df5e04"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/imagemagick/MagickCore/draw.c:2329",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/imagemagick/MagickCore/draw.c:2329"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

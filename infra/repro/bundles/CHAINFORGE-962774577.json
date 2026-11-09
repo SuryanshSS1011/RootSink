@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-962774577",
+  "chain": "CWE-456->CWE-457",
+  "project": "librawspeed",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42523779",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/darktable-org/rawspeed/commit/e542162d9a96ad3bc7c05abace119cbbf2b184bc",
+      "fix_commits": [
+        "e542162d9a96ad3bc7c05abace119cbbf2b184bc"
+      ],
+      "repo": "https://github.com/darktable-org/rawspeed"
+    },
+    "patch": "diff --git a/src/librawspeed/decoders/RawDecoder.cpp b/src/librawspeed/decoders/RawDecoder.cpp\nindex fd07adcad..ee9786cdd 100644\n--- a/src/librawspeed/decoders/RawDecoder.cpp\n+++ b/src/librawspeed/decoders/RawDecoder.cpp\n@@ -124,8 +124,7 @@ void RawDecoder::decodeUncompressed(const TiffIFD *rawIFD, BitOrder order) {\n   mRaw->whitePoint = (1UL << bitPerPixel) - 1UL;\n \n   offY = 0;\n-  for (uint32 i = 0; i < slices.size(); i++) {\n-    RawSlice slice = slices[i];\n+  for (const RawSlice& slice : slices) {\n     UncompressedDecompressor u(*mFile, slice.offset, slice.count, mRaw);\n     iPoint2D size(width, slice.h);\n     iPoint2D pos(0, offY);\n@@ -135,22 +134,9 @@ void RawDecoder::decodeUncompressed(const TiffIFD *rawIFD, BitOrder order) {\n     const auto inputPitch = width * bitPerPixel / 8;\n     if (!inputPitch)\n       ThrowRDE(\"Bad input pitch. Can not decode anything.\");\n-    try {\n-      u.readUncompressedRaw(size, pos, inputPitch, bitPerPixel, order);\n-    } catch (RawDecoderException &e) {\n-      if (i>0)\n-        mRaw->setError(e.what());\n-      else\n-        throw;\n-    } catch (IOException &e) {\n-      if (i>0)\n-        mRaw->setError(e.what());\n-      else {\n-        ThrowRDE(\"IO error occurred in first slice, unable to decode more. \"\n-                 \"Error is: %s\",\n-                 e.what());\n-      }\n-    }\n+\n+    u.readUncompressedRaw(size, pos, inputPitch, bitPerPixel, order);\n+\n     offY += slice.h;\n   }\n }\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42523779-vul",
+      "digest": "sha256:0faaf5652794535903bf71556c9d910d7b7c8821c50ef5dfbe7d35be9d2c7e52"
+    },
+    "patched": {
+      "ref": "n132/arvo:42523779-fix",
+      "digest": "sha256:d3540a91e34f641d227259ce2b2175f1a2c71a6c3277c157fa5e72b15e0b129e"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/librawspeed/src/librawspeed/common/RawImage.cpp:174",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/librawspeed/src/librawspeed/common/RawImage.cpp:174"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

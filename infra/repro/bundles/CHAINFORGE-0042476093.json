@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042476093",
+  "chain": "CWE-416->CWE-787",
+  "project": "icu",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42476093",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "c43455749b914feef56b178b256f29b3016146eb",
+      "fix_commits": [
+        "c43455749b914feef56b178b256f29b3016146eb"
+      ],
+      "repo": "https://github.com/unicode-org/icu"
+    },
+    "patch": "diff --git a/icu4c/source/test/fuzzer/collator_compare_fuzzer.cpp b/icu4c/source/test/fuzzer/collator_compare_fuzzer.cpp\nindex b42b124e71e0..87b2ea98c2c7 100644\n--- a/icu4c/source/test/fuzzer/collator_compare_fuzzer.cpp\n+++ b/icu4c/source/test/fuzzer/collator_compare_fuzzer.cpp\n@@ -17,10 +17,10 @@ extern \"C\" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {\n     return 0;\n \n   std::unique_ptr<char16_t> compbuff1(new char16_t[size/4]);\n-  std::memcpy(compbuff1.get(), data, size/2);\n+  std::memcpy(compbuff1.get(), data, (size/4)*2);\n   data = data + size/2;\n   std::unique_ptr<char16_t> compbuff2(new char16_t[size/4]);\n-  std::memcpy(compbuff2.get(), data, size/2);\n+  std::memcpy(compbuff2.get(), data, (size/4)*2);\n \n   icu::LocalPointer<icu::Collator> fuzzCollator(\n       icu::Collator::createInstance(icu::Locale::getUS(), status), status);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42476093-vul",
+      "digest": "sha256:b579d040bfe3e9b798ade8ffec4195178ba623aa58db3a331888cfa8f0cd3828"
+    },
+    "patched": {
+      "ref": "n132/arvo:42476093-fix",
+      "digest": "sha256:1da2b0d27210de7fc3ad29c3fd3516420c62a77450f863b28482171b8bb37570"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/icu/icu4c/source/test/fuzzer/collator_compare_fuzzer.cpp:20",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/icu/icu4c/source/test/fuzzer/collator_compare_fuzzer.cpp:20"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

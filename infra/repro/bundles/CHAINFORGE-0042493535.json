@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042493535",
+  "chain": "CWE-1285->CWE-787",
+  "project": "wireshark",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42493535",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "2ba52cdc0e4216dafdfc32498fc0210c99449ec9",
+      "fix_commits": [
+        "2ba52cdc0e4216dafdfc32498fc0210c99449ec9"
+      ],
+      "repo": "https://github.com/wireshark/wireshark"
+    },
+    "patch": "diff --git a/epan/tvbuff_subset.c b/epan/tvbuff_subset.c\nindex c9522df9fbc..52a332d8788 100644\n--- a/epan/tvbuff_subset.c\n+++ b/epan/tvbuff_subset.c\n@@ -1,4 +1,4 @@\n-/* tvbuff_real.c\n+/* tvbuff_subset.c\n  *\n  * Copyright (c) 2000 by Gilbert Ramirez <gram@alumni.rice.edu>\n  *\n@@ -62,16 +62,36 @@ static gint\n subset_find_guint8(tvbuff_t *tvb, guint abs_offset, guint limit, guint8 needle)\n {\n \tstruct tvb_subset *subset_tvb = (struct tvb_subset *) tvb;\n+\tgint result;\n \n-\treturn tvb_find_guint8(subset_tvb->subset.tvb, subset_tvb->subset.offset + abs_offset, limit, needle);\n+\tresult = tvb_find_guint8(subset_tvb->subset.tvb, subset_tvb->subset.offset + abs_offset, limit, needle);\n+\tif (result == -1)\n+\t\treturn result;\n+\n+\t/*\n+\t * Make the result relative to the beginning of the tvbuff we\n+\t * were handed, *not* relative to the beginning of its parent\n+\t * tvbuff.\n+\t */\n+\treturn result - subset_tvb->subset.offset;\n }\n \n static gint\n subset_pbrk_guint8(tvbuff_t *tvb, guint abs_offset, guint limit, const ws_mempbrk_pattern* pattern, guchar *found_needle)\n {\n \tstruct tvb_subset *subset_tvb = (struct tvb_subset *) tvb;\n+\tgint result;\n \n-\treturn tvb_ws_mempbrk_pattern_guint8(subset_tvb->subset.tvb, subset_tvb->subset.offset + abs_offset, limit, pattern, found_needle);\n+\tresult = tvb_ws_mempbrk_pattern_guint8(subset_tvb->subset.tvb, subset_tvb->subset.offset + abs_offset, limit, pattern, found_needle);\n+\tif (result == -1)\n+\t\treturn result;\n+\n+\t/*\n+\t * Make the result relative to the beginning of the tvbuff we\n+\t * were handed, *not* relative to the beginning of its parent\n+\t * tvbuff.\n+\t */\n+\treturn result - subset_tvb->subset.offset;\n }\n \n static tvbuff_t *\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42493535-vul",
+      "digest": "sha256:13d897ecc3d5b517169c20c547208c7d809123ee62f24a4087b08fcb47afd61f"
+    },
+    "patched": {
+      "ref": "n132/arvo:42493535-fix",
+      "digest": "sha256:f0949a6a8ff44c8e0d7bfca2c12ef1c75a93ce315714cfb6f992631fa7f66739"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/wireshark/epan/tvbuff.c:859",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/wireshark/epan/tvbuff.c:859"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

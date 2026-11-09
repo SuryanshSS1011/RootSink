@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042524453",
+  "chain": "CWE-416->CWE-125",
+  "project": "assimp",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42524453",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "b3a1c72c8f03275fcfea4a1b1ff3a3350b201664",
+      "fix_commits": [
+        "b3a1c72c8f03275fcfea4a1b1ff3a3350b201664"
+      ],
+      "repo": "https://github.com/assimp/assimp"
+    },
+    "patch": "From b3a1c72c8f03275fcfea4a1b1ff3a3350b201664 Mon Sep 17 00:00:00 2001\nFrom: Alex <aleksandrosansan@gmail.com>\nDate: Fri, 2 Jun 2023 07:45:40 +0000\nSubject: [PATCH] Fix Heap-buffer-overflow READ in\n Assimp::FileSystemFilter::Cleanup\n\n---\n code/Common/FileSystemFilter.h | 2 +-\n 1 file changed, 1 insertion(+), 1 deletion(-)\n\ndiff --git a/code/Common/FileSystemFilter.h b/code/Common/FileSystemFilter.h\nindex d28233a..c530153 100644\n--- a/code/Common/FileSystemFilter.h\n+++ b/code/Common/FileSystemFilter.h\n@@ -297,7 +297,7 @@ private:\n         }\n \n         const char separator = getOsSeparator();\n-        for (it = in.begin(); it != in.end(); ++it) {\n+        for (it = in.begin(); it < in.end(); ++it) {\n             const size_t remaining = std::distance(in.end(), it);\n             // Exclude :// and \\\\, which remain untouched.\n             // https://sourceforge.net/tracker/?func=detail&aid=3031725&group_id=226462&atid=1067632\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42524453-vul",
+      "digest": "sha256:039d1422f5cc286e11dbb873dc32abc03a732af051ece7ec6ec28fd1b8569c6b"
+    },
+    "patched": {
+      "ref": "n132/arvo:42524453-fix",
+      "digest": "sha256:5c1463d63eeac729f9b5460464e06c74da4e040d11ab2668dc40bdf31681dba6"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/assimp/code/AssetLib/FBX/FBXExporter.cpp:2053",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/assimp/code/AssetLib/FBX/FBXExporter.cpp:2053"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

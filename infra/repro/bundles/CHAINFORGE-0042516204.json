@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042516204",
+  "chain": "CWE-20->CWE-125",
+  "project": "file",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42516204",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "411ec5bf0708dcd5ec99e4d0961740fca30a6bc7",
+      "fix_commits": [
+        "411ec5bf0708dcd5ec99e4d0961740fca30a6bc7"
+      ],
+      "repo": "https://github.com/file/file"
+    },
+    "patch": "diff --git a/src/compress.c b/src/compress.c\nindex c0a2941650..e7812a25ba 100644\n--- a/src/compress.c\n+++ b/src/compress.c\n@@ -35,7 +35,7 @@\n #include \"file.h\"\n \n #ifndef lint\n-FILE_RCSID(\"@(#)$File: compress.c,v 1.140 2022/09/19 19:54:01 christos Exp $\")\n+FILE_RCSID(\"@(#)$File: compress.c,v 1.141 2022/09/20 20:36:11 christos Exp $\")\n #endif\n \n #include \"magic.h\"\n@@ -562,9 +562,15 @@ private int\n uncompressgzipped(const unsigned char *old, unsigned char **newch,\n     size_t bytes_max, size_t *n)\n {\n-\tunsigned char flg = old[3];\n+\tunsigned char flg;\n \tsize_t data_start = 10;\n \n+\tif (*n < 4) {\n+\t\tgoto err;\t\n+\t}\n+\n+\tflg = old[3];\n+\n \tif (flg & FEXTRA) {\n \t\tif (data_start + 1 >= *n)\n \t\t\tgoto err;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42516204-vul",
+      "digest": "sha256:d41fefe8e4c9160f4140d87b3398ba8f4522a5dfa956b825186d48cfa42b3b8a"
+    },
+    "patched": {
+      "ref": "n132/arvo:42516204-fix",
+      "digest": "sha256:b32ec41e0d012473e38c689e545bc939f20e390b73629067a7ba6e888eee85b9"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/file/src/compress.c:565",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/file/src/compress.c:565"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

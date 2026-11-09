@@ -1,0 +1,70 @@
+======================= INFO =========================
+This binary is built for AFL-fuzz.
+To run the target function on individual input(s) execute this:
+  /out/fuzz_disasmnext < INPUT_FILE
+or
+  /out/fuzz_disasmnext INPUT_FILE1 [INPUT_FILE2 ... ]
+To fuzz with afl-fuzz execute this:
+  afl-fuzz [afl-flags] /out/fuzz_disasmnext [-N]
+afl-fuzz will run N iterations before re-spawning the process (default: 1000)
+======================================================
+Reading 277 bytes from /tmp/poc
+=================================================================
+==265345==ERROR: AddressSanitizer: stack-buffer-overflow on address 0x14b85d18ee34 at pc 0x0000004abf43 bp 0x7ffddb784f90 sp 0x7ffddb784740
+WRITE of size 5 at 0x14b85d18ee34 thread T0
+SCARINESS: 52 (5-byte-write-stack-buffer-overflow)
+    #0 0x4abf42 in vsnprintf /src/llvm/projects/compiler-rt/lib/asan/../sanitizer_common/sanitizer_common_interceptors.inc:1619
+    #1 0x53bdf0 in SStream_concat /src/capstonenext/SStream.c:49:8
+    #2 0x6c34cb in WASM_printInst /src/capstonenext/arch/WASM/WASMInstPrinter.c
+    #3 0x536db1 in cs_disasm /src/capstonenext/cs.c:930:4
+    #4 0x534fc3 in LLVMFuzzerTestOneInput /src/capstonenext/suite/fuzz/fuzz_disasm.c:235:20
+    #5 0x6c462a in ExecuteFilesOnyByOne(int, char**) /src/libfuzzer/afl/afl_driver.cpp:156:5
+    #6 0x6c4891 in main /src/libfuzzer/afl/afl_driver.cpp:193:12
+    #7 0x14b85c10882f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+    #8 0x41cde8 in _start (/out/fuzz_disasmnext+0x41cde8)
+
+DEDUP_TOKEN: vsnprintf--SStream_concat--WASM_printInst
+Address 0x14b85d18ee34 is located in stack of thread T0 at offset 1588 in frame
+    #0 0x53676f in cs_disasm /src/capstonenext/cs.c:845
+
+DEDUP_TOKEN: cs_disasm
+  This frame has 3 object(s):
+    [32, 928) 'mci' (line 847)
+    [1056, 1058) 'insn_size' (line 848)
+    [1072, 1588) 'ss' (line 921) <== Memory access at offset 1588 overflows this variable
+HINT: this may be a false positive if your program uses some custom stack unwind mechanism, swapcontext or vfork
+      (longjmp and C++ exceptions *are* supported)
+SUMMARY: AddressSanitizer: stack-buffer-overflow /src/llvm/projects/compiler-rt/lib/asan/../sanitizer_common/sanitizer_common_interceptors.inc:1619 in vsnprintf
+Shadow bytes around the buggy address:
+  0x02978ba29d70: 00 00 00 00 f2 f2 f2 f2 f2 f2 f2 f2 f2 f2 f2 f2
+  0x02978ba29d80: f2 f2 f2 f2 02 f2 00 00 00 00 00 00 00 00 00 00
+  0x02978ba29d90: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x02978ba29da0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x02978ba29db0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x02978ba29dc0: 00 00 00 00 00 00[04]f3 f3 f3 f3 f3 f3 f3 f3 f3
+  0x02978ba29dd0: f3 f3 f3 f3 f3 f3 f3 f3 00 00 00 00 00 00 00 00
+  0x02978ba29de0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x02978ba29df0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x02978ba29e00: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x02978ba29e10: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+  Shadow gap:              cc
+==265345==ABORTING

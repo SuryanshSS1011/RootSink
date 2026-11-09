@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042496155",
+  "chain": "CWE-20->CWE-787",
+  "project": "lxc",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42496155",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "2e5c468aa59b6458d2894e7b5c730ca251e84b57",
+      "fix_commits": [
+        "2e5c468aa59b6458d2894e7b5c730ca251e84b57"
+      ],
+      "repo": "https://github.com/lxc/lxc"
+    },
+    "patch": "diff --git a/src/lxc/conf.c b/src/lxc/conf.c\nindex 0f323091b1..3ca5cf4475 100644\n--- a/src/lxc/conf.c\n+++ b/src/lxc/conf.c\n@@ -2154,11 +2154,13 @@ int parse_lxc_mntopts(struct lxc_mount_options *opts, char *mnt_opts)\n \t\t\topt_next = opt;\n \t\t\topt_next += STRLITERALLEN(\"idmap=\");\n \t\t\tidmap_path = strchrnul(opt_next, ',');\n+\t\t\tlen = idmap_path - opt_next + 1;\n \n-\t\t\tlen = strlcpy(opts->userns_path, opt_next, idmap_path - opt_next + 1);\n \t\t\tif (len >= sizeof(opts->userns_path))\n \t\t\t\treturn syserror_set(-EIO, \"Excessive idmap path length for \\\"idmap=<path>\\\" LXC specific mount option\");\n \n+\t\t\tmemcpy(opts->userns_path, opt_next, len);\n+\n \t\t\tif (is_empty_string(opts->userns_path))\n \t\t\t\treturn syserror_set(-EINVAL, \"Missing idmap path for \\\"idmap=<path>\\\" LXC specific mount option\");\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42496155-vul",
+      "digest": "sha256:6e977cde93db32b2e54a49295b65395bc495975d9311573d49cfaa78c40ba9cf"
+    },
+    "patched": {
+      "ref": "n132/arvo:42496155-fix",
+      "digest": "sha256:f7ec170966876933d63c9fff376fa231cc3b90d6c3bdf1aa0ea4907456109a02"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "ABRT",
+        "direction": null,
+        "crash_site": null,
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "ABRT",
+        "direction": null,
+        "site": null
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

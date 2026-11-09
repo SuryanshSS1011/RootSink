@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042502807",
+  "chain": "CWE-20->CWE-125",
+  "project": "php-src",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42502807",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "85cb417d37323a4eb059225e4f16dcd6d5abc9df",
+      "fix_commits": [
+        "85cb417d37323a4eb059225e4f16dcd6d5abc9df"
+      ],
+      "repo": "https://github.com/php/php-src"
+    },
+    "patch": "From bbd3f714d7a39b11b876ffca0b37520abadbef89 Mon Sep 17 00:00:00 2001\nFrom: Nikita Popov <nikita.ppv@gmail.com>\nDate: Tue, 5 Oct 2021 11:26:32 +0200\nSubject: [PATCH] Fix COPY_TMP live range construction after optimization\n\nIf we optimize the FREE away, we should switch to constructing\na normal live range, rather than a split live range.\n\nFixes oss-fuzz #39548.\n---\n Zend/tests/coalesce_assign_optimization.phpt | 17 +++++++++++++++++\n Zend/zend_opcode.c                           | 11 ++++++++---\n 2 files changed, 25 insertions(+), 3 deletions(-)\n create mode 100644 Zend/tests/coalesce_assign_optimization.phpt\n\ndiff --git a/Zend/tests/coalesce_assign_optimization.phpt b/Zend/tests/coalesce_assign_optimization.phpt\nnew file mode 100644\nindex 000000000000..ff076b03e0a8\n--- /dev/null\n+++ b/Zend/tests/coalesce_assign_optimization.phpt\n@@ -0,0 +1,17 @@\n+--TEST--\n+Live range construction should not break if colesce assign branch is optimized away\n+--FILE--\n+<?php\n+function test() {\n+    $a[X] ??= Y;\n+    var_dump($a);\n+}\n+define('X', 1);\n+define('Y', 2);\n+test();\n+?>\n+--EXPECT--\n+array(1) {\n+  [1]=>\n+  int(2)\n+}\ndiff --git a/Zend/zend_opcode.c b/Zend/zend_opcode.c\nindex 78c4adf82d5c..d99500ab258c 100644\n--- a/Zend/zend_opcode.c\n+++ b/Zend/zend_opcode.c\n@@ -721,17 +721,22 @@ static void emit_live_range(\n \t\t\t * \"null\" branch, and another from the start of the \"non-null\" branch to the\n \t\t\t * FREE opcode. */\n \t\t\tuint32_t rt_var_num = EX_NUM_TO_VAR(op_array->last_var + var_num);\n-\t\t\tzend_op *block_start_op = use_opline;\n-\n \t\t\tif (needs_live_range && !needs_live_range(op_array, orig_def_opline)) {\n \t\t\t\treturn;\n \t\t\t}\n \n+\t\t\tkind = ZEND_LIVE_TMPVAR;\n+\t\t\tif (use_opline->opcode != ZEND_FREE) {\n+\t\t\t\t/* This can happen if one branch of the coalesce has been optimized away.\n+\t\t\t\t * In this case we should emit a normal live-range instead. */\n+\t\t\t\tbreak;\n+\t\t\t}\n+\n+\t\t\tzend_op *block_start_op = use_opline;\n \t\t\twhile ((block_start_op-1)->opcode == ZEND_FREE) {\n \t\t\t\tblock_start_op--;\n \t\t\t}\n \n-\t\t\tkind = ZEND_LIVE_TMPVAR;\n \t\t\tstart = block_start_op - op_array->opcodes;\n \t\t\tif (start != end) {\n \t\t\t\temit_live_range_raw(op_array, var_num, kind, start, end);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42502807-vul",
+      "digest": "sha256:a86da39e2fd9f3f5a604c21b300bac9a16490944481dd72074292daf3c8614bd"
+    },
+    "patched": {
+      "ref": "n132/arvo:42502807-fix",
+      "digest": "sha256:51a6b5deecfc996ed9653425ce1b256db44be937dd5848d26c9568da8caa4af2"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/php-src/Zend/zend_opcode.c:805",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/php-src/Zend/zend_opcode.c:805"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042483290",
+  "chain": "CWE-20->CWE-125",
+  "project": "oniguruma",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42483290",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "8b8b37ef8864a976641d4382293de7fe3d5edd62",
+      "fix_commits": [
+        "8b8b37ef8864a976641d4382293de7fe3d5edd62"
+      ],
+      "repo": "https://github.com/kkos/oniguruma"
+    },
+    "patch": "diff --git a/src/big5.c b/src/big5.c\nindex 79ae1e34..faff845a 100644\n--- a/src/big5.c\n+++ b/src/big5.c\n@@ -2,7 +2,7 @@\n   big5.c -  Oniguruma (regular expression library)\n **********************************************************************/\n /*-\n- * Copyright (c) 2002-2019  K.Kosako\n+ * Copyright (c) 2002-2020  K.Kosako\n  * All rights reserved.\n  *\n  * Redistribution and use in source and binary forms, with or without\n@@ -58,8 +58,15 @@ static int\n big5_code_to_mbclen(OnigCodePoint code)\n {\n   if ((code & (~0xffff)) != 0) return ONIGERR_INVALID_CODE_POINT_VALUE;\n-  if ((code &    0xff00) != 0) return 2;\n-  if (EncLen_BIG5[(int )(code & 0xff)] == 1) return 1;\n+\n+  if ((code & 0xff00) != 0) {\n+    if (EncLen_BIG5[(int )(code >> 8) & 0xff] == 2)\n+      return 2;\n+  }\n+  else {\n+    if (EncLen_BIG5[(int )(code & 0xff)] == 1)\n+      return 1;\n+  }\n \n   return ONIGERR_INVALID_CODE_POINT_VALUE;\n }\ndiff --git a/src/euc_jp.c b/src/euc_jp.c\nindex 640b3e3c..6ddd91c7 100644\n--- a/src/euc_jp.c\n+++ b/src/euc_jp.c\n@@ -2,7 +2,7 @@\n   euc_jp.c -  Oniguruma (regular expression library)\n **********************************************************************/\n /*-\n- * Copyright (c) 2002-2019  K.Kosako\n+ * Copyright (c) 2002-2020  K.Kosako\n  * All rights reserved.\n  *\n  * Redistribution and use in source and binary forms, with or without\n@@ -114,10 +114,20 @@ static int\n code_to_mbclen(OnigCodePoint code)\n {\n   if (ONIGENC_IS_CODE_ASCII(code)) return 1;\n-  else if ((code & 0xff0000) != 0) return 3;\n-  else if ((code &   0xff00) != 0) return 2;\n-  else\n-    return ONIGERR_INVALID_CODE_POINT_VALUE;\n+  else if ((code & 0xff0000) != 0) {\n+    if (EncLen_EUCJP[(int )(code >> 16) & 0xff] == 3)\n+      return 3;\n+  }\n+  else if ((code & 0xff00) != 0) {\n+    if (EncLen_EUCJP[(int )(code >> 8) & 0xff] == 2)\n+      return 2;\n+  }\n+  else if (code < 256) {\n+    if (EncLen_EUCJP[(int )(code & 0xff)] == 1)\n+      return 1;\n+  }\n+\n+  return ONIGERR_INVALID_CODE_POINT_VALUE;\n }\n \n static int\ndiff --git a/src/euc_kr.c b/src/euc_kr.c\nindex 7fa50afb..b0e9fbff 100644\n--- a/src/euc_kr.c\n+++ b/src/euc_kr.c\n@@ -2,7 +2,7 @@\n   euc_kr.c -  Oniguruma (regular expression library)\n **********************************************************************/\n /*-\n- * Copyright (c) 2002-2019  K.Kosako\n+ * Copyright (c) 2002-2020  K.Kosako\n  * All rights reserved.\n  *\n  * Redistribution and use in source and binary forms, with or without\n@@ -58,8 +58,15 @@ static int\n euckr_code_to_mbclen(OnigCodePoint code)\n {\n   if ((code & (~0xffff)) != 0) return ONIGERR_INVALID_CODE_POINT_VALUE;\n-  if ((code &    0xff00) != 0) return 2;\n-  if (EncLen_EUCKR[(int )(code & 0xff)] == 1) return 1;\n+\n+  if ((code & 0xff00) != 0) {\n+    if (EncLen_EUCKR[(int )(code >> 8) & 0xff] == 2)\n+      return 2;\n+  }\n+  else {\n+    if (EncLen_EUCKR[(int )(code & 0xff)] == 1)\n+      return 1;\n+  }\n \n   return ONIGERR_INVALID_CODE_POINT_VALUE;\n }\ndiff --git a/src/euc_tw.c b/src/euc_tw.c\nindex 8e72b970..99dc5eca 100644\n--- a/src/euc_tw.c\n+++ b/src/euc_tw.c\n@@ -2,7 +2,7 @@\n   euc_tw.c -  Oniguruma (regular expression library)\n **********************************************************************/\n /*-\n- * Copyright (c) 2002-2019  K.Kosako\n+ * Copyright (c) 2002-2020  K.Kosako\n  * All rights reserved.\n  *\n  * Redistribution and use in source and binary forms, with or without\n@@ -57,15 +57,22 @@ euctw_mbc_enc_len(const UChar* p)\n static int\n euctw_code_to_mbclen(OnigCodePoint code)\n {\n-       if ((code & 0xff000000) != 0) return 4;\n-  else if ((code &   0xff0000) != 0) return ONIGERR_INVALID_CODE_POINT_VALUE;\n-  else if ((code &     0xff00) != 0) return 2;\n+  if ((code & 0xff000000) != 0) {\n+    if (EncLen_EUCTW[(int )(code >> 24) & 0xff] == 4)\n+      return 4;\n+  }\n+  else if ((code & 0xff0000) != 0)\n+    return ONIGERR_INVALID_CODE_POINT_VALUE;\n+  else if ((code & 0xff00) != 0) {\n+    if (EncLen_EUCTW[(int )(code >> 8) & 0xff] == 2)\n+      return 2;\n+  }\n   else {\n     if (EncLen_EUCTW[(int )(code & 0xff)] == 1)\n       return 1;\n-\n-    return ONIGERR_INVALID_CODE_POINT_VALUE;\n   }\n+\n+  return ONIGERR_INVALID_CODE_POINT_VALUE;\n }\n \n static int\ndiff --git a/src/gb18030.c b/src/gb18030.c\nindex 1385a7fa..7409d3e0 100644\n--- a/src/gb18030.c\n+++ b/src/gb18030.c\n@@ -89,15 +89,25 @@ gb18030_mbc_enc_len(const UChar* p)\n static int\n gb18030_code_to_mbclen(OnigCodePoint code)\n {\n-       if ((code & 0xff000000) != 0) return 4;\n-  else if ((code &   0xff0000) != 0) return ONIGERR_INVALID_CODE_POINT_VALUE;\n-  else if ((code &     0xff00) != 0) return 2;\n+  if ((code & 0xff000000) != 0) {\n+    if (GB18030_MAP[(int )(code >> 24) & 0xff] == CM)\n+      if (GB18030_MAP[(int )(code >> 16) & 0xff] == C4)\n+        return 4;\n+  }\n+  else if ((code & 0xff0000) != 0) return ONIGERR_INVALID_CODE_POINT_VALUE;\n+  else if ((code & 0xff00) != 0) {\n+    if (GB18030_MAP[(int )(code >> 8) & 0xff] == CM) {\n+      char c = GB18030_MAP[(int )code & 0xff];\n+      if (c == CM || c == C2)\n+        return 2;\n+    }\n+  }\n   else {\n-    if (GB18030_MAP[(int )(code & 0xff)] == CM)\n-      return ONIGERR_INVALID_CODE_POINT_VALUE;\n-\n-    return 1;\n+    if (GB18030_MAP[(int )(code & 0xff)] != CM)\n+      return 1;\n   }\n+\n+  return ONIGERR_INVALID_CODE_POINT_VALUE;\n }\n \n static int\ndiff --git a/src/regexec.c b/src/regexec.c\nindex 1b6895d6..cd4c1c19 100644\n--- a/src/regexec.c\n+++ b/src/regexec.c\n@@ -2362,6 +2362,10 @@ static int string_cmp_ic(OnigEncoding enc, int case_fold_flag,\n       p1++;\n       p2++;\n     }\n+    if (s2 >= end2) {\n+      if (s1 < end1) return 0;\n+      else           break;\n+    }\n   }\n \n   *ps2 = s2;\ndiff --git a/src/regparse.c b/src/regparse.c\nindex cc015a76..e815b941 100644\n--- a/src/regparse.c\n+++ b/src/regparse.c\n@@ -4564,7 +4564,7 @@ fetch_interval(UChar** src, UChar* end, PToken* tok, ScanEnv* env)\n \n /* \\M-, \\C-, \\c, or \\... */\n static int\n-fetch_escaped_value(UChar** src, UChar* end, ScanEnv* env, OnigCodePoint* val)\n+fetch_escaped_value_raw(UChar** src, UChar* end, ScanEnv* env, OnigCodePoint* val)\n {\n   int v;\n   OnigCodePoint c;\n@@ -4583,7 +4583,7 @@ fetch_escaped_value(UChar** src, UChar* end, ScanEnv* env, OnigCodePoint* val)\n       if (PEND) return ONIGERR_END_PATTERN_AT_META;\n       PFETCH_S(c);\n       if (c == MC_ESC(env->syntax)) {\n-        v = fetch_escaped_value(&p, end, env, &c);\n+        v = fetch_escaped_value_raw(&p, end, env, &c);\n         if (v < 0) return v;\n       }\n       c = ((c & 0xff) | 0x80);\n@@ -4612,7 +4612,7 @@ fetch_escaped_value(UChar** src, UChar* end, ScanEnv* env, OnigCodePoint* val)\n       }\n       else {\n         if (c == MC_ESC(env->syntax)) {\n-          v = fetch_escaped_value(&p, end, env, &c);\n+          v = fetch_escaped_value_raw(&p, end, env, &c);\n           if (v < 0) return v;\n         }\n         c &= 0x9f;\n@@ -4634,6 +4634,21 @@ fetch_escaped_value(UChar** src, UChar* end, ScanEnv* env, OnigCodePoint* val)\n   return 0;\n }\n \n+static int\n+fetch_escaped_value(UChar** src, UChar* end, ScanEnv* env, OnigCodePoint* val)\n+{\n+  int r;\n+  int len;\n+\n+  r = fetch_escaped_value_raw(src, end, env, val);\n+  if (r != 0) return r;\n+\n+  len = ONIGENC_CODE_TO_MBCLEN(env->enc, *val);\n+  if (len < 0) return len;\n+\n+  return 0;\n+}\n+\n static int fetch_token(PToken* tok, UChar** src, UChar* end, ScanEnv* env);\n \n static OnigCodePoint\n@@ -5192,7 +5207,7 @@ fetch_token_cc(PToken* tok, UChar** src, UChar* end, ScanEnv* env, int state)\n           else {\n             int curr_state;\n \n-\t    curr_state = (state == CS_RANGE) ? CPS_EMPTY : CPS_START;\n+            curr_state = (state == CS_RANGE) ? CPS_EMPTY : CPS_START;\n             r = check_code_point_sequence_cc(p, end, tok->base_num, enc,\n                                              curr_state);\n             if (r < 0) return r;\n@@ -8419,8 +8434,9 @@ parse_exp(Node** np, PToken* tok, int term, UChar** src, UChar* end,\n   case TK_CODE_POINT:\n     {\n       UChar buf[ONIGENC_CODE_TO_MBC_MAXLEN];\n-      len = ONIGENC_CODE_TO_MBC(env->enc, tok->u.code, buf);\n+      len = ONIGENC_CODE_TO_MBCLEN(env->enc, tok->u.code);\n       if (len < 0) return len;\n+      len = ONIGENC_CODE_TO_MBC(env->enc, tok->u.code, buf);\n #ifdef NUMBERED_CHAR_IS_NOT_CASE_AMBIG\n       *np = node_new_str_crude(buf, buf + len, env->options);\n #else\ndiff --git a/src/sjis.c b/src/sjis.c\nindex 1fd92d93..10afd9d3 100644\n--- a/src/sjis.c\n+++ b/src/sjis.c\n@@ -2,7 +2,7 @@\n   sjis.c -  Oniguruma (regular expression library)\n **********************************************************************/\n /*-\n- * Copyright (c) 2002-2019  K.Kosako\n+ * Copyright (c) 2002-2020  K.Kosako\n  * All rights reserved.\n  *\n  * Redistribution and use in source and binary forms, with or without\n@@ -113,13 +113,15 @@ static int\n code_to_mbclen(OnigCodePoint code)\n {\n   if (code < 256) {\n-    return EncLen_SJIS[(int )code] == 1;\n+    if (EncLen_SJIS[(int )code] == 1)\n+      return 1;\n   }\n-  else if (code <= 0xffff) {\n-    return 2;\n+  else if (code < 0x10000) {\n+    if (EncLen_SJIS[(int )(code >>  8) & 0xff] == 2)\n+      return 2;\n   }\n-  else\n-    return ONIGERR_INVALID_CODE_POINT_VALUE;\n+\n+  return ONIGERR_INVALID_CODE_POINT_VALUE;\n }\n \n static OnigCodePoint\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42483290-vul",
+      "digest": "sha256:449c5c488709529e3c1ec5c65eaba42180ef5f75e97a831ba84fbe2823cb58ed"
+    },
+    "patched": {
+      "ref": "n132/arvo:42483290-fix",
+      "digest": "sha256:a1f8e247f8958cd0957e673cacc2a7de2239cf0c55cb12e3d8a4c6c8dd2a0a49"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/oniguruma/src/utf8.c:213",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/oniguruma/src/utf8.c:213"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

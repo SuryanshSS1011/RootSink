@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042519174",
+  "chain": "CWE-456->CWE-457",
+  "project": "ndpi",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42519174",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "22821241e2abff6d33f192992b956a119e516caf",
+      "fix_commits": [
+        "22821241e2abff6d33f192992b956a119e516caf"
+      ],
+      "repo": "https://github.com/ntop/nDPI"
+    },
+    "patch": "From 22821241e2abff6d33f192992b956a119e516caf Mon Sep 17 00:00:00 2001\nFrom: Ivan Nardi <12729895+IvanNardi@users.noreply.github.com>\nDate: Tue, 20 Dec 2022 22:50:18 +0100\nSubject: [PATCH] Fix some errors found by oss-fuzz (#1834)\n\n---\n src/lib/ndpi_classify.c | 4 ++--\n src/lib/ndpi_utils.c    | 4 ++--\n 2 files changed, 4 insertions(+), 4 deletions(-)\n\ndiff --git a/src/lib/ndpi_classify.c b/src/lib/ndpi_classify.c\nindex 61a140d..f103741 100644\n--- a/src/lib/ndpi_classify.c\n+++ b/src/lib/ndpi_classify.c\n@@ -635,8 +635,8 @@ ndpi_timer_sub(const pkt_timeval *a,\n                const pkt_timeval *b,\n                pkt_timeval *result)\n {\n-  result->tv_sec = a->tv_sec - b->tv_sec;\n-  result->tv_usec = a->tv_usec - b->tv_usec;\n+  result->tv_sec = (unsigned long long)a->tv_sec - (unsigned long long)b->tv_sec;\n+  result->tv_usec = (unsigned long long)a->tv_usec - (unsigned long long)b->tv_usec;\n   if(result->tv_usec < 0) {\n     --result->tv_sec;\n     result->tv_usec += 1000000;\ndiff --git a/src/lib/ndpi_utils.c b/src/lib/ndpi_utils.c\nindex b0922ac..c7b2ff4 100644\n--- a/src/lib/ndpi_utils.c\n+++ b/src/lib/ndpi_utils.c\n@@ -2352,7 +2352,7 @@ static u_int8_t ndpi_check_hostname_risk_exception(struct ndpi_detection_module_\n     \n     if(automa->ac_automa) {\n       AC_TEXT_t ac_input_text;\n-      AC_REP_t match;\n+      AC_REP_t match = {0};\n       \n       ac_input_text.astring = hostname, ac_input_text.length = strlen(hostname);\n       ac_input_text.option = 0;\n@@ -2657,7 +2657,7 @@ u_int8_t is_a_common_alpn(struct ndpi_detection_module_struct *ndpi_str,\n \n   if(automa->ac_automa) {\n     AC_TEXT_t ac_input_text;\n-    AC_REP_t match;\n+    AC_REP_t match = {0};\n \n     ac_input_text.astring = (char*)alpn_to_check, ac_input_text.length = alpn_to_check_len;\n     ac_input_text.option = 0;\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42519174-vul",
+      "digest": "sha256:f576ef5c5685bade5e3b5eea8bd062443a57d313ba9286cef2507c40e4e76d96"
+    },
+    "patched": {
+      "ref": "n132/arvo:42519174-fix",
+      "digest": "sha256:f2f187efea7c35309ff8178b5cf39acf86c65102a8515b5763bc898c7eefa786"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/ndpi/src/lib/ndpi_utils.c:2430",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/ndpi/src/lib/ndpi_utils.c:2430"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

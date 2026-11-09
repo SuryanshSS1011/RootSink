@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042477952",
+  "chain": "CWE-20->CWE-125",
+  "project": "libxslt",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42477952",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "e1f8d2e6eb1167fd51eb5b8c99d2d40c37299897",
+      "fix_commits": [
+        "e1f8d2e6eb1167fd51eb5b8c99d2d40c37299897"
+      ],
+      "repo": "https://gitlab.gnome.org/GNOME/libxslt.git"
+    },
+    "patch": "From e1f8d2e6eb1167fd51eb5b8c99d2d40c37299897 Mon Sep 17 00:00:00 2001\nFrom: Nick Wellnhofer <wellnhofer@aevum.de>\nDate: Sun, 15 Sep 2019 13:08:38 +0200\nSubject: [PATCH] Check that crypto:rc4_decrypt produces valid UTF-8\n\nOtherwise, invalid UTF-8 could be sneaked into the output.\n\nFound by OSS-Fuzz.\n---\n libexslt/crypto.c | 9 ++++++++-\n 1 file changed, 8 insertions(+), 1 deletion(-)\n\ndiff --git a/libexslt/crypto.c b/libexslt/crypto.c\nindex ac39038..621fd90 100644\n--- a/libexslt/crypto.c\n+++ b/libexslt/crypto.c\n@@ -755,7 +755,14 @@ exsltCryptoRc4DecryptFunction (xmlXPathParserContextPtr ctxt, int nargs) {\n     PLATFORM_RC4_DECRYPT (ctxt, padkey, bin, ret_len, ret, ret_len);\n     ret[ret_len] = 0;\n \n-    xmlXPathReturnString (ctxt, ret);\n+    if (xmlCheckUTF8(ret) == 0) {\n+\txsltTransformError(tctxt, NULL, tctxt->inst,\n+\t    \"exsltCryptoRc4DecryptFunction: Invalid UTF-8\\n\");\n+        xmlFree(ret);\n+\txmlXPathReturnEmptyString(ctxt);\n+    } else {\n+        xmlXPathReturnString(ctxt, ret);\n+    }\n \n done:\n     if (key != NULL)\n-- \n2.55.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42477952-vul",
+      "digest": "sha256:813fb0ece0568a76b050259fbcea99f68fd746305d8cd032eacaf20dcb477283"
+    },
+    "patched": {
+      "ref": "n132/arvo:42477952-fix",
+      "digest": "sha256:b457acfaf06a1a04f2fc88be1fb01ba636a5ff961cac242babb04e8eba49f0de"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/libxslt/libxslt/numbers.c:1286",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/libxslt/libxslt/numbers.c:1286"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

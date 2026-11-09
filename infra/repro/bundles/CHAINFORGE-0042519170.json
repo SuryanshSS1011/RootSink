@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042519170",
+  "chain": "CWE-416->CWE-787",
+  "project": "vlc",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42519170",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "5f57257eeddcdd773540636a6fddbf13f6b2edba",
+      "fix_commits": [
+        "5f57257eeddcdd773540636a6fddbf13f6b2edba"
+      ],
+      "repo": "https://github.com/videolan/vlc"
+    },
+    "patch": "diff --git a/test/src/input/decoder.c b/test/src/input/decoder.c\nindex ad6396dfec49..1b3cb23aec6c 100644\n--- a/test/src/input/decoder.c\n+++ b/test/src/input/decoder.c\n@@ -133,15 +133,16 @@ decoder_t *test_decoder_create(vlc_object_t *parent, const es_format_t *fmt)\n     decoder_t *packetizer = NULL;\n     decoder_t *decoder = NULL;\n \n-    packetizer = vlc_object_create(parent, sizeof(*packetizer));\n+    struct decoder_owner *pkt_owner = vlc_object_create(parent, sizeof(*pkt_owner));\n     struct decoder_owner *owner = vlc_object_create(parent, sizeof(*owner));\n \n-    if (packetizer == NULL || owner == NULL)\n+    if (pkt_owner == NULL || owner == NULL)\n     {\n-        if (packetizer)\n-            vlc_object_delete(packetizer);\n+        if (pkt_owner)\n+            vlc_object_delete(&pkt_owner->dec);\n         return NULL;\n     }\n+    packetizer = &pkt_owner->dec;\n     decoder = &owner->dec;\n     owner->packetizer = packetizer;\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42519170-vul",
+      "digest": "sha256:fb0b8faf48eda17e3420baf793e3efba3237a43db99d4b7e5b4fa44c3ab5215d"
+    },
+    "patched": {
+      "ref": "n132/arvo:42519170-fix",
+      "digest": "sha256:2929f2293255024139c59e25bb308077bde0bcdacaeb03b91f263a35008bd962"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/vlc/src/misc/es_format.c:441",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/vlc/src/misc/es_format.c:441"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042516856",
+  "chain": "CWE-1284->CWE-125",
+  "project": "hunspell",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42516856",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "ef41c16af9a7fe0df27f421bd90120363c60dbb9",
+      "fix_commits": [
+        "ef41c16af9a7fe0df27f421bd90120363c60dbb9"
+      ],
+      "repo": "https://github.com/hunspell/hunspell"
+    },
+    "patch": "diff --git a/src/hunspell/affixmgr.cxx b/src/hunspell/affixmgr.cxx\nindex 17762b31a..57c8308a2 100644\n--- a/src/hunspell/affixmgr.cxx\n+++ b/src/hunspell/affixmgr.cxx\n@@ -1879,7 +1879,7 @@ struct hentry* AffixMgr::compound_check(const std::string& word,\n               if (striple) {\n                 checkedstriple = 1;\n                 i--;  // check \"fahrt\" instead of \"ahrt\" in \"Schiffahrt\"\n-              } else if (i > 2 && word[i - 1] == word[i - 2])\n+              } else if (i > 2 && i <= word.size() && word[i - 1] == word[i - 2])\n                 striple = 1;\n             }\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42516856-vul",
+      "digest": "sha256:b49b1be3af79850b033d88f357f52a4878149697d585b240975cb89c464296fb"
+    },
+    "patched": {
+      "ref": "n132/arvo:42516856-fix",
+      "digest": "sha256:baa3e61740f29ee4e87bcd7cc00796fb96ef9330e3676b01a238b057f9c09fbe"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/hunspell/src/hunspell/affixmgr.cxx:1874",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/hunspell/src/hunspell/affixmgr.cxx:1874"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

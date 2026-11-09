@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-955518440",
+  "chain": "CWE-129->CWE-125",
+  "project": "gdal",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42484727",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/OSGeo/gdal/commit/cce4fc19bb553db2a40e1bad04a903fc2c4566a6",
+      "fix_commits": [
+        "cce4fc19bb553db2a40e1bad04a903fc2c4566a6"
+      ],
+      "repo": "https://github.com/OSGeo/gdal"
+    },
+    "patch": "diff --git a/gdal/frmts/e00grid/e00read.c b/gdal/frmts/e00grid/e00read.c\nindex 428bef876b25..f023336abc51 100644\n--- a/gdal/frmts/e00grid/e00read.c\n+++ b/gdal/frmts/e00grid/e00read.c\n@@ -355,6 +355,7 @@ static void _ReadNextSourceLine(E00ReadPtr psInfo)\n             if (pszLine)\n             {\n                 strncpy(psInfo->szInBuf, pszLine, E00_READ_BUF_SIZE);\n+                psInfo->szInBuf[E00_READ_BUF_SIZE-1] = '\\0';\n             }\n             else\n             {\n@@ -371,6 +372,7 @@ static void _ReadNextSourceLine(E00ReadPtr psInfo)\n              */\n             int nLen;\n             nLen = (int)strlen(psInfo->szInBuf);\n+            CPLAssert(nLen < E00_READ_BUF_SIZE);\n             while(nLen > 0 && (psInfo->szInBuf[nLen-1] == '\\n' ||\n                                psInfo->szInBuf[nLen-1] == '\\r'   ) )\n             {\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42484727-vul",
+      "digest": "sha256:17a26d15ad44ef24c33dd15021b49ec72f0e9e625099da504eb9ad219ef4b195"
+    },
+    "patched": {
+      "ref": "n132/arvo:42484727-fix",
+      "digest": "sha256:da52939ee6aa7524079ca4a8b194d506fc05a9eac54a10808e4d382a7ab2a281"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "crash_site": "/src/gdal/gdal/frmts/e00grid/./e00read.c:374",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 129,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "site": "/src/gdal/gdal/frmts/e00grid/./e00read.c:374"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

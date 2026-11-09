@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042495882",
+  "chain": "CWE-1284->CWE-125",
+  "project": "openjpeg",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42495882",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "28094e1ebfa420f9a0bdc7a11b8d4ee5f154db35",
+      "fix_commits": [
+        "28094e1ebfa420f9a0bdc7a11b8d4ee5f154db35"
+      ],
+      "repo": "https://github.com/uclouvain/openjpeg"
+    },
+    "patch": "diff --git a/src/lib/openjp2/tcd.c b/src/lib/openjp2/tcd.c\nindex 68caf5b0f..631a48400 100644\n--- a/src/lib/openjp2/tcd.c\n+++ b/src/lib/openjp2/tcd.c\n@@ -1520,6 +1520,15 @@ OPJ_BOOL opj_tcd_decode_tile(opj_tcd_t *p_tcd,\n             tilec->win_y1 = opj_uint_min(\n                                 (OPJ_UINT32)tilec->y1,\n                                 opj_uint_ceildiv(p_tcd->win_y1, image_comp->dy));\n+            if (tilec->win_x1 < tilec->win_x0 ||\n+                    tilec->win_y1 < tilec->win_y0) {\n+                /* We should not normally go there. The circumstance is when */\n+                /* the tile coordinates do not intersect the area of interest */\n+                /* Upper level logic should not even try to decode that tile */\n+                opj_event_msg(p_manager, EVT_ERROR,\n+                              \"Invalid tilec->win_xxx values\\n\");\n+                return OPJ_FALSE;\n+            }\n \n             for (resno = 0; resno < tilec->numresolutions; ++resno) {\n                 opj_tcd_resolution_t *res = tilec->resolutions + resno;\n@@ -1973,6 +1982,16 @@ static OPJ_BOOL opj_tcd_mct_decode(opj_tcd_t *p_tcd, opj_event_mgr_t *p_manager)\n         /* but we would need to take into account a stride then */\n         l_samples = (OPJ_UINT32)((res_comp0->x1 - res_comp0->x0) *\n                                  (res_comp0->y1 - res_comp0->y0));\n+        if (l_tile->numcomps >= 3) {\n+            if (l_tile_comp->minimum_num_resolutions !=\n+                    l_tile->comps[1].minimum_num_resolutions ||\n+                    l_tile_comp->minimum_num_resolutions !=\n+                    l_tile->comps[2].minimum_num_resolutions) {\n+                opj_event_msg(p_manager, EVT_ERROR,\n+                              \"Tiles don't all have the same dimension. Skip the MCT step.\\n\");\n+                return OPJ_FALSE;\n+            }\n+        }\n         if (l_tile->numcomps >= 3) {\n             opj_tcd_resolution_t* res_comp1 = l_tile->comps[1].resolutions +\n                                               l_tile_comp->minimum_num_resolutions - 1;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42495882-vul",
+      "digest": "sha256:14ff04123a3b24a57ae55880554054657e2849c45feee4c6cffa7122c945b183"
+    },
+    "patched": {
+      "ref": "n132/arvo:42495882-fix",
+      "digest": "sha256:32917a7097ade131cf51352fa89ba309e275d25c60847bda99cf0e422f787e9c"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/openjpeg/src/lib/openjp2/tcd.c:1988",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/openjpeg/src/lib/openjp2/tcd.c:1988"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

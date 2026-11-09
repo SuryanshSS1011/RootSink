@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042538160",
+  "chain": "CWE-20->CWE-125",
+  "project": "libultrahdr",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42538160",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "89480db742e0af741901b1f8740566b89b798c3b",
+      "fix_commits": [
+        "89480db742e0af741901b1f8740566b89b798c3b"
+      ],
+      "repo": "https://github.com/google/libultrahdr"
+    },
+    "patch": "diff --git a/lib/src/jpegdecoderhelper.cpp b/lib/src/jpegdecoderhelper.cpp\nindex db6189fe..7b107a13 100644\n--- a/lib/src/jpegdecoderhelper.cpp\n+++ b/lib/src/jpegdecoderhelper.cpp\n@@ -148,20 +148,26 @@ static uhdr_img_fmt_t getOutputSamplingFormat(const j_decompress_ptr cinfo) {\n   if (cinfo->num_components == 1)\n     return UHDR_IMG_FMT_8bppYCbCr400;\n   else {\n-    int a = cinfo->max_h_samp_factor / cinfo->comp_info[1].h_samp_factor;\n-    int b = cinfo->max_v_samp_factor / cinfo->comp_info[1].v_samp_factor;\n-    if (a == 1 && b == 1)\n-      return UHDR_IMG_FMT_24bppYCbCr444;\n-    else if (a == 1 && b == 2)\n-      return UHDR_IMG_FMT_16bppYCbCr440;\n-    else if (a == 2 && b == 1)\n-      return UHDR_IMG_FMT_16bppYCbCr422;\n-    else if (a == 2 && b == 2)\n-      return UHDR_IMG_FMT_12bppYCbCr420;\n-    else if (a == 4 && b == 1)\n-      return UHDR_IMG_FMT_12bppYCbCr411;\n-    else if (a == 4 && b == 2)\n-      return UHDR_IMG_FMT_10bppYCbCr410;\n+    float ratios[6];\n+    for (int i = 0; i < 3; i++) {\n+      ratios[i * 2] = ((float)cinfo->comp_info[i].h_samp_factor) / cinfo->max_h_samp_factor;\n+      ratios[i * 2 + 1] = ((float)cinfo->comp_info[i].v_samp_factor) / cinfo->max_v_samp_factor;\n+    }\n+    if (ratios[0] == 1 && ratios[1] == 1 && ratios[2] == ratios[4] && ratios[3] == ratios[5]) {\n+      if (ratios[2] == 1 && ratios[3] == 1) {\n+        return UHDR_IMG_FMT_24bppYCbCr444;\n+      } else if (ratios[2] == 1 && ratios[3] == 0.5) {\n+        return UHDR_IMG_FMT_16bppYCbCr440;\n+      } else if (ratios[2] == 0.5 && ratios[3] == 1) {\n+        return UHDR_IMG_FMT_16bppYCbCr422;\n+      } else if (ratios[2] == 0.5 && ratios[3] == 0.5) {\n+        return UHDR_IMG_FMT_12bppYCbCr420;\n+      } else if (ratios[2] == 0.25 && ratios[3] == 1) {\n+        return UHDR_IMG_FMT_12bppYCbCr411;\n+      } else if (ratios[2] == 0.25 && ratios[3] == 0.5) {\n+        return UHDR_IMG_FMT_10bppYCbCr410;\n+      }\n+    }\n   }\n   return UHDR_IMG_FMT_UNSPECIFIED;\n }\n@@ -419,6 +425,12 @@ uhdr_error_info_t JpegDecoderHelper::decode(jpeg_decompress_struct* cinfo, uint8\n       [[fallthrough]];\n     case JCS_YCbCr:\n       mOutFormat = getOutputSamplingFormat(cinfo);\n+      if (mOutFormat == UHDR_IMG_FMT_UNSPECIFIED) {\n+        status.error_code = UHDR_CODEC_ERROR;\n+        status.has_detail = 1;\n+        snprintf(status.detail, sizeof status.detail,\n+                 \"unrecognized subsampling format for output color space JCS_YCbCr\");\n+      }\n       return decodeToCSYCbCr(cinfo, dest);\n #ifdef JCS_ALPHA_EXTENSIONS\n     case JCS_EXT_RGBA:\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42538160-vul",
+      "digest": "sha256:b77d9cd6a1482131c9bddc9a4076244a706b7295b18f7db3672f0bb88a5d4a76"
+    },
+    "patched": {
+      "ref": "n132/arvo:42538160-fix",
+      "digest": "sha256:77f61b938170b67bdf89438a8c3a4f8e54e99a49eb49840ea90672db0f59b8dc"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/libultrahdr/lib/src/gainmapmath.cpp:740",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/libultrahdr/lib/src/gainmapmath.cpp:740"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

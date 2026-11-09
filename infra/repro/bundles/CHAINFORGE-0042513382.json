@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042513382",
+  "chain": "CWE-20->CWE-125",
+  "project": "php-src",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42513382",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "c6eb5dc5fdf8373b3f6cd1c121100cad7e75f69a",
+      "fix_commits": [
+        "c6eb5dc5fdf8373b3f6cd1c121100cad7e75f69a"
+      ],
+      "repo": "https://github.com/php/php-src"
+    },
+    "patch": "diff --git a/ext/reflection/php_reflection.c b/ext/reflection/php_reflection.c\nindex f0f9e3dfe0ab..cf3b024c22b8 100644\n--- a/ext/reflection/php_reflection.c\n+++ b/ext/reflection/php_reflection.c\n@@ -6972,6 +6972,9 @@ ZEND_METHOD(ReflectionEnumBackedCase, getBackingValue)\n \n \tif (Z_TYPE(ref->value) == IS_CONSTANT_AST) {\n \t\tzval_update_constant_ex(&ref->value, ref->ce);\n+\t\tif (EG(exception)) {\n+\t\t\treturn;\n+\t\t}\n \t}\n \n \tZEND_ASSERT(intern->ce->enum_backing_type != IS_UNDEF);\ndiff --git a/ext/reflection/tests/ReflectionEnumBackedCase_getBackingValue_002.phpt b/ext/reflection/tests/ReflectionEnumBackedCase_getBackingValue_002.phpt\nnew file mode 100644\nindex 000000000000..7a942e31ad17\n--- /dev/null\n+++ b/ext/reflection/tests/ReflectionEnumBackedCase_getBackingValue_002.phpt\n@@ -0,0 +1,15 @@\n+--TEST--\n+ReflectionEnumBackedCase::getBackingValue() exception\n+--FILE--\n+<?php\n+enum Inm:int {\n+    case Foo=y;\n+}\n+try {\n+    var_dump((new ReflectionEnumBackedCase(Inm::class,'Foo'))->getBackingValue());\n+} catch (Error $e) {\n+    echo $e->getMessage() . \"\\n\";\n+}\n+?>\n+--EXPECT--\n+Undefined constant \"y\"\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42513382-vul",
+      "digest": "sha256:957ed000bb94b7786cf36100ae9308b56fc4d2bf6fa698f6b28927d548a5ed6a"
+    },
+    "patched": {
+      "ref": "n132/arvo:42513382-fix",
+      "digest": "sha256:3a0f3d9c361c4062327788234df28cf0e95b582484aa507da7d3f5283033d3b0"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/php-src/Zend/zend_enum.h:55",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/php-src/Zend/zend_enum.h:55"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

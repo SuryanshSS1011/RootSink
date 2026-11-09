@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042516369",
+  "chain": "CWE-416->CWE-787",
+  "project": "mongoose",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42516369",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "9680b8ccb396d0a49b309b3d23787c092c2f6cd7",
+      "fix_commits": [
+        "9680b8ccb396d0a49b309b3d23787c092c2f6cd7"
+      ],
+      "repo": "https://github.com/cesanta/mongoose"
+    },
+    "patch": "diff --git a/Makefile b/Makefile\nindex 2eb5f1609b..67037e880b 100644\n--- a/Makefile\n+++ b/Makefile\n@@ -81,6 +81,10 @@ fuzz: mongoose.c mongoose.h Makefile test/fuzz.c\n \t$(CXX) test/fuzz.c $(OPTS) $(WARN) $(INCS) $(TFLAGS) $(ASAN) -o fuzzer\n \t$(RUN) ./fuzzer\n \n+fuzz2: mongoose.c mongoose.h Makefile test/fuzz.c\n+\t$(CC) test/fuzz.c test/packed_fs.c -DMAIN $(CFLAGS) -o fuzzer\n+\t$(RUN) ./fuzzer /tmp/fuzzdata\n+\n test: Makefile mongoose.h $(SRCS)\n \t$(CC) $(SRCS) $(CFLAGS) $(LDFLAGS) -o unit_test\n \tASAN_OPTIONS=$(ASAN_OPTIONS) $(RUN) ./unit_test\ndiff --git a/mip/mip.c b/mip/mip.c\nindex c2b464f71a..37723361b8 100644\n--- a/mip/mip.c\n+++ b/mip/mip.c\n@@ -453,7 +453,7 @@ static void rx_icmp(struct mip_if *ifp, struct pkt *pkt) {\n     if (left > pkt->pay.len) left = pkt->pay.len;  // Don't overflow TX\n     memset(icmp, 0, sizeof(*icmp));                // Set csum to 0\n     memcpy(icmp + 1, pkt->pay.buf, left);          // Copy RX payload to TX\n-    icmp->csum = ipcsum(icmp, sizeof(*icmp) + pkt->pay.len);\n+    icmp->csum = ipcsum(icmp, sizeof(*icmp) + left);\n     ifp->driver->tx(ifp->tx.buf, len + left, ifp->driver_data);\n   }\n }\ndiff --git a/mongoose.c b/mongoose.c\nindex fdd2f86616..bd1292aca2 100644\n--- a/mongoose.c\n+++ b/mongoose.c\n@@ -90,9 +90,9 @@ int mg_base64_encode(const unsigned char *p, int n, char *to) {\n }\n \n int mg_base64_decode(const char *src, int n, char *dst) {\n-  const char *end = src + n;\n+  const char *end = src == NULL ? NULL : src + n;  // Cannot add to NULL\n   int len = 0;\n-  while (src + 3 < end) {\n+  while (src != NULL && src + 3 < end) {\n     int a = mg_b64rev(src[0]), b = mg_b64rev(src[1]), c = mg_b64rev(src[2]),\n         d = mg_b64rev(src[3]);\n     if (a == 64 || a < 0 || b == 64 || b < 0 || c < 0 || d < 0) return 0;\n@@ -1542,7 +1542,7 @@ static void mg_http_parse_headers(const char *s, const char *end,\n \n int mg_http_parse(const char *s, size_t len, struct mg_http_message *hm) {\n   int is_response, req_len = mg_http_get_request_len((unsigned char *) s, len);\n-  const char *end = s + req_len, *qs;\n+  const char *end = s == NULL ? NULL : s + req_len, *qs;  // Cannot add to NULL\n   struct mg_str *cl;\n \n   memset(hm, 0, sizeof(*hm));\n@@ -1902,12 +1902,12 @@ static void printdirentry(const char *name, void *userdata) {\n     }\n #if defined(MG_HTTP_DIRLIST_TIME)\n     char time_str[30];\n-    struct tm * time_info = localtime(&t);\n+    struct tm *time_info = localtime(&t);\n     strftime(time_str, sizeof time_str, \"%Y/%m/%d %H:%M:%S\", time_info);\n     mg_snprintf(mod, sizeof(mod), \"%s\", time_str);\n #elif defined(MG_HTTP_DIRLIST_TIME_UTC)\n     char time_str[30];\n-    struct tm * time_info = gmtime(&t);\n+    struct tm *time_info = gmtime(&t);\n     strftime(time_str, sizeof time_str, \"%Y/%m/%d %H:%M:%S\", time_info);\n     mg_snprintf(mod, sizeof(mod), \"%s\", time_str);\n #else\n@@ -6715,10 +6715,10 @@ static void rx_icmp(struct mip_if *ifp, struct pkt *pkt) {\n                           sizeof(struct icmp) + pkt->pay.len);\n     struct icmp *icmp = (struct icmp *) (ip + 1);\n     size_t len = PDIFF(ifp->tx.buf, icmp + 1), left = ifp->tx.len - len;\n-    if (left > pkt->pay.len) left = pkt->pay.len;\n-    memset(icmp, 0, sizeof(*icmp));  // Important - set csum to 0\n-    memcpy(icmp + 1, pkt->pay.buf, left);\n-    icmp->csum = ipcsum(icmp, sizeof(*icmp) + pkt->pay.len);\n+    if (left > pkt->pay.len) left = pkt->pay.len;  // Don't overflow TX\n+    memset(icmp, 0, sizeof(*icmp));                // Set csum to 0\n+    memcpy(icmp + 1, pkt->pay.buf, left);          // Copy RX payload to TX\n+    icmp->csum = ipcsum(icmp, sizeof(*icmp) + left);\n     ifp->driver->tx(ifp->tx.buf, len + left, ifp->driver_data);\n   }\n }\ndiff --git a/src/base64.c b/src/base64.c\nindex 1f8a74c81c..d7526e1b64 100644\n--- a/src/base64.c\n+++ b/src/base64.c\n@@ -1,5 +1,5 @@\n-#include \"base64.h\"\n #include \"arch.h\"\n+#include \"base64.h\"\n \n static int mg_b64idx(int c) {\n   if (c < 26) {\n@@ -66,9 +66,9 @@ int mg_base64_encode(const unsigned char *p, int n, char *to) {\n }\n \n int mg_base64_decode(const char *src, int n, char *dst) {\n-  const char *end = src + n;\n+  const char *end = src == NULL ? NULL : src + n;  // Cannot add to NULL\n   int len = 0;\n-  while (src + 3 < end) {\n+  while (src != NULL && src + 3 < end) {\n     int a = mg_b64rev(src[0]), b = mg_b64rev(src[1]), c = mg_b64rev(src[2]),\n         d = mg_b64rev(src[3]);\n     if (a == 64 || a < 0 || b == 64 || b < 0 || c < 0 || d < 0) return 0;\ndiff --git a/src/http.c b/src/http.c\nindex fb046e1fa4..d685744182 100644\n--- a/src/http.c\n+++ b/src/http.c\n@@ -1,7 +1,7 @@\n-#include \"http.h\"\n #include \"arch.h\"\n #include \"base64.h\"\n #include \"fmt.h\"\n+#include \"http.h\"\n #include \"log.h\"\n #include \"net.h\"\n #include \"ssi.h\"\n@@ -202,7 +202,7 @@ static void mg_http_parse_headers(const char *s, const char *end,\n \n int mg_http_parse(const char *s, size_t len, struct mg_http_message *hm) {\n   int is_response, req_len = mg_http_get_request_len((unsigned char *) s, len);\n-  const char *end = s + req_len, *qs;\n+  const char *end = s == NULL ? NULL : s + req_len, *qs;  // Cannot add to NULL\n   struct mg_str *cl;\n \n   memset(hm, 0, sizeof(*hm));\n@@ -562,12 +562,12 @@ static void printdirentry(const char *name, void *userdata) {\n     }\n #if defined(MG_HTTP_DIRLIST_TIME)\n     char time_str[30];\n-    struct tm * time_info = localtime(&t);\n+    struct tm *time_info = localtime(&t);\n     strftime(time_str, sizeof time_str, \"%Y/%m/%d %H:%M:%S\", time_info);\n     mg_snprintf(mod, sizeof(mod), \"%s\", time_str);\n #elif defined(MG_HTTP_DIRLIST_TIME_UTC)\n     char time_str[30];\n-    struct tm * time_info = gmtime(&t);\n+    struct tm *time_info = gmtime(&t);\n     strftime(time_str, sizeof time_str, \"%Y/%m/%d %H:%M:%S\", time_info);\n     mg_snprintf(mod, sizeof(mod), \"%s\", time_str);\n #else\ndiff --git a/test/fuzz.c b/test/fuzz.c\nindex 920d922018..212c413d2f 100644\n--- a/test/fuzz.c\n+++ b/test/fuzz.c\n@@ -58,7 +58,7 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {\n   mg_json_get(mg_str_n((char *) data, size), \"$[0]\", &n);\n \n   if (size > 0) {\n-    struct mip_cfg cfg = {};\n+    struct mip_cfg cfg = {0};\n     size_t pktlen = 1540;\n     char t[sizeof(struct mip_if) + pktlen * 2 + 0 /* qlen */];\n     struct mip_if *ifp = (struct mip_if *) t;\n@@ -85,3 +85,15 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {\n \n   return 0;\n }\n+\n+#if defined(MAIN)\n+int main(int argc, char *argv[]) {\n+  if (argc > 1) {\n+    size_t len = 0;\n+    char *buf = mg_file_read(&mg_fs_posix, argv[1], &len);\n+    if (buf != NULL) LLVMFuzzerTestOneInput((uint8_t *) buf, len);\n+    free(buf);\n+  }\n+  return 0;\n+}\n+#endif\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42516369-vul",
+      "digest": "sha256:4d610cfdb52005876f38429605255e45270ca4d0c6668a8fe6b84925e8703e49"
+    },
+    "patched": {
+      "ref": "n132/arvo:42516369-fix",
+      "digest": "sha256:3f760920488e39403065c780d7c699aff1055250696616838076b17f1358e5ac"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "dynamic-stack-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/mongoose/mip/mip.c:454",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "dynamic-stack-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/mongoose/mip/mip.c:454"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

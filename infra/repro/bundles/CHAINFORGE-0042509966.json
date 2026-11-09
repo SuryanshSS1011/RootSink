@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042509966",
+  "chain": "CWE-1284->CWE-125",
+  "project": "exiv2",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42509966",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "d16ca65b01188d28afbe5a52b1495ac0270dd95a",
+      "fix_commits": [
+        "d16ca65b01188d28afbe5a52b1495ac0270dd95a"
+      ],
+      "repo": "https://github.com/Exiv2/exiv2"
+    },
+    "patch": "diff --git a/src/jp2image_int.cpp b/src/jp2image_int.cpp\nindex 9d67bc6ccb..c4a356382c 100644\n--- a/src/jp2image_int.cpp\n+++ b/src/jp2image_int.cpp\n@@ -11,7 +11,7 @@ namespace Exiv2::Internal {\n \n bool isValidBoxFileType(const std::vector<uint8_t>& boxData) {\n   // BR & MinV are obligatory (4 + 4 bytes). Afterwards we have N compatibility lists (of size 4)\n-  if ((boxData.size() - 8u) % 4u != 0) {\n+  if (boxData.size() < 8 || ((boxData.size() - 8u) % 4u) != 0) {\n     return false;\n   }\n \ndiff --git a/unitTests/test_jp2image_int.cpp b/unitTests/test_jp2image_int.cpp\nindex 6af2bb2a58..cd83c19bfe 100644\n--- a/unitTests/test_jp2image_int.cpp\n+++ b/unitTests/test_jp2image_int.cpp\n@@ -58,6 +58,11 @@ TEST(Jp2_FileTypeBox, withInvalidBoxDataSizeIsInvalid) {\n   ASSERT_FALSE(isValidBoxFileType(boxData));\n }\n \n+TEST(Jp2_FileTypeBox, withSmallBoxDataSizeIsInvalid) {\n+  std::vector<std::uint8_t> boxData(7);  // Minimum size is 8\n+  ASSERT_FALSE(isValidBoxFileType(boxData));\n+}\n+\n TEST(Jp2_FileTypeBox, with2CLs_lastOneWithBrandValue_isValid) {\n   std::vector<std::uint8_t> boxData(16);\n   // The first 4 bytes correspond to the BR (Brand). It must have the value 'jp2\\040'\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42509966-vul",
+      "digest": "sha256:1c08b0172e6a1d39a99f09514691958bb4ae2530ae5e89aabef8552b152c36e4"
+    },
+    "patched": {
+      "ref": "n132/arvo:42509966-fix",
+      "digest": "sha256:4daa39f2e0aab0d2b09df0a3f68444aef7d9e6da61b289b182533c12befdd7ab"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/exiv2/src/types.cpp:288",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/exiv2/src/types.cpp:288"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

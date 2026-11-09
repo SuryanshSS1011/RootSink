@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-958279252",
+  "chain": "CWE-129->CWE-125",
+  "project": "ffmpeg",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42476738",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://git.ffmpeg.org/gitweb/ffmpeg.git/commitdiff/8174e5c77d8a94b57b6b1bcbb90728cf8b08ab6b",
+      "fix_commits": [
+        "8174e5c77d8a94b57b6b1bcbb90728cf8b08ab6b"
+      ],
+      "repo": "https://git.ffmpeg.org/gitweb/ffmpeg.git/commitdiff"
+    },
+    "patch": "From 8174e5c77d8a94b57b6b1bcbb90728cf8b08ab6b Mon Sep 17 00:00:00 2001\nFrom: Michael Niedermayer <michael@niedermayer.cc>\nDate: Sun, 4 Aug 2019 09:51:26 +0200\nSubject: [PATCH] avcodec/cbs_av1_syntax_template: Check ref_frame_idx before\n use\n\nFixes: index -1 out of bounds for type 'AV1ReferenceFrameState [8]'\nFixes: 16079/clusterfuzz-testcase-minimized-ffmpeg_DEMUXER_fuzzer-5758807440883712\n\nFound-by: continuous fuzzing process https://github.com/google/oss-fuzz/tree/master/projects/ffmpeg\nReviewed-by: James Almer <jamrial@gmail.com>\nSee: [FFmpeg-devel] [PATCH 05/13] avcodec/cbs_av1_syntax_template: Check ref_frame_idx before use\nSigned-off-by: Michael Niedermayer <michael@niedermayer.cc>\n---\n libavcodec/cbs_av1_syntax_template.c | 7 ++++---\n 1 file changed, 4 insertions(+), 3 deletions(-)\n\ndiff --git a/libavcodec/cbs_av1_syntax_template.c b/libavcodec/cbs_av1_syntax_template.c\nindex b04cd51..806b302 100644\n--- a/libavcodec/cbs_av1_syntax_template.c\n+++ b/libavcodec/cbs_av1_syntax_template.c\n@@ -419,16 +419,17 @@ static int FUNC(frame_size_with_refs)(CodedBitstreamContext *ctx, RWContext *rw,\n     for (i = 0; i < AV1_REFS_PER_FRAME; i++) {\n         flags(found_ref[i], 1, i);\n         if (current->found_ref[i]) {\n-            AV1ReferenceFrameState *ref =\n-                &priv->ref[current->ref_frame_idx[i]];\n+            AV1ReferenceFrameState *ref;\n \n-            if (!ref->valid) {\n+            if (current->ref_frame_idx[i] < 0 ||\n+                !priv->ref[current->ref_frame_idx[i]].valid) {\n                 av_log(ctx->log_ctx, AV_LOG_ERROR,\n                        \"Missing reference frame needed for frame size \"\n                        \"(ref = %d, ref_frame_idx = %d).\\n\",\n                        i, current->ref_frame_idx[i]);\n                 return AVERROR_INVALIDDATA;\n             }\n+            ref = &priv->ref[current->ref_frame_idx[i]];\n \n             priv->upscaled_width = ref->upscaled_width;\n             priv->frame_width    = ref->frame_width;\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42476738-vul",
+      "digest": "sha256:9686f682cdfd180d051590950a412c47d63a671602a84976847c8a3618fe418f"
+    },
+    "patched": {
+      "ref": "n132/arvo:42476738-fix",
+      "digest": "sha256:442cacf56799fb1fadbce0d6e422581990b33b6ba0668fd95f59673e75e943fa"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "crash_site": "/src/ffmpeg/libavcodec/cbs_av1_syntax_template.c:423",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 129,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "site": "/src/ffmpeg/libavcodec/cbs_av1_syntax_template.c:423"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

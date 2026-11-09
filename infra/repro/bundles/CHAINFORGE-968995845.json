@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-968995845",
+  "chain": "CWE-456->CWE-457",
+  "project": "mruby",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42500156",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/mruby/mruby/commit/8e5e96239c4e4b4725dbff14ce9f1019e3058de8",
+      "fix_commits": [
+        "8e5e96239c4e4b4725dbff14ce9f1019e3058de8"
+      ],
+      "repo": "https://github.com/mruby/mruby"
+    },
+    "patch": "diff --git a/mrbgems/mruby-pack/src/pack.c b/mrbgems/mruby-pack/src/pack.c\nindex d953ce8986..e191c1d58b 100644\n--- a/mrbgems/mruby-pack/src/pack.c\n+++ b/mrbgems/mruby-pack/src/pack.c\n@@ -398,7 +398,7 @@ pack_w(mrb_state *mrb, mrb_value o, mrb_value str, mrb_int sidx, unsigned int fl\n     if ((n & mask) == 0) break;\n   }\n   str = str_len_ensure(mrb, str, sidx + i);\n-  p = RSTRING_PTR(str);\n+  p = RSTRING_PTR(str)+sidx;\n   for (size_t j=i; j>0; p++,j--) {\n     mrb_int x = (n>>(7*(j-1)))&0x7f;\n     *p = (char)x;\n@@ -997,8 +997,8 @@ pack_M(mrb_state *mrb, mrb_value src, mrb_value dst, mrb_int didx, int count)\n       prev = '\\n';\n     }\n     if (i > 1024 - 5) {\n-      str_len_ensure(mrb, dst, didx+i);\n-      memcpy(RSTRING_PTR(dst), buff, i);\n+      str_len_ensure(mrb, dst, didx+dlen+i);\n+      memcpy(RSTRING_PTR(dst)+didx+dlen, buff, i);\n       dlen += i;\n       i = 0;\n     }\n@@ -1009,8 +1009,8 @@ pack_M(mrb_state *mrb, mrb_value src, mrb_value dst, mrb_int didx, int count)\n     buff[i++] = '\\n';\n   }\n   if (i > 0) {\n-    str_len_ensure(mrb, dst, didx+i);\n-    memcpy(RSTRING_PTR(dst), buff, i);\n+    str_len_ensure(mrb, dst, didx+dlen+i);\n+    memcpy(RSTRING_PTR(dst)+didx+dlen, buff, i);\n     dlen += i;\n   }\n   return dlen;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42500156-vul",
+      "digest": "sha256:f954f23afa870a5382064da0fb1254bc195859ae87b31254cd947eea24d530ed"
+    },
+    "patched": {
+      "ref": "n132/arvo:42500156-fix",
+      "digest": "sha256:b642998411200ab90240a613ccfb73e63ae2ca9938f3e70bc6e823c8468c2ba9"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/mruby/src/symbol.c:161",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/mruby/src/symbol.c:161"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

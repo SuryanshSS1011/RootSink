@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-960610085",
+  "chain": "CWE-456->CWE-457",
+  "project": "S2OPC",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42514216",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://gitlab.com/systerel/S2OPC/-/commit/040cd827d395f46a8515a7d2a7c7ab101f7f1de1",
+      "fix_commits": [
+        "040cd827d395f46a8515a7d2a7c7ab101f7f1de1"
+      ],
+      "repo": "https://gitlab.com/systerel/S2OPC"
+    },
+    "patch": "diff --git a/src/PubSub/network/sopc_network_layer.c b/src/PubSub/network/sopc_network_layer.c\nindex a9d527ea58959c69354c4058d0ad27229b7562b3..f85b8509a4856fb3573262147e47cc7907c14566 100644\n--- a/src/PubSub/network/sopc_network_layer.c\n+++ b/src/PubSub/network/sopc_network_layer.c\n@@ -1279,10 +1279,9 @@ static inline SOPC_ReturnStatus Decode_Message_V1(SOPC_Buffer* buffer,\n             if (SOPC_STATUS_OK == status)\n             {\n                 SOPC_Dataset_LL_DataSetMsg_Set_WriterId(dsm, writer_id);\n+                dsmReaders[i] = readerConf->callbacks.pGetReader_Func(group, conf, writer_id, (uint8_t) i);\n             }\n \n-            dsmReaders[i] = readerConf->callbacks.pGetReader_Func(group, conf, writer_id, (uint8_t) i);\n-\n             // Check if there is at last one DSM to read, otherwise decoding can be canceled\n             if (dsmReaders[i] != NULL)\n             {\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42514216-vul",
+      "digest": "sha256:83036c50630ca1e311941cbd730f4ccdaddbbfd0952e2fd962149bcadb3131be"
+    },
+    "patched": {
+      "ref": "n132/arvo:42514216-fix",
+      "digest": "sha256:aa4b2bb06554625867c6deeacf8bb4fa3c7cc8b84657d6c2e180c2b8330d5587"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/S2OPC/src/PubSub/subscriber/sopc_reader_layer.c:172",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/S2OPC/src/PubSub/subscriber/sopc_reader_layer.c:172"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

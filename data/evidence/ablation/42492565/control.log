@@ -1,0 +1,60 @@
+======================= INFO =========================
+This binary is built for AFL-fuzz.
+To run the target function on individual input(s) execute this:
+  /out/libraw_cr2_fuzzer < INPUT_FILE
+or
+  /out/libraw_cr2_fuzzer INPUT_FILE1 [INPUT_FILE2 ... ]
+To fuzz with afl-fuzz execute this:
+  afl-fuzz [afl-flags] /out/libraw_cr2_fuzzer [-N]
+afl-fuzz will run N iterations before re-spawning the process (default: 1000)
+======================================================
+Reading 3137 bytes from /tmp/poc
+=================================================================
+==1323161==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x61f000001ac0 at pc 0x000000499362 bp 0x7ffcdc2f1660 sp 0x7ffcdc2f0e28
+WRITE of size 3137 at 0x61f000001ac0 thread T0
+SCARINESS: 45 (multi-byte-write-heap-buffer-overflow)
+    #0 0x499361 in __asan_memmove /src/llvm-project/compiler-rt/lib/asan/asan_interceptors_memintrinsics.cpp:30:3
+    #1 0x50703e in LibRaw_buffer_datastream::read(void*, unsigned long, unsigned long) /src/libraw/src/libraw_datastream.cpp:371:3
+    #2 0x6166ad in LibRaw::uncompressed_fp_dng_load_raw() /src/libraw/src/decoders/fp_dng.cpp:629:59
+    #3 0x4d0639 in LibRaw::unpack() /src/libraw/src/decoders/unpack.cpp:287:7
+    #4 0x4cd8b5 in LLVMFuzzerTestOneInput /src/libraw_fuzzer.cc:47:20
+    #5 0x4cde5e in ExecuteFilesOnyByOne /src/libfuzzer/afl/afl_driver.cpp:207:5
+    #6 0x4cde5e in main /src/libfuzzer/afl/afl_driver.cpp:244:12
+    #7 0x1552c08ea83f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2083f)
+    #8 0x41ebc8 in _start (/out/libraw_cr2_fuzzer+0x41ebc8)
+
+DEDUP_TOKEN: __asan_memmove--LibRaw_buffer_datastream::read(void*, unsigned long, unsigned long)--LibRaw::uncompressed_fp_dng_load_raw()
+0x61f000001ac0 is located 0 bytes to the right of 3136-byte region [0x61f000000e80,0x61f000001ac0)
+allocated by thread T0 here:
+    #0 0x499c22 in calloc /src/llvm-project/compiler-rt/lib/asan/asan_malloc_linux.cpp:154:3
+    #1 0x4fca4b in libraw_memmgr::calloc(unsigned long, unsigned long) /src/libraw/./libraw/libraw_alloc.h:56:17
+    #2 0x4fc971 in LibRaw::calloc(unsigned long, unsigned long) /src/libraw/src/utils/utils_libraw.cpp:266:20
+    #3 0x616298 in LibRaw::uncompressed_fp_dng_load_raw() /src/libraw/src/decoders/fp_dng.cpp:602:36
+    #4 0x4d0639 in LibRaw::unpack() /src/libraw/src/decoders/unpack.cpp:287:7
+    #5 0x4cd8b5 in LLVMFuzzerTestOneInput /src/libraw_fuzzer.cc:47:20
+    #6 0x4cde5e in ExecuteFilesOnyByOne /src/libfuzzer/afl/afl_driver.cpp:207:5
+    #7 0x4cde5e in main /src/libfuzzer/afl/afl_driver.cpp:244:12
+    #8 0x1552c08ea83f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2083f)
+
+DEDUP_TOKEN: calloc--libraw_memmgr::calloc(unsigned long, unsigned long)--LibRaw::calloc(unsigned long, unsigned long)
+SUMMARY: AddressSanitizer: heap-buffer-overflow /src/llvm-project/compiler-rt/lib/asan/asan_interceptors_memintrinsics.cpp:30:3 in __asan_memmove
+Shadow bytes around the buggy address:
+  0x0c3e7fff8300: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c3e7fff8310: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c3e7fff8320: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c3e7fff8330: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c3e7fff8340: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x0c3e7fff8350: 00 00 00 00 00 00 00 00[fa]fa fa fa fa fa fa fa
+  0x0c3e7fff8360: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c3e7fff8370: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c3e7fff8380: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c3e7fff8390: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c3e7fff83a0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042505893",
+  "chain": "CWE-416->CWE-125",
+  "project": "ghostpdl",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42505893",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "7fe54b1dbf221864b25ff55eccf1d624c07bb21d",
+      "fix_commits": [
+        "7fe54b1dbf221864b25ff55eccf1d624c07bb21d"
+      ],
+      "repo": "https://cgit.ghostscript.com/ghostpdl.git"
+    },
+    "patch": "From 7fe54b1dbf221864b25ff55eccf1d624c07bb21d Mon Sep 17 00:00:00 2001\nFrom: Chris Liddell <chris.liddell@artifex.com>\nDate: Tue, 14 Dec 2021 08:47:05 +0000\nSubject: [PATCH] oss-fuzz 42285: don't free an already freed buffer\n\npdfi_close_memory_stream() already frees the buffer, no need to do so\nseparately.\n---\n pdf/pdf_file.c | 1 -\n 1 file changed, 1 deletion(-)\n\ndiff --git a/pdf/pdf_file.c b/pdf/pdf_file.c\nindex 40c5b54..a875832 100644\n--- a/pdf/pdf_file.c\n+++ b/pdf/pdf_file.c\n@@ -1275,7 +1275,6 @@ int pdfi_open_memory_stream_from_filtered_stream(pdf_context *ctx, pdf_stream *s\n     code = pdfi_filter(ctx, stream_obj, compressed_stream, &decompressed_stream, false);\n     if (code < 0) {\n         pdfi_close_memory_stream(ctx, *Buffer, *new_pdf_stream);\n-        gs_free_object(ctx->memory, *Buffer, \"pdfi_open_memory_stream_from_filtered_stream\");\n         *Buffer = NULL;\n         *new_pdf_stream = NULL;\n         return code;\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42505893-vul",
+      "digest": "sha256:35856b971231b83019d7144a3eb8d85fcde050d5ed4128f58f8504f7b4f23a7a"
+    },
+    "patched": {
+      "ref": "n132/arvo:42505893-fix",
+      "digest": "sha256:94e6352fe4270bbc631cf4f74cc86e2799235a18cbcc9982a60496c302de18b1"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/ghostpdl/./base/gsmchunk.c:1092",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/ghostpdl/./base/gsmchunk.c:1092"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

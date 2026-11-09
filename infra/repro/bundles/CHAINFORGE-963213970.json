@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-963213970",
+  "chain": "CWE-456->CWE-457",
+  "project": "flatbuffers",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42510954",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/google/flatbuffers/commit/234d86c92aee0e6b77a3fcf7de44f62390ca2088",
+      "fix_commits": [
+        "234d86c92aee0e6b77a3fcf7de44f62390ca2088"
+      ],
+      "repo": "https://github.com/google/flatbuffers"
+    },
+    "patch": "diff --git a/src/idl_parser.cpp b/src/idl_parser.cpp\nindex 74d61f3ef5..690bd8d5dd 100644\n--- a/src/idl_parser.cpp\n+++ b/src/idl_parser.cpp\n@@ -492,7 +492,7 @@ CheckedError Parser::Next() {\n         if (has_sign) {\n           // Check for +/-inf which is considered a float constant.\n           if (strncmp(cursor_, \"inf\", 3) == 0 &&\n-              !(IsIdentifierStart(cursor_[4]) || is_digit(cursor_[4]))) {\n+              !(IsIdentifierStart(cursor_[3]) || is_digit(cursor_[3]))) {\n             attribute_.assign(cursor_ - 1, cursor_ + 3);\n             token_ = kTokenFloatConstant;\n             cursor_ += 3;\ndiff --git a/tests/fuzzer/readme.md b/tests/fuzzer/readme.md\nindex 1d0b392ceb..c451301208 100644\n--- a/tests/fuzzer/readme.md\n+++ b/tests/fuzzer/readme.md\n@@ -11,6 +11,7 @@ For details about **libFuzzer** see: https://llvm.org/docs/LibFuzzer.html\n To build and run these tests LLVM compiler (with clang frontend) and CMake should be installed before.\n \n The fuzzer section include four tests:\n+- `annotator_fuzzer` checks that inputs given to the flatc --annotate are always parsable;\n - `verifier_fuzzer` checks stability of deserialization engine for `Monster` schema;\n - `parser_fuzzer` checks stability of schema and json parser under various inputs;\n - `scalar_parser` focused on validation of the parser while parse numeric scalars in schema and/or json files;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42510954-vul",
+      "digest": "sha256:652b651fb87f91005fca0b74f135f4fad9d493980238f5e5879f708732b3d155"
+    },
+    "patched": {
+      "ref": "n132/arvo:42510954-fix",
+      "digest": "sha256:729681b8689708c738d2bce11db62d7e2a0e4b0ee1ee07cfcb8123e898103f4e"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/flatbuffers/src/idl_parser.cpp:495",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/flatbuffers/src/idl_parser.cpp:495"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

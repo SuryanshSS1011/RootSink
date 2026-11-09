@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042493454",
+  "chain": "CWE-416->CWE-125",
+  "project": "selinux",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42493454",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "2d35fcc7e9e976a2346b1de20e54f8663e8a6cba",
+      "fix_commits": [
+        "2d35fcc7e9e976a2346b1de20e54f8663e8a6cba"
+      ],
+      "repo": "https://github.com/SELinuxProject/selinux"
+    },
+    "patch": "From 2d35fcc7e9e976a2346b1de20e54f8663e8a6cba Mon Sep 17 00:00:00 2001\nFrom: James Carter <jwcart2@gmail.com>\nDate: Thu, 8 Apr 2021 13:32:04 -0400\nSubject: [PATCH] libsepol/cil: Destroy classperm list when resetting map perms\n\nMap perms share the same struct as regular perms, but only the\nmap perms use the classperms field. This field is a pointer to a\nlist of classperms that is created and added to when resolving\nclassmapping rules, so the map permission doesn't own any of the\ndata in the list and this list should be destroyed when the AST is\nreset.\n\nWhen resetting a perm, destroy the classperms list without destroying\nthe data in the list.\n\nSigned-off-by: James Carter <jwcart2@gmail.com>\n---\n libsepol/cil/src/cil_reset_ast.c | 2 +-\n 1 file changed, 1 insertion(+), 1 deletion(-)\n\ndiff --git a/libsepol/cil/src/cil_reset_ast.c b/libsepol/cil/src/cil_reset_ast.c\nindex db70a53..89f91e5 100644\n--- a/libsepol/cil/src/cil_reset_ast.c\n+++ b/libsepol/cil/src/cil_reset_ast.c\n@@ -36,7 +36,7 @@ static void cil_reset_class(struct cil_class *class)\n \n static void cil_reset_perm(struct cil_perm *perm)\n {\n-\tcil_reset_classperms_list(perm->classperms);\n+\tcil_list_destroy(&perm->classperms, CIL_FALSE);\n }\n \n static inline void cil_reset_classperms(struct cil_classperms *cp)\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42493454-vul",
+      "digest": "sha256:7cc6341d988d5061dc684cfc5e628662fb0632b1a1733eca41b69afdc29e3510"
+    },
+    "patched": {
+      "ref": "n132/arvo:42493454-fix",
+      "digest": "sha256:5a78e7b1715b28789a0053dfd11d19885f6e427c34203333fa40a71374585ec2"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/selinux/libsepol/src/../cil/src/cil_verify.c:1632",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/selinux/libsepol/src/../cil/src/cil_verify.c:1632"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

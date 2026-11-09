@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042533966",
+  "chain": "CWE-456->CWE-457",
+  "project": "imagemagick",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42533966",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "990431dbe7688861ad46a7b8d6cb9d173b429cbd",
+      "fix_commits": [
+        "990431dbe7688861ad46a7b8d6cb9d173b429cbd"
+      ],
+      "repo": "https://github.com/imagemagick/imagemagick"
+    },
+    "patch": "From 990431dbe7688861ad46a7b8d6cb9d173b429cbd Mon Sep 17 00:00:00 2001\nFrom: Cristy <urban-warrior@imagemagick.org>\nDate: Tue, 6 Mar 2018 07:20:59 -0500\nSubject: [PATCH] https://bugs.chromium.org/p/oss-fuzz/issues/detail?id=6760\n\n---\n coders/mac.c | 3 +++\n 1 file changed, 3 insertions(+)\n\ndiff --git a/coders/mac.c b/coders/mac.c\nindex 4c3befa..21271cf 100644\n--- a/coders/mac.c\n+++ b/coders/mac.c\n@@ -154,6 +154,9 @@ static Image *ReadMACImage(const ImageInfo *image_info,ExceptionInfo *exception)\n       return(GetFirstImageInList(image));\n     }\n   status=SetImageExtent(image,image->columns,image->rows,exception);\n+  if (status == MagickFalse)\n+    return(DestroyImageList(image));\n+  status=ResetImagePixels(image,exception);\n   if (status == MagickFalse)\n     return(DestroyImageList(image));\n   /*\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42533966-vul",
+      "digest": "sha256:5b3701aa97ccd195f5cbf9bec3b1186f4671e9db81741c155b80950a818704d2"
+    },
+    "patched": {
+      "ref": "n132/arvo:42533966-fix",
+      "digest": "sha256:199fe1311eaf088142698a5924b7877a840980fc9e0511d76bef499356265cc3"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/imagemagick/MagickCore/image.c:3700",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/imagemagick/MagickCore/image.c:3700"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

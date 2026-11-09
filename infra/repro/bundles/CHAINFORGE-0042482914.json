@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042482914",
+  "chain": "CWE-456->CWE-457",
+  "project": "libspectre",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42482914",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "465a5c66e5e1ea04a8f70105b1db4ef8051c0428",
+      "fix_commits": [
+        "465a5c66e5e1ea04a8f70105b1db4ef8051c0428"
+      ],
+      "repo": "https://gitlab.freedesktop.org/libspectre/libspectre.git"
+    },
+    "patch": "From 465a5c66e5e1ea04a8f70105b1db4ef8051c0428 Mon Sep 17 00:00:00 2001\nFrom: Albert Astals Cid <aacid@kde.org>\nDate: Fri, 10 Apr 2020 19:26:21 +0200\nSubject: [PATCH] Initialize varibles if reading fails\n\nThis way we don't do uninitizlied memory uses later on\n\noss-fuzz/21638\n---\n libspectre/ps.c | 44 ++++++++++++++++++++++++++++++--------------\n 1 file changed, 30 insertions(+), 14 deletions(-)\n\ndiff --git a/libspectre/ps.c b/libspectre/ps.c\nindex 0883670..bb45c9a 100644\n--- a/libspectre/ps.c\n+++ b/libspectre/ps.c\n@@ -2209,6 +2209,28 @@ reorder_word(PS_WORD val)\n \treturn (PS_WORD) ((PS_WORD)(val&0xff) << 8) | (PS_WORD)((val&0xff00) >> 8);\n }\n \n+static void\n+ps_read_doseps_dword(FileData fd, PS_DWORD *dword)\n+{\n+    const size_t read = fread(dword, 4, 1, FD_FILE);\n+    if (read == 4) {\n+        *dword = (unsigned long)reorder_dword(*dword);\n+    } else {\n+        *dword = 0;\n+    }\n+}\n+\n+static void\n+ps_read_doseps_word(FileData fd, PS_WORD *word)\n+{\n+    const size_t read = fread(word, 2, 1, FD_FILE);\n+    if (read == 2) {\n+        *word = (unsigned short)reorder_word(*word);\n+    } else {\n+        *word = 0;\n+    }\n+}\n+\n /* DOS EPS header reading */\n static unsigned long\n ps_read_doseps(fd,doseps)\n@@ -2222,20 +2244,14 @@ ps_read_doseps(fd,doseps)\n         ps_io_rewind(fd);\n \treturn 0; \t/* OK */\n     }\n-    fread(&doseps->ps_begin,    4, 1, FD_FILE);\t/* PS offset */\n-    doseps->ps_begin = (unsigned long)reorder_dword(doseps->ps_begin);\n-    fread(&doseps->ps_length,   4, 1, FD_FILE);\t/* PS length */\n-    doseps->ps_length = (unsigned long)reorder_dword(doseps->ps_length);\n-    fread(&doseps->mf_begin,    4, 1, FD_FILE);\t/* Metafile offset */\n-    doseps->mf_begin = (unsigned long)reorder_dword(doseps->mf_begin);\n-    fread(&doseps->mf_length,   4, 1, FD_FILE);\t/* Metafile length */\n-    doseps->mf_length = (unsigned long)reorder_dword(doseps->mf_length);\n-    fread(&doseps->tiff_begin,  4, 1, FD_FILE);\t/* TIFF offset */\n-    doseps->tiff_begin = (unsigned long)reorder_dword(doseps->tiff_begin);\n-    fread(&doseps->tiff_length, 4, 1, FD_FILE);\t/* TIFF length */\n-    doseps->tiff_length = (unsigned long)reorder_dword(doseps->tiff_length);\n-    fread(&doseps->checksum,    2, 1, FD_FILE);\n-    doseps->checksum = (unsigned short)reorder_word(doseps->checksum);\n+    ps_read_doseps_dword(fd, &doseps->ps_begin); /* PS offset */\n+    ps_read_doseps_dword(fd, &doseps->ps_length); /* PS length */\n+    ps_read_doseps_dword(fd, &doseps->mf_begin); /* Metafile offset */\n+    ps_read_doseps_dword(fd, &doseps->mf_length); /* Metafile length */\n+    ps_read_doseps_dword(fd, &doseps->tiff_begin); /* TIFF offset */\n+    ps_read_doseps_dword(fd, &doseps->tiff_length); /* TIFF length */\n+    ps_read_doseps_word(fd, &doseps->checksum);\n+\n     ps_io_fseek(fd, doseps->ps_begin);\t        /* seek to PS section */\n \n     return doseps->ps_begin + doseps->ps_length;\n-- \n2.55.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42482914-vul",
+      "digest": "sha256:31977b77b2a3a67a586c80cb1be2e4fe475d155ae8f17dbc33fc56f6ca71608f"
+    },
+    "patched": {
+      "ref": "n132/arvo:42482914-fix",
+      "digest": "sha256:9a36feb3cf556dac51da5bdd0716b4c521bf4a4164f3cdf476997830ba3df78a"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/libspectre/libspectre/ps.c:1720",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/libspectre/libspectre/ps.c:1720"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

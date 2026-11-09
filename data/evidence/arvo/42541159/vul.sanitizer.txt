@@ -1,0 +1,64 @@
+======================= INFO =========================
+This binary is built for AFL-fuzz.
+To run the target function on individual input(s) execute this:
+  /out/gdal_filesystem_fuzzer < INPUT_FILE
+or
+  /out/gdal_filesystem_fuzzer INPUT_FILE1 [INPUT_FILE2 ... ]
+To fuzz with afl-fuzz execute this:
+  afl-fuzz [afl-flags] /out/gdal_filesystem_fuzzer [-N]
+afl-fuzz will run N iterations before re-spawning the process (default: 1000)
+======================================================
+Reading 28671 bytes from /tmp/poc
+=================================================================
+==7==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x609000000140 at pc 0x0000007b9eef bp 0x7ffe73a34130 sp 0x7ffe73a34128
+WRITE of size 4 at 0x609000000140 thread T0
+SCARINESS: 46 (4-byte-write-heap-buffer-overflow-far-from-bounds)
+    #0 0x7b9eee in NITFUncompressVQTile /src/gdal/gdal/frmts/nitf/nitfimage.c:1195:17
+    #1 0x7b8742 in NITFReadImageBlock /src/gdal/gdal/frmts/nitf/nitfimage.c:1401:9
+    #2 0x7c7206 in NITFRasterBand::IReadBlock(int, int, void*) /src/gdal/gdal/frmts/nitf/nitfrasterband.cpp:537:13
+    #3 0xad8f84 in GDALRasterBand::GetLockedBlockRef(int, int, int) /src/gdal/gdal/gcore/gdalrasterband.cpp:1328:20
+    #4 0xb12343 in GDALRasterBand::IRasterIO(GDALRWFlag, int, int, int, int, void*, int, int, GDALDataType, long long, long long, GDALRasterIOExtraArg*) /src/gdal/gdal/gcore/rasterio.cpp:151:27
+    #5 0xad64ee in GDALRasterBand::RasterIO(GDALRWFlag, int, int, int, int, void*, int, int, GDALDataType, long long, long long, GDALRasterIOExtraArg*) /src/gdal/gdal/gcore/gdalrasterband.cpp:386:16
+    #6 0xad6b44 in GDALRasterIO /src/gdal/gdal/gcore/gdalrasterband.cpp:420:21
+    #7 0xc79b33 in GDALChecksumImage /src/gdal/gdal/alg/gdalchecksum.cpp:155:17
+    #8 0x521801 in LLVMFuzzerTestOneInput /src/gdal/gdal/./fuzzers/gdal_fuzzer.cpp:111:17
+    #9 0x521cce in ExecuteFilesOnyByOne(int, char**) /src/libfuzzer/afl/afl_driver.cpp:265:5
+    #10 0x52225c in main /src/libfuzzer/afl/afl_driver.cpp:302:12
+    #11 0x7f21077f582f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+    #12 0x426598 in _start (/out/gdal_filesystem_fuzzer+0x426598)
+
+DEDUP_TOKEN: NITFUncompressVQTile--NITFReadImageBlock--NITFRasterBand::IReadBlock(int, int, void*)
+Address 0x609000000140 is a wild pointer.
+SUMMARY: AddressSanitizer: heap-buffer-overflow /src/gdal/gdal/frmts/nitf/nitfimage.c:1195:17 in NITFUncompressVQTile
+Shadow bytes around the buggy address:
+  0x0c127fff7fd0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c127fff7fe0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c127fff7ff0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c127fff8000: fa fa fa fa fa fa fa fa 00 00 00 06 fa fa fa fa
+  0x0c127fff8010: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+=>0x0c127fff8020: fa fa fa fa fa fa fa fa[fa]fa fa fa fa fa fa fa
+  0x0c127fff8030: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c127fff8040: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c127fff8050: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c127fff8060: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c127fff8070: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+==7==ABORTING

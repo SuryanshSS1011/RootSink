@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-967386973",
+  "chain": "CWE-456->CWE-457",
+  "project": "speex",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42535808",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://gitlab.xiph.org/xiph/speex.git6d7d5fe220bed046682135be90d2253bbdcd3be1",
+      "fix_commits": [
+        "6d7d5fe220bed046682135be90d2253bbdcd3be1"
+      ],
+      "repo": "https://gitlab.xiph.org/xiph/speex.git"
+    },
+    "patch": "From 6d7d5fe220bed046682135be90d2253bbdcd3be1 Mon Sep 17 00:00:00 2001\nFrom: Tristan Matthews <tmatth@videolan.org>\nDate: Wed, 29 May 2024 16:29:05 -0400\nSubject: [PATCH] sb_celp: memset innovation memory in null mode\n\nThis was happening for an ultra-wideband fuzzer testcase.\n\nFixes msan error:\n Issue 69258: speex:speex_decode_fuzzer_fixed: Use-of-uninitialized-value in compute_rms16\n\nfound-by: continuous fuzzing process https://github.com/google/oss-fuzz/tree/master/projects/speex\n\nFixes https://gitlab.xiph.org/xiph/speex/-/issues/2049\nFixes https://bugs.chromium.org/p/oss-fuzz/issues/detail?id=69258\n\nSigned-off-by: Tristan Matthews <tmatth@videolan.org>\n---\n libspeex/sb_celp.c | 3 +++\n 1 file changed, 3 insertions(+)\n\ndiff --git a/libspeex/sb_celp.c b/libspeex/sb_celp.c\nindex 75944ac..9c5fdc5 100644\n--- a/libspeex/sb_celp.c\n+++ b/libspeex/sb_celp.c\n@@ -1293,6 +1293,9 @@ int sb_decode(void *state, SpeexBits *bits, void *vout)\n \n       qmf_synth(out, out+st->frame_size, h0, out, st->full_frame_size, QMF_ORDER, st->g0_mem, st->g1_mem, stack);\n \n+      if (st->innov_save)\n+         SPEEX_MEMSET(st->innov_save, 0, st->full_frame_size);\n+\n       return 0;\n \n    }\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42535808-vul",
+      "digest": "sha256:43dfc69ffc5c8649255925d7bea7ff857d791e7bba1944f6e770fc433ec7dcb2"
+    },
+    "patched": {
+      "ref": "n132/arvo:42535808-fix",
+      "digest": "sha256:3bbfa6b5d7c61a2a901abc2be82f9e8a26d093055839921c229aaabd252b6ca5"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/speex/libspeex/filters.c:315",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/speex/libspeex/filters.c:315"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

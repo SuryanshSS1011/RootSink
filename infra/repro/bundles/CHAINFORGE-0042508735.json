@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042508735",
+  "chain": "CWE-416->CWE-125",
+  "project": "php-src",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42508735",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "83d96d677907f85204202e79da5e0b40b88eb9dc",
+      "fix_commits": [
+        "83d96d677907f85204202e79da5e0b40b88eb9dc"
+      ],
+      "repo": "https://github.com/php/php-src"
+    },
+    "patch": "diff --git a/Zend/tests/generators/errors/resume_running_generator_error_003.phpt b/Zend/tests/generators/errors/resume_running_generator_error_003.phpt\nnew file mode 100644\nindex 000000000000..c72f9ba87258\n--- /dev/null\n+++ b/Zend/tests/generators/errors/resume_running_generator_error_003.phpt\n@@ -0,0 +1,24 @@\n+--TEST--\n+Use-after-free when resume an already running generator\n+--FILE--\n+<?php\n+function gen(){\n+    $g = yield;\n+    $g->send($y);\n+}\n+$gen=gen();\n+try {\n+    $gen->send($gen);\n+}catch(y) {\n+}\n+?>\n+--EXPECTF--\n+Warning: Undefined variable $y in %sresume_running_generator_error_003.php on line 4\n+\n+Fatal error: Uncaught Error: Cannot resume an already running generator in %sresume_running_generator_error_003.php:4\n+Stack trace:\n+#0 %sresume_running_generator_error_003.php(4): Generator->send(NULL)\n+#1 [internal function]: gen()\n+#2 %sresume_running_generator_error_003.php(8): Generator->send(Object(Generator))\n+#3 {main}\n+  thrown in %sresume_running_generator_error_003.php on line 4\ndiff --git a/Zend/zend_generators.c b/Zend/zend_generators.c\nindex a5fcad31dfec..c73563ec2f39 100644\n--- a/Zend/zend_generators.c\n+++ b/Zend/zend_generators.c\n@@ -937,8 +937,7 @@ ZEND_METHOD(Generator, send)\n \n \troot = zend_generator_get_current(generator);\n \t/* Put sent value in the target VAR slot, if it is used */\n-\tif (root->send_target) {\n-\t\tzval_ptr_dtor(root->send_target);\n+\tif (root->send_target && !(root->flags & ZEND_GENERATOR_CURRENTLY_RUNNING)) {\n \t\tZVAL_COPY(root->send_target, value);\n \t}\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42508735-vul",
+      "digest": "sha256:31a31f09bee9b297c28d770af3da7dd40810ada375100e3c3e44cb260ee83961"
+    },
+    "patched": {
+      "ref": "n132/arvo:42508735-fix",
+      "digest": "sha256:698ae5d898a0f32e86c2bd3507028c01eca0c144f4593882f291ff87628b9de3"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/php-src/Zend/zend_types.h:1185",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/php-src/Zend/zend_types.h:1185"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

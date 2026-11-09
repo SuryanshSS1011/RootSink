@@ -1,0 +1,82 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-30042495805",
+  "chain": "CWE-1284->CWE-190->CWE-787",
+  "project": "wasm3",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42495805",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "a6b4a11f80a05a17995a036b643c37adb3c3dc62",
+      "fix_commits": [
+        "a6b4a11f80a05a17995a036b643c37adb3c3dc62"
+      ],
+      "repo": "https://github.com/wasm3/wasm3"
+    },
+    "patch": "diff --git a/source/m3_bind.c b/source/m3_bind.c\nindex c8191a57..951a7de1 100644\n--- a/source/m3_bind.c\n+++ b/source/m3_bind.c\n@@ -82,7 +82,7 @@ _   (AllocFuncType (& funcType, (u32) maxNumTypes));\n         }\n         else\n         {\n-            _throwif (\"malformed signature; arg count overflow\", funcType->numRets + funcType->numArgs >= maxNumTypes);\n+            _throwif (\"malformed signature; arg count overflow\", (u32)(funcType->numRets) + funcType->numArgs >= maxNumTypes);\n             funcType->numArgs++;\n             *typelist++ = type;\n         }\ndiff --git a/source/m3_compile.c b/source/m3_compile.c\nindex 25a32cd9..e84330e0 100644\n--- a/source/m3_compile.c\n+++ b/source/m3_compile.c\n@@ -2206,8 +2206,7 @@ const M3OpInfo*  GetOpInfo  (m3opcode_t opcode)\n M3Result  Compile_BlockStatements  (IM3Compilation o)\n {\n     M3Result result = m3Err_none;\n-\n-    _throwif (\"block code underrun\", o->wasm >= o->wasmEnd);\n+    bool ended = false;\n \n     while (o->wasm < o->wasmEnd)\n     {                                                                   emit_stack_dump (o);\n@@ -2241,9 +2240,12 @@ _           (Compile_Operator (o, opcode));\n         if (o->stackIndex > d_m3MaxFunctionStackHeight)         // TODO: is this only place to check?\n             _throw (m3Err_functionStackOverflow);\n \n-        if (opcode == c_waOp_end or opcode == c_waOp_else)\n+        if (opcode == c_waOp_end or opcode == c_waOp_else) {\n+            ended = true;\n             break;\n+        }\n     }\n+    _throwif(m3Err_wasmMalformed, !(ended));\n \n _catch:\n     return result;\ndiff --git a/source/m3_core.h b/source/m3_core.h\nindex c78768e8..fdf0754b 100644\n--- a/source/m3_core.h\n+++ b/source/m3_core.h\n@@ -165,6 +165,7 @@ M3CodePageHeader;\n #define d_m3MaxSaneGlobalsCount             100000\n #define d_m3MaxSaneElementSegments          100000\n #define d_m3MaxSaneDataSegments             100000\n+#define d_m3MaxSaneTableSize                100000\n #define d_m3MaxSaneUtf8Length               10000\n #define d_m3MaxSaneFunctionArgRetCount      1000    // still insane, but whatever\n \ndiff --git a/source/m3_env.c b/source/m3_env.c\nindex 6d914d66..0dc4f992 100644\n--- a/source/m3_env.c\n+++ b/source/m3_env.c\n@@ -466,16 +466,15 @@ _       (EvaluateExpression (io_module, & segmentOffset, c_m3Type_i32, & start,\n \n         m3log (runtime, \"loading data segment: %d; size: %d; offset: %d\", i, segment->size, segmentOffset);\n \n-        if (io_memory->mallocated)\n+        _throwif (\"unallocated linear memory\", !(io_memory->mallocated));\n+\n+        if (segmentOffset > 0 && (size_t) segmentOffset + segment->size <= io_memory->mallocated->length)\n         {\n             u8 * dest = m3MemData (io_memory->mallocated) + segmentOffset;\n-\n-            if ((size_t) segmentOffset + segment->size <= io_memory->mallocated->length)\n-                memcpy (dest, segment->data, segment->size);\n-            else\n-                _throw (\"data segment overflowing linear memory\");\n+            memcpy (dest, segment->data, segment->size);\n+        } else {\n+            _throw (\"data segment out of bounds\");\n         }\n-        else _throw (\"unallocated linear memory\");\n     }\n \n     _catch: return result;\n@@ -503,12 +502,12 @@ _           (EvaluateExpression (io_module, & offset, c_m3Type_i32, & bytes, end\n             u32 numElements;\n _           (ReadLEB_u32 (& numElements, & bytes, end));\n \n-            size_t endElement = numElements + offset;\n+            size_t endElement = (size_t)(numElements) + offset;\n+            _throwif (\"table overflow\", endElement > d_m3MaxSaneTableSize);\n \n             io_module->table0 = m3_ReallocArray (IM3Function, io_module->table0, endElement, io_module->table0Size);\n             _throwifnull(io_module->table0);\n \n-            _throwif (\"table overflow\", endElement > UINT_MAX)\n             io_module->table0Size = (u32) endElement;\n \n             for (u32 e = 0; e < numElements; ++e)\ndiff --git a/source/m3_parse.c b/source/m3_parse.c\nindex 37479f6b..6b29022a 100644\n--- a/source/m3_parse.c\n+++ b/source/m3_parse.c\n@@ -82,8 +82,7 @@ _               (NormalizeType (& argType, wasmType));\n \n             u32 numRets;\n _           (ReadLEB_u32 (& numRets, & i_bytes, i_end));\n-\n-            _throwif (m3Err_tooManyArgsRets, numRets + numArgs > d_m3MaxSaneFunctionArgRetCount);\n+            _throwif (m3Err_tooManyArgsRets, (u64)(numRets) + numArgs > d_m3MaxSaneFunctionArgRetCount);\n \n _           (AllocFuncType (& ftype, numRets + numArgs));\n             ftype->numArgs = numArgs;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42495805-vul",
+      "digest": "sha256:09497b77821678a2a52d484bd9700d02819268087072e6f4edfa667ab2725d2e"
+    },
+    "patched": {
+      "ref": "n132/arvo:42495805-fix",
+      "digest": "sha256:4a503d8acd25416063030cf1a99a1afd6665e80f340c16bfc17f43f08098a74d"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/wasm3/source/m3_parse.c:99",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 190,
+      "role": "intermediate",
+      "witness": {
+        "method": "ubsan-rebuild",
+        "recipe": "SANITIZER=undefined compile && $ENTRYPOINT",
+        "ubsan_options": "print_stacktrace=1:halt_on_error=0:silence_unsigned_overflow=0:symbolize=1"
+      },
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/wasm3/source/m3_parse.c:99"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

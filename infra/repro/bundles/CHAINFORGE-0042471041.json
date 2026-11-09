@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042471041",
+  "chain": "CWE-456->CWE-457",
+  "project": "openvswitch",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42471041",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "a1da3f297717c2de70dab88f7783117b78f85e89",
+      "fix_commits": [
+        "a1da3f297717c2de70dab88f7783117b78f85e89"
+      ],
+      "repo": "https://github.com/openvswitch/ovs"
+    },
+    "patch": "From a1da3f297717c2de70dab88f7783117b78f85e89 Mon Sep 17 00:00:00 2001\nFrom: Yifeng Sun <pkusunyifeng@gmail.com>\nDate: Thu, 18 Oct 2018 14:10:48 -0700\nSubject: [PATCH] odp-util: Move ufid handling to odp_flow_from_string\n\nWhen parse_odp_key_mask_attr runs into ufid, it returns length of ufid\nwithout further parsing. This causes problem to set action in function\nparse_odp_action where nested nlattrs are expected from ofpbuf after.\n\nSince in all callers of parse_odp_key_mask_attr, only odp_flow_from_string\nneeds to understand ufid. This patch moves ufid parsing from\nparse_odp_key_mask_attr out to odp_flow_from_string.\n\nReported-by: https://bugs.chromium.org/p/oss-fuzz/issues/detail?id=10850\nSigned-off-by: Yifeng Sun <pkusunyifeng@gmail.com>\nSigned-off-by: Ben Pfaff <blp@ovn.org>\n---\n lib/odp-util.c | 18 +++++++++++-------\n 1 file changed, 11 insertions(+), 7 deletions(-)\n\ndiff --git a/lib/odp-util.c b/lib/odp-util.c\nindex c31b96b..1a52f3b 100644\n--- a/lib/odp-util.c\n+++ b/lib/odp-util.c\n@@ -5366,13 +5366,6 @@ static int\n parse_odp_key_mask_attr(const char *s, const struct simap *port_names,\n                         struct ofpbuf *key, struct ofpbuf *mask)\n {\n-    /* Skip UFID. */\n-    ovs_u128 ufid;\n-    int ufid_len = odp_ufid_from_string(s, &ufid);\n-    if (ufid_len) {\n-        return ufid_len;\n-    }\n-\n     SCAN_SINGLE(\"skb_priority(\", uint32_t, u32, OVS_KEY_ATTR_PRIORITY);\n     SCAN_SINGLE(\"skb_mark(\", uint32_t, u32, OVS_KEY_ATTR_SKB_MARK);\n     SCAN_SINGLE_FULLY_MASKED(\"recirc_id(\", uint32_t, u32,\n@@ -5585,6 +5578,17 @@ odp_flow_from_string(const char *s, const struct simap *port_names,\n             return 0;\n         }\n \n+        /* Skip UFID. */\n+        ovs_u128 ufid;\n+        retval = odp_ufid_from_string(s, &ufid);\n+        if (retval < 0) {\n+            key->size = old_size;\n+            return -retval;\n+        } else if (retval > 0) {\n+            s += retval;\n+            s += s[0] == ' ' ? 1 : 0;\n+        }\n+\n         retval = parse_odp_key_mask_attr(s, port_names, key, mask);\n         if (retval < 0) {\n             key->size = old_size;\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42471041-vul",
+      "digest": "sha256:e8589817e5b94f84f07b19075425cb4c9ba64a5cec17028e68aa211d4a00d0ac"
+    },
+    "patched": {
+      "ref": "n132/arvo:42471041-fix",
+      "digest": "sha256:52f3d6e51c2d3bd0a653b8cc069feb6c23f073151f838369328d1d204555008a"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/openvswitch/lib/netlink.c:598",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/openvswitch/lib/netlink.c:598"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

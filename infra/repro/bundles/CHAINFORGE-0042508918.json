@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042508918",
+  "chain": "CWE-20->CWE-125",
+  "project": "ghostpdl",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42508918",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "a424f166ee9c1196a6cd7e2ee2289f81545d022d",
+      "fix_commits": [
+        "a424f166ee9c1196a6cd7e2ee2289f81545d022d"
+      ],
+      "repo": "https://cgit.ghostscript.com/ghostpdl.git"
+    },
+    "patch": "From a424f166ee9c1196a6cd7e2ee2289f81545d022d Mon Sep 17 00:00:00 2001\nFrom: Chris Liddell <chris.liddell@artifex.com>\nDate: Tue, 8 Mar 2022 12:03:26 +0000\nSubject: [PATCH] oss-fuzz 45049: ASCII85Decode, avoid running off the end of\n the buffer\n\nTo maintain compatibility with Acrobat, the ASCII85Decode filter has to cope\nwith various breakages in the data, including whitespace between the '~' and\nthe '>', and even a missing '>'.\n\nSearching the stream buffer for the '>', and not finding it, could leave the\npointer position a byte past the end of the buffer, this just ensures that\ncannot happen.\n---\n base/sa85d.c | 7 +++++--\n 1 file changed, 5 insertions(+), 2 deletions(-)\n\ndiff --git a/base/sa85d.c b/base/sa85d.c\nindex 4e51e89..a49a828 100644\n--- a/base/sa85d.c\n+++ b/base/sa85d.c\n@@ -1,4 +1,4 @@\n-/* Copyright (C) 2001-2021 Artifex Software, Inc.\n+/* Copyright (C) 2001-2022 Artifex Software, Inc.\n    All Rights Reserved.\n \n    This software is provided AS-IS with no warranty, either express or\n@@ -156,7 +156,10 @@ s_A85D_process(stream_state * st, stream_cursor_read * pr,\n                 }\n             }\n           finish:\n-            p += i;\t\t/* advance to the '>' */\n+            if (p + i <= rlimit)\n+                p += i;\t\t/* advance to the '>' */\n+            else\n+                p = rlimit; /* Can happen if the '>' is missing */\n             pw->ptr = q;\n             status = a85d_finish(ccount, word, pw);\n             q = pw->ptr;\n-- \n2.55.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42508918-vul",
+      "digest": "sha256:43cfc652d274634ba3d6ca9ae99f553f3f4baac2dcae437b8a6052e3f8e4755c"
+    },
+    "patched": {
+      "ref": "n132/arvo:42508918-fix",
+      "digest": "sha256:7af6d88ed9fec626297034d52694fa1397e986b57a877b14e5e0b7f20da076e6"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/ghostpdl/./base/stream.c:1012",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/ghostpdl/./base/stream.c:1012"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

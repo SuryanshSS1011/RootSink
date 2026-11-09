@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-962009854",
+  "chain": "CWE-456->CWE-457",
+  "project": "libavc",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42521277",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/ittiam-systems/libavc/commit/5fabd43f6af6c5f432c543b8a84e690dfa31a3b2",
+      "fix_commits": [
+        "5fabd43f6af6c5f432c543b8a84e690dfa31a3b2"
+      ],
+      "repo": "https://github.com/ittiam-systems/libavc"
+    },
+    "patch": "diff --git a/decoder/svc/isvcd_mode_mv_resamp.c b/decoder/svc/isvcd_mode_mv_resamp.c\nindex 49adebc6..322dbece 100644\n--- a/decoder/svc/isvcd_mode_mv_resamp.c\n+++ b/decoder/svc/isvcd_mode_mv_resamp.c\n@@ -3024,8 +3024,8 @@ WORD32 isvcd_compute_scaled_offsets(res_prms_t *ps_curr_res_prms, res_prms_t *ps\n                  i4_scaled_ref_lyr_height;\n \n     /* calcualte the values to be added based on left and top offset */\n-    i4_scale_add_x = (1 << (i4_shift_x - 1)) - i4_offset_x * i4_scale_x;\n-    i4_scale_add_y = (1 << (i4_shift_y - 1)) - i4_offset_y * i4_scale_y;\n+    i4_scale_add_x = (1 << (i4_shift_x - 1)) - (i4_offset_x * (WORD32) i4_scale_x);\n+    i4_scale_add_y = (1 << (i4_shift_y - 1)) - (i4_offset_y * (WORD32) i4_scale_y);\n \n     /* derive the projected locations in the reference layer */\n     for(i4_cntr = 0; i4_cntr < i4_curr_lyr_width; i4_cntr++)\ndiff --git a/decoder/svc/isvcd_nal_parse_structs.h b/decoder/svc/isvcd_nal_parse_structs.h\nindex fb1cb616..890ff29e 100644\n--- a/decoder/svc/isvcd_nal_parse_structs.h\n+++ b/decoder/svc/isvcd_nal_parse_structs.h\n@@ -97,7 +97,10 @@ static __inline void UPDATE_NAL_BUF_PTR(UWORD8 **ppu1_buf, WORD32 i4_derived_nal\n     pu1_buf_ptr += u4_inc;\n \n     /* Update the pointers */\n+    if(*pu4_bytes_left >= u4_inc)\n+    {\n     *pu4_bytes_left -= u4_inc;\n+    }\n     *ppu1_buf = pu1_buf_ptr;\n }\n \ndiff --git a/decoder/svc/isvcd_parse_headers.c b/decoder/svc/isvcd_parse_headers.c\nindex 6c3e9fb7..b549f4c5 100644\n--- a/decoder/svc/isvcd_parse_headers.c\n+++ b/decoder/svc/isvcd_parse_headers.c\n@@ -603,7 +603,8 @@ WORD32 isvcd_parse_subset_sps(svc_dec_lyr_struct_t *ps_svc_lyr_dec, dec_bit_stre\n         COPYTHECONTEXT(\"SPS_EXt: u1_extended_spatial_scalability_idc\",\n                        ps_seq_svc_ext->u1_extended_spatial_scalability_idc);\n \n-        if(ps_seq_svc_ext->u1_extended_spatial_scalability_idc >= 3)\n+        /* u1_extended_spatial_scalability_idc value 0 is supported*/\n+        if(ps_seq_svc_ext->u1_extended_spatial_scalability_idc != 0)\n         {\n             return ERROR_SVC_INV_SUBSET_SPS;\n         }\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42521277-vul",
+      "digest": "sha256:13572d4b5170e973d28a217cf10a0bccdfd615cc4bae3bd4555be86f116e136d"
+    },
+    "patched": {
+      "ref": "n132/arvo:42521277-fix",
+      "digest": "sha256:1743fd011abcc1149fa9b7c7ad3b21e62eeee8a4cf086e2eb4fca5ba326b997c"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/libavc/decoder/x86/svc/isvcd_residual_resamp_sse42.c:786",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/libavc/decoder/x86/svc/isvcd_residual_resamp_sse42.c:786"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

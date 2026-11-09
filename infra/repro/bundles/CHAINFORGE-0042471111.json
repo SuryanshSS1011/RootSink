@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042471111",
+  "chain": "CWE-416->CWE-125",
+  "project": "libgit2",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42471111",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "cb23c3efd22d34db279ceb39cc312473761db5ed",
+      "fix_commits": [
+        "cb23c3efd22d34db279ceb39cc312473761db5ed"
+      ],
+      "repo": "https://github.com/libgit2/libgit2"
+    },
+    "patch": "diff --git a/src/commit.c b/src/commit.c\nindex bda5a8b424c..a26368ce09c 100644\n--- a/src/commit.c\n+++ b/src/commit.c\n@@ -420,7 +420,7 @@ int git_commit__parse_raw(void *_commit, const char *data, size_t size)\n \t\treturn -1;\n \n \t/* Some tools create multiple author fields, ignore the extra ones */\n-\twhile ((size_t)(buffer_end - buffer) >= strlen(\"author \") && !git__prefixcmp(buffer, \"author \")) {\n+\twhile (!git__prefixncmp(buffer, buffer_end - buffer, \"author \")) {\n \t\tif (git_signature__parse(&dummy_sig, &buffer, buffer_end, \"author \", '\\n') < 0)\n \t\t\treturn -1;\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42471111-vul",
+      "digest": "sha256:fb641294e689792ecef89128a8400a272e1041fa6bd796c3d799d60e4dda4874"
+    },
+    "patched": {
+      "ref": "n132/arvo:42471111-fix",
+      "digest": "sha256:f6db6a22ff70effc5e0cb68f632ea873c88d2c7c32c2293fc049be8104401651"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/libgit2/src/util.c:262",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/libgit2/src/util.c:262"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

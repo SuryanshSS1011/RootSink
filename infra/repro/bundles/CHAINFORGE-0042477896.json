@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042477896",
+  "chain": "CWE-456->CWE-457",
+  "project": "matio",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42477896",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "8bde21c2f062b4f9a865263eb3256949ec3d75a3",
+      "fix_commits": [
+        "8bde21c2f062b4f9a865263eb3256949ec3d75a3"
+      ],
+      "repo": "https://github.com/tbeu/matio"
+    },
+    "patch": "From 8bde21c2f062b4f9a865263eb3256949ec3d75a3 Mon Sep 17 00:00:00 2001\nFrom: tbeu <tbeu@users.noreply.github.com>\nDate: Wed, 11 Sep 2019 20:53:47 +0200\nSubject: [PATCH] Avoid uninitialized memory\n\nAs reported by https://bugs.chromium.org/p/oss-fuzz/issues/detail?id=17108\n---\n src/mat5.c | 2 +-\n 1 file changed, 1 insertion(+), 1 deletion(-)\n\ndiff --git a/src/mat5.c b/src/mat5.c\nindex 82508e7..d609431 100644\n--- a/src/mat5.c\n+++ b/src/mat5.c\n@@ -3020,7 +3020,7 @@ Mat_VarRead5(mat_t *mat, matvar_t *matvar)\n             mat_sparse_t *sparse;\n \n             matvar->data_size = sizeof(mat_sparse_t);\n-            matvar->data      = malloc(matvar->data_size);\n+            matvar->data      = calloc(1, matvar->data_size);\n             if ( matvar->data == NULL ) {\n                 Mat_Critical(\"Mat_VarRead5: Allocation of data pointer failed\");\n                 err = 1;\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42477896-vul",
+      "digest": "sha256:a4d677c1c8c1c6871d7ee4ddbecd814c47390a650fd338711ed6fdcfab328913"
+    },
+    "patched": {
+      "ref": "n132/arvo:42477896-fix",
+      "digest": "sha256:c229cbb8e743f43c0bfd6bc02f648aa2b8c2a517bbbc3e0fa8dffb8276302b77"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/matio/src/./safe-math.h:843",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/matio/src/./safe-math.h:843"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

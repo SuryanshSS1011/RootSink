@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042488049",
+  "chain": "CWE-416->CWE-125",
+  "project": "leptonica",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42488049",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "7d0c940768fa3f7d07396dbae1d668cfded6bf05",
+      "fix_commits": [
+        "7d0c940768fa3f7d07396dbae1d668cfded6bf05"
+      ],
+      "repo": "https://github.com/DanBloomberg/leptonica"
+    },
+    "patch": "From 7d0c940768fa3f7d07396dbae1d668cfded6bf05 Mon Sep 17 00:00:00 2001\nFrom: Dan Bloomberg <dan.bloomberg@gmail.com>\nDate: Sun, 25 Oct 2020 00:18:10 -0700\nSubject: [PATCH] Issue 26260: fpix2_fuzzer: heap use after free in\n fpixChangeRefcount()\n\n---\n prog/fuzzing/fpix2_fuzzer.cc | 5 ++---\n 1 file changed, 2 insertions(+), 3 deletions(-)\n\ndiff --git a/prog/fuzzing/fpix2_fuzzer.cc b/prog/fuzzing/fpix2_fuzzer.cc\nindex 5da7a76..513b21c 100644\n--- a/prog/fuzzing/fpix2_fuzzer.cc\n+++ b/prog/fuzzing/fpix2_fuzzer.cc\n@@ -105,8 +105,7 @@ LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {\n     FPIX *fpix5 = fpixCreate(300, 300);\n     FPIX *fpix6 = fpixCreate(300, 300);\n     FPIX *fpix_copy3 = fpixCopy(NULL, fpix_payload);\n-    FPIX *fpix_return1 = fpixLinearCombination(fpix_copy3, fpix5, fpix6, 1.1, 1.1);\n-    fpixDestroy(&fpix_return1);\n+    fpixLinearCombination(fpix_copy3, fpix5, fpix6, 1.1, 1.1);\n     fpixDestroy(&fpix_copy3);\n     fpixDestroy(&fpix5);\n     fpixDestroy(&fpix6);\n@@ -129,4 +128,4 @@ LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {\n     dpixDestroy(&dpix_payload);\n     fpixDestroy(&fpix_payload);\n     return 0;\n-}\n\\ No newline at end of file\n+}\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42488049-vul",
+      "digest": "sha256:4772b833297212fffdd358c58ccbd55a358dc543e72effa68ad901992ce353f6"
+    },
+    "patched": {
+      "ref": "n132/arvo:42488049-fix",
+      "digest": "sha256:907c9d0971357480f7014b308969882943f4715302638e4caf75aa70a90439c3"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/leptonica/src/fpix1.c:526",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/leptonica/src/fpix1.c:526"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

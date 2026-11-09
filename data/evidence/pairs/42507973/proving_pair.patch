@@ -1,0 +1,59 @@
+diff --git a/src/jplist.c b/src/jplist.c
+index 88cce2803..2182079b4 100644
+--- a/src/jplist.c
++++ b/src/jplist.c
+@@ -707,18 +723,19 @@ PLIST_API int plist_from_json(const char *json, uint32_t length, plist_t * plist
+     }
+ 
+     int startindex = 0;
++    jsmntok_info_t ti = { tokens, parser.toknext };
+     switch (tokens[startindex].type) {
+         case JSMN_PRIMITIVE:
+-            *plist = parse_primitive(json, tokens, &startindex);
++            *plist = parse_primitive(json, &ti, &startindex);
+             break;
+         case JSMN_STRING:
+-            *plist = parse_string(json, tokens, &startindex);
++            *plist = parse_string(json, &ti, &startindex);
+             break;
+         case JSMN_ARRAY:
+-            *plist = parse_array(json, tokens, &startindex);
++            *plist = parse_array(json, &ti, &startindex);
+             break;
+         case JSMN_OBJECT:
+-            *plist = parse_object(json, tokens, &startindex);
++            *plist = parse_object(json, &ti, &startindex);
+             break;
+         default:
+             break;
+diff --git a/src/jplist.c b/src/jplist.c
+index 88cce2803..2182079b4 100644
+--- a/src/jplist.c
++++ b/src/jplist.c
+@@ -418,16 +418,21 @@ PLIST_API int plist_to_json(plist_t plist, char **json, uint32_t* length, int pr
+     return PLIST_ERR_SUCCESS;
+ }
+ 
+-static plist_t parse_primitive(const char* js, jsmntok_t* tokens, int* index)
++typedef struct {
++    jsmntok_t* tokens;
++    int count;
++} jsmntok_info_t;
++
++static plist_t parse_primitive(const char* js, jsmntok_info_t* ti, int* index)
+ {
+-    if (tokens[*index].type != JSMN_PRIMITIVE) {
++    if (ti->tokens[*index].type != JSMN_PRIMITIVE) {
+         PLIST_JSON_ERR("%s: token type != JSMN_PRIMITIVE\n", __func__);
+         return NULL;
+     }
+     plist_t val = NULL;
+-    const char* str_val = js + tokens[*index].start;
+-    const char* str_end = js + tokens[*index].end;
+-    size_t str_len = tokens[*index].end - tokens[*index].start;
++    const char* str_val = js + ti->tokens[*index].start;
++    const char* str_end = js + ti->tokens[*index].end;
++    size_t str_len = ti->tokens[*index].end - ti->tokens[*index].start;
+     if (!strncmp("false", str_val, str_len)) {
+         val = plist_new_bool(0);
+     } else if (!strncmp("true", str_val, str_len)) {

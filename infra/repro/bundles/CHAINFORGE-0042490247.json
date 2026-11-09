@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042490247",
+  "chain": "CWE-20->CWE-125",
+  "project": "serenity",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42490247",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "531c3fe72eb18615dba89bfe673b8a8336abfb89",
+      "fix_commits": [
+        "531c3fe72eb18615dba89bfe673b8a8336abfb89"
+      ],
+      "repo": "https://github.com/SerenityOS/serenity"
+    },
+    "patch": "diff --git a/Libraries/LibGfx/GIFLoader.cpp b/Libraries/LibGfx/GIFLoader.cpp\nindex 1b36361cc86964..b27aa058680f6f 100644\n--- a/Libraries/LibGfx/GIFLoader.cpp\n+++ b/Libraries/LibGfx/GIFLoader.cpp\n@@ -380,6 +380,9 @@ static bool decode_frame(GIFLoadingContext& context, size_t frame_index)\n                     if (image.interlaced) {\n                         if (row + INTERLACE_ROW_STRIDES[interlace_pass] >= image.height) {\n                             ++interlace_pass;\n+                            // FIXME: We could probably figure this out earlier and fail before doing a bunch of work.\n+                            if (interlace_pass >= 4)\n+                                return false;\n                             row = INTERLACE_ROW_OFFSETS[interlace_pass];\n                         } else {\n                             row += INTERLACE_ROW_STRIDES[interlace_pass];\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42490247-vul",
+      "digest": "sha256:7e87b8ab0b0e5a38d00e95afedd475e86596ddbc8895a25e71d990fa418eb9e3"
+    },
+    "patched": {
+      "ref": "n132/arvo:42490247-fix",
+      "digest": "sha256:adbc8a3986d5d841cd4f2a9738589569d21f5cf8b745c63e40cdda4569004c85"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "global-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/serenity/Libraries/LibGfx/GIFLoader.cpp:379",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "global-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/serenity/Libraries/LibGfx/GIFLoader.cpp:379"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

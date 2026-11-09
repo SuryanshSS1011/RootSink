@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042495323",
+  "chain": "CWE-1284->CWE-125",
+  "project": "opensc",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42495323",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "cae5c71f90cc5b364efe14040923fd5aa3b5dd90",
+      "fix_commits": [
+        "cae5c71f90cc5b364efe14040923fd5aa3b5dd90"
+      ],
+      "repo": "https://github.com/OpenSC/OpenSC"
+    },
+    "patch": "diff --git a/src/libopensc/pkcs15-oberthur.c b/src/libopensc/pkcs15-oberthur.c\nindex 0ddfc3f617..6487656b97 100644\n--- a/src/libopensc/pkcs15-oberthur.c\n+++ b/src/libopensc/pkcs15-oberthur.c\n@@ -973,7 +973,7 @@ sc_pkcs15emu_oberthur_add_data(struct sc_pkcs15_card *p15card,\n \t\tfree(info_blob);\n \t\tLOG_TEST_RET(ctx, SC_ERROR_UNKNOWN_DATA_RECEIVED, \"Invalid length of 'oid' received\");\n \t}\n-\tif (oid_len)   {\n+\tif (oid_len > 2) {\n \t\toid = info_blob + offs + 2;\n \t\tif (*oid != 0x06 || (*(oid + 1) != oid_len - 2)) {\n \t\t\tfree(info_blob);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42495323-vul",
+      "digest": "sha256:a7e14822cbacaefbb002c62c300263d8be014656976b8f91655a28c51a93fc3e"
+    },
+    "patched": {
+      "ref": "n132/arvo:42495323-fix",
+      "digest": "sha256:cf21af8d81db18bda31f48e00b612765064df6dedba802e3391779e46b741e18"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/opensc/src/libopensc/pkcs15-oberthur.c:978",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/opensc/src/libopensc/pkcs15-oberthur.c:978"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

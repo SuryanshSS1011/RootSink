@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042482848",
+  "chain": "CWE-1285->CWE-125",
+  "project": "libucl",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42482848",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "08de3581e8bc1ca855cf96061583363b8570215e",
+      "fix_commits": [
+        "08de3581e8bc1ca855cf96061583363b8570215e"
+      ],
+      "repo": "https://github.com/vstakhov/libucl"
+    },
+    "patch": "diff --git a/src/ucl_parser.c b/src/ucl_parser.c\nindex c2a51ad..abfcc3d 100644\n--- a/src/ucl_parser.c\n+++ b/src/ucl_parser.c\n@@ -1828,6 +1828,11 @@ ucl_parse_value (struct ucl_parser *parser, struct ucl_chunk *chunk)\n \t\t\t\t\twhile (p < chunk->end && *p >= 'A' && *p <= 'Z') {\n \t\t\t\t\t\tp ++;\n \t\t\t\t\t}\n+\t\t\t\t\tif(p == chunk->end) {\n+\t\t\t\t\t\tucl_set_err (parser, UCL_ESYNTAX,\n+\t\t\t\t\t\t\t\t\"unterminated multiline value\", &parser->err);\n+\t\t\t\t\t\treturn false;\n+\t\t\t\t\t}\n \t\t\t\t\tif (*p =='\\n') {\n \t\t\t\t\t\t/* Set chunk positions and start multiline parsing */\n \t\t\t\t\t\tchunk->remain -= p - c + 1;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42482848-vul",
+      "digest": "sha256:bc75b21c84cd03a4b867c951e283abc6f6849401532b3642c6012d917ffbaa41"
+    },
+    "patched": {
+      "ref": "n132/arvo:42482848-fix",
+      "digest": "sha256:c2169c93c34b7f972e4f325a7a3ae05df6880d0c8962564d5128f142542aeec4"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/libucl/src/ucl_parser.c:1811",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/libucl/src/ucl_parser.c:1811"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

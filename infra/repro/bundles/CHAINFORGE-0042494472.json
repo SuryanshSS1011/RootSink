@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042494472",
+  "chain": "CWE-416->CWE-787",
+  "project": "c-blosc2",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42494472",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "e670bb4036fd7c840b1c206b8739f292346b1aa9",
+      "fix_commits": [
+        "e670bb4036fd7c840b1c206b8739f292346b1aa9"
+      ],
+      "repo": "https://github.com/Blosc/c-blosc2"
+    },
+    "patch": "diff --git a/blosc/blosc2.c b/blosc/blosc2.c\nindex 235a0d5a6..c126142a1 100644\n--- a/blosc/blosc2.c\n+++ b/blosc/blosc2.c\n@@ -696,6 +696,10 @@ int blosc_read_header(const uint8_t* src, int32_t srcsize, bool extended_header,\n     BLOSC_TRACE_ERROR(\"`blocksize` is zero or greater than uncompressed size\");\n     return BLOSC2_ERROR_INVALID_HEADER;\n   }\n+  if (header->blocksize > BLOSC2_MAXBLOCKSIZE) {\n+    BLOSC_TRACE_ERROR(\"`blocksize` greater than maximum allowed\");\n+    return BLOSC2_ERROR_INVALID_HEADER;\n+  }\n   if (header->typesize <= 0 || header->typesize > BLOSC_MAX_TYPESIZE) {\n     BLOSC_TRACE_ERROR(\"`typesize` is zero or greater than max allowed.\");\n     return BLOSC2_ERROR_INVALID_HEADER;\ndiff --git a/blosc/blosc2.h b/blosc/blosc2.h\nindex c14be23f2..49a333211 100644\n--- a/blosc/blosc2.h\n+++ b/blosc/blosc2.h\n@@ -141,6 +141,7 @@ enum {\n  */\n enum {\n   BLOSC2_MAXDICTSIZE = 128 * 1024, //!< maximum size for compression dicts\n+  BLOSC2_MAXBLOCKSIZE = 536866816  //!< maximum size for blocks\n };\n \n /**\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42494472-vul",
+      "digest": "sha256:69fa7cfaf215654d2117c0aa55d4f3bc47e130ed965a0fdd7474a25bdc52992f"
+    },
+    "patched": {
+      "ref": "n132/arvo:42494472-fix",
+      "digest": "sha256:20368ef474e725ae8d1b8df257c810d7aa74ecf743d716a31a2e84d824a67a1b"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/c-blosc2/blosc/bitshuffle-sse2.c:445",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/c-blosc2/blosc/bitshuffle-sse2.c:445"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

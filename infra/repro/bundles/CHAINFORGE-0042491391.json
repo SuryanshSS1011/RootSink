@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042491391",
+  "chain": "CWE-456->CWE-457",
+  "project": "poppler",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42491391",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "2b82271415000e776b54f0214d564d28170d9c6b",
+      "fix_commits": [
+        "2b82271415000e776b54f0214d564d28170d9c6b"
+      ],
+      "repo": "https://gitlab.freedesktop.org/poppler/poppler.git"
+    },
+    "patch": "diff --git a/poppler/JBIG2Stream.cc b/poppler/JBIG2Stream.cc\nindex db46b1ae9a5296baea0f7acd853d17e55e832192..111fac0226431d40f1e35840591bc679e2fbc149 100644\n--- a/poppler/JBIG2Stream.cc\n+++ b/poppler/JBIG2Stream.cc\n@@ -2316,7 +2316,9 @@ std::unique_ptr<JBIG2Bitmap> JBIG2Stream::readTextRegion(bool huff, bool refine,\n \n                     if (decodeSuccess && syms[symID]) {\n                         refDX = ((rdw >= 0) ? rdw : rdw - 1) / 2 + rdx;\n-                        refDY = ((rdh >= 0) ? rdh : rdh - 1) / 2 + rdy;\n+                        if (checkedAdd(((rdh >= 0) ? rdh : rdh - 1) / 2, rdy, &refDY)) {\n+                            return nullptr;\n+                        }\n \n                         symbolBitmap = readGenericRefinementRegion(rdw + syms[symID]->getWidth(), rdh + syms[symID]->getHeight(), templ, false, syms[symID], refDX, refDY, atx, aty).release();\n                     }\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42491391-vul",
+      "digest": "sha256:89eb219fbd11a337d1739208703f424022fbc550c45478974f0236e9e0c76b02"
+    },
+    "patched": {
+      "ref": "n132/arvo:42491391-fix",
+      "digest": "sha256:132cc76c5f51dd0d856b546b6e73a1feea904a34b1c85b9583d851b9d04a8adf"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/poppler/fofi/FoFiType1C.cc:1802",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/poppler/fofi/FoFiType1C.cc:1802"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

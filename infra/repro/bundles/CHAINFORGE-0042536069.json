@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042536069",
+  "chain": "CWE-20->CWE-125",
+  "project": "libcups",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42536069",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "a7a28e643cd0f84dcae785f93b72426d644c0619",
+      "fix_commits": [
+        "a7a28e643cd0f84dcae785f93b72426d644c0619"
+      ],
+      "repo": "https://github.com/OpenPrinting/libcups"
+    },
+    "patch": "diff --git a/cups/ipp.c b/cups/ipp.c\nindex 12bdde2b6..993c9cf83 100644\n--- a/cups/ipp.c\n+++ b/cups/ipp.c\n@@ -2683,7 +2683,8 @@ ippReadIO(void        *src,\t\t// I - Data source\n               if (value_tag != tag)\n               {\n                 DEBUG_printf(\"1ippReadIO: Converting %s attribute from %s to %s.\", attr->name, ippTagString(value_tag), ippTagString(tag));\n-\t\tippSetValueTag(ipp, &attr, tag);\n+\t\tif (!ippSetValueTag(ipp, &attr, tag))\n+\t\t  goto rollback;\n \t      }\n             }\n \t    else if (value_tag == IPP_TAG_INTEGER || value_tag == IPP_TAG_RANGE)\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42536069-vul",
+      "digest": "sha256:a50bd71e60c0797f0d06f7890771e5b24567d7132460a47a9df09ade1deb8eac"
+    },
+    "patched": {
+      "ref": "n132/arvo:42536069-fix",
+      "digest": "sha256:f16db49e04125f03e84b27412ab3305e5c5b2aad53c527c2b5c5cbdc965e8547"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/libcups/cups/ipp.c:5263",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/libcups/cups/ipp.c:5263"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

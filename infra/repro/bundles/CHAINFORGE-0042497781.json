@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042497781",
+  "chain": "CWE-456->CWE-457",
+  "project": "libjxl",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42497781",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "b91fc37c9a79355059b71a7421a92ccd4ce04422",
+      "fix_commits": [
+        "b91fc37c9a79355059b71a7421a92ccd4ce04422"
+      ],
+      "repo": "https://github.com/libjxl/libjxl"
+    },
+    "patch": "From b91fc37c9a79355059b71a7421a92ccd4ce04422 Mon Sep 17 00:00:00 2001\nFrom: Luca Versari <veluca@google.com>\nDate: Fri, 11 Jun 2021 17:23:24 +0200\nSubject: [PATCH] Fix per-rect YCbCr upsampling with late FIR.\n\n---\n lib/jxl/dec_reconstruct.cc | 5 ++---\n 1 file changed, 2 insertions(+), 3 deletions(-)\n\ndiff --git a/lib/jxl/dec_reconstruct.cc b/lib/jxl/dec_reconstruct.cc\nindex 8b82104..58ec6cf 100644\n--- a/lib/jxl/dec_reconstruct.cc\n+++ b/lib/jxl/dec_reconstruct.cc\n@@ -1118,9 +1118,8 @@ Status FinalizeFrameDecoding(ImageBundle* decoded,\n \n     std::atomic<bool> apply_features_ok{true};\n     auto run_apply_features = [&](size_t rect_id, size_t thread) {\n-      size_t xstart = kBlockDim + dec_state->group_border_assigner.PaddingX(\n-                                      dec_state->FinalizeRectPadding());\n-      size_t ystart = dec_state->FinalizeRectPadding();\n+      size_t xstart = PassesDecoderState::kGroupDataXBorder;\n+      size_t ystart = PassesDecoderState::kGroupDataYBorder;\n       for (size_t c = 0; c < 3; c++) {\n         Rect rh(rects_to_process[rect_id].x0() >>\n                     frame_header.chroma_subsampling.HShift(c),\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42497781-vul",
+      "digest": "sha256:f17470a77eb17589d24676f8a6dab6d42fcd5d6eeb98cbb06110c0fbcbf28382"
+    },
+    "patched": {
+      "ref": "n132/arvo:42497781-fix",
+      "digest": "sha256:258c1aa0cbe8bdce08a7165c6b49cc7d8acfe5b5ef4938aed8f834092f8ae1d3"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/libjxl/third_party/highway/hwy/ops/scalar-inl.h:245",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/libjxl/third_party/highway/hwy/ops/scalar-inl.h:245"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

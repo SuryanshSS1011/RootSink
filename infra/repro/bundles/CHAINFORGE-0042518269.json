@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042518269",
+  "chain": "CWE-20->CWE-125",
+  "project": "libredwg",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42518269",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "756d716867a4e862faa07ae395254b048b1322dc",
+      "fix_commits": [
+        "756d716867a4e862faa07ae395254b048b1322dc"
+      ],
+      "repo": "https://github.com/LibreDWG/libredwg"
+    },
+    "patch": "diff --git a/src/bits.c b/src/bits.c\nindex 5be82caf67..43c8b803c1 100644\n--- a/src/bits.c\n+++ b/src/bits.c\n@@ -1221,8 +1221,6 @@ bit_read_H (Bit_Chain *restrict dat, Dwg_Handle *restrict handle)\n   if (dat->from_version < R_13)\n     {\n       BITCODE_RC *restrict val;\n-      if (pos == dat->byte)\n-        return DWG_ERR_INVALIDHANDLE;\n       handle->size = handle->code;\n       if (handle->size > sizeof(BITCODE_RC *))\n         {\ndiff --git a/src/decode.c b/src/decode.c\nindex c00c82cb12..bf3473376e 100644\n--- a/src/decode.c\n+++ b/src/decode.c\n@@ -3861,14 +3861,16 @@ dwg_decode_entity (Bit_Chain *dat, Bit_Chain *hdl_dat, Bit_Chain *str_dat,\n   }\n \n   error |= bit_read_H (dat, &(obj->handle));\n-  if (error & DWG_ERR_INVALIDHANDLE || !obj->handle.value || !obj->handle.size\n-      || obj->handle.code)\n+  if (error & DWG_ERR_INVALIDHANDLE || !obj->handle.value || !obj->handle.size)\n     {\n       LOG_ERROR (\"Invalid object handle \" FORMAT_H \" at pos @%lu.%u\",\n                  ARGS_H (obj->handle), dat->byte, dat->bit);\n       // TODO reconstruct the handle and search in the bitsoup?\n       if (has_wrong_bitsize)\n         obj->bitsize = 0;\n+      //obj->handle.value = 0;\n+      //obj->handle.size = 0;\n+      //obj->handle.code = 0;\n       ent->num_eed = 0;\n       ent->preview_exists = 0;\n       return error | DWG_ERR_INVALIDHANDLE;\n@@ -5174,9 +5176,15 @@ dwg_decode_add_object (Dwg_Data *restrict dwg, Bit_Chain *dat,\n \n           // properly dwg_decode_object/_entity for eed, reactors, xdic\n           if (is_entity)\n+            {\n+              //obj->type = DWG_TYPE_UNKNOWN_ENT;\n               error |= dwg_decode_UNKNOWN_ENT (dat, obj);\n+            }\n           else\n+            {\n+              //obj->type = DWG_TYPE_UNKNOWN_OBJ;\n               error |= dwg_decode_UNKNOWN_OBJ (dat, obj);\n+            }\n \n           if (!dat)\n             return error;\ndiff --git a/src/out_dxf.c b/src/out_dxf.c\nindex ef940d300a..5ee33ee513 100644\n--- a/src/out_dxf.c\n+++ b/src/out_dxf.c\n@@ -2399,6 +2399,9 @@ dwg_dxf_variable_type (const Dwg_Data *restrict dwg, Bit_Chain *restrict dat,\n   i = obj->type - 500;\n   if (i < 0 || i >= dwg->num_classes)\n     return DWG_ERR_INVALIDTYPE;\n+  if (obj->fixedtype == DWG_TYPE_UNKNOWN_ENT\n+      || obj->fixedtype == DWG_TYPE_UNKNOWN_OBJ)\n+    return DWG_ERR_UNHANDLEDCLASS;\n \n   klass = &dwg->dwg_class[i];\n   if (!klass || !klass->dxfname)\n@@ -2582,7 +2585,16 @@ static int dwg_dxf_object (Bit_Chain *restrict dat,\n   if (!obj || !obj->parent)\n     return DWG_ERR_INTERNALERROR;\n   minimal = obj->parent->opts & DWG_OPTS_MINIMAL;\n-  type = dat->version < R_13 ? (unsigned int)obj->fixedtype : obj->type;\n+  if (dat->version < R_13)\n+    type = (unsigned int)obj->fixedtype;\n+  else\n+    {\n+      type = obj->type;\n+      if (obj->fixedtype == DWG_TYPE_UNKNOWN_ENT)\n+        type = DWG_TYPE_UNKNOWN_ENT;\n+      if (obj->fixedtype == DWG_TYPE_UNKNOWN_OBJ)\n+        type = DWG_TYPE_UNKNOWN_OBJ;\n+    }\n \n   switch (type)\n     {\n@@ -2773,7 +2785,8 @@ static int dwg_dxf_object (Bit_Chain *restrict dat,\n           int j = obj->type - 500;\n           Dwg_Class *klass = NULL;\n \n-          if (j >= 0 && j < (int)dwg->num_classes)\n+          if (j >= 0 && j < (int)dwg->num_classes\n+              && obj->fixedtype < DWG_TYPE_FREED)\n             klass = &dwg->dwg_class[j];\n           if (!klass)\n             {\ndiff --git a/src/out_dxfb.c b/src/out_dxfb.c\nindex 595fb02b15..2b162aa061 100644\n--- a/src/out_dxfb.c\n+++ b/src/out_dxfb.c\n@@ -1376,6 +1376,9 @@ dwg_dxfb_variable_type (const Dwg_Data *restrict dwg, Bit_Chain *restrict dat,\n   i = obj->type - 500;\n   if (i < 0 || i >= dwg->num_classes)\n     return DWG_ERR_INVALIDTYPE;\n+  if (obj->fixedtype == DWG_TYPE_UNKNOWN_ENT\n+      || obj->fixedtype == DWG_TYPE_UNKNOWN_OBJ)\n+    return DWG_ERR_UNHANDLEDCLASS;\n \n   klass = &dwg->dwg_class[i];\n   if (!klass || !klass->dxfname)\n@@ -1557,7 +1560,16 @@ static int dwg_dxfb_object (Bit_Chain *restrict dat,\n   if (!obj || !obj->parent)\n     return DWG_ERR_INTERNALERROR;\n   minimal = obj->parent->opts & DWG_OPTS_MINIMAL;\n-  type = dat->version < R_13 ? (unsigned int)obj->fixedtype : obj->type;\n+  if (dat->version < R_13)\n+    type = (unsigned int)obj->fixedtype;\n+  else\n+    {\n+      type = obj->type;\n+      if (obj->fixedtype == DWG_TYPE_UNKNOWN_ENT)\n+        type = DWG_TYPE_UNKNOWN_ENT;\n+      if (obj->fixedtype == DWG_TYPE_UNKNOWN_OBJ)\n+        type = DWG_TYPE_UNKNOWN_OBJ;\n+    }\n \n   switch (type)\n     {\n@@ -1755,7 +1767,8 @@ static int dwg_dxfb_object (Bit_Chain *restrict dat,\n           int j = obj->type - 500;\n           Dwg_Class *klass = NULL;\n \n-          if (j >= 0 && j < (int)dwg->num_classes)\n+          if (j >= 0 && j < (int)dwg->num_classes\n+              && obj->fixedtype < DWG_TYPE_FREED)\n             klass = &dwg->dwg_class[j];\n           if (!klass)\n             {\ndiff --git a/src/out_geojson.c b/src/out_geojson.c\nindex 63e3cb0899..a63792d913 100644\n--- a/src/out_geojson.c\n+++ b/src/out_geojson.c\n@@ -620,6 +620,9 @@ dwg_geojson_variable_type (Dwg_Data *restrict dwg, Bit_Chain *restrict dat,\n   i = obj->type - 500;\n   if (i < 0 || i >= (int)dwg->num_classes)\n     return 0;\n+  if (obj->fixedtype == DWG_TYPE_UNKNOWN_ENT\n+      || obj->fixedtype == DWG_TYPE_UNKNOWN_OBJ)\n+    return DWG_ERR_UNHANDLEDCLASS;\n \n   klass = &dwg->dwg_class[i];\n   if (!klass || !klass->dxfname)\ndiff --git a/src/out_json.c b/src/out_json.c\nindex d8e84fd5f4..cb0e98614f 100644\n--- a/src/out_json.c\n+++ b/src/out_json.c\n@@ -1525,6 +1525,9 @@ dwg_json_variable_type (Dwg_Data *restrict dwg, Bit_Chain *restrict dat,\n   i = obj->type - 500;\n   if (i < 0 || i >= (int)dwg->num_classes)\n     return DWG_ERR_INVALIDTYPE;\n+  if (obj->fixedtype == DWG_TYPE_UNKNOWN_ENT\n+      || obj->fixedtype == DWG_TYPE_UNKNOWN_OBJ)\n+    return DWG_ERR_UNHANDLEDCLASS;\n \n   klass = &dwg->dwg_class[i];\n   if (!klass || !klass->dxfname)\n@@ -1546,7 +1549,17 @@ dwg_json_object (Bit_Chain *restrict dat, Dwg_Object *restrict obj)\n \n   if (!obj || !obj->parent)\n     return DWG_ERR_INTERNALERROR;\n-  type = dat->version < R_13 ? (unsigned int)obj->fixedtype : obj->type;\n+  if (dat->version < R_13)\n+    type = (unsigned int)obj->fixedtype;\n+  else\n+    {\n+      type = obj->type;\n+      if (obj->fixedtype == DWG_TYPE_UNKNOWN_ENT)\n+        type = DWG_TYPE_UNKNOWN_ENT;\n+      if (obj->fixedtype == DWG_TYPE_UNKNOWN_OBJ)\n+        type = DWG_TYPE_UNKNOWN_OBJ;\n+    }\n+\n   switch (type)\n     {\n     case DWG_TYPE_TEXT:\n@@ -1727,20 +1740,28 @@ dwg_json_object (Bit_Chain *restrict dat, Dwg_Object *restrict obj)\n                & (error = dwg_json_variable_type (obj->parent, dat, obj)))\n         {\n           Dwg_Data *dwg = obj->parent;\n-          int is_entity;\n+          int is_entity = 0;\n           int i = obj->type - 500;\n           Dwg_Class *klass = NULL;\n           int num_bytes = obj->num_unknown_bits / 8;\n           if (obj->num_unknown_bits & 8)\n             num_bytes++;\n \n-          if (i >= 0 && i < (int)dwg->num_classes)\n+          if (obj->fixedtype == DWG_TYPE_FREED)\n+              goto invalid_type;\n+          if (i >= 0 && i < (int)dwg->num_classes\n+              && obj->fixedtype < DWG_TYPE_FREED)\n             {\n               klass = &dwg->dwg_class[i];\n               is_entity = dwg_class_is_entity (klass);\n             }\n+          else\n+            {\n+              if (obj->fixedtype == DWG_TYPE_UNKNOWN_ENT)\n+                is_entity = 1;\n+            }\n           // properly dwg_decode_object/_entity for eed, reactors, xdic\n-          if (klass && !is_entity)\n+          if (!is_entity)\n             {\n               error |= dwg_json_UNKNOWN_OBJ (dat, obj);\n               KEY (num_unknown_bits);\n@@ -1749,7 +1770,7 @@ dwg_json_object (Bit_Chain *restrict dat, Dwg_Object *restrict obj)\n               VALUE_BINARY (obj->unknown_bits, num_bytes, 0);\n               return error;\n             }\n-          else if (klass)\n+          else\n             {\n               error |= dwg_json_UNKNOWN_ENT (dat, obj);\n               KEY (num_unknown_bits);\n@@ -1758,10 +1779,6 @@ dwg_json_object (Bit_Chain *restrict dat, Dwg_Object *restrict obj)\n               VALUE_BINARY (obj->unknown_bits, num_bytes, 0);\n               return error;\n             }\n-          else // not a class\n-            {\n-              goto invalid_type;\n-            }\n         }\n       else\n         return 0;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42518269-vul",
+      "digest": "sha256:e806cc17c97481642f1642df972de536c0a563468fa12cb429e238bda6cf3e98"
+    },
+    "patched": {
+      "ref": "n132/arvo:42518269-fix",
+      "digest": "sha256:45a5637adc88e1118fa0d825cf141599503f66015d9f75281ce3644de454172c"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/libredwg/src/./common_entity_handle_data.spec:50",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/libredwg/src/./common_entity_handle_data.spec:50"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042524476",
+  "chain": "CWE-1285->CWE-125",
+  "project": "liblouis",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42524476",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "1c5432a12e541f597bdc43b7c67ee828df3c49e1",
+      "fix_commits": [
+        "1c5432a12e541f597bdc43b7c67ee828df3c49e1"
+      ],
+      "repo": "https://github.com/liblouis/liblouis"
+    },
+    "patch": "diff --git a/liblouis/lou_translateString.c b/liblouis/lou_translateString.c\nindex 484c0bf71c..050ad82daf 100644\n--- a/liblouis/lou_translateString.c\n+++ b/liblouis/lou_translateString.c\n@@ -755,7 +755,9 @@ passDoTest(const TranslationTableHeader *table, int pos, const InString *input,\n \t\t*passCharDots = 1;\n \twhile (*passIC < transRule->dotslen) {\n \t\tint itsTrue = 1;  // whether we have a match or not\n-\t\tif (pos > input->length) return 0;\n+\t\t// check if `pos` is within the input string, \n+\t\t// maybe a unsigned type would be better to omit negative values\n+\t\tif (pos > input->length || pos < 0) return 0;\n \t\tswitch ((*passInstructions)[*passIC]) {\n \t\tcase pass_first:\n \t\t\tif (pos != 0) itsTrue = 0;\n@@ -882,7 +884,8 @@ passDoTest(const TranslationTableHeader *table, int pos, const InString *input,\n \t\t\t\tstartReplace = startMatch;\n \t\t\t\tendReplace = endMatch;\n \t\t\t}\n-\t\t\tif (startReplace < startMatch)\n+\t\t\t// Check whetehr endReplace != -1 while startReplace! = -1\n+\t\t\tif (startReplace < startMatch || endReplace == -1)\n \t\t\t\treturn 0;\n \t\t\telse {\n \t\t\t\t*match = (PassRuleMatch){ .startMatch = startMatch,\n@@ -3877,7 +3880,7 @@ translateString(const TranslationTableHeader *table, int mode, int currentPass,\n \t\t\t\t\tif (!putCharacter(input->chars[pos], table, pos, input, output,\n \t\t\t\t\t\t\t\tposMapping, cursorPosition, cursorStatus, mode))\n \t\t\t\t\t\tgoto failure;\n-\t\t\t\t\tpos++;\n+\t\t\t\t\tif (++pos >= input->length) break;\n \t\t\t\t}\n \t\t\t}\n \t\t\tbreak;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42524476-vul",
+      "digest": "sha256:5197eef2f8574c05664ffaeff065a33fb4fffab1a32b9da2ff71a81e720cc806"
+    },
+    "patched": {
+      "ref": "n132/arvo:42524476-fix",
+      "digest": "sha256:5a31ffdd90d3b0c896ce739bb9d1dbfb114d51ed929844e59bd34a97f347a243"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/liblouis/liblouis/lou_translateString.c:284",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/liblouis/liblouis/lou_translateString.c:284"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

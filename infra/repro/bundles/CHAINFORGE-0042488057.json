@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042488057",
+  "chain": "CWE-1285->CWE-787",
+  "project": "leptonica",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42488057",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "20b8d16e4f3fa4d94b606a7f7804ee56c776768b",
+      "fix_commits": [
+        "20b8d16e4f3fa4d94b606a7f7804ee56c776768b"
+      ],
+      "repo": "https://github.com/DanBloomberg/leptonica"
+    },
+    "patch": "diff --git a/src/graphics.c b/src/graphics.c\nindex 910574996..c2100a990 100644\n--- a/src/graphics.c\n+++ b/src/graphics.c\n@@ -2573,10 +2573,14 @@ PIX      *pixi, *pixd;\n         return (PIX *)ERROR_PTR(\"pixs undefined or not 1 bpp\", procName, NULL);\n     if (!pta)\n         return (PIX *)ERROR_PTR(\"pta not defined\", procName, NULL);\n+    if (ptaGetCount(pta) < 2)\n+        return (PIX *)ERROR_PTR(\"pta has < 2 pts\", procName, NULL);\n \n     pixGetDimensions(pixs, &w, &h, NULL);\n-    xstart = (l_int32 *)LEPT_CALLOC(w / 2, sizeof(l_int32));\n-    xend = (l_int32 *)LEPT_CALLOC(w / 2, sizeof(l_int32));\n+    xstart = (l_int32 *)LEPT_CALLOC(L_MAX(1, w / 2), sizeof(l_int32));\n+    xend = (l_int32 *)LEPT_CALLOC(L_MAX(1, w / 2), sizeof(l_int32));\n+    if (!xstart)\n+        return (PIX *)ERROR_PTR(\"xstart and xend not made\", procName, NULL);\n \n         /* Find a raster with 2 or more black runs.  The first background\n          * pixel after the end of the first run is likely to be inside\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42488057-vul",
+      "digest": "sha256:fe94ba4341fc830de6a3b10f3bc631424701c2bc899344dd22a386349fe114fe"
+    },
+    "patched": {
+      "ref": "n132/arvo:42488057-fix",
+      "digest": "sha256:c92d7bc099cf74575c72fc1b4645917c9c86f3195380b3d03d0e07994b45f069"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/leptonica/src/runlength.c:411",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/leptonica/src/runlength.c:411"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

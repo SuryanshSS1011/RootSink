@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042537948",
+  "chain": "CWE-456->CWE-457",
+  "project": "libjpeg-turbo.main",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42537948",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "488d42a8a5669fd227f9225258a8d6fec92d204b",
+      "fix_commits": [
+        "488d42a8a5669fd227f9225258a8d6fec92d204b"
+      ],
+      "repo": "https://github.com/libjpeg-turbo/libjpeg-turbo"
+    },
+    "patch": "From 488d42a8a5669fd227f9225258a8d6fec92d204b Mon Sep 17 00:00:00 2001\nFrom: DRC <information@libjpeg-turbo.org>\nDate: Fri, 16 Aug 2024 12:12:09 -0400\nSubject: [PATCH] OSS-Fuzz: Define ZERO_BUFFERS for MSan build\n\n... and use tj3Alloc() to allocate compression/transformation\ndestination buffers.\n---\n fuzz/build.sh      | 4 ++++\n fuzz/compress.cc   | 4 ++--\n fuzz/compress12.cc | 4 ++--\n fuzz/transform.cc  | 4 ++--\n 4 files changed, 10 insertions(+), 6 deletions(-)\n\ndiff --git a/fuzz/build.sh b/fuzz/build.sh\nindex d87cbdf..a856c5e 100644\n--- a/fuzz/build.sh\n+++ b/fuzz/build.sh\n@@ -9,6 +9,10 @@ if [ $# -ge 1 ]; then\n \tFUZZER_SUFFIX=\"`echo $1 | sed 's/\\./_/g'`\"\n fi\n \n+if [ \"$SANITIZER\" = \"memory\" ]; then\n+\texport CFLAGS=\"$CFLAGS -DZERO_BUFFERS=1\"\n+fi\n+\n cmake . -DCMAKE_BUILD_TYPE=RelWithDebInfo -DENABLE_STATIC=1 -DENABLE_SHARED=0 \\\n \t-DCMAKE_C_FLAGS_RELWITHDEBINFO=\"-g -DNDEBUG\" \\\n \t-DCMAKE_CXX_FLAGS_RELWITHDEBINFO=\"-g -DNDEBUG\" -DCMAKE_INSTALL_PREFIX=$WORK \\\ndiff --git a/fuzz/compress.cc b/fuzz/compress.cc\nindex daad047..995840b 100644\n--- a/fuzz/compress.cc\n+++ b/fuzz/compress.cc\n@@ -1,5 +1,5 @@\n /*\n- * Copyright (C)2021, 2023 D. R. Commander.  All Rights Reserved.\n+ * Copyright (C)2021, 2023-2024 D. R. Commander.  All Rights Reserved.\n  *\n  * Redistribution and use in source and binary forms, with or without\n  * modification, are permitted provided that the following conditions are met:\n@@ -89,7 +89,7 @@ extern \"C\" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)\n \n     maxBufSize = tj3JPEGBufSize(width, height, tests[ti].subsamp);\n     if (tj3Get(handle, TJPARAM_NOREALLOC)) {\n-      if ((dstBuf = (unsigned char *)malloc(maxBufSize)) == NULL)\n+      if ((dstBuf = (unsigned char *)tj3Alloc(maxBufSize)) == NULL)\n         goto bailout;\n     } else\n       dstBuf = NULL;\ndiff --git a/fuzz/compress12.cc b/fuzz/compress12.cc\nindex 12cb756..63131c8 100644\n--- a/fuzz/compress12.cc\n+++ b/fuzz/compress12.cc\n@@ -1,5 +1,5 @@\n /*\n- * Copyright (C)2021, 2023 D. R. Commander.  All Rights Reserved.\n+ * Copyright (C)2021, 2023-2024 D. R. Commander.  All Rights Reserved.\n  *\n  * Redistribution and use in source and binary forms, with or without\n  * modification, are permitted provided that the following conditions are met:\n@@ -89,7 +89,7 @@ extern \"C\" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)\n \n     maxBufSize = tj3JPEGBufSize(width, height, tests[ti].subsamp);\n     if (tj3Get(handle, TJPARAM_NOREALLOC)) {\n-      if ((dstBuf = (unsigned char *)malloc(maxBufSize)) == NULL)\n+      if ((dstBuf = (unsigned char *)tj3Alloc(maxBufSize)) == NULL)\n         goto bailout;\n     } else\n       dstBuf = NULL;\ndiff --git a/fuzz/transform.cc b/fuzz/transform.cc\nindex 84a8cce..f3b5b26 100644\n--- a/fuzz/transform.cc\n+++ b/fuzz/transform.cc\n@@ -1,5 +1,5 @@\n /*\n- * Copyright (C)2021-2023 D. R. Commander.  All Rights Reserved.\n+ * Copyright (C)2021-2024 D. R. Commander.  All Rights Reserved.\n  *\n  * Redistribution and use in source and binary forms, with or without\n  * modification, are permitted provided that the following conditions are met:\n@@ -70,7 +70,7 @@ extern \"C\" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)\n   transforms[0].op = TJXOP_NONE;\n   transforms[0].options = TJXOPT_PROGRESSIVE | TJXOPT_COPYNONE;\n   dstBufs[0] =\n-    (unsigned char *)malloc(tj3JPEGBufSize(width, height, jpegSubsamp));\n+    (unsigned char *)tj3Alloc(tj3JPEGBufSize(width, height, jpegSubsamp));\n   if (!dstBufs[0])\n     goto bailout;\n \n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42537948-vul",
+      "digest": "sha256:458804d3579bc71b16db10bd5ab1364abbe5bfbf11efd3c9c3895df7e2896bea"
+    },
+    "patched": {
+      "ref": "n132/arvo:42537948-fix",
+      "digest": "sha256:227271e90f0f35353d369a49937e53f4d9e2df99f103a51dcb1881fcd338d4dc"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/libjpeg-turbo.main/jcphuff.c:683",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/libjpeg-turbo.main/jcphuff.c:683"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042472681",
+  "chain": "CWE-20->CWE-125",
+  "project": "yara",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42472681",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "bc0f0522419f1be77378120a4b946c82da4ac635",
+      "fix_commits": [
+        "bc0f0522419f1be77378120a4b946c82da4ac635"
+      ],
+      "repo": "https://github.com/VirusTotal/yara"
+    },
+    "patch": "diff --git a/libyara/modules/dex/dex.c b/libyara/modules/dex/dex.c\nindex 5fe167e2a0..b45f171ff5 100644\n--- a/libyara/modules/dex/dex.c\n+++ b/libyara/modules/dex/dex.c\n@@ -434,13 +434,6 @@ static int32_t read_uleb128_bounded(\n }\n \n \n-static int32_t read_uleb128(const uint8_t* pStream, uint32_t* size)\n-{\n-  bool error;\n-  return read_uleb128_bounded(pStream, (const uint8_t*) SIZE_MAX, size, &error);\n-}\n-\n-\n static int64_t dex_get_integer(\n     YR_OBJECT* object,\n     const char* pattern,\n@@ -592,18 +585,26 @@ uint32_t load_encoded_field(\n   printf(\"[DEX] Parse encoded field start_offset:0x%zx\\n\", start_offset);\n #endif\n \n+  const uint8_t* data_cur_start = dex->data + start_offset;\n   if (!fits_in_dex(dex, dex->data + start_offset, sizeof(uint32_t) * 2))\n     return 0;\n \n+  const uint8_t* data_end = dex->data + dex->data_size;\n   uint32_t current_size = 0;\n-\n+  bool error = false;\n   encoded_field_t encoded_field;\n \n-  encoded_field.field_idx_diff = (uint32_t) read_uleb128(\n-      (dex->data + start_offset + current_size), &current_size);\n+  encoded_field.field_idx_diff =\n+      (uint32_t) read_uleb128_bounded((dex->data + start_offset + current_size),\n+                                      data_end, &current_size, &error);\n+  if (error)\n+    return 0;\n \n-  encoded_field.access_flags = (uint32_t) read_uleb128(\n-      (dex->data + start_offset + current_size), &current_size);\n+  encoded_field.access_flags =\n+      (uint32_t) read_uleb128_bounded((dex->data + start_offset + current_size),\n+                                      data_end, &current_size, &error);\n+  if (error)\n+    return 0;\n \n   yr_set_integer(\n       encoded_field.field_idx_diff,\n@@ -946,6 +947,8 @@ void dex_parse(DEX* dex, uint64_t base_address)\n   uint32_t index_encoded_method = 0;\n   uint32_t index_encoded_field = 0;\n \n+  const uint8_t* data_end = dex->data + dex->data_size;\n+\n   if (!struct_fits_in_dex(dex, dex->data, dex_header_t))\n     return;\n \n@@ -981,9 +984,12 @@ void dex_parse(DEX* dex, uint64_t base_address)\n             sizeof(uint32_t)))\n       continue;\n \n-    uint32_t value = (uint32_t) read_uleb128(\n+    bool error = false;\n+    uint32_t value = (uint32_t) read_uleb128_bounded(\n         (dex->data + yr_le32toh(string_id_item->string_data_offset)),\n-        &uleb128_size);\n+        data_end, &uleb128_size, &error);\n+    if (error)\n+      continue;\n \n #ifdef DEBUG_DEX_MODULE\n     printf(\"[DEX] STRING ID item size:0x%x\\n\", value);\n@@ -1271,25 +1277,34 @@ void dex_parse(DEX* dex, uint64_t base_address)\n         return;\n \n       uleb128_size = 0;\n+      bool error = false;\n \n-      class_data_item.static_fields_size = (uint32_t) read_uleb128(\n+      class_data_item.static_fields_size = (uint32_t) read_uleb128_bounded(\n           (dex->data + yr_le32toh(class_id_item->class_data_offset)),\n-          &uleb128_size);\n+          data_end, &uleb128_size, &error);\n+      if (error)\n+        return;\n \n-      class_data_item.instance_fields_size = (uint32_t) read_uleb128(\n+      class_data_item.instance_fields_size = (uint32_t) read_uleb128_bounded(\n           (dex->data + yr_le32toh(class_id_item->class_data_offset) +\n            uleb128_size),\n-          &uleb128_size);\n+          data_end, &uleb128_size, &error);\n+      if (error)\n+        return;\n \n-      class_data_item.direct_methods_size = (uint32_t) read_uleb128(\n+      class_data_item.direct_methods_size = (uint32_t) read_uleb128_bounded(\n           (dex->data + yr_le32toh(class_id_item->class_data_offset) +\n            uleb128_size),\n-          &uleb128_size);\n+          data_end, &uleb128_size, &error);\n+      if (error)\n+        return;\n \n-      class_data_item.virtual_methods_size = (uint32_t) read_uleb128(\n+      class_data_item.virtual_methods_size = (uint32_t) read_uleb128_bounded(\n           (dex->data + yr_le32toh(class_id_item->class_data_offset) +\n            uleb128_size),\n-          &uleb128_size);\n+          data_end, &uleb128_size, &error);\n+      if (error)\n+        return;\n \n       yr_set_integer(\n           class_data_item.static_fields_size,\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42472681-vul",
+      "digest": "sha256:17587962c83a70938a08793ed3eeb6dca4aa55adccc99ecfa7c72ce2883d4637"
+    },
+    "patched": {
+      "ref": "n132/arvo:42472681-fix",
+      "digest": "sha256:bf6cfbb322a38036a15efecdabad1f085a77623dae890ebc2cb074f2223996ca"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/yara/libyara/modules/dex.c:241",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/yara/libyara/modules/dex.c:241"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

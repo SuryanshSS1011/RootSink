@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042530909",
+  "chain": "CWE-20->CWE-125",
+  "project": "selinux",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42530909",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "e54bedce80267b4fbd79b16f548a278c097bd675",
+      "fix_commits": [
+        "e54bedce80267b4fbd79b16f548a278c097bd675"
+      ],
+      "repo": "https://github.com/SELinuxProject/selinux"
+    },
+    "patch": "diff --git a/libsepol/src/policydb_validate.c b/libsepol/src/policydb_validate.c\nindex bd8e9f8f3..d86f885e4 100644\n--- a/libsepol/src/policydb_validate.c\n+++ b/libsepol/src/policydb_validate.c\n@@ -1344,6 +1344,8 @@ static int validate_range_trans_rules(sepol_handle_t *handle, const range_trans_\n \n static int validate_scope_index(sepol_handle_t *handle, const scope_index_t *scope_index, validate_t flavors[])\n {\n+\tif (!ebitmap_is_empty(&scope_index->scope[SYM_COMMONS]))\n+\t\tgoto bad;\n \tif (validate_ebitmap(&scope_index->p_classes_scope, &flavors[SYM_CLASSES]))\n \t\tgoto bad;\n \tif (validate_ebitmap(&scope_index->p_roles_scope, &flavors[SYM_ROLES]))\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42530909-vul",
+      "digest": "sha256:034521d14ab1c5ada989bd3f177463998e4939906f3fccc1c9ffbb915908125c"
+    },
+    "patched": {
+      "ref": "n132/arvo:42530909-fix",
+      "digest": "sha256:f02b177c1395fa2edab25e2e82e6e4d9827efbc30d17c5558a6708f7e16d7e79"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/selinux/libsepol/src/link.c:1951",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/selinux/libsepol/src/link.c:1951"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

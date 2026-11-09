@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042500245",
+  "chain": "CWE-416->CWE-125",
+  "project": "espeak-ng",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42500245",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "1da9ad10e80f2e2365c4c00b532fe908b4b8fe19",
+      "fix_commits": [
+        "1da9ad10e80f2e2365c4c00b532fe908b4b8fe19"
+      ],
+      "repo": "https://github.com/espeak-ng/espeak-ng"
+    },
+    "patch": "From 1da9ad10e80f2e2365c4c00b532fe908b4b8fe19 Mon Sep 17 00:00:00 2001\nFrom: Samuel Thibault <samuel.thibault@ens-lyon.org>\nDate: Sat, 2 Jul 2022 01:04:21 +0200\nSubject: [PATCH] Add tertiary translator\n\nTranslateWord2 passes translator2 as tr to TranslateWord which may call\nTranslateWord3, SpeakIndividualLetters, TranslateLetter, which was calling\nSetTranslator2 again, thus freeing the very tr being used. Make that\nlatter use another translator.\n---\n src/libespeak-ng/numbers.c   | 26 ++++++++++++------------\n src/libespeak-ng/translate.c | 38 ++++++++++++++++++++++++------------\n src/libespeak-ng/translate.h |  2 ++\n 3 files changed, 40 insertions(+), 26 deletions(-)\n\ndiff --git a/src/libespeak-ng/numbers.c b/src/libespeak-ng/numbers.c\nindex 5a627ca..04f9591 100644\n--- a/src/libespeak-ng/numbers.c\n+++ b/src/libespeak-ng/numbers.c\n@@ -500,8 +500,8 @@ void LookupLetter(Translator *tr, unsigned int letter, int next_byte, char *ph_b\n \t\tif (tr->translator_name == L('e', 'n'))\n \t\t\treturn; // we are already using English\n \n-\t\tSetTranslator2(ESPEAKNG_DEFAULT_VOICE);\n-\t\tif (Lookup(translator2, &single_letter[2], ph_buf3) != 0) {\n+\t\tSetTranslator3(ESPEAKNG_DEFAULT_VOICE);\n+\t\tif (Lookup(translator3, &single_letter[2], ph_buf3) != 0) {\n \t\t\t// yes, switch to English and re-translate the word\n \t\t\tsprintf(ph_buf1, \"%c\", phonSWITCH);\n \t\t}\n@@ -719,8 +719,8 @@ int TranslateLetter(Translator *tr, char *word, char *phonemes, int control, ALP\n \t\t\t\t// don't say \"superscript\" during normal text reading\n \t\t\t\tLookup(tr, modifier, capital);\n \t\t\t\tif (capital[0] == 0) {\n-\t\t\t\t\tcapital[2] = SetTranslator2(ESPEAKNG_DEFAULT_VOICE); // overwrites previous contents of translator2\n-\t\t\t\t\tLookup(translator2, modifier, &capital[3]);\n+\t\t\t\t\tcapital[2] = SetTranslator3(ESPEAKNG_DEFAULT_VOICE); // overwrites previous contents of translator3\n+\t\t\t\t\tLookup(translator3, modifier, &capital[3]);\n \t\t\t\t\tif (capital[3] != 0) {\n \t\t\t\t\t\tcapital[0] = phonPAUSE;\n \t\t\t\t\t\tcapital[1] = phonSWITCH;\n@@ -763,8 +763,8 @@ int TranslateLetter(Translator *tr, char *word, char *phonemes, int control, ALP\n \t\t\t\tph_buf2[0] = 0;\n \t\t\t\tif (Lookup(translator, alphabet->name, ph_alphabet) == 0) { // the original language for the current voice\n \t\t\t\t\t// Can't find the local name for this alphabet, use the English name\n-\t\t\t\t\tph_alphabet[2] = SetTranslator2(ESPEAKNG_DEFAULT_VOICE); // overwrites previous contents of translator2\n-\t\t\t\t\tLookup(translator2, alphabet->name, ph_buf2);\n+\t\t\t\t\tph_alphabet[2] = SetTranslator3(ESPEAKNG_DEFAULT_VOICE); // overwrites previous contents of translator3\n+\t\t\t\t\tLookup(translator3, alphabet->name, ph_buf2);\n \t\t\t\t} else if (translator != tr) {\n \t\t\t\t\tphontab_1 = tr->phoneme_tab_ix;\n \t\t\t\t\tstrcpy(ph_buf2, ph_alphabet);\n@@ -801,9 +801,9 @@ int TranslateLetter(Translator *tr, char *word, char *phonemes, int control, ALP\n \t\t\tchar hangul_buf[12];\n \n \t\t\t// speak in the language for this alphabet (or English)\n-\t\t\tph_buf[2] = SetTranslator2(WordToString2(language));\n+\t\t\tph_buf[2] = SetTranslator3(WordToString2(language));\n \n-\t\t\tif (translator2 != NULL) {\n+\t\t\tif (translator3 != NULL) {\n \t\t\t\tif (((code = letter - 0xac00) >= 0) && (letter <= 0xd7af)) {\n \t\t\t\t\t// Special case for Korean letters.\n \t\t\t\t\t// break a syllable hangul into 2 or 3 individual jamo\n@@ -818,15 +818,15 @@ int TranslateLetter(Translator *tr, char *word, char *phonemes, int control, ALP\n \t\t\t\t\tp3[6] = ' ';\n \t\t\t\t\tp3[7] = 0;\n \t\t\t\t\tph_buf[3] = 0;\n-\t\t\t\t\tTranslateRules(translator2, &hangul_buf[1], &ph_buf[3], sizeof(ph_buf)-3, NULL, 0, NULL);\n-\t\t\t\t\tSetWordStress(translator2, &ph_buf[3], NULL, -1, 0);\n+\t\t\t\t\tTranslateRules(translator3, &hangul_buf[1], &ph_buf[3], sizeof(ph_buf)-3, NULL, 0, NULL);\n+\t\t\t\t\tSetWordStress(translator3, &ph_buf[3], NULL, -1, 0);\n \t\t\t\t} else\n-\t\t\t\t\tLookupLetter(translator2, letter, word[n_bytes], &ph_buf[3], control & 1);\n+\t\t\t\t\tLookupLetter(translator3, letter, word[n_bytes], &ph_buf[3], control & 1);\n \n \t\t\t\tif (ph_buf[3] == phonSWITCH) {\n \t\t\t\t\t// another level of language change\n-\t\t\t\t\tph_buf[2] = SetTranslator2(&ph_buf[4]);\n-\t\t\t\t\tLookupLetter(translator2, letter, word[n_bytes], &ph_buf[3], control & 1);\n+\t\t\t\t\tph_buf[2] = SetTranslator3(&ph_buf[4]);\n+\t\t\t\t\tLookupLetter(translator3, letter, word[n_bytes], &ph_buf[3], control & 1);\n \t\t\t\t}\n \n \t\t\t\tSelectPhonemeTable(voice->phoneme_tab_ix); // revert to original phoneme table\ndiff --git a/src/libespeak-ng/translate.c b/src/libespeak-ng/translate.c\nindex 33bf542..19f9505 100644\n--- a/src/libespeak-ng/translate.c\n+++ b/src/libespeak-ng/translate.c\n@@ -47,6 +47,8 @@\n Translator *translator = NULL; // the main translator\n Translator *translator2 = NULL; // secondary translator for certain words\n static char translator2_language[20] = { 0 };\n+Translator *translator3 = NULL; // tertiary translator for certain words\n+static char translator3_language[20] = { 0 };\n \n FILE *f_trans = NULL; // phoneme output text\n int option_tone_flags = 0; // bit 8=emphasize allcaps, bit 9=emphasize penultimate stress\n@@ -1206,35 +1208,45 @@ static void Word_EmbeddedCmd()\n \t} while (((embedded_cmd & 0x80) == 0) && (embedded_read < embedded_ix));\n }\n \n-int SetTranslator2(const char *new_language)\n+static int SetAlternateTranslator(const char *new_language, Translator **translator, char translator_language[20])\n {\n-\t// Set translator2 to a second language\n+\t// Set alternate translator to a second language\n \tint new_phoneme_tab;\n \n \tif ((new_phoneme_tab = SelectPhonemeTableName(new_language)) >= 0) {\n-\t\tif ((translator2 != NULL) && (strcmp(new_language, translator2_language) != 0)) {\n+\t\tif ((*translator != NULL) && (strcmp(new_language, translator_language) != 0)) {\n \t\t\t// we already have an alternative translator, but not for the required language, delete it\n-\t\t\tDeleteTranslator(translator2);\n-\t\t\ttranslator2 = NULL;\n+\t\t\tDeleteTranslator(*translator);\n+\t\t\t*translator = NULL;\n \t\t}\n \n-\t\tif (translator2 == NULL) {\n-\t\t\ttranslator2 = SelectTranslator(new_language);\n-\t\t\tstrcpy(translator2_language, new_language);\n+\t\tif (*translator == NULL) {\n+\t\t\t*translator = SelectTranslator(new_language);\n+\t\t\tstrcpy(translator_language, new_language);\n \n-\t\t\tif (LoadDictionary(translator2, translator2->dictionary_name, 0) != 0) {\n+\t\t\tif (LoadDictionary(*translator, (*translator)->dictionary_name, 0) != 0) {\n \t\t\t\tSelectPhonemeTable(voice->phoneme_tab_ix); // revert to original phoneme table\n \t\t\t\tnew_phoneme_tab = -1;\n-\t\t\t\ttranslator2_language[0] = 0;\n+\t\t\t\ttranslator_language[0] = 0;\n \t\t\t}\n-\t\t\ttranslator2->phoneme_tab_ix = new_phoneme_tab;\n+\t\t\t(*translator)->phoneme_tab_ix = new_phoneme_tab;\n \t\t}\n \t}\n-\tif (translator2 != NULL)\n-\t\ttranslator2->phonemes_repeat[0] = 0;\n+\tif (*translator != NULL)\n+\t\t(*translator)->phonemes_repeat[0] = 0;\n \treturn new_phoneme_tab;\n }\n \n+int SetTranslator2(const char *new_language)\n+{\n+\treturn SetAlternateTranslator(new_language, &translator2, translator2_language);\n+}\n+\n+int SetTranslator3(const char *new_language)\n+{\n+\treturn SetAlternateTranslator(new_language, &translator3, translator3_language);\n+}\n+\n static int TranslateWord2(Translator *tr, char *word, WORD_TAB *wtab, int pre_pause)\n {\n \tint flags = 0;\ndiff --git a/src/libespeak-ng/translate.h b/src/libespeak-ng/translate.h\nindex 7af9660..0be35ce 100644\n--- a/src/libespeak-ng/translate.h\n+++ b/src/libespeak-ng/translate.h\n@@ -649,6 +649,7 @@ extern wchar_t option_punctlist[N_PUNCTLIST];  // which punctuation characters t\n \n extern Translator *translator;\n extern Translator *translator2;\n+extern Translator *translator3;\n extern char dictionary_name[40];\n extern espeak_ng_TEXT_DECODER *p_decoder;\n extern int dictionary_skipwords;\n@@ -679,6 +680,7 @@ ALPHABET *AlphabetFromChar(int c);\n \n Translator *SelectTranslator(const char *name);\n int SetTranslator2(const char *name);\n+int SetTranslator3(const char *name);\n void DeleteTranslator(Translator *tr);\n void ProcessLanguageOptions(LANGUAGE_OPTIONS *langopts);\n \n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42500245-vul",
+      "digest": "sha256:756ca39bc0a7c31c2af67471909fd4b77528efbb3350a28a157b367b36d17778"
+    },
+    "patched": {
+      "ref": "n132/arvo:42500245-fix",
+      "digest": "sha256:6b3ea5641e0da7edaddc4bcc002555d5526fedb7eb038f79b129672390ec8923"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/espeak-ng/src/libespeak-ng/numbers.c:839",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/espeak-ng/src/libespeak-ng/numbers.c:839"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

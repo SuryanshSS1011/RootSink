@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042531304",
+  "chain": "CWE-20->CWE-125",
+  "project": "gpac",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42531304",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "538b229cab5e6317053c15c66417a9d053681ad0",
+      "fix_commits": [
+        "538b229cab5e6317053c15c66417a9d053681ad0"
+      ],
+      "repo": "https://github.com/gpac/gpac"
+    },
+    "patch": "diff --git a/src/filters/dmx_ghi.c b/src/filters/dmx_ghi.c\nindex b6c6d245b3..d7b4950cc1 100644\n--- a/src/filters/dmx_ghi.c\n+++ b/src/filters/dmx_ghi.c\n@@ -1000,8 +1000,10 @@ GF_Err ghi_dmx_init(GF_Filter *filter, GHIDmxCtx *ctx)\n \t\tbs = gf_bs_new(data, size, GF_BITSTREAM_READ);\n \t\te = ghi_dmx_init_bin(filter, ctx, bs);\n \t\tif (!e && gf_bs_is_overflow(bs)) e = GF_NON_COMPLIANT_BITSTREAM;\n-\t} else {\n+\t} else if (gf_utf8_is_legal(data, size))\n \t\te = ghi_dmx_init_xml(filter, ctx, data);\n+\telse {\n+\t\te = GF_NON_COMPLIANT_BITSTREAM;\n \t}\n \tif (e) {\n \t\tif (bs) gf_bs_del(bs);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42531304-vul",
+      "digest": "sha256:97438993c0c363275f9d02038e7ca04cb12995b2795e3439de37f827091ef58a"
+    },
+    "patched": {
+      "ref": "n132/arvo:42531304-fix",
+      "digest": "sha256:7b0a37db295b7b6a34486007c6b18bdc050529140d11141fe15726b7968abb4e"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/gpac/src/utils/xml_parser.c:977",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/gpac/src/utils/xml_parser.c:977"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

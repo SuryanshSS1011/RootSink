@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-962448136",
+  "chain": "CWE-456->CWE-457",
+  "project": "libxml2",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42484588",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://gitlab.gnome.org/GNOME/libxml2/-/commit/2af3c2a8b974cb5896cd3beb74561ba979de9f34",
+      "fix_commits": [
+        "2af3c2a8b974cb5896cd3beb74561ba979de9f34"
+      ],
+      "repo": "https://gitlab.gnome.org/GNOME/libxml2"
+    },
+    "patch": "diff --git a/xmlreader.c b/xmlreader.c\nindex 3fd9aa4c076c0ea381232a7b70c65859380a92f2..6ae6e9229c0748a70955419f001d272cf3459896 100644\n--- a/xmlreader.c\n+++ b/xmlreader.c\n@@ -278,6 +278,59 @@ xmlTextReaderRemoveID(xmlDocPtr doc, xmlAttrPtr attr) {\n     return(0);\n }\n \n+/**\n+ * xmlTextReaderWalkRemoveRef:\n+ * @data:  Contents of current link\n+ * @user:  Value supplied by the user\n+ *\n+ * Returns 0 to abort the walk or 1 to continue\n+ */\n+static int\n+xmlTextReaderWalkRemoveRef(const void *data, void *user)\n+{\n+    xmlRefPtr ref = (xmlRefPtr)data;\n+    xmlAttrPtr attr = (xmlAttrPtr)user;\n+\n+    if (ref->attr == attr) { /* Matched: remove and terminate walk */\n+        ref->name = xmlStrdup(attr->name);\n+        ref->attr = NULL;\n+        return 0;\n+    }\n+    return 1;\n+}\n+\n+/**\n+ * xmlTextReaderRemoveRef:\n+ * @doc:  the document\n+ * @attr:  the attribute\n+ *\n+ * Remove the given attribute from the Ref table maintained internally.\n+ *\n+ * Returns -1 if the lookup failed and 0 otherwise\n+ */\n+static int\n+xmlTextReaderRemoveRef(xmlDocPtr doc, xmlAttrPtr attr) {\n+    xmlListPtr ref_list;\n+    xmlRefTablePtr table;\n+    xmlChar *ID;\n+\n+    if (doc == NULL) return(-1);\n+    if (attr == NULL) return(-1);\n+    table = (xmlRefTablePtr) doc->refs;\n+    if (table == NULL)\n+        return(-1);\n+\n+    ID = xmlNodeListGetString(doc, attr->children, 1);\n+    if (ID == NULL)\n+        return(-1);\n+    ref_list = xmlHashLookup(table, ID);\n+    xmlFree(ID);\n+    if(ref_list == NULL)\n+        return (-1);\n+    xmlListWalk(ref_list, xmlTextReaderWalkRemoveRef, attr);\n+    return(0);\n+}\n+\n /**\n  * xmlTextReaderFreeProp:\n  * @reader:  the xmlTextReaderPtr used\n@@ -304,6 +357,8 @@ xmlTextReaderFreeProp(xmlTextReaderPtr reader, xmlAttrPtr cur) {\n \t (cur->parent->doc->extSubset != NULL))) {\n         if (xmlIsID(cur->parent->doc, cur->parent, cur))\n \t    xmlTextReaderRemoveID(cur->parent->doc, cur);\n+        if (xmlIsRef(cur->parent->doc, cur->parent, cur))\n+            xmlTextReaderRemoveRef(cur->parent->doc, cur);\n     }\n     if (cur->children != NULL)\n         xmlTextReaderFreeNodeList(reader, cur->children);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42484588-vul",
+      "digest": "sha256:7c0123b7a750a3652f15da49160057b85f92e89887116d9e819fca1dd4bc8ebd"
+    },
+    "patched": {
+      "ref": "n132/arvo:42484588-fix",
+      "digest": "sha256:31fb77c90e196fb589ef3bca393984630d6c7ae9ccbab3530e1ff4fb76f58e0d"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/libxml2/xmlstring.c:70",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/libxml2/xmlstring.c:70"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

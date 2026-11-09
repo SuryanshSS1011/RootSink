@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042494936",
+  "chain": "CWE-416->CWE-125",
+  "project": "serenity",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42494936",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "c3cf739b945e57cbff5342ced7eca155f16b5406",
+      "fix_commits": [
+        "c3cf739b945e57cbff5342ced7eca155f16b5406"
+      ],
+      "repo": "https://github.com/SerenityOS/serenity"
+    },
+    "patch": "From c3cf739b945e57cbff5342ced7eca155f16b5406 Mon Sep 17 00:00:00 2001\nFrom: Sahan Fernando <sahan.h.fernando@gmail.com>\nDate: Sat, 24 Apr 2021 16:51:31 +1000\nSubject: [PATCH] AK: Make AK::Vector expose allocation failures in API\n\n---\n AK/Vector.h | 200 ++++++++++++++++++++++++++++++++++++++++++----------\n 1 file changed, 161 insertions(+), 39 deletions(-)\n\ndiff --git a/AK/Vector.h b/AK/Vector.h\nindex e50ec48..7615f98 100644\n--- a/AK/Vector.h\n+++ b/AK/Vector.h\n@@ -259,12 +259,14 @@ public:\n     }\n \n     template<typename U = T>\n-    void insert(size_t index, U&& value)\n+    [[nodiscard]] bool try_insert(size_t index, U&& value)\n     {\n-        VERIFY(index <= size());\n+        if (index > size())\n+            return false;\n         if (index == size())\n-            return append(forward<U>(value));\n-        grow_capacity(size() + 1);\n+            return try_append(forward<U>(value));\n+        if (!try_grow_capacity(size() + 1))\n+            return false;\n         ++m_size;\n         if constexpr (Traits<T>::is_trivial()) {\n             TypedTransfer<T>::move(slot(index + 1), slot(index), m_size - index - 1);\n@@ -275,22 +277,40 @@ public:\n             }\n         }\n         new (slot(index)) T(forward<U>(value));\n+        return true;\n+    }\n+\n+    template<typename U = T>\n+    void insert(size_t index, U&& value)\n+    {\n+        auto did_allocate = try_insert<U>(index, forward<U>(value));\n+        VERIFY(did_allocate);\n     }\n \n     template<typename C, typename U = T>\n-    void insert_before_matching(U&& value, C callback, size_t first_index = 0, size_t* inserted_index = nullptr)\n+    [[nodiscard]] bool try_insert_before_matching(U&& value, C callback, size_t first_index = 0, size_t* inserted_index = nullptr)\n     {\n         for (size_t i = first_index; i < size(); ++i) {\n             if (callback(at(i))) {\n-                insert(i, forward<U>(value));\n+                if (!try_insert(i, forward<U>(value)))\n+                    return false;\n                 if (inserted_index)\n                     *inserted_index = i;\n-                return;\n+                return true;\n             }\n         }\n-        append(forward<U>(value));\n+        if (!try_append(forward<U>(value)))\n+            return false;\n         if (inserted_index)\n             *inserted_index = size() - 1;\n+        return true;\n+    }\n+\n+    template<typename C, typename U = T>\n+    void insert_before_matching(U&& value, C callback, size_t first_index = 0, size_t* inserted_index = nullptr)\n+    {\n+        auto did_allocate = try_insert_before_matching(forward<U>(value), callback, first_index, inserted_index);\n+        VERIFY(did_allocate);\n     }\n \n     Vector& operator=(const Vector& other)\n@@ -314,24 +334,40 @@ public:\n         return *this;\n     }\n \n-    void append(Vector&& other)\n+    [[nodiscard]] bool try_append(Vector&& other)\n     {\n         if (is_empty()) {\n             *this = move(other);\n-            return;\n+            return true;\n         }\n         auto other_size = other.size();\n         Vector tmp = move(other);\n-        grow_capacity(size() + other_size);\n+        if (!try_grow_capacity(size() + other_size))\n+            return false;\n         TypedTransfer<T>::move(data() + m_size, tmp.data(), other_size);\n         m_size += other_size;\n+        return true;\n     }\n \n-    void append(const Vector& other)\n+    void append(Vector&& other)\n+    {\n+        auto did_allocate = try_append(move(other));\n+        VERIFY(did_allocate);\n+    }\n+\n+    [[nodiscard]] bool try_append(const Vector& other)\n     {\n-        grow_capacity(size() + other.size());\n+        if (!try_grow_capacity(size() + other.size()))\n+            return false;\n         TypedTransfer<T>::copy(data() + m_size, other.data(), other.size());\n         m_size += other.m_size;\n+        return true;\n+    }\n+\n+    void append(const Vector& other)\n+    {\n+        auto did_allocate = try_append(other);\n+        VERIFY(did_allocate);\n     }\n \n     template<typename Callback>\n@@ -389,43 +425,74 @@ public:\n     }\n \n     template<class... Args>\n-    void empend(Args&&... args)\n+    [[nodiscard]] bool try_empend(Args&&... args)\n     {\n-        grow_capacity(m_size + 1);\n+        if (!try_grow_capacity(m_size + 1))\n+            return false;\n         new (slot(m_size)) T { forward<Args>(args)... };\n         ++m_size;\n+        return true;\n     }\n \n-    ALWAYS_INLINE void append(T&& value)\n+    template<class... Args>\n+    void empend(Args&&... args)\n+    {\n+        auto did_allocate = try_empend(forward<Args>(args)...);\n+        VERIFY(did_allocate);\n+    }\n+\n+    [[nodiscard]] ALWAYS_INLINE bool try_append(T&& value)\n     {\n-        grow_capacity(size() + 1);\n+        if (!try_grow_capacity(size() + 1))\n+            return false;\n         new (slot(m_size)) T(move(value));\n         ++m_size;\n+        return true;\n+    }\n+\n+    ALWAYS_INLINE void append(T&& value)\n+    {\n+        auto did_allocate = try_append(move(value));\n+        VERIFY(did_allocate);\n+    }\n+\n+    [[nodiscard]] ALWAYS_INLINE bool try_append(const T& value)\n+    {\n+        return try_append(T(value));\n     }\n \n     ALWAYS_INLINE void append(const T& value)\n     {\n-        append(T(value));\n+        auto did_allocate = try_append(T(value));\n+        VERIFY(did_allocate);\n+    }\n+\n+    template<typename U = T>\n+    [[nodiscard]] bool try_prepend(U&& value)\n+    {\n+        return try_insert(0, forward<U>(value));\n     }\n \n     template<typename U = T>\n     void prepend(U&& value)\n     {\n-        insert(0, forward<U>(value));\n+        auto did_allocate = try_insert(0, forward<U>(value));\n+        VERIFY(did_allocate);\n     }\n \n-    void prepend(Vector&& other)\n+    [[nodiscard]] bool try_prepend(Vector&& other)\n     {\n         if (other.is_empty())\n-            return;\n+            return true;\n \n         if (is_empty()) {\n             *this = move(other);\n-            return;\n+            return true;\n         }\n \n         auto other_size = other.size();\n-        grow_capacity(size() + other_size);\n+        if (!try_grow_capacity(size() + other_size))\n+            return false;\n \n         for (size_t i = size() + other_size - 1; i >= other.size(); --i) {\n             new (slot(i)) T(move(at(i - other_size)));\n@@ -435,40 +502,71 @@ public:\n         Vector tmp = move(other);\n         TypedTransfer<T>::move(slot(0), tmp.data(), tmp.size());\n         m_size += other_size;\n+        return true;\n     }\n \n-    void prepend(const T* values, size_t count)\n+    void prepend(Vector&& other)\n+    {\n+        auto did_allocate = try_prepend(move(other));\n+        VERIFY(did_allocate);\n+    }\n+\n+    [[nodiscard]] bool try_prepend(const T* values, size_t count)\n     {\n         if (!count)\n-            return;\n-        grow_capacity(size() + count);\n+            return true;\n+        if (!try_grow_capacity(size() + count))\n+            return false;\n         TypedTransfer<T>::move(slot(count), slot(0), m_size);\n         TypedTransfer<T>::copy(slot(0), values, count);\n         m_size += count;\n+        return true;\n     }\n \n-    void append(const T* values, size_t count)\n+    void prepend(const T* values, size_t count)\n+    {\n+        auto did_allocate = try_prepend(values, count);\n+        VERIFY(did_allocate);\n+    }\n+\n+    [[nodiscard]] bool try_append(const T* values, size_t count)\n     {\n         if (!count)\n-            return;\n-        grow_capacity(size() + count);\n+            return true;\n+        if (!try_grow_capacity(size() + count))\n+            return false;\n         TypedTransfer<T>::copy(slot(m_size), values, count);\n         m_size += count;\n+        return true;\n     }\n \n-    void grow_capacity(size_t needed_capacity)\n+    void append(const T* values, size_t count)\n+    {\n+        auto did_allocate = try_append(values, count);\n+        VERIFY(did_allocate);\n+    }\n+\n+    [[nodiscard]] bool try_grow_capacity(size_t needed_capacity)\n     {\n         if (m_capacity >= needed_capacity)\n-            return;\n-        ensure_capacity(padded_capacity(needed_capacity));\n+            return true;\n+        return try_ensure_capacity(padded_capacity(needed_capacity));\n     }\n \n-    void ensure_capacity(size_t needed_capacity)\n+    void grow_capacity(size_t needed_capacity)\n+    {\n+        auto did_allocate = try_grow_capacity(needed_capacity);\n+        VERIFY(did_allocate);\n+    }\n+\n+    [[nodiscard]] bool try_ensure_capacity(size_t needed_capacity)\n     {\n         if (m_capacity >= needed_capacity)\n-            return;\n+            return true;\n         size_t new_capacity = needed_capacity;\n         auto* new_buffer = (T*)kmalloc(new_capacity * sizeof(T));\n+        if (new_buffer == nullptr)\n+            return false;\n \n         if constexpr (Traits<T>::is_trivial()) {\n             TypedTransfer<T>::copy(new_buffer, data(), m_size);\n@@ -482,6 +580,13 @@ public:\n             kfree(m_outline_buffer);\n         m_outline_buffer = new_buffer;\n         m_capacity = new_capacity;\n+        return true;\n+    }\n+\n+    void ensure_capacity(size_t needed_capacity)\n+    {\n+        auto did_allocate = try_ensure_capacity(needed_capacity);\n+        VERIFY(did_allocate);\n     }\n \n     void shrink(size_t new_size, bool keep_capacity = false)\n@@ -503,20 +608,37 @@ public:\n         m_size = new_size;\n     }\n \n-    void resize(size_t new_size, bool keep_capacity = false)\n+    [[nodiscard]] bool try_resize(size_t new_size, bool keep_capacity = false)\n     {\n-        if (new_size <= size())\n-            return shrink(new_size, keep_capacity);\n+        if (new_size <= size()) {\n+            shrink(new_size, keep_capacity);\n+            return true;\n+        }\n+\n+        if (!try_ensure_capacity(new_size))\n+            return false;\n \n-        ensure_capacity(new_size);\n         for (size_t i = size(); i < new_size; ++i)\n             new (slot(i)) T;\n         m_size = new_size;\n+        return true;\n+    }\n+\n+    void resize(size_t new_size, bool keep_capacity = false)\n+    {\n+        auto did_allocate = try_resize(new_size, keep_capacity);\n+        VERIFY(did_allocate);\n+    }\n+\n+    [[nodiscard]] bool try_resize_and_keep_capacity(size_t new_size)\n+    {\n+        return try_resize(new_size, true);\n     }\n \n     void resize_and_keep_capacity(size_t new_size)\n     {\n-        return resize(new_size, true);\n+        auto did_allocate = try_resize_and_keep_capacity(new_size);\n+        VERIFY(did_allocate);\n     }\n \n     using ConstIterator = SimpleIterator<const Vector, const T>;\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42494936-vul",
+      "digest": "sha256:dfbbb48e4bfaf0be271539402cfaa667c819f9fe9b4c89f326264538a2b7fb3d"
+    },
+    "patched": {
+      "ref": "n132/arvo:42494936-fix",
+      "digest": "sha256:44cdd781355a753339fb75bbbb2ac3d9d6006f78e111d20793a651ceb5582384"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/serenity/Meta/Lagom/build/../../../AK/NonnullOwnPtr.h:125",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/serenity/Meta/Lagom/build/../../../AK/NonnullOwnPtr.h:125"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-962016879",
+  "chain": "CWE-456->CWE-457",
+  "project": "relic",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42492578",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/relic-toolkit/relic/commit/1cca0a522ca280c7c8ba5e1288a54d9ecde627b4",
+      "fix_commits": [
+        "1cca0a522ca280c7c8ba5e1288a54d9ecde627b4"
+      ],
+      "repo": "https://github.com/relic-toolkit/relic"
+    },
+    "patch": "diff --git a/src/bn/relic_bn_div.c b/src/bn/relic_bn_div.c\nindex b8049454e..836a05f90 100644\n--- a/src/bn/relic_bn_div.c\n+++ b/src/bn/relic_bn_div.c\n@@ -166,10 +166,7 @@ void bn_div_dig(bn_t c, const bn_t a, dig_t b) {\n \n \tRLC_TRY {\n \t\tbn_new_size(q, a->used);\n-\t\tint size = a->used;\n-\t\tconst dig_t *ap = a->dp;\n-\n-\t\tbn_div1_low(q->dp, &r, ap, size, b);\n+\t\tbn_div1_low(q->dp, &r, (const dig_t *)a->dp, a->used, b);\n \n \t\tif (c != NULL) {\n \t\t\tq->used = a->used;\n@@ -208,11 +205,8 @@ void bn_div_rem_dig(bn_t c, dig_t *d, const bn_t a, dig_t b) {\n \t}\n \n \tRLC_TRY {\n-\t\tbn_new(q);\n-\t\tint size = a->used;\n-\t\tconst dig_t *ap = a->dp;\n-\n-\t\tbn_div1_low(q->dp, &r, ap, size, b);\n+\t\tbn_new_size(q, a->used);\n+\t\tbn_div1_low(q->dp, &r, (const dig_t *)a->dp, a->used, b);\n \n \t\tif (c != NULL) {\n \t\t\tq->used = a->used;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42492578-vul",
+      "digest": "sha256:8d77aaf46479de6dd530d06ac4e5e38631aaa2497edfbae6d77525211edac1fe"
+    },
+    "patched": {
+      "ref": "n132/arvo:42492578-fix",
+      "digest": "sha256:33121a377fd02b2243a99e77592d919c6d274724dc540b238397ccce90201046"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/cryptofuzz/modules/relic/bn_helper.cpp:51",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/cryptofuzz/modules/relic/bn_helper.cpp:51"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

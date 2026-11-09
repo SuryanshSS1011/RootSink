@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042489139",
+  "chain": "CWE-20->CWE-125",
+  "project": "fluent-bit",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42489139",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "163af0b9c0513f31cc4cbfe8aeee26d22513163c",
+      "fix_commits": [
+        "163af0b9c0513f31cc4cbfe8aeee26d22513163c"
+      ],
+      "repo": "https://github.com/fluent/fluent-bit"
+    },
+    "patch": "diff --git a/src/flb_strptime.c b/src/flb_strptime.c\nindex c96feb03cc8..994aad8709f 100644\n--- a/src/flb_strptime.c\n+++ b/src/flb_strptime.c\n@@ -168,6 +168,13 @@ _flb_strptime(const char *buf, const char *fmt, struct tm *tm, int initialize)\n \t\t\tcontinue;\n \t\t}\n \n+        /*\n+         * Having increased bp we need to ensure we are not\n+         * moving beyond bounds.\n+         */\n+        if (*bp == '\\0')\n+           return (NULL);\n+\n \t\tif ((c = *fmt++) != '%')\n \t\t\tgoto literal;\n \n@@ -178,6 +185,13 @@ again:\t\tswitch (c = *fmt++) {\n \t\tif (c != *bp++)\n \t\t\treturn (NULL);\n \n+        /*\n+         * Having increased bp we need to ensure we are not\n+         * moving beyond bounds.\n+         */\n+        if (*bp == '\\0')\n+           return (NULL);\n+\n \t\tbreak;\n \n \t\t/*\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42489139-vul",
+      "digest": "sha256:8749d1469108ee188d1f93813ac768c929e53f30ed2251768531d9321a00ba1d"
+    },
+    "patched": {
+      "ref": "n132/arvo:42489139-fix",
+      "digest": "sha256:045fb93c5a720e77bcab69431fbb9a31b6fe16098477c4342418ccec8e23cd3d"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/fluent-bit/src/flb_strptime.c:442",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/fluent-bit/src/flb_strptime.c:442"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

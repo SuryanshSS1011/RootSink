@@ -1,0 +1,76 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042500694",
+  "chain": "CWE-1285->CWE-787",
+  "project": "httpd",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42500694",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "42057ecf99f136feb8d1d15fe51e2dbd14359048\n968525cbec6851115a894630b710f4faa8cb4079\na452f3b42ea5bdc1bbd36701ad7028775e3df0bd\na6e5a92b0d0e74ead5a43f20f81f5cf880ea4fb8\nbeec41a39a7206a8ed95d6aac31631a2f10118cd",
+      "fix_commits": [
+        "42057ecf99f136feb8d1d15fe51e2dbd14359048",
+        "968525cbec6851115a894630b710f4faa8cb4079",
+        "a452f3b42ea5bdc1bbd36701ad7028775e3df0bd",
+        "a6e5a92b0d0e74ead5a43f20f81f5cf880ea4fb8",
+        "beec41a39a7206a8ed95d6aac31631a2f10118cd"
+      ],
+      "repo": "https://github.com/apache/httpd"
+    },
+    "patch": "diff --git a/server/apreq_util.c b/server/apreq_util.c\nindex 7b0f3b1022d..eba8b8b3f69 100644\n--- a/server/apreq_util.c\n+++ b/server/apreq_util.c\n@@ -839,100 +839,157 @@ APREQ_DECLARE(apr_status_t) apreq_file_mktemp(apr_file_t **fp,\n }\n \n \n-/*\n- * is_2616_token() is the verbatim definition from section 2.2\n- * in the rfc itself.  We try to optimize it around the\n- * expectation that the argument is not a token, which\n- * should be the typical usage.\n- */\n-\n-static APR_INLINE\n-unsigned is_2616_token(const char c) {\n-    switch (c) {\n-    case ' ': case ';': case ',': case '\"': case '\\t':\n-        /* The chars we are expecting are listed above;\n-           the chars below are just for completeness. */\n-    case '?': case '=': case '@': case ':': case '\\\\': case '/':\n-    case '(': case ')':\n-    case '<': case '>':\n-    case '{': case '}':\n-    case '[': case ']':\n-        return 0;\n-    default:\n-        if (apr_iscntrl(c))\n-            return 0;\n-    }\n-    return 1;\n-}\n+#define IS_SPACE_CHAR(c) ((c) == '\\t' || (c) == ' ')\n+#define IS_TOKEN_CHAR(c) (apr_isalnum(c) \\\n+                          || ((c) && strchr(\"!#$%&'*+-.^_`|~\", (c))))\n \n APREQ_DECLARE(apr_status_t)\n     apreq_header_attribute(const char *hdr,\n                            const char *name, const apr_size_t nlen,\n                            const char **val, apr_size_t *vlen)\n {\n-    const char *key, *v;\n-\n-    /* Must ensure first char isn't '=', so we can safely backstep. */\n-    while (*hdr == '=')\n-        ++hdr;\n+    int done = 0;\n \n-    while ((key = strchr(hdr, '=')) != NULL) {\n+    if (!nlen)\n+        return APREQ_ERROR_NOATTR;\n \n-        v = key + 1;\n-        --key;\n+    do {\n+        const char *hde, *v;\n+        apr_size_t tail = 0;\n \n-        while (apr_isspace(*key) && key > hdr + nlen)\n-            --key;\n+        /* Parse the name => [hdr:hde[ */\n+        hde = hdr;\n+    look_for_end_name:\n+        switch (*hde) {\n+        case 0:\n+        case '\\r':\n+        case '\\n':\n+            done = 1;\n+        case '=':\n+        case ';':\n+        case ',':\n+            v = hde + 1;\n+            hde -= tail;\n+            break;\n+        case ' ':\n+        case '\\t':\n+            if (hde == hdr)\n+                ++hdr;\n+            else\n+                ++tail;\n+            ++hde;\n+            goto look_for_end_name;\n+        default:\n+            /* The name is a token */\n+            if (!IS_TOKEN_CHAR(*hde))\n+                return APREQ_ERROR_BADCHAR;\n+            /* Nothing after the tail */\n+            if (tail)\n+                return APREQ_ERROR_BADATTR;\n+            ++hde;\n+            goto look_for_end_name;\n+        }\n \n-        key -= nlen - 1;\n+        /* Parse the value => (*val, *vlen) */\n+        if (v[-1] == '=') {\n+            if (hde == hdr) {\n+                /* The name can't be empty */\n+                return APREQ_ERROR_BADATTR;\n+            }\n \n-        while (apr_isspace(*v))\n-            ++v;\n+            while (IS_SPACE_CHAR(*v))\n+                ++v;\n \n-        if (*v == '\"') {\n-            ++v;\n-            *val = v;\n+            /* Quoted string ? */\n+            if (*v == '\"') {\n+                *val = ++v;\n+\n+                /* XXX: the interface does not permit unescaping,\n+                 *      it should have pool to allocate from.\n+                 * The caller can't know whether a returned '\\\\' is\n+                 * a quoted-char or not..\n+                 */\n+            look_for_end_quote:\n+                switch (*v) {\n+                case 0:\n+                case '\\r':\n+                case '\\n':\n+                    return APREQ_ERROR_BADSEQ;\n+                case '\"':\n+                    *vlen = v - *val;\n+                    break;\n+                case '\\\\':\n+                    if (v[1] != 0)\n+                        ++v;\n+                    ++v;\n+                    goto look_for_end_quote;\n+                default:\n+                    if (apr_iscntrl(*v))\n+                        return APREQ_ERROR_BADCHAR;\n+                    ++v;\n+                    goto look_for_end_quote;\n+                }\n \n-        look_for_end_quote:\n-            switch (*v) {\n-            case '\"':\n-                break;\n-            case 0:\n-                return APREQ_ERROR_BADSEQ;\n-            case '\\\\':\n-                if (v[1] != 0)\n+            look_for_after_quote:\n+                switch (*v) {\n+                case 0:\n+                case '\\r':\n+                case '\\n':\n+                    done = 1;\n+                case ';':\n+                case ',':\n+                    break;\n+                case ' ':\n+                case '\\t':\n+                    goto look_for_after_quote;\n+                default:\n+                    if (apr_iscntrl(*v))\n+                        return APREQ_ERROR_BADCHAR;\n+                    return APREQ_ERROR_BADSEQ;\n+                }\n+            }\n+            else {\n+                *val = v;\n+                tail = 0;\n+\n+            look_for_end_value:\n+                switch (*v) {\n+                case 0:\n+                case '\\r':\n+                case '\\n':\n+                    done = 1;\n+                case ';':\n+                case ',':\n+                    *vlen = v - *val - tail;\n+                    break;\n+                case ' ':\n+                case '\\t':\n+                    if (*val == v)\n+                        ++*val;\n+                    else\n+                        ++tail;\n                     ++v;\n-            default:\n-                ++v;\n-                goto look_for_end_quote;\n+                    goto look_for_end_value;\n+                default:\n+                    if (apr_iscntrl(*v))\n+                        return APREQ_ERROR_BADCHAR;\n+                    ++v;\n+                    tail = 0;\n+                    goto look_for_end_value;\n+                }\n             }\n         }\n         else {\n-            *val = v;\n-\n-        look_for_terminator:\n-            switch (*v) {\n-            case 0:\n-            case ' ':\n-            case ';':\n-            case ',':\n-            case '\\t':\n-            case '\\r':\n-            case '\\n':\n-                break;\n-            default:\n-                ++v;\n-                goto look_for_terminator;\n-            }\n+            *val = NULL;\n+            *vlen = 0;\n         }\n \n-        if (key >= hdr && strncasecmp(key, name, nlen) == 0) {\n-            *vlen = v - *val;\n-            if (key == hdr || ! is_2616_token(key[-1]))\n-                return APR_SUCCESS;\n+        if (hdr + nlen == hde && strncasecmp(hdr, name, nlen) == 0) {\n+            return APR_SUCCESS;\n         }\n-        hdr = v;\n-    }\n+\n+        hdr = v + 1;\n+    } while (!done);\n \n     return APREQ_ERROR_NOATTR;\n }\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42500694-vul",
+      "digest": "sha256:8c7d3920531412f43a13236af29e1a1bd3defcb9c655218678b34695c284cb7b"
+    },
+    "patched": {
+      "ref": "n132/arvo:42500694-fix",
+      "digest": "sha256:dc88b333c844d331faa0ee3553779de1dbf662a5ffbe39c966fd38a997dae972"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/httpd/server/apreq_parser_header.c:124",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/httpd/server/apreq_parser_header.c:124"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

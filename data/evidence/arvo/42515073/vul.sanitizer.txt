@@ -1,0 +1,72 @@
+======================= INFO =========================
+This binary is built for AFL-fuzz.
+To run the target function on individual input(s) execute this:
+  /out/gtiff_mmap < INPUT_FILE
+or
+  /out/gtiff_mmap INPUT_FILE1 [INPUT_FILE2 ... ]
+To fuzz with afl-fuzz execute this:
+  afl-fuzz [afl-flags] /out/gtiff_mmap [-N]
+afl-fuzz will run N iterations before re-spawning the process (default: 1000)
+======================================================
+Reading 777 bytes from /tmp/poc
+=================================================================
+==7==ERROR: AddressSanitizer: stack-buffer-overflow on address 0x7f113e56a640 at pc 0x00000049ea03 bp 0x7ffe017a0870 sp 0x7ffe017a0020
+WRITE of size 315 at 0x7f113e56a640 thread T0
+SCARINESS: 60 (multi-byte-write-stack-buffer-overflow)
+    #0 0x49ea02 in vsnprintf /src/llvm/projects/compiler-rt/lib/asan/../sanitizer_common/sanitizer_common_interceptors.inc:1509
+    #1 0x49eb50 in snprintf /src/llvm/projects/compiler-rt/lib/asan/../sanitizer_common/sanitizer_common_interceptors.inc:1556
+    #2 0x82aa2b in CPLvsnprintf /src/gdal/gdal/port/cpl_string.cpp:1236:21
+    #3 0x82cb63 in CPLsprintf /src/gdal/gdal/port/cpl_string.cpp:1370:21
+    #4 0xbb5873 in GTIFAngleToDD /src/gdal/gdal/frmts/gtiff/libgeotiff/geo_normalize.c:265:9
+    #5 0xbbae1e in GTIFGetDefn /src/gdal/gdal/frmts/gtiff/libgeotiff/geo_normalize.c:2488:13
+    #6 0x53a090 in GTiffDataset::LookForProjection() /src/gdal/gdal/frmts/gtiff/geotiff.cpp:12240:13
+    #7 0x57edc2 in GTiffDataset::GetProjectionRef() /src/gdal/gdal/frmts/gtiff/geotiff.cpp:17247:9
+    #8 0x520bea in LLVMFuzzerTestOneInput /src/gdal/gdal/./fuzzers/gdal_fuzzer.cpp:168:9
+    #9 0x52119e in ExecuteFilesOnyByOne(int, char**) /src/libfuzzer/afl/afl_driver.cpp:265:5
+    #10 0x52172c in main /src/libfuzzer/afl/afl_driver.cpp:302:12
+    #11 0x7f113e83f82f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+    #12 0x427358 in _start (/out/gtiff_mmap+0x427358)
+
+DEDUP_TOKEN: vsnprintf--snprintf--CPLvsnprintf
+Address 0x7f113e56a640 is located in stack of thread T0 at offset 64 in frame
+    #0 0xbb577f in GTIFAngleToDD /src/gdal/gdal/frmts/gtiff/libgeotiff/geo_normalize.c:260
+
+DEDUP_TOKEN: GTIFAngleToDD
+  This frame has 2 object(s):
+    [32, 64) 'szAngleString' (line 263)
+    [96, 104) 'dfInDegrees' (line 270) <== Memory access at offset 64 partially underflows this variable
+HINT: this may be a false positive if your program uses some custom stack unwind mechanism or swapcontext
+      (longjmp and C++ exceptions *are* supported)
+SUMMARY: AddressSanitizer: stack-buffer-overflow /src/llvm/projects/compiler-rt/lib/asan/../sanitizer_common/sanitizer_common_interceptors.inc:1509 in vsnprintf
+Shadow bytes around the buggy address:
+  0x0fe2a7ca5470: f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5
+  0x0fe2a7ca5480: f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5
+  0x0fe2a7ca5490: f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5
+  0x0fe2a7ca54a0: f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5
+  0x0fe2a7ca54b0: f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5
+=>0x0fe2a7ca54c0: f1 f1 f1 f1 00 00 00 00[f2]f2 f2 f2 f8 f3 f3 f3
+  0x0fe2a7ca54d0: f1 f1 f1 f1 00 00 00 f3 f3 f3 f3 f3 00 00 00 00
+  0x0fe2a7ca54e0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0fe2a7ca54f0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0fe2a7ca5500: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0fe2a7ca5510: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+==7==ABORTING

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042539245",
+  "chain": "CWE-456->CWE-457",
+  "project": "skia",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42539245",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "963781a985a777c21987f432dc4a1b766d1db23b",
+      "fix_commits": [
+        "963781a985a777c21987f432dc4a1b766d1db23b"
+      ],
+      "repo": "https://skia.googlesource.com/skia.git"
+    },
+    "patch": "diff --git a/src/core/SkBitmapDevice.cpp b/src/core/SkBitmapDevice.cpp\nindex f6433af..7c0e0ab 100644\n--- a/src/core/SkBitmapDevice.cpp\n+++ b/src/core/SkBitmapDevice.cpp\n@@ -81,12 +81,12 @@\n                 dev->ctm().mapRect(&devBounds, *bounds);\n                 if (devBounds.intersect(SkRect::Make(clipR))) {\n                     fSrcBounds = devBounds.roundOut();\n+                    // Check again, now that we have computed srcbounds.\n+                    fNeedsTiling = fSrcBounds.right() > kMaxDim || fSrcBounds.bottom() > kMaxDim;\n                 } else {\n                     fNeedsTiling = false;\n                     fDone = true;\n                 }\n-                // Check again, now that we have computed srcbounds.\n-                fNeedsTiling = fSrcBounds.right() > kMaxDim || fSrcBounds.bottom() > kMaxDim;\n             } else {\n                 fSrcBounds = clipR;\n             }\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42539245-vul",
+      "digest": "sha256:eb4532f4d40bd5b9498c896c8ee04df15a7803152a002b254d8a042e4abf8fb4"
+    },
+    "patched": {
+      "ref": "n132/arvo:42539245-fix",
+      "digest": "sha256:c332c721c5c0dcddbea6bf2b8aa8a8f36cf327b7e76d165a3f048daf938384e1"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/skia/out/Fuzz_mem_constraints/../../src/core/SkBitmapDevice.cpp:89",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/skia/out/Fuzz_mem_constraints/../../src/core/SkBitmapDevice.cpp:89"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

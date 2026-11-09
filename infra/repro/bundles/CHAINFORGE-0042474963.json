@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042474963",
+  "chain": "CWE-1284->CWE-125",
+  "project": "net-snmp",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42474963",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "7de049193ab78d9fcdc3baa2c0673bd1e300ed5b",
+      "fix_commits": [
+        "7de049193ab78d9fcdc3baa2c0673bd1e300ed5b"
+      ],
+      "repo": "https://github.com/net-snmp/net-snmp"
+    },
+    "patch": "diff --git a/agent/mibgroup/agentx/protocol.c b/agent/mibgroup/agentx/protocol.c\nindex d8a954368a..4d219da818 100644\n--- a/agent/mibgroup/agentx/protocol.c\n+++ b/agent/mibgroup/agentx/protocol.c\n@@ -1241,6 +1241,11 @@ agentx_parse_string(const u_char *data, size_t *length, struct rszbuf *string,\n     u_int           len;\n \n     len = agentx_parse_int(data, network_byte_order);\n+    if (*length < len + 4) {\n+        DEBUGMSGTL((\"agentx\", \"Incomplete string (still too short: %d)\\n\",\n+                    (int)*length));\n+        return NULL;\n+    }\n     if (!increase_size(string, len + 1)) {\n         DEBUGMSGTL((\"agentx\", \"Out of memory\\n\"));\n         return NULL;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42474963-vul",
+      "digest": "sha256:8dd7eefda3be9e71605ea6af02a058afca9ee5f3abf493f9e1f317edf9cb7bfd"
+    },
+    "patched": {
+      "ref": "n132/arvo:42474963-fix",
+      "digest": "sha256:7ecab6d291fc182b231e98db733c3fb53062457ea0f050b996f02638f693fa01"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/net-snmp/agent/mibgroup/agentx/protocol.c:1248",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/net-snmp/agent/mibgroup/agentx/protocol.c:1248"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

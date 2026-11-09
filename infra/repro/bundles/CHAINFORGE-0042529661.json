@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042529661",
+  "chain": "CWE-416->CWE-125",
+  "project": "php-src",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42529661",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "1ca574f84a1153796b340a8d2107fe2ece825276",
+      "fix_commits": [
+        "1ca574f84a1153796b340a8d2107fe2ece825276"
+      ],
+      "repo": "https://github.com/php/php-src"
+    },
+    "patch": "diff --git a/Zend/zend_list.c b/Zend/zend_list.c\nindex 51ef3e1d92eb..bf599a2efca9 100644\n--- a/Zend/zend_list.c\n+++ b/Zend/zend_list.c\n@@ -276,6 +276,7 @@ ZEND_API int zend_register_list_destructors_ex(rsrc_dtor_func_t ld, rsrc_dtor_fu\n \tZVAL_PTR(&zv, lde);\n \n \tif (zend_hash_next_index_insert(&list_destructors, &zv) == NULL) {\n+\t\tfree(lde);\n \t\treturn FAILURE;\n \t}\n \treturn list_destructors.nNextFreeElement-1;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42529661-vul",
+      "digest": "sha256:20ba278500adbd6963b9b4ea79423f43dffe2c253572176b928f0423ba7c0e23"
+    },
+    "patched": {
+      "ref": "n132/arvo:42529661-fix",
+      "digest": "sha256:0d60449c8d07f6c5262b77f3b16c92711b6f2ffdf173bd3b6b6e55c65ad353d7"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/php-src/ext/opcache/jit/zend_jit_vm_helpers.c:650",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/php-src/ext/opcache/jit/zend_jit_vm_helpers.c:650"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

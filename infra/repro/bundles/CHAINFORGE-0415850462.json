@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0415850462",
+  "chain": "CWE-1285->CWE-125",
+  "project": "haproxy",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "415850462",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "10e6d0bd5702586a11daf8bd320713e0b501e37d",
+      "fix_commits": [
+        "10e6d0bd5702586a11daf8bd320713e0b501e37d"
+      ],
+      "repo": "https://github.com/haproxy/haproxy"
+    },
+    "patch": "diff --git a/src/tools.c b/src/tools.c\nindex 73335d21e878..313396823ce7 100644\n--- a/src/tools.c\n+++ b/src/tools.c\n@@ -6439,7 +6439,7 @@ uint32_t parse_line(char *in, char *out, size_t *outlen, char **args, int *nbarg\n \t\t\t\t\t\t\terr |= PARSE_ERR_TOOMANY;\n \t\t\t\t\t}\n \t\t\t\t\tif (prev_in_arg && !in_arg) {\n-\t\t\t\t\t\tif (!empty_arg_ptr && args[arg] == out + arg_start)\n+\t\t\t\t\t\tif (!empty_arg_ptr && arg < argsmax && args[arg] == out + arg_start)\n \t\t\t\t\t\t\tempty_arg_ptr = begin_new_arg;\n \t\t\t\t\t\tEMIT_CHAR(0);\n \t\t\t\t\t\targ++;\n@@ -6481,7 +6481,7 @@ uint32_t parse_line(char *in, char *out, size_t *outlen, char **args, int *nbarg\n \t\t}\n \n \t\tif (prev_in_arg && !in_arg) {\n-\t\t\tif (!empty_arg_ptr && args[arg] == out + arg_start)\n+\t\t\tif (!empty_arg_ptr && arg < argsmax && args[arg] == out + arg_start)\n \t\t\t\tempty_arg_ptr = begin_new_arg;\n \t\t\tEMIT_CHAR(0);\n \t\t\targ++;\n@@ -6490,7 +6490,7 @@ uint32_t parse_line(char *in, char *out, size_t *outlen, char **args, int *nbarg\n \n \t/* end of output string */\n \tif (in_arg) {\n-\t\tif (!empty_arg_ptr && args[arg] == out + arg_start)\n+\t\tif (!empty_arg_ptr && arg < argsmax && args[arg] == out + arg_start)\n \t\t\tempty_arg_ptr = begin_new_arg;\n \t\tEMIT_CHAR(0);\n \t\targ++;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:415850462-vul",
+      "digest": "sha256:ba9086f9e18449251959ea55dfa4e5ba83d4de27834dd13245a0012c36266455"
+    },
+    "patched": {
+      "ref": "n132/arvo:415850462-fix",
+      "digest": "sha256:f84c7ae000f8ba1c8bb93a151434c90ba9ca56dc2d0a87757601abe05d52ed24"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/haproxy/src/tools.c:6493",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/haproxy/src/tools.c:6493"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

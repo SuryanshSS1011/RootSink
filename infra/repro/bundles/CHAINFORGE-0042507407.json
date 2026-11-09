@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042507407",
+  "chain": "CWE-20->CWE-787",
+  "project": "ghostpdl",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42507407",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "0c036b19d498afdbe07895ff605298372b3432e2",
+      "fix_commits": [
+        "0c036b19d498afdbe07895ff605298372b3432e2"
+      ],
+      "repo": "https://cgit.ghostscript.com/ghostpdl.git"
+    },
+    "patch": "From 0c036b19d498afdbe07895ff605298372b3432e2 Mon Sep 17 00:00:00 2001\nFrom: Michael Vrhel <michael.vrhel@artifex.com>\nDate: Sat, 15 Jan 2022 22:39:50 -0800\nSubject: [PATCH] Revert part of b98c81c\n\nIn http://git.ghostscript.com/?p=ghostpdl.git;a=commit;h=b98c81c443fc9ea7c6351eff306da74765d2581e\n\nI made an aggressive abort of the pdf14 device when the page rendering\nhad failed. This is not the correct thing to do as the page rendering could\nhave failed for a number of non-transparency issues.\n\nOvernight tests had such an issue, which caused a seg fault.  see\nhttps://bugs.ghostscript.com/show_bug.cgi?id=704820\n\nThe pdf14 aborts need to occur further up stream.  I will do some additional\ntesting to see that various group push and pop failures are handled properly\nand add the needed device abort.\n---\n pdf/pdf_page.c | 4 +---\n 1 file changed, 1 insertion(+), 3 deletions(-)\n\ndiff --git a/pdf/pdf_page.c b/pdf/pdf_page.c\nindex 681c4aa..aed1eee 100644\n--- a/pdf/pdf_page.c\n+++ b/pdf/pdf_page.c\n@@ -834,12 +834,10 @@ int pdfi_page_render(pdf_context *ctx, uint64_t page_num, bool init_graphics)\n \n     if (ctx->page.has_transparency && page_group_known) {\n         code1 = pdfi_trans_end_group(ctx);\n-        if (code >= 0)\n-            code = code1;\n     }\n \n     if (need_pdf14) {\n-        if (code < 0) {\n+        if (code1 < 0) {\n             (void)gs_abort_pdf14trans_device(ctx->pgs);\n             goto exit1;\n         }\n-- \n2.55.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42507407-vul",
+      "digest": "sha256:0b12b389c38dded9fccaea5989a28c2fc78ec4b6efb10c0653f3b22f20f26166"
+    },
+    "patched": {
+      "ref": "n132/arvo:42507407-fix",
+      "digest": "sha256:e78eae969dd21727548f442fde6f571f489385cc10b333c9a166668af3cd2463"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/ghostpdl/./base/gdevm24.c:281",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/ghostpdl/./base/gdevm24.c:281"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

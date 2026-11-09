@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042494652",
+  "chain": "CWE-1284->CWE-125",
+  "project": "opensc",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42494652",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "5d4daf6c92e4668f5458f380f3cacea3e879d91a",
+      "fix_commits": [
+        "5d4daf6c92e4668f5458f380f3cacea3e879d91a"
+      ],
+      "repo": "https://github.com/OpenSC/OpenSC"
+    },
+    "patch": "diff --git a/src/libopensc/pkcs15-oberthur.c b/src/libopensc/pkcs15-oberthur.c\nindex 4ba201f8ba..0ddfc3f617 100644\n--- a/src/libopensc/pkcs15-oberthur.c\n+++ b/src/libopensc/pkcs15-oberthur.c\n@@ -609,7 +609,10 @@ sc_pkcs15emu_oberthur_add_pubkey(struct sc_pkcs15_card *p15card,\n \t\tLOG_TEST_RET(ctx, SC_ERROR_UNKNOWN_DATA_RECEIVED, \"Failed to add public key: no 'Label'\");\n \t}\n \tlen = *(info_blob + offs + 1) + *(info_blob + offs) * 0x100;\n-\tif (len)   {\n+\tif (offs + 2 + len > info_len) {\n+\t\tfree(info_blob);\n+\t\tLOG_TEST_RET(ctx, SC_ERROR_INVALID_DATA, \"Failed to add public key: invalid 'Label' length\");\n+\t} else if (len) {\n \t\tif (len > sizeof(key_obj.label) - 1)\n \t\t\tlen = sizeof(key_obj.label) - 1;\n \t\tmemcpy(key_obj.label, info_blob + offs + 2, len);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42494652-vul",
+      "digest": "sha256:f20734d947739aa89bfa9d8ac4eb53ce851902d43e38f92af72be78cfc2718ba"
+    },
+    "patched": {
+      "ref": "n132/arvo:42494652-fix",
+      "digest": "sha256:d22b37d7d1f1c26e5926fb1496dd253f5df98cbdc2ab9f7136c428a17d473ac9"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/opensc/src/libopensc/pkcs15-oberthur.c:600",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/opensc/src/libopensc/pkcs15-oberthur.c:600"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

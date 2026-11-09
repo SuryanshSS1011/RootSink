@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-968749976",
+  "chain": "CWE-456->CWE-457",
+  "project": "libzmq",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42485761",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/zeromq/libzmq/commit/c733067d6d52acc8031792316c0ee58990cdd0e8",
+      "fix_commits": [
+        "c733067d6d52acc8031792316c0ee58990cdd0e8"
+      ],
+      "repo": "https://github.com/zeromq/libzmq"
+    },
+    "patch": "diff --git a/src/stream_engine_base.cpp b/src/stream_engine_base.cpp\nindex 275be24d94..9b9563a9bc 100644\n--- a/src/stream_engine_base.cpp\n+++ b/src/stream_engine_base.cpp\n@@ -344,8 +344,14 @@ void zmq::stream_engine_base_t::out_event ()\n         _outsize = _encoder->encode (&_outpos, 0);\n \n         while (_outsize < static_cast<size_t> (_options.out_batch_size)) {\n-            if ((this->*_next_msg) (&_tx_msg) == -1)\n-                break;\n+            if ((this->*_next_msg) (&_tx_msg) == -1) {\n+                //  ws_engine can cause an engine error and delete it, so\n+                //  bail out immediately to avoid use-after-free\n+                if (errno == ECONNRESET)\n+                    return;\n+                else\n+                    break;\n+            }\n             _encoder->load_msg (&_tx_msg);\n             unsigned char *bufptr = _outpos + _outsize;\n             const size_t n =\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42485761-vul",
+      "digest": "sha256:fb60cb8cc811af2aac5a59a7672317c3668b523a3bc5553ff5a22a8cd8afea33"
+    },
+    "patched": {
+      "ref": "n132/arvo:42485761-fix",
+      "digest": "sha256:c0a5b2e81adf86e794e7276662662a063a5238fdadd51d9ac57466a058f12e88"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/libzmq/src/stream_engine_base.cpp:360",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/libzmq/src/stream_engine_base.cpp:360"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

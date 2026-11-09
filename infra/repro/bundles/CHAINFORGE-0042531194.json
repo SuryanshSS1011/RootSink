@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042531194",
+  "chain": "CWE-416->CWE-125",
+  "project": "binutils-gdb",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42531194",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "cf86e13d8bfc2924746b8e45299aed103d090985",
+      "fix_commits": [
+        "cf86e13d8bfc2924746b8e45299aed103d090985"
+      ],
+      "repo": "git://sourceware.org/git/binutils-gdb.git"
+    },
+    "patch": "diff --git a/bfd/format.c b/bfd/format.c\nindex 31aeb52861a..0790a3a2ee5 100644\n--- a/bfd/format.c\n+++ b/bfd/format.c\n@@ -163,16 +163,15 @@ io_reinit (bfd *abfd, struct bfd_preserve *preserve)\n   if (abfd->iovec != preserve->iovec)\n     {\n       /* Handle file backed to in-memory transition.  bfd_cache_close\n-\t won't do anything unless abfd->iovec is the cache_iovec.  */\n+\t won't do anything unless abfd->iovec is the cache_iovec.\n+\t Don't be tempted to call iovec->bclose here.  We don't want\n+\t to call memory_bclose, which would free the bim.  The bim\n+\t must be kept if bfd_check_format_matches is going to decide\n+\t later that the PE format needing it is in fact the correct\n+\t target match.  */\n       bfd_cache_close (abfd);\n       abfd->iovec = preserve->iovec;\n-\n-      if (abfd->iostream != preserve->iostream)\n-\t{\n-\t  if ((abfd->flags & BFD_IN_MEMORY) != 0)\n-\t    free (abfd->iostream);\n-\t  abfd->iostream = preserve->iostream;\n-\t}\n+      abfd->iostream = preserve->iostream;\n \n       /* Handle in-memory to file backed transition.  */\n       if ((abfd->flags & BFD_CLOSED_BY_CACHE) != 0\ndiff --git a/bfd/opncls.c b/bfd/opncls.c\nindex e7b39593608..32c95d6ba52 100644\n--- a/bfd/opncls.c\n+++ b/bfd/opncls.c\n@@ -176,8 +176,6 @@ _bfd_delete_bfd (bfd *abfd)\n   else\n     free ((char *) bfd_get_filename (abfd));\n \n-  if ((abfd->flags & BFD_IN_MEMORY) != 0)\n-    free (abfd->iostream);\n   free (abfd->arelt_data);\n   free (abfd);\n }\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42531194-vul",
+      "digest": "sha256:00b7e382733eede417dea337b4122ff750f36354bdaebc4356a1275b14ae8764"
+    },
+    "patched": {
+      "ref": "n132/arvo:42531194-fix",
+      "digest": "sha256:2018e96929a0541577bc7113bae3b8add26096c80b96f615ca88892ed3e52a4c"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/binutils-gdb/bfd/bfdio.c:792",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/binutils-gdb/bfd/bfdio.c:792"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

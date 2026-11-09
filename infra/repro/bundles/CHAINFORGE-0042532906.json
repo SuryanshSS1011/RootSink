@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042532906",
+  "chain": "CWE-1285->CWE-125",
+  "project": "libdwarf",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42532906",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "812f5db1c0fd4369e4c3b6bb8b132c70b6940320",
+      "fix_commits": [
+        "812f5db1c0fd4369e4c3b6bb8b132c70b6940320"
+      ],
+      "repo": "https://github.com/davea42/libdwarf-code"
+    },
+    "patch": "diff --git a/src/lib/libdwarf/dwarf_form.c b/src/lib/libdwarf/dwarf_form.c\nindex dc4f77f6b..d8ae1e1c3 100644\n--- a/src/lib/libdwarf/dwarf_form.c\n+++ b/src/lib/libdwarf/dwarf_form.c\n@@ -783,6 +783,13 @@ _dwarf_internal_global_formref_b(Dwarf_Attribute attr,\n     switch (attr->ar_attribute_form) {\n \n     case DW_FORM_ref1:\n+        if (attr->ar_debug_ptr >= section_end) {\n+            _dwarf_error_string(dbg, error, \n+                DW_DLE_ATTR_FORM_OFFSET_BAD,\n+                \"DW_DLE_ATTR_FORM_OFFSET_BAD: \"\n+                \"DW_FORM_ref1 outside of the section.\");\n+            return DW_DLV_ERROR;\n+        }\n         offset = *(Dwarf_Small *) attr->ar_debug_ptr;\n         goto fixoffset;\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42532906-vul",
+      "digest": "sha256:7c7d94f2cfdda1edbdf32a58c752bb9b8f0b0582083850a67f68a58600550db4"
+    },
+    "patched": {
+      "ref": "n132/arvo:42532906-fix",
+      "digest": "sha256:ef85ebd9f7acfe310fa704fdf01d9ff03ff1f15ba3c6fc94cd7860505b760a90"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/libdwarf/src/lib/libdwarf/dwarf_form.c:706",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/libdwarf/src/lib/libdwarf/dwarf_form.c:706"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

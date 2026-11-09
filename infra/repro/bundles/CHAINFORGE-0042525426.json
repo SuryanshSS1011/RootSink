@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042525426",
+  "chain": "CWE-456->CWE-457",
+  "project": "graphicsmagick",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42525426",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "d45cc9051a4f852baf6745b230bd2e2564b81e96",
+      "fix_commits": [
+        "d45cc9051a4f852baf6745b230bd2e2564b81e96"
+      ],
+      "repo": "https://foss.heptapod.net/graphicsmagick/graphicsmagick"
+    },
+    "patch": "diff --git a/ChangeLog b/ChangeLog\nindex ee4446b4fa94d411d4fd58814d22d5f537fb289d_Q2hhbmdlTG9n..d45cc9051a4f852baf6745b230bd2e2564b81e96_Q2hhbmdlTG9n 100644\n--- a/ChangeLog\n+++ b/ChangeLog\n@@ -1,3 +1,7 @@\n+2023-06-21  Fojtik Jaroslav  <JaFojtik@yandex.com>\n+\n+\t* coders/topol.c: Fix tile positioning.\n+\n 2023-06-20  Bob Friesenhahn  <bfriesen@simple.dallas.tx.us>\n \n \t* coders/webp.c (ReadWEBPImage): SourceForge patch #77 \"Don't\ndiff --git a/coders/topol.c b/coders/topol.c\nindex ee4446b4fa94d411d4fd58814d22d5f537fb289d_Y29kZXJzL3RvcG9sLmM=..d45cc9051a4f852baf6745b230bd2e2564b81e96_Y29kZXJzL3RvcG9sLmM= 100644\n--- a/coders/topol.c\n+++ b/coders/topol.c\n@@ -550,9 +550,8 @@\n   /* If ping is true, then only set image size and colors without reading any image data. */\n   if (image_info->ping) goto DONE_READING;\n \n-  if(j>=512)\n-      if(((magick_uint64_t)(depth*Header.Cols+7)/8) * (magick_uint64_t)Header.Rows > (magick_uint64_t)GetBlobSize(image)-512)\n-        goto TOPOL_KO;    /* Check for forged image that overflows file size. */\n+  if(((magick_uint64_t)(depth*Header.Cols+7)/8) * (magick_uint64_t)Header.Rows > (magick_uint64_t)GetBlobSize(image)-512)\n+      goto TOPOL_KO;    /* Check for forged image that overflows file size. */\n \n   /* ----- Handle the reindexing mez file ----- */\n   j = image->colors;\n@@ -730,8 +729,8 @@\n          ThrowTOPOLReaderException(CorruptImageError,InsufficientImageDataInFile, image);\n        }\n \n-       for(TilY=0;TilY<Header.Rows;TilY+=Header.TileHeight)\n-         for(TilX=0;TilX<TilesAcross;TilX++)\n+       for(TilY=0; TilY<Header.Rows; TilY+=Header.TileHeight)\t/* TilY counts per pixel.*/\n+         for(TilX=0; TilX<TilesAcross; TilX++)\t\t\t/* TilX counts per tile.*/\n            {\n            ldblk = Offsets[(TilY/Header.TileHeight)*TilesAcross+TilX];\n            if(SeekBlob(image, ldblk, SEEK_SET) != ldblk)\n@@ -760,7 +759,8 @@\n              }\n              if(SkipBlk>0)\n                SeekBlob(image, SkipBlk, SEEK_CUR);\n-             if(InsertRow(depth, BImgBuff, i+TilY, image, TilX,\n+             /*printf(\"Inserting x=%d; y=%d\\n\", TilX*Header.TileWidth, i+TilY);*/\n+             if(InsertRow(depth, BImgBuff, i+TilY, image, TilX*Header.TileWidth,\n                     (image->columns<Header.TileWidth)?image->columns:Header.TileWidth, &import_options))\n              {\n                MagickFreeResourceLimitedMemory(Offsets);\n@@ -775,7 +775,6 @@\n       }\n     }\n \n-\n   /* Finish: */\n DONE_READING:\n   MagickFreeResourceLimitedMemory(BImgBuff);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42525426-vul",
+      "digest": "sha256:0b7b75110b177a104dee7487e6a9cfce286fb605b816329d92f9c903b2543af2"
+    },
+    "patched": {
+      "ref": "n132/arvo:42525426-fix",
+      "digest": "sha256:6b832493bec2e1fca0fe10c7af96d7e20baf8e3d194abb4e598f311fc0fa4ba2"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/graphicsmagick/magick/export.c:660",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/graphicsmagick/magick/export.c:660"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

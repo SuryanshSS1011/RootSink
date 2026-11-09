@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042534541",
+  "chain": "CWE-416->CWE-125",
+  "project": "imagemagick",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42534541",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "eb224a5545ba0e11a04dcb45b7a3abceeba3ec45",
+      "fix_commits": [
+        "eb224a5545ba0e11a04dcb45b7a3abceeba3ec45"
+      ],
+      "repo": "https://github.com/imagemagick/imagemagick"
+    },
+    "patch": "From eb224a5545ba0e11a04dcb45b7a3abceeba3ec45 Mon Sep 17 00:00:00 2001\nFrom: Cristy <urban-warrior@imagemagick.org>\nDate: Fri, 19 Apr 2024 21:18:21 -0400\nSubject: [PATCH] initialize decompression before importing profiles\n\n---\n coders/jpeg.c | 13 +++++++------\n 1 file changed, 7 insertions(+), 6 deletions(-)\n\ndiff --git a/coders/jpeg.c b/coders/jpeg.c\nindex 80b0726..d60b211 100644\n--- a/coders/jpeg.c\n+++ b/coders/jpeg.c\n@@ -1378,12 +1378,6 @@ static Image *ReadOneJPEGImage(const ImageInfo *image_info,\n   if (jpeg_info->arith_code == TRUE)\n     (void) SetImageProperty(image,\"jpeg:arithmetic-coding\",\"true\",exception);\n #endif\n-  if (JPEGSetImageProfiles(client_info) == MagickFalse)\n-    {\n-      JPEGDestroyDecompress(jpeg_info);\n-      client_info=(JPEGClientInfo *) RelinquishMagickMemory(client_info);\n-      return(DestroyImageList(image));\n-    }\n   *offset=TellBlob(image);\n   if (image_info->ping != MagickFalse)\n     {\n@@ -1404,8 +1398,15 @@ static Image *ReadOneJPEGImage(const ImageInfo *image_info,\n       (jpeg_info->output_components != 3) && (jpeg_info->output_components != 4))\n     {\n       JPEGDestroyDecompress(jpeg_info);\n+      client_info=(JPEGClientInfo *) RelinquishMagickMemory(client_info);\n       ThrowJPEGReaderException(CorruptImageError,\"ImageTypeNotSupported\");\n     }\n+  if (JPEGSetImageProfiles(client_info) == MagickFalse)\n+    {\n+      JPEGDestroyDecompress(jpeg_info);\n+      client_info=(JPEGClientInfo *) RelinquishMagickMemory(client_info);\n+      return(DestroyImageList(image));\n+    }\n   memory_info=AcquireVirtualMemory((size_t) image->columns,\n     (size_t) jpeg_info->output_components*sizeof(*jpeg_pixels));\n   if (memory_info == (MemoryInfo *) NULL)\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42534541-vul",
+      "digest": "sha256:cb253cfa1d21543ab06adf01f78d2a7521f2a66e7b6c59b33d238fe76efdea50"
+    },
+    "patched": {
+      "ref": "n132/arvo:42534541-fix",
+      "digest": "sha256:70431b458323341c7a2c1d7557f355472fa999da09b3c96d24ba89e8fae563ec"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/imagemagick/MagickCore/locale.c:1548",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/imagemagick/MagickCore/locale.c:1548"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

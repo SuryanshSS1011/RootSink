@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-961677985",
+  "chain": "CWE-456->CWE-457",
+  "project": "faad2",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42523804",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/knik0/faad2/commit/d7aa650f3c04aa344ab236d784394c8f6d8d59ee",
+      "fix_commits": [
+        "d7aa650f3c04aa344ab236d784394c8f6d8d59ee"
+      ],
+      "repo": "https://github.com/knik0/faad2"
+    },
+    "patch": "diff --git a/fuzz/build_fuzz.sh b/fuzz/build_fuzz.sh\nindex f51d6dcc..41a7bf53 100644\n--- a/fuzz/build_fuzz.sh\n+++ b/fuzz/build_fuzz.sh\n@@ -29,6 +29,9 @@\n # ASAN:\n export SANITIZER=address\n export SANITIZER_FLAGS=\"-fsanitize=$SANITIZER -fsanitize-address-use-after-scope\"\n+# MSAN:\n+#export SANITIZER=memory\n+#export SANITIZER_FLAGS=\"-fsanitize=$SANITIZER -fsanitize-memory-track-origins=2\"\n # UBSAN:\n #export SANITIZER=array-bounds,bool,builtin,enum,float-divide-by-zero,function,integer-divide-by-zero,null,object-size,return,returns-nonnull-attribute,shift,signed-integer-overflow,unsigned-integer-overflow,unreachable,vla-bound,vptr\n #export SANITIZER_FLAGS=\"-fsanitize=$SANITIZER -fno-sanitize-recover=$SANITIZER\"\n@@ -43,6 +46,7 @@ export CXXFLAGS=\"${BASE_FLAGS} -stdlib=libc++\"\n ./bootstrap\n ./configure\n cd libfaad\n+make clean -j `nproc`\n make -j `nproc`\n cd ../\n for fname in config decode; do\ndiff --git a/libfaad/specrec.c b/libfaad/specrec.c\nindex 41c35070..ae4887bc 100644\n--- a/libfaad/specrec.c\n+++ b/libfaad/specrec.c\n@@ -40,6 +40,7 @@\n \n #include <string.h>\n #include <stdlib.h>\n+#include <string.h>\n #include \"specrec.h\"\n #include \"filtbank.h\"\n #include \"syntax.h\"\n@@ -572,6 +573,12 @@ static uint8_t quant_to_spec(NeAACDecStruct *hDecoder,\n     k = 0;\n     gindex = 0;\n \n+    /* In this case quant_to_spec is no-op and spec_data remains undefined.\n+     * Without peeking into AAC specification, there is no strong evidence if\n+     * such streams are invalid -> just calm down MSAN. */\n+    if (ics->num_swb == 0)\n+        memset(spec_data, 0, frame_len * sizeof(real_t));\n+\n     for (g = 0; g < ics->num_window_groups; g++)\n     {\n         uint16_t j = 0;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42523804-vul",
+      "digest": "sha256:0b42ae6dc91e0cc52a3dc24b5ece4db4e9b97781ba5e6e098d63adcc52dd2b42"
+    },
+    "patched": {
+      "ref": "n132/arvo:42523804-fix",
+      "digest": "sha256:b008fa058ba2de76d3f28e55b4c1fb3b14f292f3dae5d8293a27c1064501779f"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/faad2/libfaad/lt_predict.c:154",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/faad2/libfaad/lt_predict.c:154"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

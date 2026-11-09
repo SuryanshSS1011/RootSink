@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042490276",
+  "chain": "CWE-20->CWE-125",
+  "project": "fluent-bit",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42490276",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "cfee54301badc5fd61422eb85ff4c1028ad6cbc7",
+      "fix_commits": [
+        "cfee54301badc5fd61422eb85ff4c1028ad6cbc7"
+      ],
+      "repo": "https://github.com/fluent/fluent-bit"
+    },
+    "patch": "diff --git a/src/flb_http_client.c b/src/flb_http_client.c\nindex 5d22b274990..b5398e2eaba 100644\n--- a/src/flb_http_client.c\n+++ b/src/flb_http_client.c\n@@ -289,7 +289,9 @@ static int process_chunked_data(struct flb_http_client *c)\n         flb_errno();\n         return FLB_HTTP_ERROR;\n     }\n-\n+    if (val < 0) {\n+        return FLB_HTTP_ERROR;\n+    }\n     /*\n      * 'val' contains the expected number of bytes, check current lengths\n      * and do buffer adjustments.\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42490276-vul",
+      "digest": "sha256:ff493f2c716d95555d07be06d0322f9e2c84d5b8567ea18fc601892e2dec304c"
+    },
+    "patched": {
+      "ref": "n132/arvo:42490276-fix",
+      "digest": "sha256:b38a3dc9734ac7a4270cdf838792d1323b19d4d7c38a20c69b003293b5d0d3de"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/fluent-bit/src/flb_http_client.c:293",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/fluent-bit/src/flb_http_client.c:293"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

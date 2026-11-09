@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0404921047",
+  "chain": "CWE-416->CWE-787",
+  "project": "wamr",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "404921047",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "9aaf3599ec69469f6ab3b4373bfb0d8e6b3345b9",
+      "fix_commits": [
+        "9aaf3599ec69469f6ab3b4373bfb0d8e6b3345b9"
+      ],
+      "repo": "https://github.com/bytecodealliance/wasm-micro-runtime"
+    },
+    "patch": "diff --git a/core/iwasm/interpreter/wasm_loader.c b/core/iwasm/interpreter/wasm_loader.c\nindex 8229c6f71d..10a20e313b 100644\n--- a/core/iwasm/interpreter/wasm_loader.c\n+++ b/core/iwasm/interpreter/wasm_loader.c\n@@ -11234,6 +11234,13 @@ wasm_loader_prepare_bytecode(WASMModule *module, WASMFunction *func,\n     bool disable_emit, preserve_local = false, if_condition_available = true;\n     float32 f32_const;\n     float64 f64_const;\n+    /*\n+     * It means that the fast interpreter detected an exception while preparing,\n+     * typically near the block opcode, but it did not immediately trigger\n+     * the exception. The loader should be capable of identifying it near\n+     * the end opcode and then raising the exception.\n+     */\n+    bool pending_exception = false;\n \n     LOG_OP(\"\\nProcessing func | [%d] params | [%d] locals | [%d] return\\n\",\n            func->param_cell_num, func->local_cell_num, func->ret_cell_num);\n@@ -11584,6 +11591,16 @@ wasm_loader_prepare_bytecode(WASMModule *module, WASMFunction *func,\n                         cell_num = wasm_value_type_cell_num(\n                             wasm_type->types[wasm_type->param_count - i - 1]);\n                         loader_ctx->frame_offset -= cell_num;\n+\n+                        if (loader_ctx->frame_offset\n+                            < loader_ctx->frame_offset_bottom) {\n+                            LOG_DEBUG(\n+                                \"frame_offset underflow, roll back and \"\n+                                \"let following stack checker report it\\n\");\n+                            loader_ctx->frame_offset += cell_num;\n+                            pending_exception = true;\n+                            break;\n+                        }\n #endif\n                     }\n                 }\n@@ -12106,6 +12123,15 @@ wasm_loader_prepare_bytecode(WASMModule *module, WASMFunction *func,\n                     }\n                 }\n \n+#if WASM_ENABLE_FAST_INTERP != 0\n+                if (pending_exception) {\n+                    set_error_buf(\n+                        error_buf, error_buf_size,\n+                        \"There is a pending exception needs to be handled\");\n+                    goto fail;\n+                }\n+#endif\n+\n                 break;\n             }\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:404921047-vul",
+      "digest": "sha256:3c62e460f4b907a894d45ca6ddc026fe57e6067b1a6b4e4dfe3a4ebf01f45418"
+    },
+    "patched": {
+      "ref": "n132/arvo:404921047-fix",
+      "digest": "sha256:30c6d4ed4e637e427dc62c422126525c80b3154f7acd4cc1b24eef19b96a8fd8"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/wamr/core/iwasm/interpreter/wasm_loader.c:11615",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/wamr/core/iwasm/interpreter/wasm_loader.c:11615"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

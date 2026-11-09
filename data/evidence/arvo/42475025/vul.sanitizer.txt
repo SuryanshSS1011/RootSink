@@ -1,0 +1,77 @@
+======================= INFO =========================
+This binary is built for AFL-fuzz.
+To run the target function on individual input(s) execute this:
+  /out/libarchive_fuzzer < INPUT_FILE
+or
+  /out/libarchive_fuzzer INPUT_FILE1 [INPUT_FILE2 ... ]
+To fuzz with afl-fuzz execute this:
+  afl-fuzz [afl-flags] /out/libarchive_fuzzer [-N]
+afl-fuzz will run N iterations before re-spawning the process (default: 1000)
+======================================================
+Reading 255 bytes from /tmp/poc
+=================================================================
+==730585==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x1466127fd7d5 at pc 0x00000059ead9 bp 0x7fff2b8eaf10 sp 0x7fff2b8eaf08
+READ of size 1 at 0x1466127fd7d5 thread T0
+SCARINESS: 22 (1-byte-read-heap-buffer-overflow-far-from-bounds)
+    #0 0x59ead8 in copy_string /src/libarchive/libarchive/archive_read_support_format_rar5.c:2378:45
+    #1 0x59cfd6 in do_uncompress_block /src/libarchive/libarchive/archive_read_support_format_rar5.c:2526:30
+    #2 0x59aba9 in process_block /src/libarchive/libarchive/archive_read_support_format_rar5.c:2863:11
+    #3 0x59a512 in do_uncompress_file /src/libarchive/libarchive/archive_read_support_format_rar5.c:3033:19
+    #4 0x599e51 in uncompress_file /src/libarchive/libarchive/archive_read_support_format_rar5.c:3105:15
+    #5 0x59502d in rar5_read_data /src/libarchive/libarchive/archive_read_support_format_rar5.c:3314:11
+    #6 0x5391b1 in archive_read_data /src/libarchive/libarchive/archive_read.c:842:8
+    #7 0x532d8a in LLVMFuzzerTestOneInput /src/libarchive_fuzzer.cc:49:17
+    #8 0x534a5a in ExecuteFilesOnyByOne(int, char**) /src/libfuzzer/afl/afl_driver.cpp:301:5
+    #9 0x534fbe in main /src/libfuzzer/afl/afl_driver.cpp:339:12
+    #10 0x1467157e982f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+    #11 0x41e758 in _start (/out/libarchive_fuzzer+0x41e758)
+
+DEDUP_TOKEN: copy_string--do_uncompress_block--process_block
+0x1466127fd7d5 is located 43 bytes to the left of 4294967296-byte region [0x1466127fd800,0x1467127fd800)
+allocated by thread T0 here:
+    #0 0x4edff7 in calloc /src/llvm/projects/compiler-rt/lib/asan/asan_malloc_linux.cc:155
+    #1 0x59a964 in init_unpack /src/libarchive/libarchive/archive_read_support_format_rar5.c:1850:30
+    #2 0x59a4a1 in do_uncompress_file /src/libarchive/libarchive/archive_read_support_format_rar5.c:3020:13
+    #3 0x599e51 in uncompress_file /src/libarchive/libarchive/archive_read_support_format_rar5.c:3105:15
+    #4 0x59502d in rar5_read_data /src/libarchive/libarchive/archive_read_support_format_rar5.c:3314:11
+    #5 0x5391b1 in archive_read_data /src/libarchive/libarchive/archive_read.c:842:8
+    #6 0x532d8a in LLVMFuzzerTestOneInput /src/libarchive_fuzzer.cc:49:17
+    #7 0x534a5a in ExecuteFilesOnyByOne(int, char**) /src/libfuzzer/afl/afl_driver.cpp:301:5
+    #8 0x534fbe in main /src/libfuzzer/afl/afl_driver.cpp:339:12
+    #9 0x1467157e982f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+
+DEDUP_TOKEN: calloc--init_unpack--do_uncompress_file
+SUMMARY: AddressSanitizer: heap-buffer-overflow /src/libarchive/libarchive/archive_read_support_format_rar5.c:2378:45 in copy_string
+Shadow bytes around the buggy address:
+  0x028d424f7aa0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x028d424f7ab0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x028d424f7ac0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x028d424f7ad0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x028d424f7ae0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+=>0x028d424f7af0: fa fa fa fa fa fa fa fa fa fa[fa]fa fa fa fa fa
+  0x028d424f7b00: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x028d424f7b10: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x028d424f7b20: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x028d424f7b30: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x028d424f7b40: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+  Shadow gap:              cc
+==730585==ABORTING

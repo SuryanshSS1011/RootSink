@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042521023",
+  "chain": "CWE-1284->CWE-787",
+  "project": "mosquitto",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42521023",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "23983afe82e61d7aa1b4cdfd192a88b5317e20bb",
+      "fix_commits": [
+        "23983afe82e61d7aa1b4cdfd192a88b5317e20bb"
+      ],
+      "repo": "https://github.com/eclipse/mosquitto"
+    },
+    "patch": "diff --git a/lib/util_mosq.c b/lib/util_mosq.c\nindex 8402c515ca..18ba330df3 100644\n--- a/lib/util_mosq.c\n+++ b/lib/util_mosq.c\n@@ -174,15 +174,17 @@ int mosquitto__hex2bin(const char *hex, unsigned char *bin, int bin_max_len)\n \tBIGNUM *bn = NULL;\n \tint len;\n \tint leading_zero = 0;\n-\tint start = 0;\n \tsize_t i = 0;\n \n \t/* Count the number of leading zero */\n \tfor(i=0; i<strlen(hex); i=i+2) {\n \t\tif(strncmp(hex + i, \"00\", 2) == 0) {\n-\t\t\tleading_zero++;\n+\t\t\tif(leading_zero >= bin_max_len){\n+\t\t\t\treturn 0;\n+\t\t\t}\n \t\t\t/* output leading zero to bin */\n-\t\t\tbin[start++] = 0;\n+\t\t\tbin[leading_zero] = 0;\n+\t\t\tleading_zero++;\n \t\t}else{\n \t\t\tbreak;\n \t\t}\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42521023-vul",
+      "digest": "sha256:4d85189e6b0cd365853d72fbd12c17c01137d65b443ed798ca819a6ad75fc528"
+    },
+    "patched": {
+      "ref": "n132/arvo:42521023-fix",
+      "digest": "sha256:3c6b9c6d2b8dcdcaca94bedab16daf9433bf9b9c31d27585c49ba13d9057adbc"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/mosquitto/src/../lib/util_mosq.c:185",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/mosquitto/src/../lib/util_mosq.c:185"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

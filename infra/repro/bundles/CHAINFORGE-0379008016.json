@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0379008016",
+  "chain": "CWE-20->CWE-125",
+  "project": "jsoncons",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "379008016",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "353024540ba60ef5d1e11050b8ae5809dd34a40e",
+      "fix_commits": [
+        "353024540ba60ef5d1e11050b8ae5809dd34a40e"
+      ],
+      "repo": "https://github.com/danielaparker/jsoncons"
+    },
+    "patch": "diff --git a/include/jsoncons/json_parser.hpp b/include/jsoncons/json_parser.hpp\nindex 7b70de4bac..c7dfc24d71 100644\n--- a/include/jsoncons/json_parser.hpp\n+++ b/include/jsoncons/json_parser.hpp\n@@ -297,6 +297,7 @@ class basic_json_parser : public ser_context, public virtual basic_parser_input<\n \n     void skip_space(std::error_code& ec)\n     {\n+        bool got_cr = false;\n         const char_type* local_input_end = input_end_;\n         while (true) \n         {\n@@ -316,17 +317,25 @@ class basic_json_parser : public ser_context, public virtual basic_parser_input<\n                     ++position_;\n                     break;\n                 case '\\r': \n-                    push_state(state_);\n                     ++input_ptr_;\n+                    ++line_;\n                     ++position_;\n-                    state_ = json_parse_state::cr;\n-                    return; \n+                    mark_position_ = position_;\n+                    got_cr = true;\n+                    break; \n                 case '\\n': \n                     ++input_ptr_;\n-                    ++line_;\n+                    if (got_cr)\n+                    {\n+                        got_cr = false;\n+                    }\n+                    else\n+                    {\n+                        ++line_;\n+                    }\n                     ++position_;\n                     mark_position_ = position_;\n-                    return;   \n+                    break;   \n                 default:\n                     return;\n             }\n@@ -335,6 +344,7 @@ class basic_json_parser : public ser_context, public virtual basic_parser_input<\n \n     void skip_whitespace(std::error_code& ec)\n     {\n+        bool got_cr = false;\n         const char_type* local_input_end = input_end_;\n \n         while (true) \ndiff --git a/include/jsoncons/json_reader.hpp b/include/jsoncons/json_reader.hpp\nindex 868e5eab7f..1e947880e4 100644\n--- a/include/jsoncons/json_reader.hpp\n+++ b/include/jsoncons/json_reader.hpp\n@@ -321,7 +321,7 @@ namespace jsoncons {\n             \n             while (!source_.eof())\n             {\n-                parser_.skip_whitespace(ec);\n+                parser_.skip_space(ec);\n                 if (parser_.source_exhausted())\n                 {\n                     auto s1 = source_.read_buffer(ec);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:379008016-vul",
+      "digest": "sha256:509d800367a30d79df05f9aa019f1e0895f6b4149aa2925b1fe34b190dea4d22"
+    },
+    "patched": {
+      "ref": "n132/arvo:379008016-fix",
+      "digest": "sha256:7369a976919b6ed1650d0543f269b61355c28a818dd78199457289bfce96155a"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/jsoncons/./include/jsoncons/json_parser.hpp:297",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/jsoncons/./include/jsoncons/json_parser.hpp:297"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

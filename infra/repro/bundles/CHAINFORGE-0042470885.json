@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042470885",
+  "chain": "CWE-456->CWE-457",
+  "project": "openvswitch",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42470885",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "2c022949efff7f135686bd9007fffaaa6147f935",
+      "fix_commits": [
+        "2c022949efff7f135686bd9007fffaaa6147f935"
+      ],
+      "repo": "https://github.com/openvswitch/ovs"
+    },
+    "patch": "From 2c022949efff7f135686bd9007fffaaa6147f935 Mon Sep 17 00:00:00 2001\nFrom: Yifeng Sun <pkusunyifeng@gmail.com>\nDate: Fri, 5 Oct 2018 14:50:39 -0700\nSubject: [PATCH] odp-util: Fix a use-after-free bug.\n\nAfter ofpbuf_put, actions may have been reallocated and\nkey will point to invalid memory address.\n\nReported-at: https://bugs.chromium.org/p/oss-fuzz/issues/detail?id=10796\nReported-at: https://bugs.chromium.org/p/oss-fuzz/issues/detail?id=10802\nSigned-off-by: Yifeng Sun <pkusunyifeng@gmail.com>\nSigned-off-by: Ben Pfaff <blp@ovn.org>\n---\n lib/odp-util.c | 9 +++++----\n 1 file changed, 5 insertions(+), 4 deletions(-)\n\ndiff --git a/lib/odp-util.c b/lib/odp-util.c\nindex 890c71b..7705bb3 100644\n--- a/lib/odp-util.c\n+++ b/lib/odp-util.c\n@@ -2242,13 +2242,14 @@ parse_odp_action(const char *s, const struct simap *port_names,\n                 key->nla_len += size;\n                 ofpbuf_put(actions, mask + 1, size);\n \n-                /* Add new padding as needed */\n-                ofpbuf_put_zeros(actions, NLA_ALIGN(key->nla_len) -\n-                                          key->nla_len);\n-\n                 /* 'actions' may have been reallocated by ofpbuf_put(). */\n                 nested = ofpbuf_at_assert(actions, start_ofs, sizeof *nested);\n                 nested->nla_type = OVS_ACTION_ATTR_SET_MASKED;\n+\n+                key = nested + 1;\n+                /* Add new padding as needed */\n+                ofpbuf_put_zeros(actions, NLA_ALIGN(key->nla_len) -\n+                                          key->nla_len);\n             }\n         }\n         ofpbuf_uninit(&maskbuf);\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42470885-vul",
+      "digest": "sha256:f3797b987a497e92c5826098434c1592d3c0cd293e05fed98fbe2c3b13ce3cb5"
+    },
+    "patched": {
+      "ref": "n132/arvo:42470885-fix",
+      "digest": "sha256:a2ab3e5a2f0efbdfbfd840a003e19ff0e7326aa4e977f291dbf07eac3f33ac70"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/openvswitch/lib/ofpbuf.c:290",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/openvswitch/lib/ofpbuf.c:290"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

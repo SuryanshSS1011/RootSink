@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042495624",
+  "chain": "CWE-1284->CWE-125",
+  "project": "wasm3",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42495624",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "60fdd9ecd84b841351059dbfb962a32f616e376e",
+      "fix_commits": [
+        "60fdd9ecd84b841351059dbfb962a32f616e376e"
+      ],
+      "repo": "https://github.com/wasm3/wasm3"
+    },
+    "patch": "diff --git a/source/m3_compile.c b/source/m3_compile.c\nindex a895c496..e525da2f 100644\n--- a/source/m3_compile.c\n+++ b/source/m3_compile.c\n@@ -2194,6 +2194,21 @@ const M3OpInfo c_operationsFC [] =\n # endif\n };\n \n+const M3OpInfo* GetOpInfo(m3opcode_t opcode) {\n+    switch (opcode >> 8) {\n+    case 0x00:\n+    \tif (opcode < M3_COUNT_OF(c_operations)) {\n+    \t\treturn &c_operations[opcode];\n+    \t}\n+    case 0xFC:\n+    \topcode &= 0xFF;\n+    \tif (opcode < M3_COUNT_OF(c_operationsFC)) {\n+    \t\treturn &c_operationsFC[opcode];\n+    \t}\n+    }\n+    return NULL;\n+}\n+\n M3Result  Compile_BlockStatements  (IM3Compilation o)\n {\n     M3Result result = m3Err_none;\ndiff --git a/source/m3_compile.h b/source/m3_compile.h\nindex ece7ad6b..5bf8e099 100644\n--- a/source/m3_compile.h\n+++ b/source/m3_compile.h\n@@ -138,17 +138,7 @@ M3OpInfo;\n \n typedef const M3OpInfo *    IM3OpInfo;\n \n-extern const M3OpInfo c_operations [];\n-extern const M3OpInfo c_operationsFC [];\n-\n-static inline\n-const M3OpInfo* GetOpInfo(m3opcode_t opcode) {\n-    switch (opcode >> 8) {\n-    case 0x00: return &c_operations[opcode];\n-    case 0xFC: return &c_operationsFC[opcode & 0xFF];\n-    default:   return NULL;\n-    }\n-}\n+extern const M3OpInfo* GetOpInfo(m3opcode_t opcode);\n \n // TODO: This helper should be removed, when MultiValue is implemented\n static inline\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42495624-vul",
+      "digest": "sha256:be4213f9060f18082f16c84ddecb5d483abdd81ed8320999732f0a5b0a9570e8"
+    },
+    "patched": {
+      "ref": "n132/arvo:42495624-fix",
+      "digest": "sha256:3b3ff00971bb6f8b074aaf5749946b7105cb361edd0816e672b5ff2a14b99d74"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "global-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/wasm3/source/m3_compile.c:2206",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "global-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/wasm3/source/m3_compile.c:2206"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042475409",
+  "chain": "CWE-416->CWE-125",
+  "project": "mbedtls",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42475409",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "eb1bb3d2d0e69b01c7b1ada98a0a944eaccdcfed",
+      "fix_commits": [
+        "eb1bb3d2d0e69b01c7b1ada98a0a944eaccdcfed"
+      ],
+      "repo": "https://github.com/ARMmbed/mbedtls"
+    },
+    "patch": "From eb1bb3d2d0e69b01c7b1ada98a0a944eaccdcfed Mon Sep 17 00:00:00 2001\nFrom: k-stachowiak <krzysiek.stachowiak@gmail.com>\nDate: Mon, 4 Feb 2019 10:43:40 +0100\nSubject: [PATCH] Reword ssl_conf_max_frag_len documentation to clarify its\n necessity\n\n---\n include/mbedtls/ssl.h | 9 +++++++--\n 1 file changed, 7 insertions(+), 2 deletions(-)\n\ndiff --git a/include/mbedtls/ssl.h b/include/mbedtls/ssl.h\nindex 135be05..86ada47 100644\n--- a/include/mbedtls/ssl.h\n+++ b/include/mbedtls/ssl.h\n@@ -2755,13 +2755,18 @@ void mbedtls_ssl_conf_cert_req_ca_list( mbedtls_ssl_config *conf,\n #if defined(MBEDTLS_SSL_MAX_FRAGMENT_LENGTH)\n /**\n  * \\brief          Set the maximum fragment length to emit and/or negotiate\n- *                 (Default: the smaller of MBEDTLS_SSL_IN_CONTENT_LEN and\n+ *                 (Typical: the smaller of MBEDTLS_SSL_IN_CONTENT_LEN and\n  *                 MBEDTLS_SSL_OUT_CONTENT_LEN, usually 2^14 bytes)\n  *                 (Server: set maximum fragment length to emit,\n- *                 usually negotiated by the client during handshake\n+ *                 usually negotiated by the client during handshake)\n  *                 (Client: set maximum fragment length to emit *and*\n  *                 negotiate with the server during handshake)\n  *\n+ * \\note           By default the \\c mfl_code field ofthe \\c mbedtls_ssl_config\n+ *                 structure is equal `0 == MBEDTLS_SSL_MAX_FRAG_LEN_NONE`.\n+ *                 This means the max fragment length extension *will not* be\n+ *                 used unless set to other value via this function.\n+ *\n  * \\note           With TLS, this currently only affects ApplicationData (sent\n  *                 with \\c mbedtls_ssl_read()), not handshake messages.\n  *                 With DTLS, this affects both ApplicationData and handshake.\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42475409-vul",
+      "digest": "sha256:2852462017d2e50be0e66eef41b6cfe96021daed35d19ead7b8dc50d1e9ea7c4"
+    },
+    "patched": {
+      "ref": "n132/arvo:42475409-fix",
+      "digest": "sha256:a4ccb62f589eb8fffd8498942df94172bffdb2b9689fc80294408a11ac1e049b"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/mbedtls/library/x509_crt.c:3280",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/mbedtls/library/x509_crt.c:3280"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

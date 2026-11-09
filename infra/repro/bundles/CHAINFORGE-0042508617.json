@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042508617",
+  "chain": "CWE-1285->CWE-125",
+  "project": "icu",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42508617",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "4962050f47ecdef3539b7035b030ff712c1fc6f7",
+      "fix_commits": [
+        "4962050f47ecdef3539b7035b030ff712c1fc6f7"
+      ],
+      "repo": "https://github.com/unicode-org/icu"
+    },
+    "patch": "diff --git a/icu4c/source/common/ucasemap.cpp b/icu4c/source/common/ucasemap.cpp\nindex b6e7f2b744d5..f727560b5716 100644\n--- a/icu4c/source/common/ucasemap.cpp\n+++ b/icu4c/source/common/ucasemap.cpp\n@@ -437,6 +437,7 @@ constexpr uint8_t ACUTE_BYTE1 = u8\"\\u0301\"[1];\n  */\n int32_t maybeTitleDutchIJ(const uint8_t *src, UChar32 c, int32_t start, int32_t segmentLimit,\n                           ByteSink &sink, uint32_t options, icu::Edits *edits, UErrorCode &errorCode) {\n+    U_ASSERT(start < segmentLimit);\n \n     int32_t index = start;\n     bool withAcute = false;\n@@ -594,7 +595,7 @@ ucasemap_internalUTF8ToTitle(\n                 }\n \n                 /* Special case Dutch IJ titlecasing */\n-                if (titleStart+1 < index &&\n+                if (titleLimit < index &&\n                     caseLocale == UCASE_LOC_DUTCH) {\n                     if (c < 0) {\n                         c = ~c;\ndiff --git a/icu4c/source/common/ustrcase.cpp b/icu4c/source/common/ustrcase.cpp\nindex acd37a598ab1..43910ea52098 100644\n--- a/icu4c/source/common/ustrcase.cpp\n+++ b/icu4c/source/common/ustrcase.cpp\n@@ -416,6 +416,7 @@ namespace {\n int32_t maybeTitleDutchIJ(const UChar *src, UChar32 c, int32_t start, int32_t segmentLimit,\n                           UChar *dest, int32_t &destIndex, int32_t destCapacity, uint32_t options,\n                           icu::Edits *edits) {\n+    U_ASSERT(start < segmentLimit);\n \n     int32_t index = start;\n     bool withAcute = false;\ndiff --git a/icu4c/source/test/intltest/strcase.cpp b/icu4c/source/test/intltest/strcase.cpp\nindex 14df2a36bdb4..b5eff9f0af80 100644\n--- a/icu4c/source/test/intltest/strcase.cpp\n+++ b/icu4c/source/test/intltest/strcase.cpp\n@@ -741,6 +741,9 @@ void StringCaseTest::TestDutchTitle() {\n         {u\"\u00edjabc\\u0308\",        u\"\u00cdjabc\\u0308\",       u\"\u00cd\"},\n         {u\"\u00edj\u0301abc\\U0001D16E\",    u\"\u00cdJ\u0301abc\\U0001D16E\",   u\"\u00cdJ\"},\n         {u\"\u00edjabc\\u1ABE\",        u\"\u00cdjabc\\u1ABE\",       u\"\u00cd\"},\n+\n+        // Bug ICU-21919\n+        {u\"\u00cd\",                  u\"\u00cd\",                 u\"\"},\n     };\n \n     for (const auto& cas : dutchTitleTestCases) {\n@@ -763,7 +766,6 @@ void StringCaseTest::TestDutchTitle() {\n                 testOptions\n             );\n         }\n-        \n     }\n }\n #endif\ndiff --git a/icu4j/main/classes/core/src/com/ibm/icu/impl/CaseMapImpl.java b/icu4j/main/classes/core/src/com/ibm/icu/impl/CaseMapImpl.java\nindex 052e52c592f4..c6521a580227 100644\n--- a/icu4j/main/classes/core/src/com/ibm/icu/impl/CaseMapImpl.java\n+++ b/icu4j/main/classes/core/src/com/ibm/icu/impl/CaseMapImpl.java\n@@ -794,6 +794,8 @@ public static <A extends Appendable> A toTitle(\n     private static <A extends Appendable> int maybeTitleDutchIJ(\n             CharSequence src, int c, int start, int segmentLimit,\n             A dest, int options, Edits edits) throws IOException {\n+        assert start < segmentLimit;\n+\n         int index = start;\n         boolean withAcute = false;\n \ndiff --git a/icu4j/main/tests/core/src/com/ibm/icu/dev/test/lang/UCharacterCaseTest.java b/icu4j/main/tests/core/src/com/ibm/icu/dev/test/lang/UCharacterCaseTest.java\nindex f56f2950e31d..b929dfa9ee5a 100644\n--- a/icu4j/main/tests/core/src/com/ibm/icu/dev/test/lang/UCharacterCaseTest.java\n+++ b/icu4j/main/tests/core/src/com/ibm/icu/dev/test/lang/UCharacterCaseTest.java\n@@ -497,6 +497,9 @@ public void TestDutchTitle() {\n                 {\"\u00edjabc\\u0308\",        \"\u00cdjabc\\u0308\",       \"\u00cd\"},\n                 {\"\u00edj\u0301abc\\uD834\\uDD6E\",  \"\u00cdJ\u0301abc\\uD834\\uDD6E\", \"\u00cdJ\"},\n                 {\"\u00edjabc\\u1ABE\",        \"\u00cdjabc\\u1ABE\",       \"\u00cd\"},\n+\n+                // Bug ICU-21919\n+                {\"\u00cd\",                  \"\u00cd\",                 \"\"},\n         };\n \n         for (String[] caseDatum : dutchIJCasesData) {\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42508617-vul",
+      "digest": "sha256:55d0ec673cf69aee38a26dff8966cfb452721d9451110d58312ee8fec1601f39"
+    },
+    "patched": {
+      "ref": "n132/arvo:42508617-fix",
+      "digest": "sha256:0d7bb617d6114b5820747505e3bb33de0ac89079d0fb7bea4665e2b5ee5618d6"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/icu/icu4c/source/common/ucasemap.cpp:451",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/icu/icu4c/source/common/ucasemap.cpp:451"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

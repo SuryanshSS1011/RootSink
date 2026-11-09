@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-961972545",
+  "chain": "CWE-456->CWE-457",
+  "project": "zlib",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42514310",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/madler/zlib/commit/981ee7570ad98a3cf1ae74d737e2ee619ed79171",
+      "fix_commits": [
+        "981ee7570ad98a3cf1ae74d737e2ee619ed79171"
+      ],
+      "repo": "https://github.com/madler/zlib"
+    },
+    "patch": "diff --git a/deflate.c b/deflate.c\nindex c271d0152f..1ede12aa0d 100644\n--- a/deflate.c\n+++ b/deflate.c\n@@ -179,6 +179,11 @@ local const config configuration_table[10] = {\n  * bit values at the expense of memory usage). We slide even when level == 0 to\n  * keep the hash table consistent if we switch back to level > 0 later.\n  */\n+#if defined(__has_feature)\n+#  if __has_feature(memory_sanitizer)\n+     __attribute__((no_sanitize(\"memory\")))\n+#  endif\n+#endif\n local void slide_hash(deflate_state *s) {\n     unsigned n, m;\n     Posf *p;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42514310-vul",
+      "digest": "sha256:f2fe6a0fb11a5f95d6b78253d828d8192589dd516f22f651a0fa3450168f7c10"
+    },
+    "patched": {
+      "ref": "n132/arvo:42514310-fix",
+      "digest": "sha256:6dcd3da06a5c072b7e48cd9874150b3062f2c0df51fed6bbb97680a189b68759"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/zlib/deflate.c:222",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/zlib/deflate.c:222"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

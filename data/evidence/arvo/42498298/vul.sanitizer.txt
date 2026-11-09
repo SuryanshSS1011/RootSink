@@ -1,0 +1,78 @@
+INFO: Seed: 2612379527
+INFO: Loaded 1 modules   (8289 inline 8-bit counters): 8289 [0xa820e0, 0xa84141), 
+INFO: Loaded 1 PC tables (8289 PCs): 8289 [0xa84148,0xaa4758), 
+/out/ssh_client_fuzzer: Running 1 inputs 1 time(s) each.
+Running: /tmp/poc
+=================================================================
+==442704==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x603000007770 at pc 0x000000521def bp 0x7ffeaf9126a0 sp 0x7ffeaf911e68
+WRITE of size 64 at 0x603000007770 thread T0
+SCARINESS: 45 (multi-byte-write-heap-buffer-overflow)
+    #0 0x521dee in __asan_memset /src/llvm-project/compiler-rt/lib/asan/asan_interceptors_memintrinsics.cpp:26:3
+    #1 0x58dc9d in explicit_bzero /src/libssh/src/misc.c:1468:5
+    #2 0x5b41d8 in crypto_free /src/libssh/src/wrapper.c:189:9
+    #3 0x571235 in ssh_disconnect /src/libssh/src/client.c:734:5
+    #4 0x555271 in LLVMFuzzerTestOneInput /src/libssh/tests/fuzz/ssh_client_fuzzer.cpp:160:5
+    #5 0x45ab01 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:556:15
+    #6 0x445621 in fuzzer::RunOneTest(fuzzer::Fuzzer*, char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:292:6
+    #7 0x44b2de in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:774:9
+    #8 0x475202 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:19:10
+    #9 0x14fafa97f82f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+    #10 0x41ea98 in _start (/out/ssh_client_fuzzer+0x41ea98)
+
+DEDUP_TOKEN: __asan_memset--explicit_bzero--crypto_free
+0x603000007770 is located 0 bytes to the right of 32-byte region [0x603000007750,0x603000007770)
+allocated by thread T0 here:
+    #0 0x52269d in malloc /src/llvm-project/compiler-rt/lib/asan/asan_malloc_linux.cpp:145:3
+    #1 0x59a002 in ssh_packet_set_newkeys /src/libssh/src/packet.c:1924:44
+    #2 0x59b299 in ssh_packet_newkeys /src/libssh/src/packet_cb.c:164:10
+    #3 0x597d20 in ssh_packet_process /src/libssh/src/packet.c:1494:14
+    #4 0x595ec4 in ssh_packet_socket_callback /src/libssh/src/packet.c:1338:17
+    #5 0x595f75 in ssh_packet_socket_callback /src/libssh/src/packet.c:1360:22
+    #6 0x595f75 in ssh_packet_socket_callback /src/libssh/src/packet.c:1360:22
+    #7 0x5b08af in ssh_socket_pollcallback /src/libssh/src/socket.c:314:25
+    #8 0x5aaea7 in ssh_poll_ctx_dopoll /src/libssh/src/poll.c:702:33
+    #9 0x5ae753 in ssh_handle_packets /src/libssh/src/session.c:661:10
+    #10 0x5ae158 in ssh_handle_packets_termination /src/libssh/src/session.c:730:15
+    #11 0x56f964 in ssh_connect /src/libssh/src/client.c:608:15
+    #12 0x5551ac in LLVMFuzzerTestOneInput /src/libssh/tests/fuzz/ssh_client_fuzzer.cpp:135:10
+    #13 0x45ab01 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:556:15
+    #14 0x445621 in fuzzer::RunOneTest(fuzzer::Fuzzer*, char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:292:6
+    #15 0x44b2de in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:774:9
+    #16 0x475202 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:19:10
+    #17 0x14fafa97f82f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+
+DEDUP_TOKEN: malloc--ssh_packet_set_newkeys--ssh_packet_newkeys
+SUMMARY: AddressSanitizer: heap-buffer-overflow /src/llvm-project/compiler-rt/lib/asan/asan_interceptors_memintrinsics.cpp:26:3 in __asan_memset
+Shadow bytes around the buggy address:
+  0x0c067fff8e90: fd fd fd fa fa fa fd fd fd fa fa fa fd fd fd fa
+  0x0c067fff8ea0: fa fa fd fd fd fa fa fa fd fd fd fa fa fa fd fd
+  0x0c067fff8eb0: fd fd fa fa fd fd fd fa fa fa fd fd fd fa fa fa
+  0x0c067fff8ec0: fd fd fd fd fa fa fd fd fd fa fa fa fd fd fd fd
+  0x0c067fff8ed0: fa fa fd fd fd fd fa fa fd fd fd fd fa fa fd fd
+=>0x0c067fff8ee0: fd fd fa fa fd fd fd fd fa fa 00 00 00 00[fa]fa
+  0x0c067fff8ef0: fd fd fd fd fa fa fd fd fd fd fa fa fd fd fd fd
+  0x0c067fff8f00: fa fa fd fd fd fd fa fa fa fa fa fa fa fa fa fa
+  0x0c067fff8f10: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c067fff8f20: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c067fff8f30: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+  Shadow gap:              cc
+==442704==ABORTING

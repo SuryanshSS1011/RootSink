@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042514060",
+  "chain": "CWE-20->CWE-125",
+  "project": "e2fsprogs",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42514060",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "ab51d587bb9b229b1fade1afd02e1574c1ba5c76",
+      "fix_commits": [
+        "ab51d587bb9b229b1fade1afd02e1574c1ba5c76"
+      ],
+      "repo": "https://github.com/tytso/e2fsprogs"
+    },
+    "patch": "diff --git a/lib/ext2fs/extent.c b/lib/ext2fs/extent.c\nindex b324c7b0f..1a206a16c 100644\n--- a/lib/ext2fs/extent.c\n+++ b/lib/ext2fs/extent.c\n@@ -495,6 +495,10 @@ errcode_t ext2fs_extent_get(ext2_extent_handle_t handle,\n \t\t\text2fs_le16_to_cpu(eh->eh_entries);\n \t\tnewpath->max_entries = ext2fs_le16_to_cpu(eh->eh_max);\n \n+\t\t/* Make sure there is at least one extent present */\n+\t\tif (newpath->left <= 0)\n+\t\t\treturn EXT2_ET_EXTENT_NO_DOWN;\n+\n \t\tif (path->left > 0) {\n \t\t\tix++;\n \t\t\tnewpath->end_blk = ext2fs_le32_to_cpu(ix->ei_block);\n@@ -1630,6 +1634,10 @@ errcode_t ext2fs_extent_delete(ext2_extent_handle_t handle, int flags)\n \n \tcp = path->curr;\n \n+\t/* Sanity check before memmove() */\n+\tif (path->left < 0)\n+\t\treturn EXT2_ET_EXTENT_LEAF_BAD;\n+\n \tif (path->left) {\n \t\tmemmove(cp, cp + sizeof(struct ext3_extent_idx),\n \t\t\tpath->left * sizeof(struct ext3_extent_idx));\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42514060-vul",
+      "digest": "sha256:4fb8a4bb36e0aece9bdb1aa8467935654d1435ede7d16a6e3f334d2554edcaf7"
+    },
+    "patched": {
+      "ref": "n132/arvo:42514060-fix",
+      "digest": "sha256:7b8df38949c8fd576ef80cfb103b90608470f6e75791d60cebecc8a4457cd4ef"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/e2fsprogs/lib/ext2fs/blkmap64_ba.c:300",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/e2fsprogs/lib/ext2fs/blkmap64_ba.c:300"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-955703125",
+  "chain": "CWE-129->CWE-125",
+  "project": "openthread",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42473001",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/openthread/openthread/commit/f9659b3733b85ffb499692a6d2f18a6414782dc0",
+      "fix_commits": [
+        "f9659b3733b85ffb499692a6d2f18a6414782dc0"
+      ],
+      "repo": "https://github.com/openthread/openthread"
+    },
+    "patch": "diff --git a/include/openthread/thread_ftd.h b/include/openthread/thread_ftd.h\nindex 5ed1cde65df..4dae3b1d26d 100644\n--- a/include/openthread/thread_ftd.h\n+++ b/include/openthread/thread_ftd.h\n@@ -333,6 +333,7 @@ OTAPI void OTCALL otThreadSetRouterUpgradeThreshold(otInstance *aInstance, uint8\n  * @param[in]  aRouterId  The Router ID to release. Valid range is [0, 62].\n  *\n  * @retval OT_ERROR_NONE           Successfully released the router id.\n+ * @retval OT_ERROR_INVALID_ARGS   @p aRouterId is not in the range [0, 62].\n  * @retval OT_ERROR_INVALID_STATE  The device is not currently operating as a leader.\n  * @retval OT_ERROR_NOT_FOUND      The router id is not currently allocated.\n  *\ndiff --git a/src/core/api/thread_ftd_api.cpp b/src/core/api/thread_ftd_api.cpp\nindex 71738fcd9fd..6c7963446d1 100644\n--- a/src/core/api/thread_ftd_api.cpp\n+++ b/src/core/api/thread_ftd_api.cpp\n@@ -166,9 +166,15 @@ void otThreadSetRouterUpgradeThreshold(otInstance *aInstance, uint8_t aThreshold\n \n otError otThreadReleaseRouterId(otInstance *aInstance, uint8_t aRouterId)\n {\n+    otError   error    = OT_ERROR_NONE;\n     Instance &instance = *static_cast<Instance *>(aInstance);\n \n-    return instance.GetThreadNetif().GetMle().GetRouterTable().Release(aRouterId);\n+    VerifyOrExit(aRouterId <= Mle::kMaxRouterId, error = OT_ERROR_INVALID_ARGS);\n+\n+    error = instance.GetThreadNetif().GetMle().GetRouterTable().Release(aRouterId);\n+\n+exit:\n+    return error;\n }\n \n otError otThreadBecomeRouter(otInstance *aInstance)\ndiff --git a/src/core/thread/router_table.cpp b/src/core/thread/router_table.cpp\nindex 4e3499d41a4..dbf7028dd46 100644\n--- a/src/core/thread/router_table.cpp\n+++ b/src/core/thread/router_table.cpp\n@@ -261,6 +261,8 @@ otError RouterTable::Release(uint8_t aRouterId)\n     ThreadNetif &netif  = GetNetif();\n     uint16_t     rloc16 = Mle::Mle::GetRloc16(aRouterId);\n \n+    assert(aRouterId <= Mle::kMaxRouterId);\n+\n     VerifyOrExit(netif.GetMle().GetRole() == OT_DEVICE_ROLE_LEADER, error = OT_ERROR_INVALID_STATE);\n     VerifyOrExit(IsAllocated(aRouterId), error = OT_ERROR_NOT_FOUND);\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42473001-vul",
+      "digest": "sha256:0dde6b9a32b6952a7f431e40327855633bffbfb8abe3d42a1a87c79a1753a9d6"
+    },
+    "patched": {
+      "ref": "n132/arvo:42473001-fix",
+      "digest": "sha256:963a207d283c8c9d4bc444bb39f28e6fda2140187ccbd7cb3c827f8bfd30ad5c"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "crash_site": "/src/openthread/src/core/thread/router_table.cpp:106",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 129,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "site": "/src/openthread/src/core/thread/router_table.cpp:106"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,51 @@
+======================= INFO =========================
+This binary is built for AFL-fuzz.
+To run the target function on individual input(s) execute this:
+  /out/fuzz_filter < INPUT_FILE
+or
+  /out/fuzz_filter INPUT_FILE1 [INPUT_FILE2 ... ]
+To fuzz with afl-fuzz execute this:
+  afl-fuzz [afl-flags] /out/fuzz_filter [-N]
+afl-fuzz will run N iterations before re-spawning the process (default: 1000)
+======================================================
+Reading 22937 bytes from /tmp/poc
+==2138400==WARNING: AddressSanitizer failed to allocate 0xffffffff365e7b20 bytes
+=================================================================
+==2138400==ERROR: AddressSanitizer: attempting double-free on 0x14b3068d4800 in thread T0:
+SCARINESS: 42 (double-free)
+    #0 0x4eb9f0 in __interceptor_free /src/llvm/projects/compiler-rt/lib/asan/asan_malloc_linux.cc:124
+    #1 0x54a0e7 in opt_cleanup /src/libpcap/optimize.c:2034:2
+    #2 0x549fc8 in bpf_optimize /src/libpcap/optimize.c:1905:3
+    #3 0x53127b in pcap_compile /src/libpcap/gencode.c:804:7
+    #4 0x53051c in LLVMFuzzerTestOneInput /src/libpcap/build/../testprogs/fuzz/fuzz_filter.c:32:9
+    #5 0x59265e in ExecuteFilesOnyByOne(int, char**) /src/libfuzzer/afl/afl_driver.cpp:301:5
+    #6 0x592bce in main /src/libfuzzer/afl/afl_driver.cpp:339:12
+    #7 0x14b30da9282f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+    #8 0x41d088 in _start (/out/fuzz_filter+0x41d088)
+
+DEDUP_TOKEN: __interceptor_free--opt_cleanup--bpf_optimize
+0x14b3068d4800 is located 0 bytes inside of 2170032-byte region [0x14b3068d4800,0x14b306ae64b0)
+freed by thread T0 here:
+    #0 0x4eb9f0 in __interceptor_free /src/llvm/projects/compiler-rt/lib/asan/asan_malloc_linux.cc:124
+    #1 0x54abcf in opt_init /src/libpcap/optimize.c:2185:3
+    #2 0x549fe5 in bpf_optimize /src/libpcap/optimize.c:1908:2
+    #3 0x53127b in pcap_compile /src/libpcap/gencode.c:804:7
+    #4 0x53051c in LLVMFuzzerTestOneInput /src/libpcap/build/../testprogs/fuzz/fuzz_filter.c:32:9
+    #5 0x59265e in ExecuteFilesOnyByOne(int, char**) /src/libfuzzer/afl/afl_driver.cpp:301:5
+    #6 0x592bce in main /src/libfuzzer/afl/afl_driver.cpp:339:12
+    #7 0x14b30da9282f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+
+DEDUP_TOKEN: __interceptor_free--opt_init--bpf_optimize
+previously allocated by thread T0 here:
+    #0 0x4ebfe7 in calloc /src/llvm/projects/compiler-rt/lib/asan/asan_malloc_linux.cc:155
+    #1 0x54a2c0 in opt_init /src/libpcap/optimize.c:2161:37
+    #2 0x549fe5 in bpf_optimize /src/libpcap/optimize.c:1908:2
+    #3 0x53127b in pcap_compile /src/libpcap/gencode.c:804:7
+    #4 0x53051c in LLVMFuzzerTestOneInput /src/libpcap/build/../testprogs/fuzz/fuzz_filter.c:32:9
+    #5 0x59265e in ExecuteFilesOnyByOne(int, char**) /src/libfuzzer/afl/afl_driver.cpp:301:5
+    #6 0x592bce in main /src/libfuzzer/afl/afl_driver.cpp:339:12
+    #7 0x14b30da9282f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+
+DEDUP_TOKEN: calloc--opt_init--bpf_optimize
+SUMMARY: AddressSanitizer: double-free /src/llvm/projects/compiler-rt/lib/asan/asan_malloc_linux.cc:124 in __interceptor_free
+==2138400==ABORTING

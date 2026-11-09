@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0372994344",
+  "chain": "CWE-416->CWE-125",
+  "project": "gpac",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "372994344",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "a40c0dede301c1c0db9458b6a401fba6c199ebd4",
+      "fix_commits": [
+        "a40c0dede301c1c0db9458b6a401fba6c199ebd4"
+      ],
+      "repo": "https://github.com/gpac/gpac"
+    },
+    "patch": "From a40c0dede301c1c0db9458b6a401fba6c199ebd4 Mon Sep 17 00:00:00 2001\nFrom: Aurelien David <aurelien.david@telecom-paristech.fr>\nDate: Mon, 14 Oct 2024 12:28:29 +0200\nSubject: [PATCH] prevent UAF on gf_m2ts_es_del\n\nossfuzz issue 372994344\n---\n src/media_tools/mpegts.c | 5 +++++\n 1 file changed, 5 insertions(+)\n\ndiff --git a/src/media_tools/mpegts.c b/src/media_tools/mpegts.c\nindex b34a8b2..fb6513e 100644\n--- a/src/media_tools/mpegts.c\n+++ b/src/media_tools/mpegts.c\n@@ -301,6 +301,11 @@ static void gf_m2ts_es_del(GF_M2TS_ES *es, GF_M2TS_Demuxer *ts)\n \n \t}\n \tif (es->slcfg) gf_free(es->slcfg);\n+\tfor (u32 i=0; i<GF_M2TS_MAX_STREAMS; i++) {\n+\t\tif (ts->ess[i]==es) {\n+\t\t\tts->ess[i] = NULL;\n+\t\t}\n+\t}\n \tgf_free(es);\n }\n \n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:372994344-vul",
+      "digest": "sha256:e5604e77db19e107475ff43ca3ad958111d5aeb8c965533fcc13abae92de0406"
+    },
+    "patched": {
+      "ref": "n132/arvo:372994344-fix",
+      "digest": "sha256:8b886208b06a7f6f55cbeb179466863238693a4bf07768662fccaca4895ce766"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/gpac/src/media_tools/mpegts.c:3115",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/gpac/src/media_tools/mpegts.c:3115"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

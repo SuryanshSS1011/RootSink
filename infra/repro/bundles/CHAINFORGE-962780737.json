@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-962780737",
+  "chain": "CWE-456->CWE-457",
+  "project": "mupdf",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42524846",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/ArtifexSoftware/mupdf/commit/3f3de914a38ef440cf99c4b0c6f0f043c5fdffbe",
+      "fix_commits": [
+        "3f3de914a38ef440cf99c4b0c6f0f043c5fdffbe"
+      ],
+      "repo": "https://github.com/ArtifexSoftware/mupdf"
+    },
+    "patch": "diff --git a/source/fitz/load-bmp.c b/source/fitz/load-bmp.c\nindex 7a37ebc40c..00f79e3939 100644\n--- a/source/fitz/load-bmp.c\n+++ b/source/fitz/load-bmp.c\n@@ -1262,7 +1262,15 @@ fz_load_bmp_subimage(fz_context *ctx, const unsigned char *buf, size_t len, int\n \t{\n \t\tp = begin + nextoffset;\n \n-\t\tif (is_bitmap_array(p))\n+\t\tif (end - p < 14)\n+\t\t\tfz_throw(ctx, FZ_ERROR_GENERIC, \"not enough data for bitmap array (%02x%02x) in bmp image\", p[0], p[1]);\n+\n+\t\tif (!is_bitmap_array(p))\n+\t\t{\n+\t\t\tfz_warn(ctx, \"treating invalid subimage as end of file\");\n+\t\t\tnextoffset = 0;\n+\t\t}\n+\t\telse\n \t\t{\n \t\t\t/* read16(p+0) == type */\n \t\t\t/* read32(p+2) == size of this header in bytes */\n@@ -1271,16 +1279,14 @@ fz_load_bmp_subimage(fz_context *ctx, const unsigned char *buf, size_t len, int\n \t\t\t/* read16(p+12) == suitable pely dimensions */\n \t\t\tp += 14;\n \t\t}\n-\t\telse if (nextoffset > 0)\n-\t\t\tfz_throw(ctx, FZ_ERROR_GENERIC, \"unexpected bitmap array magic (%02x%02x) in bmp image\", p[0], p[1]);\n \n \t\tif (end - begin < nextoffset)\n \t\t{\n \t\t\tfz_warn(ctx, \"treating invalid next subimage offset as end of file\");\n \t\t\tnextoffset = 0;\n \t\t}\n-\n-\t\tsubimage--;\n+\t\telse\n+\t\t\tsubimage--;\n \n \t} while (subimage >= 0 && nextoffset > 0);\n \n@@ -1302,14 +1308,22 @@ fz_load_bmp_subimage_count(fz_context *ctx, const unsigned char *buf, size_t len\n {\n \tconst unsigned char *begin = buf;\n \tconst unsigned char *end = buf + len;\n-\tint nextoffset = 0;\n+\tuint32_t nextoffset = 0;\n \tint count = 0;\n \n \tdo\n \t{\n \t\tconst unsigned char *p = begin + nextoffset;\n \n-\t\tif (is_bitmap_array(p))\n+\t\tif (end - p < 14)\n+\t\t\tfz_throw(ctx, FZ_ERROR_GENERIC, \"not enough data for bitmap array (%02x%02x) in bmp image\", p[0], p[1]);\n+\n+\t\tif (!is_bitmap_array(p))\n+\t\t{\n+\t\t\tfz_warn(ctx, \"treating invalid subimage as end of file\");\n+\t\t\tnextoffset = 0;\n+\t\t}\n+\t\telse\n \t\t{\n \t\t\t/* read16(p+0) == type */\n \t\t\t/* read32(p+2) == size of this header in bytes */\n@@ -1318,8 +1332,6 @@ fz_load_bmp_subimage_count(fz_context *ctx, const unsigned char *buf, size_t len\n \t\t\t/* read16(p+12) == suitable pely dimensions */\n \t\t\tp += 14;\n \t\t}\n-\t\telse if (nextoffset > 0)\n-\t\t\tfz_throw(ctx, FZ_ERROR_GENERIC, \"unexpected bitmap array magic (%02x%02x) in bmp image\", p[0], p[1]);\n \n \t\tif (end - begin < nextoffset)\n \t\t{\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42524846-vul",
+      "digest": "sha256:31214e9e6a7d30c9ee7c2971bd960cdaf380b5f254a2add41ff22ceb744d48bb"
+    },
+    "patched": {
+      "ref": "n132/arvo:42524846-fix",
+      "digest": "sha256:707f8dd905becaeb2a7103c90dcd4f1b7ef1db4d3f7ff9374bdb09e1f18242a7"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/mupdf/source/fitz/load-bmp.c:1319",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/mupdf/source/fitz/load-bmp.c:1319"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

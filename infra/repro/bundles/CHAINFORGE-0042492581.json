@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042492581",
+  "chain": "CWE-1284->CWE-787",
+  "project": "wolfssl",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42492581",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "3fd2647383318d5ca0c4ec3ef99119c863c51528",
+      "fix_commits": [
+        "3fd2647383318d5ca0c4ec3ef99119c863c51528"
+      ],
+      "repo": "https://github.com/wolfssl/wolfssl"
+    },
+    "patch": "diff --git a/wolfcrypt/src/sha256.c b/wolfcrypt/src/sha256.c\nindex e610d54134d..50b8cf60f89 100644\n--- a/wolfcrypt/src/sha256.c\n+++ b/wolfcrypt/src/sha256.c\n@@ -1094,7 +1094,7 @@ static int InitSha256(wc_Sha256* sha256)\n     #endif\n \n         /* save remainder */\n-        if (len > 0) {\n+        if (ret == 0 && len > 0) {\n             XMEMCPY(local, data, len);\n             sha256->buffLen = len;\n         }\ndiff --git a/wolfcrypt/src/sha512.c b/wolfcrypt/src/sha512.c\nindex 1a4483278bd..ef09e540489 100644\n--- a/wolfcrypt/src/sha512.c\n+++ b/wolfcrypt/src/sha512.c\n@@ -717,7 +717,7 @@ static WC_INLINE int Sha512Update(wc_Sha512* sha512, const byte* data, word32 le\n     }\n #endif\n \n-    if (len > 0) {\n+    if (ret == 0 && len > 0) {\n         XMEMCPY(local, data, len);\n         sha512->buffLen = len;\n     }\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42492581-vul",
+      "digest": "sha256:0e342b3c8e7fada583849f0fcae62e38cbea2f95fa49cb36faacd42d54899846"
+    },
+    "patched": {
+      "ref": "n132/arvo:42492581-fix",
+      "digest": "sha256:176af43137fd68f336bb511ecb6511df06f29575dbbdb620d86ddd906538b983"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/wolfssl-disable-fastmath/wolfcrypt/src/sha512.c:721",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/wolfssl-disable-fastmath/wolfcrypt/src/sha512.c:721"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

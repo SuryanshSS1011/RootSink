@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042510720",
+  "chain": "CWE-416->CWE-125",
+  "project": "ghostpdl",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42510720",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "4fae247b37ae8c1115b6d13ff4e447c54aea9d8b",
+      "fix_commits": [
+        "4fae247b37ae8c1115b6d13ff4e447c54aea9d8b"
+      ],
+      "repo": "https://cgit.ghostscript.com/ghostpdl.git"
+    },
+    "patch": "From 4fae247b37ae8c1115b6d13ff4e447c54aea9d8b Mon Sep 17 00:00:00 2001\nFrom: Chris Liddell <chris.liddell@artifex.com>\nDate: Thu, 14 Apr 2022 11:01:11 +0100\nSubject: [PATCH] oss-fuzz 46672: Avoid PS stack extensions from pdfi error\n\npdfi was using the standard gs_error_stackoverflow error code when the pdfi\noperand stack overflowed. Returning that to the Postscript interpreter caused\nthe interpreter to attempt to extend the Postscript op stack with a new block\nwith zero requested new elements.\n\nThis, in turn, caused the garbage collector to traverse the previous op stack\nblock, and find no longer valid objects. Leading to trying to mark objects\nfreed by a restore.\n\nThe solution is to add a specific gs_error_pdf_stackoverflow, so we can still\nsignal the appropriate error, but avoid confusing the Postscript interpreter.\n---\n base/gserrors.h  | 10 ++++++++--\n pdf/ghostpdf.c   |  3 ++-\n pdf/pdf_check.c  |  2 +-\n pdf/pdf_fontps.c |  2 +-\n pdf/pdf_fontps.h |  4 ++--\n pdf/pdf_page.c   |  2 +-\n pdf/pdf_stack.c  |  4 ++--\n psi/ierrors.h    |  7 +++++--\n psi/iinit.c      |  4 ++--\n 9 files changed, 24 insertions(+), 14 deletions(-)\n\ndiff --git a/base/gserrors.h b/base/gserrors.h\nindex 0e4982d..6a7c5fe 100644\n--- a/base/gserrors.h\n+++ b/base/gserrors.h\n@@ -1,4 +1,4 @@\n-/* Copyright (C) 2001-2021 Artifex Software, Inc.\n+/* Copyright (C) 2001-2022 Artifex Software, Inc.\n    All Rights Reserved.\n \n    This software is provided AS-IS with no warranty, either express or\n@@ -62,6 +62,12 @@ enum gs_error_type {\n /* invalidid is for the NeXT DPS extension. */\n     gs_error_invalidid = -30,\n \n+/* We need a specific stackoverflow error for the PDF interpreter to avoid dropping into\n+ * the Postscript interpreter's stack extending code, when the PDF interpreter is called from\n+ * Postscript\n+ */\n+    gs_error_pdf_stackoverflow = -31,\n+\n         /* ------ Pseudo-errors used internally ------ */\n \n     gs_error_hit_detected = -99,\n@@ -122,7 +128,7 @@ enum gs_error_type {\n     gs_error_handled = -111,\n \n /* Internal error for the C-based PDF interpreter, to indicate a circular PDF reference */\n-  gs_error_circular_reference = -112,\n+    gs_error_circular_reference = -112,\n };\n \n /* We do provide a typedef type for external API use */\ndiff --git a/pdf/ghostpdf.c b/pdf/ghostpdf.c\nindex 6077d1c..4391702 100644\n--- a/pdf/ghostpdf.c\n+++ b/pdf/ghostpdf.c\n@@ -347,6 +347,7 @@ const char *gs_error_strings[] = {\n     \"unregistered\",\n     \"invalidcontext\",\n     \"invalidid\",\n+    \"pdf_stackoverflow\"\n };\n \n const char *gs_internal_error_strings[] = {\n@@ -365,7 +366,7 @@ const char *gs_internal_error_strings[] = {\n     \"handled\",\n     \"circular reference\"\n };\n-#define LASTNORMALGSERROR gs_error_invalidid * -1\n+#define LASTNORMALGSERROR gs_error_pdf_stackoverflow * -1\n #define FIRSTINTERNALERROR gs_error_hit_detected * -1\n #define LASTGSERROR gs_error_circular_reference * -1\n \ndiff --git a/pdf/pdf_check.c b/pdf/pdf_check.c\nindex 00933bd..91bd2bd 100644\n--- a/pdf/pdf_check.c\n+++ b/pdf/pdf_check.c\n@@ -1104,7 +1104,7 @@ static int pdfi_check_page_inner(pdf_context *ctx, pdf_dict *page_dict,\n     code = pdfi_dict_knownget_type(ctx, page_dict, \"Resources\", PDF_DICT, (pdf_obj **)&Resources);\n     if (code > 0)\n         code = pdfi_check_Resources(ctx, Resources, page_dict, tracker);\n-    if ((code < 0 && ctx->args.pdfstoponerror) || (code == gs_error_stackoverflow))\n+    if ((code < 0 && ctx->args.pdfstoponerror) || (code == gs_error_pdf_stackoverflow))\n         goto exit;\n \n     /* If we are drawing Annotations, check to see if the page uses any Annots */\ndiff --git a/pdf/pdf_fontps.c b/pdf/pdf_fontps.c\nindex 3ab399b..ab99375 100644\n--- a/pdf/pdf_fontps.c\n+++ b/pdf/pdf_fontps.c\n@@ -1282,7 +1282,7 @@ pdfi_read_ps_font(pdf_context *ctx, pdf_dict *font_dict, byte *fbuf, int fbuflen\n        and that can end up in a stackoverflow error, even though we have a complete font. Override it\n        and let the Type 1 specific code decide for itself if it can use the font.\n      */\n-    if (code == gs_error_stackoverflow)\n+    if (code == gs_error_pdf_stackoverflow)\n         code = 0;\n \n     return code;\ndiff --git a/pdf/pdf_fontps.h b/pdf/pdf_fontps.h\nindex 835f006..79ba2ae 100644\n--- a/pdf/pdf_fontps.h\n+++ b/pdf/pdf_fontps.h\n@@ -208,7 +208,7 @@ static inline int pdf_ps_stack_push(pdf_ps_ctx_t *s)\n     }\n     s->cur++;\n     if (pdf_ps_obj_has_type(s->cur, PDF_PS_OBJ_STACK_TOP))\n-        return_error(gs_error_stackoverflow);\n+        return_error(gs_error_pdf_stackoverflow);\n     if (pdf_ps_obj_has_type(s->cur, PDF_PS_OBJ_STACK_BOTTOM))\n         return_error(gs_error_stackunderflow);\n     return 0;\n@@ -239,7 +239,7 @@ static inline int pdf_ps_stack_pop(pdf_ps_ctx_t *s, unsigned int n)\n         pdf_ps_make_null(s->cur);\n         s->cur--;\n         if (pdf_ps_obj_has_type(s->cur, PDF_PS_OBJ_STACK_TOP))\n-            return_error(gs_error_stackoverflow);\n+            return_error(gs_error_pdf_stackoverflow);\n         if (pdf_ps_obj_has_type(s->cur, PDF_PS_OBJ_STACK_BOTTOM))\n             return_error(gs_error_stackunderflow);\n     }\ndiff --git a/pdf/pdf_page.c b/pdf/pdf_page.c\nindex 9117898..4386ea8 100644\n--- a/pdf/pdf_page.c\n+++ b/pdf/pdf_page.c\n@@ -879,7 +879,7 @@ exit3:\n      */\n     gx_pattern_cache_winnow(gstate_pattern_cache(ctx->pgs), pdfi_pattern_purge_all_proc, NULL);\n \n-    if (code == 0 || (!ctx->args.pdfstoponerror && code != gs_error_stackoverflow))\n+    if (code == 0 || (!ctx->args.pdfstoponerror && code != gs_error_pdf_stackoverflow))\n         if (!page_dict_error && ctx->finish_page != NULL)\n             code = ctx->finish_page(ctx);\n     return code;\ndiff --git a/pdf/pdf_stack.c b/pdf/pdf_stack.c\nindex d2644fb..330ad80 100644\n--- a/pdf/pdf_stack.c\n+++ b/pdf/pdf_stack.c\n@@ -1,4 +1,4 @@\n-/* Copyright (C) 2018-2021 Artifex Software, Inc.\n+/* Copyright (C) 2018-2022 Artifex Software, Inc.\n    All Rights Reserved.\n \n    This software is provided AS-IS with no warranty, either express or\n@@ -49,7 +49,7 @@ int pdfi_push(pdf_context *ctx, pdf_obj *o)\n \n     if (ctx->stack_top >= ctx->stack_limit) {\n         if (ctx->stack_size >= MAX_STACK_SIZE)\n-            return_error(gs_error_stackoverflow);\n+            return_error(gs_error_pdf_stackoverflow);\n \n         new_stack = (pdf_obj **)gs_alloc_bytes(ctx->memory, (ctx->stack_size + INITIAL_STACK_SIZE) * sizeof (pdf_obj *), \"pdfi_push_increase_interp_stack\");\n         if (new_stack == NULL)\ndiff --git a/psi/ierrors.h b/psi/ierrors.h\nindex 50f3212..fa0c789 100644\n--- a/psi/ierrors.h\n+++ b/psi/ierrors.h\n@@ -1,4 +1,4 @@\n-/* Copyright (C) 2001-2021 Artifex Software, Inc.\n+/* Copyright (C) 2001-2022 Artifex Software, Inc.\n    All Rights Reserved.\n \n    This software is provided AS-IS with no warranty, either express or\n@@ -57,8 +57,11 @@ extern const char *const gs_error_names[];\n #define DPS_ERROR_NAMES\\\n  \"invalidcontext\", \"invalidid\"\n \n+#define PDF_ERROR_NAMES\\\n+ \"pdf_stackoverflow\"\n+\n #define ERROR_NAMES\\\n- LEVEL1_ERROR_NAMES, LEVEL2_ERROR_NAMES, DPS_ERROR_NAMES\n+ LEVEL1_ERROR_NAMES, LEVEL2_ERROR_NAMES, DPS_ERROR_NAMES, PDF_ERROR_NAMES\n \n /*\n  * Define which error codes require re-executing the current object.\ndiff --git a/psi/iinit.c b/psi/iinit.c\nindex e347129..2d8bfe9 100644\n--- a/psi/iinit.c\n+++ b/psi/iinit.c\n@@ -1,4 +1,4 @@\n-/* Copyright (C) 2001-2021 Artifex Software, Inc.\n+/* Copyright (C) 2001-2022 Artifex Software, Inc.\n    All Rights Reserved.\n \n    This software is provided AS-IS with no warranty, either express or\n@@ -363,7 +363,7 @@ obj_init(i_ctx_t **pi_ctx_p, gs_dual_memory_t *idmem)\n \n     /* Create the error name table */\n     {\n-        int n = countof(gs_error_names) - 1;\n+        int n = countof(gs_error_names);\n         int i;\n         ref era;\n \n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42510720-vul",
+      "digest": "sha256:c5981adef1331405e46d59ab55ec73117104eab8d3aa3cb1695181d54d181ec1"
+    },
+    "patched": {
+      "ref": "n132/arvo:42510720-fix",
+      "digest": "sha256:aebebb82db4414afb341eb06e4c6ae02e94368710041f1a652587aebddc68b96"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/ghostpdl/./psi/igc.c:915",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/ghostpdl/./psi/igc.c:915"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

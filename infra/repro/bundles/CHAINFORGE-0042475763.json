@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042475763",
+  "chain": "CWE-416->CWE-125",
+  "project": "radare2",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42475763",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "d7fd30df8ef0f1a9081863b91a0197f26408dc6b",
+      "fix_commits": [
+        "d7fd30df8ef0f1a9081863b91a0197f26408dc6b"
+      ],
+      "repo": "https://github.com/radare/radare2"
+    },
+    "patch": "From d7fd30df8ef0f1a9081863b91a0197f26408dc6b Mon Sep 17 00:00:00 2001\nFrom: =?UTF-8?q?Florian=20M=C3=A4rkl?= <info@florianmaerkl.de>\nDate: Tue, 13 Aug 2019 19:31:29 +0200\nSubject: [PATCH] Refactor is* and fix Injection harder (#14797)\n\n---\n libr/core/cbin.c | 112 ++++++++++++++++++++++++++---------------------\n 1 file changed, 61 insertions(+), 51 deletions(-)\n\ndiff --git a/libr/core/cbin.c b/libr/core/cbin.c\nindex 9b152d5..6e45686 100644\n--- a/libr/core/cbin.c\n+++ b/libr/core/cbin.c\n@@ -1833,6 +1833,17 @@ static const char *getPrefixFor(const char *s) {\n \treturn \"sym\";\n }\n \n+#define MAXFLAG_LEN_DEFAULT 128\n+\n+static char *construct_symbol_flagname(const char *pfx, const char *symname, int len) {\n+\tchar *r = r_str_newf (\"%s.%s\", pfx, symname);\n+\tif (!r) {\n+\t\treturn NULL;\n+\t}\n+\tr_name_filter (r, len);\n+\treturn r;\n+}\n+\n typedef struct {\n \tconst char *pfx; // prefix for flags\n \tchar *name;      // raw symbol name\n@@ -1846,21 +1857,18 @@ typedef struct {\n } SymName;\n \n static void snInit(RCore *r, SymName *sn, RBinSymbol *sym, const char *lang) {\n-#define MAXFLAG_LEN 128\n \tint bin_demangle = lang != NULL;\n \tbool keep_lib = r_config_get_i (r->config, \"bin.demangle.libs\");\n-\tconst char *pfx;\n \tif (!r || !sym || !sym->name) {\n \t\treturn;\n \t}\n-\tpfx = getPrefixFor (sym->type);\n \tsn->name = strdup (sym->name);\n-\tsn->nameflag = r_str_newf (\"%s.%s\", pfx, r_bin_symbol_name (sym));\n-\tr_name_filter (sn->nameflag, MAXFLAG_LEN);\n+\tconst char *pfx = getPrefixFor (sym->type);\n+\tsn->nameflag = construct_symbol_flagname(pfx, r_bin_symbol_name (sym), MAXFLAG_LEN_DEFAULT);\n \tif (sym->classname && sym->classname[0]) {\n \t\tsn->classname = strdup (sym->classname);\n \t\tsn->classflag = r_str_newf (\"sym.%s.%s\", sn->classname, sn->name);\n-\t\tr_name_filter (sn->classflag, MAXFLAG_LEN);\n+\t\tr_name_filter (sn->classflag, MAXFLAG_LEN_DEFAULT);\n \t\tconst char *name = sym->dname? sym->dname: sym->name;\n \t\tsn->methname = r_str_newf (\"%s::%s\", sn->classname, name);\n \t\tsn->methflag = r_str_newf (\"sym.%s.%s\", sn->classname, name);\n@@ -1876,8 +1884,7 @@ static void snInit(RCore *r, SymName *sn, RBinSymbol *sym, const char *lang) {\n \tif (bin_demangle && sym->paddr) {\n \t\tsn->demname = r_bin_demangle (r->bin->cur, lang, sn->name, sym->vaddr, keep_lib);\n \t\tif (sn->demname) {\n-\t\t\tsn->demflag = r_str_newf (\"%s.%s\", pfx, sn->demname);\n-\t\t\tr_name_filter (sn->demflag, -1);\n+\t\t\tsn->demflag = construct_symbol_flagname (pfx, sn->demname, -1);\n \t\t}\n \t}\n }\n@@ -2125,53 +2132,55 @@ static int bin_symbols(RCore *r, int mode, ut64 laddr, int va, ut64 at, const ch\n \t\t} else if (IS_MODE_RAD (mode)) {\n \t\t\t/* Skip special symbols because we do not flag them and\n \t\t\t * they shouldn't be printed in the rad format either */\n-\t\t\tif (!is_special_symbol (symbol)) {\n-\t\t\t\tRBinFile *binfile;\n-\t\t\t\tRBinPlugin *plugin;\n-\t\t\t\tchar *name = strdup (sn.demname? sn.demname: r_symbol_name);\n-\t\t\t\tr_name_filter (name, -1);\n-\t\t\t\tif (!strncmp (name, \"imp.\", 4)) {\n-\t\t\t\t\tif (lastfs != 'i') {\n-\t\t\t\t\t\tr_cons_printf (\"fs imports\\n\");\n-\t\t\t\t\t}\n-\t\t\t\t\tlastfs = 'i';\n-\t\t\t\t} else {\n-\t\t\t\t\tif (lastfs != 's') {\n-\t\t\t\t\t\tr_cons_printf (\"fs %s\\n\",\n-\t\t\t\t\t\t\texponly? \"exports\": \"symbols\");\n-\t\t\t\t\t}\n-\t\t\t\t\tlastfs = 's';\n+\t\t\tif (is_special_symbol (symbol)) {\n+\t\t\t\tgoto next;\n+\t\t\t}\n+\t\t\tRBinFile *binfile;\n+\t\t\tRBinPlugin *plugin;\n+\t\t\tconst char *name = sn.demname? sn.demname: r_symbol_name;\n+\t\t\tif (!name) {\n+\t\t\t\tgoto next;\n+\t\t\t}\n+\t\t\tif (!strncmp (name, \"imp.\", 4)) {\n+\t\t\t\tif (lastfs != 'i') {\n+\t\t\t\t\tr_cons_printf (\"fs imports\\n\");\n \t\t\t\t}\n-\t\t\t\tif (r->bin->prefix) {\n-\t\t\t\t\tr_cons_printf (\"\\\"f %s.sym.%s %u 0x%08\" PFMT64x \"\\\"\\n\",\n-\t\t\t\t\t\tr->bin->prefix, r_bin_symbol_name (symbol), symbol->size, addr);\n-\t\t\t\t} else {\n-\t\t\t\t\tif (*name) {\n-\t\t\t\t\t\tr_cons_printf (\"\\\"f sym.%s %u 0x%08\" PFMT64x \"\\\"\\n\",\n-\t\t\t\t\t\t\tr_bin_symbol_name (symbol), symbol->size, addr);\n-\t\t\t\t\t} else {\n-\t\t\t\t\t\t// we don't want unnamed symbol flags\n-\t\t\t\t\t}\n+\t\t\t\tlastfs = 'i';\n+\t\t\t} else {\n+\t\t\t\tif (lastfs != 's') {\n+\t\t\t\t\tr_cons_printf (\"fs %s\\n\",\n+\t\t\t\t\t\texponly? \"exports\": \"symbols\");\n \t\t\t\t}\n-\t\t\t\tbinfile = r_bin_cur (r->bin);\n-\t\t\t\tplugin = r_bin_file_cur_plugin (binfile);\n-\t\t\t\tif (plugin && plugin->name) {\n-\t\t\t\t\tif (r_str_startswith (plugin->name, \"pe\")) {\n-\t\t\t\t\t\tchar *module = strdup (r_symbol_name);\n-\t\t\t\t\t\tchar *p = strstr (module, \".dll_\");\n-\t\t\t\t\t\tif (p && strstr (module, \"imp.\")) {\n-\t\t\t\t\t\t\tconst char *symname = p + 5;\n-\t\t\t\t\t\t\t*p = 0;\n-\t\t\t\t\t\t\tif (r->bin->prefix) {\n-\t\t\t\t\t\t\t\tr_cons_printf (\"k bin/pe/%s/%d=%s.%s\\n\",\n-\t\t\t\t\t\t\t\t\tmodule, symbol->ordinal, r->bin->prefix, symname);\n-\t\t\t\t\t\t\t} else {\n-\t\t\t\t\t\t\t\tr_cons_printf (\"k bin/pe/%s/%d=%s\\n\",\n-\t\t\t\t\t\t\t\t\tmodule, symbol->ordinal, symname);\n-\t\t\t\t\t\t\t}\n+\t\t\t\tlastfs = 's';\n+\t\t\t}\n+\t\t\tif (r->bin->prefix || *name) { // we don't want unnamed symbol flags\n+\t\t\t\tchar *flagname = construct_symbol_flagname (\"sym\", name, MAXFLAG_LEN_DEFAULT);\n+\t\t\t\tif (!flagname) {\n+\t\t\t\t\tgoto next;\n+\t\t\t\t}\n+\t\t\t\tr_cons_printf (\"\\\"f %s%s%s %u 0x%08\" PFMT64x \"\\\"\\n\",\n+\t\t\t\t\tr->bin->prefix ? r->bin->prefix : \"\", r->bin->prefix ? \".\" : \"\",\n+\t\t\t\t\tflagname, symbol->size, addr);\n+\t\t\t\tfree(flagname);\n+\t\t\t}\n+\t\t\tbinfile = r_bin_cur (r->bin);\n+\t\t\tplugin = r_bin_file_cur_plugin (binfile);\n+\t\t\tif (plugin && plugin->name) {\n+\t\t\t\tif (r_str_startswith (plugin->name, \"pe\")) {\n+\t\t\t\t\tchar *module = strdup (r_symbol_name);\n+\t\t\t\t\tchar *p = strstr (module, \".dll_\");\n+\t\t\t\t\tif (p && strstr (module, \"imp.\")) {\n+\t\t\t\t\t\tconst char *symname = p + 5;\n+\t\t\t\t\t\t*p = 0;\n+\t\t\t\t\t\tif (r->bin->prefix) {\n+\t\t\t\t\t\t\tr_cons_printf (\"k bin/pe/%s/%d=%s.%s\\n\",\n+\t\t\t\t\t\t\t\tmodule, symbol->ordinal, r->bin->prefix, symname);\n+\t\t\t\t\t\t} else {\n+\t\t\t\t\t\t\tr_cons_printf (\"k bin/pe/%s/%d=%s\\n\",\n+\t\t\t\t\t\t\t\tmodule, symbol->ordinal, symname);\n \t\t\t\t\t\t}\n-\t\t\t\t\t\tfree (module);\n \t\t\t\t\t}\n+\t\t\t\t\tfree (module);\n \t\t\t\t}\n \t\t\t}\n \t\t} else {\n@@ -2188,6 +2197,7 @@ static int bin_symbols(RCore *r, int mode, ut64 laddr, int va, ut64 at, const ch\n \t\t\tr_cons_printf (\" 0x%08\"PFMT64x\" %6s %6s %4d%s%s\\n\",\n \t\t\t               addr, bind, type, symbol->size, *name? \" \": \"\", name);\n \t\t}\n+next:\n \t\tsnFini (&sn);\n \t\ti++;\n \t\tfree (r_symbol_name);\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42475763-vul",
+      "digest": "sha256:6ec263df6c276bbda3af570fcd69114b33f9bc21005db13b701603b7594a053b"
+    },
+    "patched": {
+      "ref": "n132/arvo:42475763-fix",
+      "digest": "sha256:c7fbe263a496ecbf6a65147e88a8c0c690347546e98b09b8f9803a0aede08e65"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/radare2/libr/util/calc.c:216",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/radare2/libr/util/calc.c:216"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

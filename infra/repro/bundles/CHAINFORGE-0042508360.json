@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042508360",
+  "chain": "CWE-416->CWE-125",
+  "project": "libarchive",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42508360",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "52efa50c69653029687bfc545703b7340b7a51e2",
+      "fix_commits": [
+        "52efa50c69653029687bfc545703b7340b7a51e2"
+      ],
+      "repo": "https://github.com/libarchive/libarchive"
+    },
+    "patch": "From 52efa50c69653029687bfc545703b7340b7a51e2 Mon Sep 17 00:00:00 2001\nFrom: Martin Matuska <martin@matuska.org>\nDate: Wed, 16 Feb 2022 21:36:41 +0100\nSubject: [PATCH] RAR reader: fix heap-use-after-free in RAR (v4) filter code\n\nRework function expand() to process integer passed by reference\nand return an archive error code.\n\nFixes: 01a2d329dfc7 (support rar filters)\nReported-by: OSS-Fuzz #44547\n---\n libarchive/archive_read_support_format_rar.c | 46 ++++++++++++--------\n 1 file changed, 29 insertions(+), 17 deletions(-)\n\ndiff --git a/libarchive/archive_read_support_format_rar.c b/libarchive/archive_read_support_format_rar.c\nindex 893a280..388484a 100644\n--- a/libarchive/archive_read_support_format_rar.c\n+++ b/libarchive/archive_read_support_format_rar.c\n@@ -430,7 +430,7 @@ static int new_node(struct huffman_code *);\n static int make_table(struct archive_read *, struct huffman_code *);\n static int make_table_recurse(struct archive_read *, struct huffman_code *, int,\n                               struct huffman_table_entry *, int, int);\n-static int64_t expand(struct archive_read *, int64_t);\n+static int expand(struct archive_read *, int64_t *);\n static int copy_from_lzss_window_to_unp(struct archive_read *, const void **,\n                                         int64_t, int);\n static const void *rar_read_ahead(struct archive_read *, size_t, ssize_t *);\n@@ -1988,7 +1988,7 @@ read_data_compressed(struct archive_read *a, const void **buff, size_t *size,\n     return (ARCHIVE_FATAL);\n \n   struct rar *rar;\n-  int64_t start, end, actualend;\n+  int64_t start, end;\n   size_t bs;\n   int ret = (ARCHIVE_OK), sym, code, lzss_offset, length, i;\n \n@@ -2179,11 +2179,12 @@ read_data_compressed(struct archive_read *a, const void **buff, size_t *size,\n         end = rar->filters.filterstart;\n       }\n \n-      if ((actualend = expand(a, end)) < 0)\n-        return ((int)actualend);\n+      ret = expand(a, &end);\n+      if (ret != ARCHIVE_OK)\n+\t      return (ret);\n \n-      rar->bytes_uncopied = actualend - start;\n-      rar->filters.lastend = actualend;\n+      rar->bytes_uncopied = end - start;\n+      rar->filters.lastend = end;\n       if (rar->filters.lastend != rar->filters.filterstart && rar->bytes_uncopied == 0) {\n           /* Broken RAR files cause this case.\n           * NOTE: If this case were possible on a normal RAR file\n@@ -2825,8 +2826,8 @@ make_table_recurse(struct archive_read *a, struct huffman_code *code, int node,\n   return ret;\n }\n \n-static int64_t\n-expand(struct archive_read *a, int64_t end)\n+static int\n+expand(struct archive_read *a, int64_t *end)\n {\n   static const unsigned char lengthbases[] =\n     {   0,   1,   2,   3,   4,   5,   6,\n@@ -2873,16 +2874,19 @@ expand(struct archive_read *a, int64_t end)\n   struct rar *rar = (struct rar *)(a->format->data);\n   struct rar_br *br = &(rar->br);\n \n-  if (rar->filters.filterstart < end)\n-    end = rar->filters.filterstart;\n+  if (rar->filters.filterstart < *end)\n+    *end = rar->filters.filterstart;\n \n   while (1)\n   {\n-    if(lzss_position(&rar->lzss) >= end)\n-      return end;\n+    if(lzss_position(&rar->lzss) >= *end) {\n+      return (ARCHIVE_OK);\n+    }\n \n-    if(rar->is_ppmd_block)\n-      return lzss_position(&rar->lzss);\n+    if(rar->is_ppmd_block) {\n+      *end = lzss_position(&rar->lzss);\n+      return (ARCHIVE_OK);\n+    }\n \n     if ((symbol = read_next_symbol(a, &rar->maincode)) < 0)\n       return (ARCHIVE_FATAL);\n@@ -2906,7 +2910,8 @@ expand(struct archive_read *a, int64_t end)\n           goto truncated_data;\n         rar->start_new_table = rar_br_bits(br, 1);\n         rar_br_consume(br, 1);\n-        return lzss_position(&rar->lzss);\n+        *end = lzss_position(&rar->lzss);\n+        return (ARCHIVE_OK);\n       }\n       else\n       {\n@@ -2917,7 +2922,7 @@ expand(struct archive_read *a, int64_t end)\n     }\n     else if(symbol==257)\n     {\n-      if (!read_filter(a, &end))\n+      if (!read_filter(a, end))\n           return (ARCHIVE_FATAL);\n       continue;\n     }\n@@ -3325,12 +3330,19 @@ run_filters(struct archive_read *a)\n   struct rar_filter *filter = filters->stack;\n   size_t start = filters->filterstart;\n   size_t end = start + filter->blocklength;\n+  int64_t tend;\n   uint32_t lastfilteraddress;\n   uint32_t lastfilterlength;\n   int ret;\n \n   filters->filterstart = INT64_MAX;\n-  end = (size_t)expand(a, end);\n+  tend = (int64_t)end;\n+  ret = expand(a, &tend);\n+  if (ret != ARCHIVE_OK)\n+    return (ret);\n+  if (tend < 0)\n+    return (ARCHIVE_FATAL);\n+  end = (size_t)tend;\n   if (end != start + filter->blocklength)\n     return 0;\n \n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42508360-vul",
+      "digest": "sha256:13cfd437e456e758e7711a1117881e159630459bf681f964ae4e1412888c10d2"
+    },
+    "patched": {
+      "ref": "n132/arvo:42508360-fix",
+      "digest": "sha256:ae82e4198959f87aacdb175c1fdab8e120a286f8e3633be713c517c3d0317c32"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/libarchive/libarchive/archive_read_support_format_rar.c:3334",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/libarchive/libarchive/archive_read_support_format_rar.c:3334"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

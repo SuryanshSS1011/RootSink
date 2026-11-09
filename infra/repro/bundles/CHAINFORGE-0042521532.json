@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042521532",
+  "chain": "CWE-416->CWE-125",
+  "project": "mruby",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42521532",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "321cfe97605de8f050ac9be597069e370d5d9da3",
+      "fix_commits": [
+        "321cfe97605de8f050ac9be597069e370d5d9da3"
+      ],
+      "repo": "https://github.com/mruby/mruby"
+    },
+    "patch": "From 321cfe97605de8f050ac9be597069e370d5d9da3 Mon Sep 17 00:00:00 2001\nFrom: \"Yukihiro \\\"Matz\\\" Matsumoto\" <matz@ruby.or.jp>\nDate: Mon, 27 Feb 2023 19:56:18 +0900\nSubject: [PATCH] mruby-io/file.c: add File#atime and File#ctime\n\n---\n mrbgems/mruby-io/README.md      |  4 ++--\n mrbgems/mruby-io/mrblib/file.rb | 10 ++++++++++\n mrbgems/mruby-io/src/file.c     | 24 ++++++++++++++++++++++++\n 3 files changed, 36 insertions(+), 2 deletions(-)\n\ndiff --git a/mrbgems/mruby-io/README.md b/mrbgems/mruby-io/README.md\nindex 3629cdb..21138ac 100644\n--- a/mrbgems/mruby-io/README.md\n+++ b/mrbgems/mruby-io/README.md\n@@ -158,10 +158,10 @@ Add the line below to your build configuration.\n | File.writable?              |          | FileTest |\n | File.writable_real?         |          | FileTest |\n | File.zero?                  | o        | FileTest |\n-| File#atime                  |          |          |\n+| File#atime                  | o        |          |\n | File#chmod                  |          |          |\n | File#chown                  |          |          |\n-| File#ctime                  |          |          |\n+| File#ctime                  | o        |          |\n | File#flock                  | o        |          |\n | File#lstat                  |          |          |\n | File#mtime                  | o        |          |\ndiff --git a/mrbgems/mruby-io/mrblib/file.rb b/mrbgems/mruby-io/mrblib/file.rb\nindex b706cf0..4a38767 100644\n--- a/mrbgems/mruby-io/mrblib/file.rb\n+++ b/mrbgems/mruby-io/mrblib/file.rb\n@@ -11,6 +11,16 @@ class File < IO\n     end\n   end\n \n+  def atime\n+    t = self._atime\n+    t && Time.at(t)\n+  end\n+\n+  def ctime\n+    t = self._ctime\n+    t && Time.at(t)\n+  end\n+\n   def mtime\n     t = self._mtime\n     t && Time.at(t)\ndiff --git a/mrbgems/mruby-io/src/file.c b/mrbgems/mruby-io/src/file.c\nindex 6505f98..73a7301 100644\n--- a/mrbgems/mruby-io/src/file.c\n+++ b/mrbgems/mruby-io/src/file.c\n@@ -391,6 +391,28 @@ mrb_file__gethome(mrb_state *mrb, mrb_value klass)\n #endif\n }\n \n+static mrb_value\n+mrb_file_atime(mrb_state *mrb, mrb_value self)\n+{\n+  int fd = mrb_io_fileno(mrb, self);\n+  mrb_stat st;\n+\n+  if (mrb_fstat(fd, &st) == -1)\n+    return mrb_nil_value();\n+  return mrb_int_value(mrb, (mrb_int)st.st_atime);\n+}\n+\n+static mrb_value\n+mrb_file_ctime(mrb_state *mrb, mrb_value self)\n+{\n+  int fd = mrb_io_fileno(mrb, self);\n+  mrb_stat st;\n+\n+  if (mrb_fstat(fd, &st) == -1)\n+    return mrb_nil_value();\n+  return mrb_int_value(mrb, (mrb_int)st.st_ctime);\n+}\n+\n static mrb_value\n mrb_file_mtime(mrb_state *mrb, mrb_value self)\n {\n@@ -610,6 +632,8 @@ mrb_init_file(mrb_state *mrb)\n   mrb_define_class_method(mrb, file, \"_gethome\",  mrb_file__gethome,   MRB_ARGS_OPT(1));\n \n   mrb_define_method(mrb, file, \"flock\", mrb_file_flock, MRB_ARGS_REQ(1));\n+  mrb_define_method(mrb, file, \"_atime\", mrb_file_atime, MRB_ARGS_NONE());\n+  mrb_define_method(mrb, file, \"_ctime\", mrb_file_ctime, MRB_ARGS_NONE());\n   mrb_define_method(mrb, file, \"_mtime\", mrb_file_mtime, MRB_ARGS_NONE());\n   mrb_define_method(mrb, file, \"size\", mrb_file_size, MRB_ARGS_NONE());\n   mrb_define_method(mrb, file, \"truncate\", mrb_file_truncate, MRB_ARGS_REQ(1));\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42521532-vul",
+      "digest": "sha256:1346629fe80a9cd84365fe4650f8dfc16d71d15e69361b46df3196cdae6e1310"
+    },
+    "patched": {
+      "ref": "n132/arvo:42521532-fix",
+      "digest": "sha256:c3c8b2ab602e746aae02faf7c13ac6da3b74119daa217f5270ce66f18e033082"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/mruby/src/gc.c:789",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/mruby/src/gc.c:789"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

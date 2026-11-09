@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042503750",
+  "chain": "CWE-416->CWE-787",
+  "project": "libjxl",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42503750",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "839ef3e392240fc3994b8b73e5164ac5cad4d30a",
+      "fix_commits": [
+        "839ef3e392240fc3994b8b73e5164ac5cad4d30a"
+      ],
+      "repo": "https://github.com/libjxl/libjxl"
+    },
+    "patch": "diff --git a/lib/jxl/box_content_decoder.cc b/lib/jxl/box_content_decoder.cc\nindex 262dac53944..c4cba3a31ae 100644\n--- a/lib/jxl/box_content_decoder.cc\n+++ b/lib/jxl/box_content_decoder.cc\n@@ -83,7 +83,6 @@ JxlDecoderStatus JxlBoxContentDecoder::Process(const uint8_t* next_in,\n     size_t can_read = avail_in;\n     if (!box_until_eof_) can_read = std::min<size_t>(can_read, remaining_);\n     size_t to_write = std::min<size_t>(can_read, *avail_out);\n-\n     memcpy(*next_out, next_in, to_write);\n \n     *next_out += to_write;\ndiff --git a/lib/jxl/decode.cc b/lib/jxl/decode.cc\nindex f90ab0df1bd..74fbb64f7ce 100644\n--- a/lib/jxl/decode.cc\n+++ b/lib/jxl/decode.cc\n@@ -1759,10 +1759,12 @@ JxlDecoderStatus JxlDecoderProcessInput(JxlDecoder* dec) {\n         if (dec->store_exif == 0 &&\n             memcmp(dec->box_decoded_type, \"Exif\", 4) == 0) {\n           dec->store_exif = 1;\n+          dec->recon_out_buffer_pos = 0;\n         }\n         if (dec->store_xmp == 0 &&\n-            memcmp(dec->box_decoded_type, \"XML \", 4) == 0) {\n+            memcmp(dec->box_decoded_type, \"xml \", 4) == 0) {\n           dec->store_xmp = 1;\n+          dec->recon_out_buffer_pos = 0;\n         }\n       }\n \ndiff --git a/lib/jxl/decode_test.cc b/lib/jxl/decode_test.cc\nindex fb019e467e9..b74444bb3ce 100644\n--- a/lib/jxl/decode_test.cc\n+++ b/lib/jxl/decode_test.cc\n@@ -3315,6 +3315,14 @@ TEST(DecodeTest, JXL_TRANSCODE_JPEG_TEST(JPEGReconstructionTest)) {\n   VerifyJPEGReconstruction(container, orig);\n }\n \n+TEST(DecodeTest, JXL_TRANSCODE_JPEG_TEST(JPEGReconstructionMetadataTest)) {\n+  const std::string jpeg_path = \"jxl/jpeg_reconstruction/1x1_exif_xmp.jpg\";\n+  const std::string jxl_path = \"jxl/jpeg_reconstruction/1x1_exif_xmp.jxl\";\n+  const jxl::PaddedBytes jpeg = jxl::ReadTestData(jpeg_path);\n+  const jxl::PaddedBytes jxl = jxl::ReadTestData(jxl_path);\n+  VerifyJPEGReconstruction(jxl, jpeg);\n+}\n+\n TEST(DecodeTest, ContinueFinalNonEssentialBoxTest) {\n   size_t xsize = 80, ysize = 90;\n   std::vector<uint8_t> pixels = jxl::test::GetSomeTestImage(xsize, ysize, 4, 0);\ndiff --git a/lib/jxl/decode_to_jpeg.cc b/lib/jxl/decode_to_jpeg.cc\nindex a3db5feacfb..4114d2905c6 100644\n--- a/lib/jxl/decode_to_jpeg.cc\n+++ b/lib/jxl/decode_to_jpeg.cc\n@@ -95,7 +95,7 @@ size_t JxlToJpegDecoder::NumXmpMarkers(const jpeg::JPEGData& jpeg_data) {\n size_t JxlToJpegDecoder::ExifBoxContentSize(const jpeg::JPEGData& jpeg_data) {\n   for (size_t i = 0; i < jpeg_data.app_data.size(); ++i) {\n     if (jpeg_data.app_marker_type[i] == jxl::jpeg::AppMarkerType::kExif) {\n-      return jpeg_data.app_data[i].size() + 4 - 9;\n+      return jpeg_data.app_data[i].size() + 4 - 3 - sizeof(jpeg::kExifTag);\n     }\n   }\n   return 0;\n@@ -104,7 +104,7 @@ size_t JxlToJpegDecoder::ExifBoxContentSize(const jpeg::JPEGData& jpeg_data) {\n size_t JxlToJpegDecoder::XmlBoxContentSize(const jpeg::JPEGData& jpeg_data) {\n   for (size_t i = 0; i < jpeg_data.app_data.size(); ++i) {\n     if (jpeg_data.app_marker_type[i] == jxl::jpeg::AppMarkerType::kXMP) {\n-      return jpeg_data.app_data[i].size() - 9;\n+      return jpeg_data.app_data[i].size() - 3 - sizeof(jpeg::kXMPTag);\n     }\n   }\n   return 0;\n@@ -114,14 +114,17 @@ JxlDecoderStatus JxlToJpegDecoder::SetExif(const uint8_t* data, size_t size,\n                                            jpeg::JPEGData* jpeg_data) {\n   for (size_t i = 0; i < jpeg_data->app_data.size(); ++i) {\n     if (jpeg_data->app_marker_type[i] == jxl::jpeg::AppMarkerType::kExif) {\n-      if (jpeg_data->app_data[i].size() != size + 9 - 4) return JXL_DEC_ERROR;\n+      if (jpeg_data->app_data[i].size() !=\n+          size + 3 + sizeof(jpeg::kExifTag) - 4)\n+        return JXL_DEC_ERROR;\n       // The first 9 bytes are used for JPEG marker header.\n       jpeg_data->app_data[i][0] = 0xE1;\n       // The second and third byte are already filled in correctly\n       memcpy(jpeg_data->app_data[i].data() + 3, jpeg::kExifTag,\n              sizeof(jpeg::kExifTag));\n       // The first 4\n-      memcpy(jpeg_data->app_data[i].data() + 9, data + 4, size - 4);\n+      memcpy(jpeg_data->app_data[i].data() + 3 + sizeof(jpeg::kExifTag),\n+             data + 4, size - 4);\n       return JXL_DEC_SUCCESS;\n     }\n   }\n@@ -131,13 +134,15 @@ JxlDecoderStatus JxlToJpegDecoder::SetXmp(const uint8_t* data, size_t size,\n                                           jpeg::JPEGData* jpeg_data) {\n   for (size_t i = 0; i < jpeg_data->app_data.size(); ++i) {\n     if (jpeg_data->app_marker_type[i] == jxl::jpeg::AppMarkerType::kXMP) {\n-      if (jpeg_data->app_data[i].size() != size + 9) return JXL_DEC_ERROR;\n+      if (jpeg_data->app_data[i].size() != size + 3 + sizeof(jpeg::kXMPTag))\n+        return JXL_DEC_ERROR;\n       // The first 9 bytes are used for JPEG marker header.\n       jpeg_data->app_data[i][0] = 0xE1;\n       // The second and third byte are already filled in correctly\n       memcpy(jpeg_data->app_data[i].data() + 3, jpeg::kXMPTag,\n              sizeof(jpeg::kXMPTag));\n-      memcpy(jpeg_data->app_data[i].data() + 5, data, size);\n+      memcpy(jpeg_data->app_data[i].data() + 3 + sizeof(jpeg::kXMPTag), data,\n+             size);\n       return JXL_DEC_SUCCESS;\n     }\n   }\ndiff --git a/third_party/testdata/jxl/jpeg_reconstruction/1x1_exif_xmp.jpg b/third_party/testdata/jxl/jpeg_reconstruction/1x1_exif_xmp.jpg\nnew file mode 100644\nindex 00000000000..c057580dd6b\nBinary files /dev/null and b/third_party/testdata/jxl/jpeg_reconstruction/1x1_exif_xmp.jpg differ\ndiff --git a/third_party/testdata/jxl/jpeg_reconstruction/1x1_exif_xmp.jxl b/third_party/testdata/jxl/jpeg_reconstruction/1x1_exif_xmp.jxl\nnew file mode 100644\nindex 00000000000..7aadbded9ba\nBinary files /dev/null and b/third_party/testdata/jxl/jpeg_reconstruction/1x1_exif_xmp.jxl differ\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42503750-vul",
+      "digest": "sha256:ad688487624686578abd4a56b02d5c212189b74619ff61e248cb279793b0468f"
+    },
+    "patched": {
+      "ref": "n132/arvo:42503750-fix",
+      "digest": "sha256:5107cbda55979e1286908bb81753ca537035fee2be406b64b8308d1a5857210e"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/libjxl/lib/jxl/box_content_decoder.cc:87",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/libjxl/lib/jxl/box_content_decoder.cc:87"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

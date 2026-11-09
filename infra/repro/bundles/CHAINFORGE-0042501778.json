@@ -1,0 +1,80 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042501778",
+  "chain": "CWE-20->CWE-125",
+  "project": "yara",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42501778",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "900ade653f3c58a904b428317a3c632623b0120d\n9e03c23f0f2b7f03a754aec7459d80a5370b427d\nc4cdf42ad8509379f46f948cfe45d1245ef1a2eb\nfe4fa92eb9bbca10d052f997008e881a5e220fa1\n95fc1ed889fdae48aa5d7bf4fb0daca6fd96f6bb\n669ab4e22be81e946e23269032ddf4751938c404\n26b92cb4a335358ac870a9f83e41e536ccb35adb\n948b20bede31b3279021d01e9b3eefdd911fa942\n106b30bc774fadb5c362481c41f2c7428fc9d413",
+      "fix_commits": [
+        "900ade653f3c58a904b428317a3c632623b0120d",
+        "9e03c23f0f2b7f03a754aec7459d80a5370b427d",
+        "c4cdf42ad8509379f46f948cfe45d1245ef1a2eb",
+        "fe4fa92eb9bbca10d052f997008e881a5e220fa1",
+        "95fc1ed889fdae48aa5d7bf4fb0daca6fd96f6bb",
+        "669ab4e22be81e946e23269032ddf4751938c404",
+        "26b92cb4a335358ac870a9f83e41e536ccb35adb",
+        "948b20bede31b3279021d01e9b3eefdd911fa942",
+        "106b30bc774fadb5c362481c41f2c7428fc9d413"
+      ],
+      "repo": "https://github.com/VirusTotal/yara"
+    },
+    "patch": "diff --git a/libyara/modules/elf.c b/libyara/modules/elf.c\nindex 1eb3d960bf..c98c4fae72 100644\n--- a/libyara/modules/elf.c\n+++ b/libyara/modules/elf.c\n@@ -327,7 +327,8 @@ void parse_elf_header_##bits##_##bo(                                           \\\n                                                                                \\\n           set_sized_string(                                                    \\\n               sym_name,                                                        \\\n-              strnlen(sym_name, sym_str_table_size - sym_name_offset),         \\\n+              strnlen(                                                         \\\n+                  sym_name, (size_t) (sym_str_table_size - sym_name_offset)),  \\\n               elf_obj,                                                         \\\n               \"symtab[%i].name\",                                               \\\n               j);                                                              \\\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42501778-vul",
+      "digest": "sha256:060bb052f7f6a7f5aa5f13df452ddb94d0e8d0a7d01dbbffa9f5c8f8183c4858"
+    },
+    "patched": {
+      "ref": "n132/arvo:42501778-fix",
+      "digest": "sha256:9a80c623d31eef4d683bba55f2d3433955d9b2a8d20b956ab3a5c2ce56e570d8"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/yara/libyara/modules/pe.c:1019",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/yara/libyara/modules/pe.c:1019"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

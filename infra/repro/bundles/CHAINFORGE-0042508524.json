@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042508524",
+  "chain": "CWE-1285->CWE-125",
+  "project": "libplist",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42508524",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "106c4ee7f53ef800a82fce9638f29756e8b78640",
+      "fix_commits": [
+        "106c4ee7f53ef800a82fce9638f29756e8b78640"
+      ],
+      "repo": "https://github.com/libimobiledevice/libplist"
+    },
+    "patch": "diff --git a/src/jplist.c b/src/jplist.c\nindex 978c5f999..45f054486 100644\n--- a/src/jplist.c\n+++ b/src/jplist.c\n@@ -490,7 +490,7 @@ static plist_t parse_primitive(const char* js, jsmntok_info_t* ti, int* index)\n         if (endp >= str_end) {\n             /* integer */\n             val = plist_new_uint((uint64_t)intpart);\n-        } else if ((*endp == '.' && endp+1 < str_end && isdigit(*(endp+1))) || ((*endp == 'e' || *endp == 'E') && endp < str_end && (isdigit(*(endp+1)) || ((*(endp+1) == '-') && endp+1 < str_end && isdigit(*(endp+2)))))) {\n+        } else if ((*endp == '.' && endp+1 < str_end && isdigit(*(endp+1))) || ((*endp == 'e' || *endp == 'E') && endp+1 < str_end && (isdigit(*(endp+1)) || ((*(endp+1) == '-') && endp+2 < str_end && isdigit(*(endp+2)))))) {\n             /* floating point */\n             double dval = (double)intpart;\n             char* fendp = endp;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42508524-vul",
+      "digest": "sha256:b83ff65cdda198135c75254a922c8b83f973c74638a0a533f6136859aef5435d"
+    },
+    "patched": {
+      "ref": "n132/arvo:42508524-fix",
+      "digest": "sha256:40e8fd3970734c32b1416b79c6c9ce1e5313c9838ed384389142c9722af94d83"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/libplist/src/jplist.c:470",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/libplist/src/jplist.c:470"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

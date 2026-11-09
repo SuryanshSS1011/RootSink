@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-959280623",
+  "chain": "CWE-129->CWE-787",
+  "project": "open62541",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42479069",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/open62541/open62541/commit/22fadf7edf95caecb84fa1a9b36deac8314fe801",
+      "fix_commits": [
+        "22fadf7edf95caecb84fa1a9b36deac8314fe801"
+      ],
+      "repo": "https://github.com/open62541/open62541"
+    },
+    "patch": "diff --git a/deps/mdnsd b/deps/mdnsd\nindex 0f504efa295..f7f0dd543f1 160000\n--- a/deps/mdnsd\n+++ b/deps/mdnsd\n@@ -1 +1 @@\n-Subproject commit 0f504efa29598c07dcab290ce6118d496c1f1ad1\n+Subproject commit f7f0dd543f12fa7bbf2b667cceb287b9c8184b7d\ndiff --git a/src/ua_types_encoding_json.c b/src/ua_types_encoding_json.c\nindex 8e129b55949..66e0e6734db 100644\n--- a/src/ua_types_encoding_json.c\n+++ b/src/ua_types_encoding_json.c\n@@ -2259,6 +2259,9 @@ searchObjectForKeyRec(const char *searchKey, CtxJson *ctx,\n                 if(jsoneq((char*)ctx->pos, &parseCtx->tokenArray[parseCtx->index], searchKey) == 0) {\n                     /*found*/\n                     parseCtx->index++; /*We give back a pointer to the value of the searched key!*/\n+                    if (parseCtx->index >= parseCtx->tokenCount)\n+                        /* We got invalid json. See https://bugs.chromium.org/p/oss-fuzz/issues/detail?id=14620 */\n+                        return UA_STATUSCODE_BADOUTOFRANGE;\n                     *resultIndex = parseCtx->index;\n                     return UA_STATUSCODE_GOOD;\n                 }\ndiff --git a/tools/nodeset_compiler/backend_open62541_nodes.py b/tools/nodeset_compiler/backend_open62541_nodes.py\nindex a515e4b0a69..3b0f08e0be8 100644\n--- a/tools/nodeset_compiler/backend_open62541_nodes.py\n+++ b/tools/nodeset_compiler/backend_open62541_nodes.py\n@@ -305,6 +305,7 @@ def generateExtensionObjectSubtypeCode(node, parent, nodeset, global_var_code, i\n             for subArrayIdx,val in enumerate(subv):\n                 code.append(generateNodeValueCode(instanceNameSafe + \"_\" + memberName + \"[\" + str(subArrayIdx) + \"]\" +\" = \",\n                                                   val, instanceName,instanceName + \"_gehtNed_member\", global_var_code, asIndirect=False))\n+            code.append(instanceName + accessor + memberName + \"Size = {0};\".format(len(subv)))\n             code.append(instanceName + accessor + memberName + \" = \" + instanceNameSafe+\"_\"+ memberName+\";\")\n             continue\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42479069-vul",
+      "digest": "sha256:7c1a4365c2ed8ec04a7442c02c8f5cf09da26a66b616e4e5893d22ba16a3d372"
+    },
+    "patched": {
+      "ref": "n132/arvo:42479069-fix",
+      "digest": "sha256:5d2356461c5114ca68c02e4dfcaff5b522a22558d3f098abc31c5d52abf5d9b1"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "crash_site": "/src/open62541/deps/mdnsd/libmdnsd/1035.c:337",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 129,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "site": "/src/open62541/deps/mdnsd/libmdnsd/1035.c:337"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

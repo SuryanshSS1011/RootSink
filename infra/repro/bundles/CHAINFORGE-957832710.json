@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-957832710",
+  "chain": "CWE-129->CWE-787",
+  "project": "faad2",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42523706",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/knik0/faad2/commit/135b37882f57a4883851ccb5be9363795f10fb9b",
+      "fix_commits": [
+        "135b37882f57a4883851ccb5be9363795f10fb9b"
+      ],
+      "repo": "https://github.com/knik0/faad2"
+    },
+    "patch": "diff --git a/libfaad/syntax.c b/libfaad/syntax.c\nindex 9e77a3ed..7193262e 100644\n--- a/libfaad/syntax.c\n+++ b/libfaad/syntax.c\n@@ -369,9 +369,16 @@ static void decode_sce_lfe(NeAACDecStruct *hDecoder,\n         hDecoder->internal_channel[channels+1] = channels+1;\n     } else {\n         if (hDecoder->pce_set)\n+        {\n+            if (hDecoder->pce.channels > MAX_CHANNELS)\n+            {\n+                hInfo->error = 22;\n+                return;\n+            }\n             hDecoder->internal_channel[hDecoder->pce.sce_channel[tag]] = channels;\n-        else\n+        } else {\n             hDecoder->internal_channel[channels] = channels;\n+        }\n     }\n \n     hDecoder->fr_channels += hDecoder->element_output_channels[hDecoder->fr_ch_ele];\n@@ -394,6 +401,11 @@ static void decode_cpe(NeAACDecStruct *hDecoder, NeAACDecFrameInfo *hInfo, bitfi\n         hInfo->error = 13;\n         return;\n     }\n+    if (hDecoder->pce_set && (hDecoder->pce.channels > MAX_CHANNELS))\n+    {\n+        hInfo->error = 22;\n+        return;\n+    }\n \n     /* for CPE the number of output channels is always 2 */\n     if (hDecoder->element_output_channels[hDecoder->fr_ch_ele] == 0)\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42523706-vul",
+      "digest": "sha256:33c9c3e7c8d2683f0f9808a2a24b54df453fa4b18780908fc257fff4436a685f"
+    },
+    "patched": {
+      "ref": "n132/arvo:42523706-fix",
+      "digest": "sha256:ff817458a8438dbdb69579234860e342ff8ca8f7473009e1cf6e811525bcbf22"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "crash_site": "/src/faad2/libfaad/syntax.c:372",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 129,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "site": "/src/faad2/libfaad/syntax.c:372"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

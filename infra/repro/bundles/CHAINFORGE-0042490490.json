@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042490490",
+  "chain": "CWE-20->CWE-125",
+  "project": "glib",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42490490",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "b4c2e4d553099a85f75edf8fe9c64028e7302766",
+      "fix_commits": [
+        "b4c2e4d553099a85f75edf8fe9c64028e7302766"
+      ],
+      "repo": "https://gitlab.gnome.org/GNOME/glib"
+    },
+    "patch": "From b4c2e4d553099a85f75edf8fe9c64028e7302766 Mon Sep 17 00:00:00 2001\nFrom: Philip Withnall <pwithnall@endlessos.org>\nDate: Wed, 9 Dec 2020 12:07:41 +0000\nSubject: [PATCH] gdate: Validate input as UTF-8 before parsing\n\nDates have to be valid UTF-8.\n\noss-fuzz#28458\n\nSigned-off-by: Philip Withnall <pwithnall@endlessos.org>\n---\n glib/gdate.c      |  6 +++++-\n glib/tests/date.c | 24 ++++++++++++++++++++++++\n 2 files changed, 29 insertions(+), 1 deletion(-)\n\ndiff --git a/glib/gdate.c b/glib/gdate.c\nindex c896c22..391b142 100644\n--- a/glib/gdate.c\n+++ b/glib/gdate.c\n@@ -1234,7 +1234,11 @@ g_date_set_parse (GDate       *d,\n   \n   /* set invalid */\n   g_date_clear (d, 1);\n-  \n+\n+  /* The input has to be valid UTF-8. */\n+  if (!g_utf8_validate (str, -1, NULL))\n+    return;\n+\n   G_LOCK (g_date_global);\n \n   g_date_prepare_to_parse (str, &pt);\ndiff --git a/glib/tests/date.c b/glib/tests/date.c\nindex e49ec34..38de1d9 100644\n--- a/glib/tests/date.c\n+++ b/glib/tests/date.c\n@@ -184,6 +184,29 @@ test_parse (void)\n   g_date_free (d);\n }\n \n+static void\n+test_parse_invalid (void)\n+{\n+  const gchar * const strs[] =\n+    {\n+      /* Incomplete UTF-8 sequence */\n+      \"\\xfd\",\n+    };\n+  gsize i;\n+\n+  for (i = 0; i < G_N_ELEMENTS (strs); i++)\n+    {\n+      GDate *d = g_date_new ();\n+\n+      g_test_message (\"Test %\" G_GSIZE_FORMAT, i);\n+      g_date_set_parse (d, strs[i]);\n+\n+      g_assert_false (g_date_valid (d));\n+\n+      g_date_free (d);\n+    }\n+}\n+\n static void\n test_parse_locale_change (void)\n {\n@@ -770,6 +793,7 @@ main (int argc, char** argv)\n   g_test_add_func (\"/date/julian\", test_julian_constructor);\n   g_test_add_func (\"/date/dates\", test_dates);\n   g_test_add_func (\"/date/parse\", test_parse);\n+  g_test_add_func (\"/date/parse/invalid\", test_parse_invalid);\n   g_test_add_func (\"/date/parse_locale_change\", test_parse_locale_change);\n   g_test_add_func (\"/date/month_substring\", test_month_substring);\n   g_test_add_func (\"/date/month_names\", test_month_names);\n-- \n2.55.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42490490-vul",
+      "digest": "sha256:656abf4fd678003890e3620a289db7cd2677608cdf19ae73c428c52003b395b3"
+    },
+    "patched": {
+      "ref": "n132/arvo:42490490-fix",
+      "digest": "sha256:2b9f4f3dd534d96b2477b712256a5e70e90e16d760ee35ffa9ac8378e5365c5b"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": null,
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": null
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

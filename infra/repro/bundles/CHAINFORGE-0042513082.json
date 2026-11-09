@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042513082",
+  "chain": "CWE-1285->CWE-787",
+  "project": "ffmpeg",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42513082",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "9450f759748d02d1d284d2e4afd741cb0fe0c04a",
+      "fix_commits": [
+        "9450f759748d02d1d284d2e4afd741cb0fe0c04a"
+      ],
+      "repo": "https://git.ffmpeg.org/ffmpeg.git"
+    },
+    "patch": "From 9450f759748d02d1d284d2e4afd741cb0fe0c04a Mon Sep 17 00:00:00 2001\nFrom: Michael Niedermayer <michael@niedermayer.cc>\nDate: Tue, 12 Jul 2022 20:43:20 +0200\nSubject: [PATCH] avcodec/lagarith: Check dst/src in zero run code\n\nFixes: out of array access\nFixes: 48799/clusterfuzz-testcase-minimized-ffmpeg_AV_CODEC_ID_LAGARITH_fuzzer-4764457825337344\n\nFound-by: continuous fuzzing process https://github.com/google/oss-fuzz/tree/master/projects/ffmpeg\nReviewed-by: Paul B Mahol <onemda@gmail.com>\nSigned-off-by: Michael Niedermayer <michael@niedermayer.cc>\n---\n libavcodec/lagarith.c | 3 +++\n 1 file changed, 3 insertions(+)\n\ndiff --git a/libavcodec/lagarith.c b/libavcodec/lagarith.c\nindex 3aeb1c8..00e8005 100644\n--- a/libavcodec/lagarith.c\n+++ b/libavcodec/lagarith.c\n@@ -409,6 +409,9 @@ output_zeros:\n         if (zero_run) {\n             zero_run = 0;\n             i += esc_count;\n+            if (i >  end - dst ||\n+                i >= src_end - src)\n+                return AVERROR_INVALIDDATA;\n             memcpy(dst, src, i);\n             dst += i;\n             l->zeros_rem = lag_calc_zero_run(src[i]);\n-- \n2.55.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42513082-vul",
+      "digest": "sha256:dd7b692fffaecc2fd2ed7bb3249f346ecdf35e24d8fe07e5d217a7c05d9d1cd0"
+    },
+    "patched": {
+      "ref": "n132/arvo:42513082-fix",
+      "digest": "sha256:20271c48c67115f5d8527c5043924de18c3d7dc8893bba729caf8f8536e265fa"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/ffmpeg/libavcodec/lagarith.c:412",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/ffmpeg/libavcodec/lagarith.c:412"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

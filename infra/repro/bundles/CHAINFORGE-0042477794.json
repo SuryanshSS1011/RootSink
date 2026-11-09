@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042477794",
+  "chain": "CWE-416->CWE-787",
+  "project": "libhevc",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42477794",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "1e2d083b14478f051b9ecb436a818fad7e0d86ab",
+      "fix_commits": [
+        "1e2d083b14478f051b9ecb436a818fad7e0d86ab"
+      ],
+      "repo": "https://android.googlesource.com/platform/external/libhevc"
+    },
+    "patch": "diff --git a/common/ivd.h b/common/ivd.h\nindex fe39a78..a3dae2d 100644\n--- a/common/ivd.h\n+++ b/common/ivd.h\n@@ -484,6 +484,17 @@\n      * disp_buf_id\n      */\n     UWORD32                                 u4_disp_buf_id;\n+\n+    /**\n+     * reorder_depth\n+     */\n+    WORD32                                  i4_reorder_depth;\n+\n+    /**\n+     * display index\n+     */\n+    WORD32                                  i4_display_index;\n+\n }ivd_video_decode_op_t;\n \n \ndiff --git a/decoder/ihevcd_decode.c b/decoder/ihevcd_decode.c\nindex 1295687..16ed36b 100644\n--- a/decoder/ihevcd_decode.c\n+++ b/decoder/ihevcd_decode.c\n@@ -207,6 +207,8 @@\n \n     ps_dec_op->u4_output_present = 0;\n     ps_dec_op->u4_progressive_frame_flag = 1;\n+    ps_dec_op->i4_display_index = -1;\n+    ps_dec_op->i4_reorder_depth = -1;\n     if(ps_codec->i4_sps_done)\n     {\n         sps_t *ps_sps = (ps_codec->s_parse.ps_sps_base + ps_codec->i4_sps_id);\n@@ -217,6 +219,8 @@\n         {\n             ps_dec_op->u4_progressive_frame_flag = 0;\n         }\n+        ps_dec_op->i4_reorder_depth =\n+                        ps_sps->ai1_sps_max_num_reorder_pics[ps_sps->i1_sps_max_sub_layers - 1];\n     }\n \n     ps_dec_op->u4_is_ref_flag = 1;\n@@ -224,7 +228,6 @@\n     ps_dec_op->u4_is_ref_flag = 1;\n \n     ps_dec_op->e4_fld_type = IV_FLD_TYPE_DEFAULT;\n-\n     ps_dec_op->u4_ts = (UWORD32)(-1);\n     ps_dec_op->u4_disp_buf_id = ps_codec->i4_disp_buf_id;\n     if(ps_codec->i4_flush_mode)\n@@ -264,6 +267,7 @@\n                     break;\n             }\n         }\n+        ps_dec_op->i4_display_index = ps_disp_buf->i4_abs_poc;\n         ps_dec_op->u4_output_present = 1;\n         ps_dec_op->u4_ts = ps_disp_buf->u4_ts;\n         if((ps_codec->i4_flush_mode == 0) && (ps_codec->s_parse.i4_end_of_frame == 0))\ndiff --git a/decoder/ihevcd_parse_headers.c b/decoder/ihevcd_parse_headers.c\nindex 2d1f567..e16a9e6 100644\n--- a/decoder/ihevcd_parse_headers.c\n+++ b/decoder/ihevcd_parse_headers.c\n@@ -1675,6 +1675,19 @@\n     {\n         return IHEVCD_INVALID_PARAMETER;\n     }\n+    /* Check if CTB size is different in case of multiple SPS with same ID */\n+    {\n+        sps_t *ps_sps_old = (ps_codec->s_parse.ps_sps_base + sps_id);\n+        if(ps_sps_old->i1_sps_valid && ps_sps_old->i1_log2_ctb_size != ctb_log2_size_y)\n+        {\n+            if(0 == ps_codec->i4_first_pic_done)\n+            {\n+                return IHEVCD_INVALID_PARAMETER;\n+            }\n+            ps_codec->i4_reset_flag = 1;\n+            return (IHEVCD_ERROR_T)IVD_RES_CHANGED;\n+        }\n+    }\n     ps_sps->i1_log2_ctb_size = ctb_log2_size_y;\n \n     UEV_PARSE(\"log2_min_transform_block_size_minus2\", value, ps_bitstrm);\ndiff --git a/decoder/ihevcd_parse_slice_header.c b/decoder/ihevcd_parse_slice_header.c\nindex ba2c5e8..c161fc4 100644\n--- a/decoder/ihevcd_parse_slice_header.c\n+++ b/decoder/ihevcd_parse_slice_header.c\n@@ -318,7 +318,7 @@\n     }\n \n     ps_slice_hdr = ps_codec->s_parse.ps_slice_hdr_base + (ps_codec->s_parse.i4_cur_slice_idx & (MAX_SLICE_HDR_CNT - 1));\n-\n+    memset(ps_slice_hdr, 0, sizeof(*ps_slice_hdr));\n \n     if((ps_pps->i1_dependent_slice_enabled_flag) &&\n        (!first_slice_in_pic_flag))\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42477794-vul",
+      "digest": "sha256:16904ce3261393801212774da41f65e37b251e1ccecaf03ab173114a84a4b4de"
+    },
+    "patched": {
+      "ref": "n132/arvo:42477794-fix",
+      "digest": "sha256:8d3d47ee3ef0ec9cfd9e55c8e6782755ae679c775b0feb720c5b5857628a75d9"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/libhevc/decoder/ihevcd_ref_list.c:179",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/libhevc/decoder/ihevcd_ref_list.c:179"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

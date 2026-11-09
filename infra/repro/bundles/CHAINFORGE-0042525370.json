@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042525370",
+  "chain": "CWE-1285->CWE-125",
+  "project": "PcapPlusPlus",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42525370",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "59bb2d12ec7e0b90b6fc4746da0a44f4dc64825b",
+      "fix_commits": [
+        "59bb2d12ec7e0b90b6fc4746da0a44f4dc64825b"
+      ],
+      "repo": "https://github.com/seladb/PcapPlusPlus"
+    },
+    "patch": "diff --git a/Packet++/header/TLVData.h b/Packet++/header/TLVData.h\nindex 085ba95dd9..1e4d79c335 100644\n--- a/Packet++/header/TLVData.h\n+++ b/Packet++/header/TLVData.h\n@@ -259,11 +259,14 @@ namespace pcpp\n \t\t */\n \t\tTLVRecordType getFirstTLVRecord(uint8_t* tlvDataBasePtr, size_t tlvDataLen) const\n \t\t{\n-\t\t\t// In most cases tlvDataLen is not zero and the size is correct therefore the overhead is not significant if the checks will be done later\n \t\t\tTLVRecordType resRec(tlvDataBasePtr); // for NRVO optimization\n \n+\t\t\t// resRec pointer is out-bounds of the TLV records memory\n+\t\t\tif (resRec.getRecordBasePtr() + resRec.getTotalSize() > tlvDataBasePtr + tlvDataLen)\n+\t\t\t\tresRec.assign(NULL);\n+\n \t\t\t// check if there are records at all and the total size is not zero\n-\t\t\tif (tlvDataLen == 0 || resRec.getTotalSize() == 0)\n+\t\t\tif (!resRec.isNull() && (tlvDataLen == 0 || resRec.getTotalSize() == 0))\n \t\t\t\tresRec.assign(NULL);\n \n \t\t\treturn resRec;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42525370-vul",
+      "digest": "sha256:6ca79a04027dbc4abfb7e280330d3ab54f859c7ddcc78831b844b737e3541743"
+    },
+    "patched": {
+      "ref": "n132/arvo:42525370-fix",
+      "digest": "sha256:e753bce06ac7aa8756ab6e500ab6ccc2283ab5a301a6d88f287e4e68e365e620"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/PcapPlusPlus/Packet++/src/SipLayer.cpp:894",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/PcapPlusPlus/Packet++/src/SipLayer.cpp:894"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

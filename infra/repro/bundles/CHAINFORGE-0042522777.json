@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042522777",
+  "chain": "CWE-1284->CWE-125",
+  "project": "libdwarf",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42522777",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "36e4063ade31c9ea6ea5df973d2045b36877885b",
+      "fix_commits": [
+        "36e4063ade31c9ea6ea5df973d2045b36877885b"
+      ],
+      "repo": "https://github.com/davea42/libdwarf-code"
+    },
+    "patch": "diff --git a/src/lib/libdwarf/dwarf_line_table_reader_common.h b/src/lib/libdwarf/dwarf_line_table_reader_common.h\nindex 541b43748..0989d0941 100644\n--- a/src/lib/libdwarf/dwarf_line_table_reader_common.h\n+++ b/src/lib/libdwarf/dwarf_line_table_reader_common.h\n@@ -67,9 +67,12 @@ STANDARD_OPERAND_COUNT_DWARF3] = {\n     0, 0, 1\n };\n \n-/* Rather like memcmp but identifies which value pair\n+/*  Rather like memcmp but identifies which value pair\n     mismatches (the return value is non-zero if mismatch,\n     zero if match)..\n+    This is used only in determining which kind of\n+    standard-opcode-table we have in the DWARF: std-original,\n+    or std-later.\n     mismatch_entry returns the table index that mismatches.\n     tabval returns the table byte value.\n     lineval returns the value from the line table header.  */\n@@ -81,9 +84,10 @@ operandmismatch(unsigned char * table,unsigned table_length,\n {\n     unsigned i = 0;\n \n-    /* check_count better be <= table_length */\n+    /*  ASSERT: check_count is <= table_length, which\n+        is guaranteed by the caller. */\n     for (i = 0; i<check_count; ++i) {\n-        if (i > table_length) {\n+        if (i >= table_length) {\n             *mismatch_entry = i;\n             *lineval = linetable[i];\n             *tabval = 0; /* No entry present. */\n@@ -366,6 +370,14 @@ _dwarf_read_line_table_header(Dwarf_Debug dbg,\n                 err_count_out);\n             check_count = tab_count;\n         }\n+        if ((line_context->lc_opcode_length_table + check_count) >=\n+                section_end) {\n+            _dwarf_error_string(dbg, err, DW_DLE_LINE_NUM_OPERANDS_BAD,\n+                \"DW_DLE_LINE_NUM_OPERANDS_BAD: \"\n+                \"The .debug_line section is too short to be real \"\n+                \"as a standard opcode table does not fit\");\n+            return DW_DLV_ERROR;\n+        }\n         {\n             unsigned entrynum = 0;\n             unsigned tabv     = 0;\n@@ -420,13 +432,19 @@ _dwarf_read_line_table_header(Dwarf_Debug dbg,\n         }\n         if (operand_ck_fail) {\n             /* Here we are not sure what the lc_std_op_count is. */\n-            _dwarf_error(dbg, err, DW_DLE_LINE_NUM_OPERANDS_BAD);\n-            return (DW_DLV_ERROR);\n+            _dwarf_error_string(dbg, err, DW_DLE_LINE_NUM_OPERANDS_BAD,\n+                \"DW_DLE_LINE_NUM_OPERANDS_BAD \"\n+                \"we cannot determine the size of the standard opcode\"\n+                \" table in the line table header\");\n+            return DW_DLV_ERROR;\n         }\n     }\n     /*  At this point we no longer need to check operand counts. */\n     if (line_ptr >= line_ptr_end) {\n-        _dwarf_error(dbg, err, DW_DLE_LINE_OFFSET_BAD);\n+        _dwarf_error_string(dbg, err, DW_DLE_LINE_OFFSET_BAD,\n+            \"DW_DLE_LINE_OFFSET_BAD \"\n+            \"we run off the end of the .debug_line section \"\n+            \"reading a line table header\");\n         return DW_DLV_ERROR;\n     }\n \n@@ -437,15 +455,11 @@ _dwarf_read_line_table_header(Dwarf_Debug dbg,\n             malloc(sizeof(Dwarf_Small *) * directories_malloc);\n         if (line_context->lc_include_directories == NULL) {\n             _dwarf_error(dbg, err, DW_DLE_ALLOC_FAIL);\n-            return (DW_DLV_ERROR);\n+            return DW_DLV_ERROR;\n         }\n         memset(line_context->lc_include_directories, 0,\n             sizeof(Dwarf_Small *) * directories_malloc);\n \n-        if (line_ptr >= line_ptr_end) {\n-            _dwarf_error(dbg, err, DW_DLE_LINE_NUMBER_HEADER_ERROR);\n-            return (DW_DLV_ERROR);\n-        }\n         while ((*(char *) line_ptr) != '\\0') {\n             if (directories_count >= directories_malloc) {\n                 Dwarf_Unsigned expand = 2 * directories_malloc;\n@@ -456,8 +470,11 @@ _dwarf_read_line_table_header(Dwarf_Debug dbg,\n                         bytesalloc);\n \n                 if (!newdirs) {\n-                    _dwarf_error(dbg, err, DW_DLE_ALLOC_FAIL);\n-                    return (DW_DLV_ERROR);\n+                    _dwarf_error_string(dbg, err, DW_DLE_ALLOC_FAIL,\n+                        \"DW_DLE_ALLOC_FAIL \"\n+                        \"reallocating an array of include directories\"\n+                        \" in a line table\");\n+                    return DW_DLV_ERROR;\n                 }\n                 /* Doubled size, zero out second half. */\n                 memset(newdirs + directories_malloc, 0,\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42522777-vul",
+      "digest": "sha256:110525b15255626af085fd1b73c26824e282d2508608e3714b0b47e662b1fa44"
+    },
+    "patched": {
+      "ref": "n132/arvo:42522777-fix",
+      "digest": "sha256:b0c398c3caf0048380c241d32fc7b688e207b3f6fdae18799b2c3e27453f9fd1"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/libdwarf/src/lib/libdwarf/dwarf_line_table_reader_common.h:93",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/libdwarf/src/lib/libdwarf/dwarf_line_table_reader_common.h:93"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

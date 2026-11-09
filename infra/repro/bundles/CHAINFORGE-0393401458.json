@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0393401458",
+  "chain": "CWE-20->CWE-125",
+  "project": "grok",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "393401458",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "d044b11edcdc916a1435e2bf108a8532661ddd33",
+      "fix_commits": [
+        "d044b11edcdc916a1435e2bf108a8532661ddd33"
+      ],
+      "repo": "https://github.com/GrokImageCompression/grok"
+    },
+    "patch": "diff --git a/src/lib/core/t2/PacketIter.h b/src/lib/core/t2/PacketIter.h\nindex 8af3f18eec..d706f8109d 100644\n--- a/src/lib/core/t2/PacketIter.h\n+++ b/src/lib/core/t2/PacketIter.h\n@@ -98,13 +98,12 @@ struct LayerIncludeBuffers\n       if(chunks.find(chunkIndex) == chunks.end())\n          chunks[chunkIndex] =\n              new uint8_t[GRK_INCLUDE_TRACKER_CHUNK_SIZE](); // Allocate chunk lazily\n-\n       auto include = chunks[chunkIndex] + chunkOffset;\n       uint8_t bit = (bitIndex & 7);\n-      uint8_t val = include[byteIndex];\n+      uint8_t val = *include;\n       if(((val >> bit) & 1) == 0)\n       {\n-         include[byteIndex] = (uint8_t)(val | (1 << bit));\n+         *include = (uint8_t)(val | (1 << bit));\n          return true;\n       }\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:393401458-vul",
+      "digest": "sha256:1dee6bbb4a10b98aaf9b58cf4a12b5b3e62dd1238251d4de9d64919a8469b0fe"
+    },
+    "patched": {
+      "ref": "n132/arvo:393401458-fix",
+      "digest": "sha256:a11568d420ed7f54593adde46b86a0d9e1d437c6de18337fe12e7fbd5cd30fdb"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/grok/src/lib/core/t2/PacketIter.h:131",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/grok/src/lib/core/t2/PacketIter.h:131"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042498525",
+  "chain": "CWE-416->CWE-125",
+  "project": "proj.4",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42498525",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "cb335699aafc84952d1a6a94eb9d2ee201ad416f",
+      "fix_commits": [
+        "cb335699aafc84952d1a6a94eb9d2ee201ad416f"
+      ],
+      "repo": "https://github.com/OSGeo/proj.4"
+    },
+    "patch": "From cb335699aafc84952d1a6a94eb9d2ee201ad416f Mon Sep 17 00:00:00 2001\nFrom: Thomas Knudsen <busstoptaktik@users.noreply.github.com>\nDate: Sun, 8 Oct 2017 16:29:16 +0200\nSubject: [PATCH] Resolve #594 and OSS-Fuzz-3569 (#595)\n\n* Resolve #594 and OSS-Fuzz-3569\n\n* Restructure PJ_geos opaque object: sweep_axis showed unneeded, and freeing it was wrong. Eliminate instead\n\nResolves #594\nResolves OSS-Fuzz Issue 3569\n\nCredit to OSS-Fuzz\n---\n src/PJ_geos.c   | 16 ++++++++--------\n src/pj_ctx.c    | 28 +++++++++++++++++++++-------\n src/pj_malloc.c |  9 +++++++--\n 3 files changed, 36 insertions(+), 17 deletions(-)\n\ndiff --git a/src/PJ_geos.c b/src/PJ_geos.c\nindex 5679455..5fd3e56 100644\n--- a/src/PJ_geos.c\n+++ b/src/PJ_geos.c\n@@ -40,7 +40,6 @@ struct pj_opaque {\n     double radius_g;\n     double radius_g_1;\n     double C;\n-    char *sweep_axis;\n     int flip_axis;\n };\n \n@@ -191,25 +190,26 @@ static LP e_inverse (XY xy, PJ *P) {          /* Ellipsoidal, inverse */\n \n \n PJ *PROJECTION(geos) {\n+    char *sweep_axis;\n     struct pj_opaque *Q = pj_calloc (1, sizeof (struct pj_opaque));\n     if (0==Q)\n         return pj_default_destructor (P, ENOMEM);\n     P->opaque = Q;\n \n     if ((Q->h = pj_param(P->ctx, P->params, \"dh\").f) <= 0.)\n-        pj_default_destructor (P, PJD_ERR_H_LESS_THAN_ZERO);\n+        return pj_default_destructor (P, PJD_ERR_H_LESS_THAN_ZERO);\n \n     if (P->phi0 != 0.0)\n-        pj_default_destructor (P, PJD_ERR_UNKNOWN_PRIME_MERIDIAN);\n+        return pj_default_destructor (P, PJD_ERR_UNKNOWN_PRIME_MERIDIAN);\n \n-    Q->sweep_axis = pj_param(P->ctx, P->params, \"ssweep\").s;\n-    if (Q->sweep_axis == NULL)\n+    sweep_axis = pj_param(P->ctx, P->params, \"ssweep\").s;\n+    if (sweep_axis == NULL)\n       Q->flip_axis = 0;\n     else {\n-        if (Q->sweep_axis[1] != '\\0' || (Q->sweep_axis[0] != 'x' && Q->sweep_axis[0] != 'y'))\n-            pj_default_destructor (P, PJD_ERR_INVALID_SWEEP_AXIS);\n+        if (sweep_axis[1] != '\\0' || (sweep_axis[0] != 'x' && sweep_axis[0] != 'y'))\n+            return pj_default_destructor (P, PJD_ERR_INVALID_SWEEP_AXIS);\n \n-        if (Q->sweep_axis[0] == 'x')\n+        if (sweep_axis[0] == 'x')\n           Q->flip_axis = 1;\n         else\n           Q->flip_axis = 0;\ndiff --git a/src/pj_ctx.c b/src/pj_ctx.c\nindex 7ba85e7..a8edaf4 100644\n--- a/src/pj_ctx.c\n+++ b/src/pj_ctx.c\n@@ -55,6 +55,8 @@ projCtx pj_get_ctx( projPJ pj )\n void pj_set_ctx( projPJ pj, projCtx ctx )\n \n {\n+    if (pj==0)\n+        return;\n     pj->ctx = ctx;\n }\n \n@@ -103,6 +105,8 @@ projCtx pj_ctx_alloc()\n \n {\n     projCtx ctx = (projCtx_t *) malloc(sizeof(projCtx_t));\n+    if (0==ctx)\n+        return 0;\n     memcpy( ctx, pj_get_default_ctx(), sizeof(projCtx_t) );\n     ctx->last_errno = 0;\n \n@@ -116,7 +120,7 @@ projCtx pj_ctx_alloc()\n void pj_ctx_free( projCtx ctx )\n \n {\n-    free( ctx );\n+    pj_dealloc( ctx );\n }\n \n /************************************************************************/\n@@ -126,27 +130,25 @@ void pj_ctx_free( projCtx ctx )\n int pj_ctx_get_errno( projCtx ctx )\n \n {\n+    if (0==ctx)\n+        return pj_get_default_ctx ()->last_errno;\n     return ctx->last_errno;\n }\n \n /************************************************************************/\n /*                          pj_ctx_set_errno()                          */\n /*                                                                      */\n-/*      Also sets the global errno.                                     */\n-/*      Since pj_errno makes sense in single threaded cases only,       */\n-/*      we set it only when called on the default context.              */\n+/*                      Also sets the global errno                      */\n /************************************************************************/\n \n void pj_ctx_set_errno( projCtx ctx, int new_errno )\n \n {\n     ctx->last_errno = new_errno;\n-    if (ctx!=pj_get_default_ctx())\n-        return;\n     if( new_errno == 0 )\n         return;\n-    pj_errno = new_errno;\n     errno = new_errno;\n+    pj_errno = new_errno;\n }\n \n /************************************************************************/\n@@ -156,6 +158,8 @@ void pj_ctx_set_errno( projCtx ctx, int new_errno )\n void pj_ctx_set_debug( projCtx ctx, int new_debug )\n \n {\n+    if (0==ctx)\n+        pj_get_default_ctx ()->debug_level = new_debug;\n     ctx->debug_level = new_debug;\n }\n \n@@ -166,6 +170,8 @@ void pj_ctx_set_debug( projCtx ctx, int new_debug )\n void pj_ctx_set_logger( projCtx ctx, void (*new_logger)(void*,int,const char*) )\n \n {\n+    if (0==ctx)\n+        return;\n     ctx->logger = new_logger;\n }\n \n@@ -176,6 +182,8 @@ void pj_ctx_set_logger( projCtx ctx, void (*new_logger)(void*,int,const char*) )\n void pj_ctx_set_app_data( projCtx ctx, void *new_app_data )\n \n {\n+    if (0==ctx)\n+        return;\n     ctx->app_data = new_app_data;\n }\n \n@@ -186,6 +194,8 @@ void pj_ctx_set_app_data( projCtx ctx, void *new_app_data )\n void *pj_ctx_get_app_data( projCtx ctx )\n \n {\n+    if (0==ctx)\n+        return 0;\n     return ctx->app_data;\n }\n \n@@ -196,6 +206,8 @@ void *pj_ctx_get_app_data( projCtx ctx )\n void pj_ctx_set_fileapi( projCtx ctx, projFileAPI *fileapi )\n \n {\n+    if (0==ctx)\n+        return;\n     ctx->fileapi = fileapi;\n }\n \n@@ -206,5 +218,7 @@ void pj_ctx_set_fileapi( projCtx ctx, projFileAPI *fileapi )\n projFileAPI *pj_ctx_get_fileapi( projCtx ctx )\n \n {\n+    if (0==ctx)\n+        return 0;\n     return ctx->fileapi;\n }\ndiff --git a/src/pj_malloc.c b/src/pj_malloc.c\nindex 75d0537..4e465c4 100644\n--- a/src/pj_malloc.c\n+++ b/src/pj_malloc.c\n@@ -158,6 +158,13 @@ void *pj_default_destructor (PJ *P, int errlev) {   /* Destructor */\n     of PJs where the opaque object does not contain any additionally\n     allocated memory below the P->opaque level.\n ******************************************************************************/\n+\n+    /* Even if P==0, we set the errlev on pj_error and the default context   */\n+    /* Note that both, in the multithreaded case, may then contain undefined */\n+    /* values. This is expected behaviour. For MT have one ctx per thread    */\n+    if (0!=errlev)\n+        pj_ctx_set_errno (pj_get_ctx(P), errlev);\n+\n     if (0==P)\n         return 0;\n     \n@@ -179,7 +186,5 @@ void *pj_default_destructor (PJ *P, int errlev) {   /* Destructor */\n     pj_dealloc_params (pj_get_ctx(P), P->params, errlev);\n \n     pj_dealloc (P->opaque);\n-    if (0!=errlev)\n-        pj_ctx_set_errno (pj_get_ctx(P), errlev);\n     return pj_dealloc(P);\n }\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42498525-vul",
+      "digest": "sha256:cc9e8441ad2127d07dd6c15b182def6340a0de496a3bf845d6267aa3692a913d"
+    },
+    "patched": {
+      "ref": "n132/arvo:42498525-fix",
+      "digest": "sha256:0f515a76effe4a0205acf51d86ac1ffa62c2b4fe2c2e34fd51f471a19a044660"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/proj.4/src/PJ_geos.c:202",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/proj.4/src/PJ_geos.c:202"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

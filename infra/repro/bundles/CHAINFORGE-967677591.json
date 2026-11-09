@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-967677591",
+  "chain": "CWE-456->CWE-457",
+  "project": "mupdf",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42521259",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/ArtifexSoftware/mupdf/commit/86b5034359a45254e1f07eca84469db0d44005ad",
+      "fix_commits": [
+        "86b5034359a45254e1f07eca84469db0d44005ad"
+      ],
+      "repo": "https://github.com/ArtifexSoftware/mupdf"
+    },
+    "patch": "diff --git a/source/fitz/draw-unpack.c b/source/fitz/draw-unpack.c\nindex 2b6a241eab..7544c5aca5 100644\n--- a/source/fitz/draw-unpack.c\n+++ b/source/fitz/draw-unpack.c\n@@ -190,6 +190,8 @@ fz_unpack_tile(fz_context *ctx, fz_pixmap *dst, unsigned char * restrict src, in\n \t\t\t\t\tcase 16: *dp++ = get16(sp, b); break;\n \t\t\t\t\tcase 24: *dp++ = get24(sp, b); break;\n \t\t\t\t\tcase 32: *dp++ = get32(sp, b); break;\n+\t\t\t\t\tdefault:\n+\t\t\t\t\t\tfz_throw(ctx, FZ_ERROR_GENERIC, \"cannot unpack tile with %d bits per component\", depth);\n \t\t\t\t\t}\n \t\t\t\t\tb++;\n \t\t\t\t}\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42521259-vul",
+      "digest": "sha256:4f0802f2614a9b9e4ecd7306d70597c152e7c4c80bdbc4d8e0969c9a18045cf0"
+    },
+    "patched": {
+      "ref": "n132/arvo:42521259-fix",
+      "digest": "sha256:699a6953eb45a3ab237111a93768453751e5e56d675d71155b4c56d08fe94dc6"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/mupdf/source/fitz/draw-affine.c:480",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/mupdf/source/fitz/draw-affine.c:480"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

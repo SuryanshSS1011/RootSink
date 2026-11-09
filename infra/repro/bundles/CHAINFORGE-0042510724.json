@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042510724",
+  "chain": "CWE-20->CWE-125",
+  "project": "libbpf",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42510724",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "2dbdd3b56490a1da1650d2722fb19282b2714202",
+      "fix_commits": [
+        "2dbdd3b56490a1da1650d2722fb19282b2714202"
+      ],
+      "repo": "https://github.com/libbpf/libbpf"
+    },
+    "patch": "diff --git a/src/btf.c b/src/btf.c\nindex 8484b563b..ee95fd379 100644\n--- a/src/btf.c\n+++ b/src/btf.c\n@@ -448,6 +448,165 @@ static int btf_parse_type_sec(struct btf *btf)\n \treturn 0;\n }\n \n+static int btf_validate_str(const struct btf *btf, __u32 str_off, const char *what, __u32 type_id)\n+{\n+\tconst char *s;\n+\n+\ts = btf__str_by_offset(btf, str_off);\n+\tif (!s) {\n+\t\tpr_warn(\"btf: type [%u]: invalid %s (string offset %u)\\n\", type_id, what, str_off);\n+\t\treturn -EINVAL;\n+\t}\n+\n+\treturn 0;\n+}\n+\n+static int btf_validate_id(const struct btf *btf, __u32 id, __u32 ctx_id)\n+{\n+\tconst struct btf_type *t;\n+\n+\tt = btf__type_by_id(btf, id);\n+\tif (!t) {\n+\t\tpr_warn(\"btf: type [%u]: invalid referenced type ID %u\\n\", ctx_id, id);\n+\t\treturn -EINVAL;\n+\t}\n+\n+\treturn 0;\n+}\n+\n+static int btf_validate_type(const struct btf *btf, const struct btf_type *t, __u32 id)\n+{\n+\t__u32 kind = btf_kind(t);\n+\tint err, i, n;\n+\n+\terr = btf_validate_str(btf, t->name_off, \"type name\", id);\n+\tif (err)\n+\t\treturn err;\n+\n+\tswitch (kind) {\n+\tcase BTF_KIND_UNKN:\n+\tcase BTF_KIND_INT:\n+\tcase BTF_KIND_FWD:\n+\tcase BTF_KIND_FLOAT:\n+\t\tbreak;\n+\tcase BTF_KIND_PTR:\n+\tcase BTF_KIND_TYPEDEF:\n+\tcase BTF_KIND_VOLATILE:\n+\tcase BTF_KIND_CONST:\n+\tcase BTF_KIND_RESTRICT:\n+\tcase BTF_KIND_VAR:\n+\tcase BTF_KIND_DECL_TAG:\n+\tcase BTF_KIND_TYPE_TAG:\n+\t\terr = btf_validate_id(btf, t->type, id);\n+\t\tif (err)\n+\t\t\treturn err;\n+\t\tbreak;\n+\tcase BTF_KIND_ARRAY: {\n+\t\tconst struct btf_array *a = btf_array(t);\n+\n+\t\terr = btf_validate_id(btf, a->type, id);\n+\t\terr = err ?: btf_validate_id(btf, a->index_type, id);\n+\t\tif (err)\n+\t\t\treturn err;\n+\t\tbreak;\n+\t}\n+\tcase BTF_KIND_STRUCT:\n+\tcase BTF_KIND_UNION: {\n+\t\tconst struct btf_member *m = btf_members(t);\n+\n+\t\tn = btf_vlen(t);\n+\t\tfor (i = 0; i < n; i++, m++) {\n+\t\t\terr = btf_validate_str(btf, m->name_off, \"field name\", id);\n+\t\t\terr = err ?: btf_validate_id(btf, m->type, id);\n+\t\t\tif (err)\n+\t\t\t\treturn err;\n+\t\t}\n+\t\tbreak;\n+\t}\n+\tcase BTF_KIND_ENUM: {\n+\t\tconst struct btf_enum *m = btf_enum(t);\n+\n+\t\tn = btf_vlen(t);\n+\t\tfor (i = 0; i < n; i++, m++) {\n+\t\t\terr = btf_validate_str(btf, m->name_off, \"enum name\", id);\n+\t\t\tif (err)\n+\t\t\t\treturn err;\n+\t\t}\n+\t\tbreak;\n+\t}\n+\tcase BTF_KIND_ENUM64: {\n+\t\tconst struct btf_enum64 *m = btf_enum64(t);\n+\n+\t\tn = btf_vlen(t);\n+\t\tfor (i = 0; i < n; i++, m++) {\n+\t\t\terr = btf_validate_str(btf, m->name_off, \"enum name\", id);\n+\t\t\tif (err)\n+\t\t\t\treturn err;\n+\t\t}\n+\t\tbreak;\n+\t}\n+\tcase BTF_KIND_FUNC: {\n+\t\tconst struct btf_type *ft;\n+\n+\t\terr = btf_validate_id(btf, t->type, id);\n+\t\tif (err)\n+\t\t\treturn err;\n+\t\tft = btf__type_by_id(btf, t->type);\n+\t\tif (btf_kind(ft) != BTF_KIND_FUNC_PROTO) {\n+\t\t\tpr_warn(\"btf: type [%u]: referenced type [%u] is not FUNC_PROTO\\n\", id, t->type);\n+\t\t\treturn -EINVAL;\n+\t\t}\n+\t\tbreak;\n+\t}\n+\tcase BTF_KIND_FUNC_PROTO: {\n+\t\tconst struct btf_param *m = btf_params(t);\n+\n+\t\tn = btf_vlen(t);\n+\t\tfor (i = 0; i < n; i++, m++) {\n+\t\t\terr = btf_validate_str(btf, m->name_off, \"param name\", id);\n+\t\t\terr = err ?: btf_validate_id(btf, m->type, id);\n+\t\t\tif (err)\n+\t\t\t\treturn err;\n+\t\t}\n+\t\tbreak;\n+\t}\n+\tcase BTF_KIND_DATASEC: {\n+\t\tconst struct btf_var_secinfo *m = btf_var_secinfos(t);\n+\n+\t\tn = btf_vlen(t);\n+\t\tfor (i = 0; i < n; i++, m++) {\n+\t\t\terr = btf_validate_id(btf, m->type, id);\n+\t\t\tif (err)\n+\t\t\t\treturn err;\n+\t\t}\n+\t\tbreak;\n+\t}\n+\tdefault:\n+\t\tpr_warn(\"btf: type [%u]: unrecognized kind %u\\n\", id, kind);\n+\t\treturn -EINVAL;\n+\t}\n+\treturn 0;\n+}\n+\n+/* Validate basic sanity of BTF. It's intentionally less thorough than\n+ * kernel's validation and validates only properties of BTF that libbpf relies\n+ * on to be correct (e.g., valid type IDs, valid string offsets, etc)\n+ */\n+static int btf_sanity_check(const struct btf *btf)\n+{\n+\tconst struct btf_type *t;\n+\t__u32 i, n = btf__type_cnt(btf);\n+\tint err;\n+\n+\tfor (i = 1; i < n; i++) {\n+\t\tt = btf_type_by_id(btf, i);\n+\t\terr = btf_validate_type(btf, t, i);\n+\t\tif (err)\n+\t\t\treturn err;\n+\t}\n+\treturn 0;\n+}\n+\n __u32 btf__type_cnt(const struct btf *btf)\n {\n \treturn btf->start_id + btf->nr_types;\n@@ -902,6 +1061,7 @@ static struct btf *btf_new(const void *data, __u32 size, struct btf *base_btf)\n \n \terr = btf_parse_str_sec(btf);\n \terr = err ?: btf_parse_type_sec(btf);\n+\terr = err ?: btf_sanity_check(btf);\n \tif (err)\n \t\tgoto done;\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42510724-vul",
+      "digest": "sha256:60e0d60571ac233d41377a79553f51bf12a20686287783251a0f99e101e73b0c"
+    },
+    "patched": {
+      "ref": "n132/arvo:42510724-fix",
+      "digest": "sha256:328371bcbc15aa9f6c2fcf87c7041ac51023b57075527b6a7451dbfbe5648700"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "SEGV",
+        "direction": "READ",
+        "crash_site": "/src/libbpf/src/libbpf.c:8151",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "SEGV",
+        "direction": "READ",
+        "site": "/src/libbpf/src/libbpf.c:8151"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

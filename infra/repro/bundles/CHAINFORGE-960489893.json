@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-960489893",
+  "chain": "CWE-456->CWE-457",
+  "project": "imagemagick",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42476119",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/imagemagick/imagemagick/commit/f723b47f0e151475f85c28e85187cd8c5565968e",
+      "fix_commits": [
+        "f723b47f0e151475f85c28e85187cd8c5565968e"
+      ],
+      "repo": "https://github.com/imagemagick/imagemagick"
+    },
+    "patch": "diff --git a/Magick++/fuzz/utils.cc b/Magick++/fuzz/utils.cc\nindex 0f3e8a4c1f7..9f8ff015c9e 100644\n--- a/Magick++/fuzz/utils.cc\n+++ b/Magick++/fuzz/utils.cc\n@@ -9,6 +9,10 @@\n class FuzzingInitializer {\n public:\n   FuzzingInitializer() {\n+\n+    // Disable SIMD in jpeg turbo.\n+    (void) putenv(const_cast<char *>(\"JSIMD_FORCENONE=1\"));\n+\n     Magick::InitializeMagick((const char *) NULL);\n     Magick::SecurityPolicy::maxMemoryRequest(256000000);\n     Magick::ResourceLimits::memory(1000000000);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42476119-vul",
+      "digest": "sha256:d874691227c6712e2546758d92e226d9f8a32d3f7bc6a9324b6a00b06921a852"
+    },
+    "patched": {
+      "ref": "n132/arvo:42476119-fix",
+      "digest": "sha256:d46f804ae16d8fa23efce983fff6e296e7d7d362d76117aa45984e8a02779bb3"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/libjpeg-turbo/jcphuff.c:522",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/libjpeg-turbo/jcphuff.c:522"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

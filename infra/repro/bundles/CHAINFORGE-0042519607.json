@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042519607",
+  "chain": "CWE-456->CWE-457",
+  "project": "hunspell",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42519607",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "d6830498ccdcf748ae990a5a1891df259011332a",
+      "fix_commits": [
+        "d6830498ccdcf748ae990a5a1891df259011332a"
+      ],
+      "repo": "https://github.com/hunspell/hunspell"
+    },
+    "patch": "From d6830498ccdcf748ae990a5a1891df259011332a Mon Sep 17 00:00:00 2001\nFrom: =?UTF-8?q?Caol=C3=A1n=20McNamara?= <caolanm@redhat.com>\nDate: Fri, 30 Dec 2022 14:00:06 +0000\nSubject: [PATCH] ofz#54672 Use-of-uninitialized-value\n\n---\n src/hunspell/hashmgr.cxx | 8 +++++---\n 1 file changed, 5 insertions(+), 3 deletions(-)\n\ndiff --git a/src/hunspell/hashmgr.cxx b/src/hunspell/hashmgr.cxx\nindex 20c4696..100916d 100644\n--- a/src/hunspell/hashmgr.cxx\n+++ b/src/hunspell/hashmgr.cxx\n@@ -851,7 +851,7 @@ bool HashMgr::decode_flags(std::vector<unsigned short>& result, const std::strin\n       result.resize(origsize + len);\n       memcpy(result.data() + origsize, w.data(), len * sizeof(short));\n #else\n-      result.reserve(origsize + len);\t\n+      result.reserve(origsize + len);\n       for (const w_char wc : w) result.push_back((unsigned short)wc);\n #endif\n       break;\n@@ -871,7 +871,8 @@ unsigned short HashMgr::decode_flag(const std::string& f) const {\n   int i;\n   switch (flag_mode) {\n     case FLAG_LONG:\n-      s = ((unsigned short)((unsigned char)f[0]) << 8) | ((unsigned short)((unsigned char)f[1]));\n+      if (f.size() >= 2)\n+        s = ((unsigned short)((unsigned char)f[0]) << 8) | ((unsigned short)((unsigned char)f[1]));\n       break;\n     case FLAG_NUM:\n       i = atoi(f.c_str());\n@@ -890,7 +891,8 @@ unsigned short HashMgr::decode_flag(const std::string& f) const {\n       break;\n     }\n     default:\n-      s = (unsigned char)f[0];\n+      if (!f.empty())\n+        s = (unsigned char)f[0];\n   }\n   if (s == 0)\n     HUNSPELL_WARNING(stderr, \"error: 0 is wrong flag id\\n\");\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42519607-vul",
+      "digest": "sha256:f43efa2b31bdb84835adabd6266870beba748e38142f63bec16d3794c9bf3d7c"
+    },
+    "patched": {
+      "ref": "n132/arvo:42519607-fix",
+      "digest": "sha256:5742b7b7e5bfb36317cc91bd80dfacd78e4b3c67a6e73278bf8524bef8aae469"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/hunspell/src/hunspell/affixmgr.cxx:1333",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/hunspell/src/hunspell/affixmgr.cxx:1333"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

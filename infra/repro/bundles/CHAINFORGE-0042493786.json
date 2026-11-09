@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042493786",
+  "chain": "CWE-416->CWE-125",
+  "project": "php-src",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42493786",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "75a4f484f058f50fa1bb70c1eb5388409910203b",
+      "fix_commits": [
+        "75a4f484f058f50fa1bb70c1eb5388409910203b"
+      ],
+      "repo": "https://github.com/php/php-src"
+    },
+    "patch": "From 75a4f484f058f50fa1bb70c1eb5388409910203b Mon Sep 17 00:00:00 2001\nFrom: Nikita Popov <nikita.ppv@gmail.com>\nDate: Mon, 1 Mar 2021 15:01:09 +0100\nSubject: [PATCH] Fixed bug #80811\n\nWhen filling in defaults for skipped params, make sure that\nreference parameters get the expected reference wrapper.\n---\n NEWS                     |  2 ++\n Zend/tests/bug80811.phpt | 19 +++++++++++++++++++\n Zend/zend_execute.c      |  3 +++\n 3 files changed, 24 insertions(+)\n create mode 100644 Zend/tests/bug80811.phpt\n\ndiff --git a/NEWS b/NEWS\nindex aefef64c..6e5bd051 100644\n--- a/NEWS\n+++ b/NEWS\n@@ -4,6 +4,8 @@ PHP                                                                        NEWS\n \n - Core:\n   . Fixed bug #75776 (Flushing streams with compression filter is broken). (cmb)\n+  . Fixed bug #80811 (Function exec without $output but with $restult_code\n+    parameter crashes). (Nikita)\n \n - IMAP:\n   . Fixed bug #80800 (imap_open() fails when the flags parameter includes\ndiff --git a/Zend/tests/bug80811.phpt b/Zend/tests/bug80811.phpt\nnew file mode 100644\nindex 00000000..e9f6443d\n--- /dev/null\n+++ b/Zend/tests/bug80811.phpt\n@@ -0,0 +1,19 @@\n+--TEST--\n+Bug #80811: Function exec without $output but with $restult_code parameter crashes\n+--FILE--\n+<?php\n+\n+echo 'Executing with all params:' . PHP_EOL;\n+exec('echo Something', output: $output, result_code: $resultCode);\n+var_dump($resultCode);\n+\n+echo 'Executing without output param:' . PHP_EOL;\n+exec('echo Something', result_code: $resultCode);\n+var_dump($resultCode);\n+\n+?>\n+--EXPECT--\n+Executing with all params:\n+int(0)\n+Executing without output param:\n+int(0)\ndiff --git a/Zend/zend_execute.c b/Zend/zend_execute.c\nindex f6b2a6f9..69b0fb52 100644\n--- a/Zend/zend_execute.c\n+++ b/Zend/zend_execute.c\n@@ -4579,6 +4579,9 @@ ZEND_API zend_result ZEND_FASTCALL zend_handle_undef_args(zend_execute_data *cal\n \t\t\t}\n \n \t\t\tZVAL_COPY_VALUE(arg, &default_value);\n+\t\t\tif (ZEND_ARG_SEND_MODE(arg_info) & ZEND_SEND_BY_REF) {\n+\t\t\t\tZVAL_NEW_REF(arg, arg);\n+\t\t\t}\n \t\t}\n \t}\n \n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42493786-vul",
+      "digest": "sha256:98b3bd63c48c92d31d4bb66f867063c126eef64e42667d60a4bef27de20ed658"
+    },
+    "patched": {
+      "ref": "n132/arvo:42493786-fix",
+      "digest": "sha256:343e969ca0f0a49dce40777ded8dae6ddadb99d9b23af901a96a383957029146"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/php-src/Zend/zend_hash.c:542",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/php-src/Zend/zend_hash.c:542"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

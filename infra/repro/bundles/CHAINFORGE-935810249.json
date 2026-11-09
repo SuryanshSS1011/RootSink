@@ -1,0 +1,82 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-935810249",
+  "chain": "CWE-1284->CWE-190->CWE-119",
+  "project": "htslib",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42482360",
+    "commit_range": {
+      "introduced": null,
+      "fixed": null,
+      "fix_commits": [
+        "29c294e6842a56ba3b9a24a24a5f6de1575b0961"
+      ],
+      "repo": "https://github.com/samtools/htslib"
+    },
+    "patch": "diff --git a/htslib/kstring.h b/htslib/kstring.h\nindex 02da3ed72..a42a07685 100644\n--- a/htslib/kstring.h\n+++ b/htslib/kstring.h\n@@ -38,7 +38,7 @@\n #include \"hts_defs.h\"\n \n #ifndef kroundup32\n-#define kroundup32(x) (--(x), (x)|=(x)>>1, (x)|=(x)>>2, (x)|=(x)>>4, (x)|=(x)>>8, (x)|=(x)>>16, ++(x))\n+#define kroundup32(x) (--(x), (x)|=(x)>>1, (x)|=(x)>>2, (x)|=(x)>>4, (x)|=(x)>>8, (x)|=(x)>>16, ++(x),(x)=(x)?(x):(uint32_t)-1)\n #endif\n \n #ifndef kroundup_size_t\n@@ -49,7 +49,7 @@\n                             (x)|=(x)>>(sizeof(size_t)),   /*  4 or  8 */ \\\n                             (x)|=(x)>>(sizeof(size_t)*2), /*  8 or 16 */ \\\n                             (x)|=(x)>>(sizeof(size_t)*4), /* 16 or 32 */ \\\n-                            ++(x))\n+                            ++(x),(x)=(x)?(x):(size_t)-1)\n #endif\n \n #if defined __GNUC__ && (__GNUC__ > 2 || (__GNUC__ == 2 && __GNUC_MINOR__ > 4))\ndiff --git a/vcf.c b/vcf.c\nindex 486e1b75d..96253065e 100644\n--- a/vcf.c\n+++ b/vcf.c\n@@ -2193,8 +2193,7 @@ static inline int align_mem(kstring_t *s)\n     int e = 0;\n     if (s->l&7) {\n         uint64_t zero = 0;\n-        int l = ((s->l + 7)>>3<<3) - s->l;\n-        e = kputsn((char*)&zero, l, s) < 0;\n+        e = kputsn((char*)&zero, 8 - (s->l&7), s) < 0;\n     }\n     return e == 0 ? 0 : -1;\n }\n@@ -2338,9 +2337,26 @@ static int vcf_parse_format(kstring_t *s, const bcf_hdr_t *h, bcf1_t *v, char *p\n             v->errcode |= BCF_ERR_TAG_INVALID;\n             return -1;\n         }\n-        align_mem(mem);\n+        if (align_mem(mem) < 0) {\n+            hts_log_error(\"Memory allocation failure\");\n+            v->errcode |= BCF_ERR_LIMITS;\n+            return -1;\n+        }\n         f->offset = mem->l;\n-        ks_resize(mem, mem->l + v->n_sample * f->size);\n+\n+        // Limit the total memory to ~2Gb per VCF row.  This should mean\n+        // malformed VCF data is less likely to take excessive memory and/or\n+        // time.\n+        if (v->n_sample * (uint64_t)f->size > INT_MAX) {\n+            hts_log_error(\"Excessive memory required by FORMAT fields\");\n+            v->errcode |= BCF_ERR_LIMITS;\n+            return -1;\n+        }\n+        if (ks_resize(mem, mem->l + v->n_sample * (size_t)f->size) < 0) {\n+            hts_log_error(\"Memory allocation failure\");\n+            v->errcode |= BCF_ERR_LIMITS;\n+            return -1;\n+        }\n         mem->l += v->n_sample * f->size;\n     }\n     for (j = 0; j < v->n_fmt; ++j)\n@@ -2367,9 +2383,15 @@ static int vcf_parse_format(kstring_t *s, const bcf_hdr_t *h, bcf1_t *v, char *p\n         while ( t < end )\n         {\n             fmt_aux_t *z = &fmt[j++];\n+            if (!z->buf) {\n+                hts_log_error(\"Memory allocation failure for FORMAT field type %d\",\n+                              z->y>>4&0xf);\n+                v->errcode |= BCF_ERR_LIMITS;\n+                return -1;\n+            }\n             if ((z->y>>4&0xf) == BCF_HT_STR) {\n                 if (z->is_gt) { // genotypes\n-                    int32_t is_phased = 0, *x = (int32_t*)(z->buf + z->size * m);\n+                    int32_t is_phased = 0, *x = (int32_t*)(z->buf + z->size * (size_t)m);\n                     for (l = 0;; ++t) {\n                         if (*t == '.') {\n                             ++t, x[l++] = is_phased;\n@@ -2391,12 +2413,12 @@ static int vcf_parse_format(kstring_t *s, const bcf_hdr_t *h, bcf1_t *v, char *p\n                     if ( !l ) x[l++] = 0;   // An empty field, insert missing value\n                     for (; l < z->size>>2; ++l) x[l] = bcf_int32_vector_end;\n                 } else {\n-                    char *x = (char*)z->buf + z->size * m;\n+                    char *x = (char*)z->buf + z->size * (size_t)m;\n                     for (r = t, l = 0; *t != ':' && *t; ++t) x[l++] = *t;\n                     for (; l < z->size; ++l) x[l] = 0;\n                 }\n             } else if ((z->y>>4&0xf) == BCF_HT_INT) {\n-                int32_t *x = (int32_t*)(z->buf + z->size * m);\n+                int32_t *x = (int32_t*)(z->buf + z->size * (size_t)m);\n                 for (l = 0;; ++t) {\n                     if (*t == '.') x[l++] = bcf_int32_missing, ++t; // ++t to skip \".\"\n                     else\n@@ -2421,7 +2443,7 @@ static int vcf_parse_format(kstring_t *s, const bcf_hdr_t *h, bcf1_t *v, char *p\n                 if ( !l ) x[l++] = bcf_int32_missing;\n                 for (; l < z->size>>2; ++l) x[l] = bcf_int32_vector_end;\n             } else if ((z->y>>4&0xf) == BCF_HT_REAL) {\n-                float *x = (float*)(z->buf + z->size * m);\n+                float *x = (float*)(z->buf + z->size * (size_t)m);\n                 for (l = 0;; ++t) {\n                     if (*t == '.' && !isdigit_c(t[1])) bcf_float_set_missing(x[l++]), ++t; // ++t to skip \".\"\n                     else x[l++] = strtod(t, &t);\n@@ -2454,20 +2476,20 @@ static int vcf_parse_format(kstring_t *s, const bcf_hdr_t *h, bcf1_t *v, char *p\n             fmt_aux_t *z = &fmt[j];\n             if ((z->y>>4&0xf) == BCF_HT_STR) {\n                 if (z->is_gt) {\n-                    int32_t *x = (int32_t*)(z->buf + z->size * m);\n+                    int32_t *x = (int32_t*)(z->buf + z->size * (size_t)m);\n                     if (z->size) x[0] = bcf_int32_missing;\n                     for (l = 1; l < z->size>>2; ++l) x[l] = bcf_int32_vector_end;\n                 } else {\n-                    char *x = (char*)z->buf + z->size * m;\n+                    char *x = (char*)z->buf + z->size * (size_t)m;\n                     if ( z->size ) x[0] = '.';\n                     for (l = 1; l < z->size; ++l) x[l] = 0;\n                 }\n             } else if ((z->y>>4&0xf) == BCF_HT_INT) {\n-                int32_t *x = (int32_t*)(z->buf + z->size * m);\n+                int32_t *x = (int32_t*)(z->buf + z->size * (size_t)m);\n                 x[0] = bcf_int32_missing;\n                 for (l = 1; l < z->size>>2; ++l) x[l] = bcf_int32_vector_end;\n             } else if ((z->y>>4&0xf) == BCF_HT_REAL) {\n-                float *x = (float*)(z->buf + z->size * m);\n+                float *x = (float*)(z->buf + z->size * (size_t)m);\n                 bcf_float_set_missing(x[0]);\n                 for (l = 1; l < z->size>>2; ++l) bcf_float_set_vector_end(x[l]);\n             }\n@@ -2485,12 +2507,12 @@ static int vcf_parse_format(kstring_t *s, const bcf_hdr_t *h, bcf1_t *v, char *p\n             bcf_enc_int1(str, z->key);\n             if ((z->y>>4&0xf) == BCF_HT_STR && !z->is_gt) {\n                 bcf_enc_size(str, z->size, BCF_BT_CHAR);\n-                kputsn((char*)z->buf, z->size * v->n_sample, str);\n+                kputsn((char*)z->buf, z->size * (size_t)v->n_sample, str);\n             } else if ((z->y>>4&0xf) == BCF_HT_INT || z->is_gt) {\n                 bcf_enc_vint(str, (z->size>>2) * v->n_sample, (int32_t*)z->buf, z->size>>2);\n             } else {\n                 bcf_enc_size(str, z->size>>2, BCF_BT_FLOAT);\n-                if (serialize_float_array(str, (z->size>>2) * v->n_sample,\n+                if (serialize_float_array(str, (z->size>>2) * (size_t)v->n_sample,\n                                           (float *) z->buf) != 0) {\n                     v->errcode |= BCF_ERR_LIMITS;\n                     hts_log_error(\"Out of memory\");\n@@ -3038,7 +3060,7 @@ int vcf_format(const bcf_hdr_t *h, const bcf1_t *v, kstring_t *s)\n                     if (gt_i == i)\n                         bcf_format_gt(f,j,s);\n                     else\n-                        bcf_fmt_array(s, f->n, f->type, f->p + j * f->size);\n+                        bcf_fmt_array(s, f->n, f->type, f->p + j * (size_t)f->size);\n                 }\n                 if ( first ) kputc('.', s);\n             }\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42482360-vul",
+      "digest": "sha256:34eed9a9477934e0793550b8c90696ad881dbb183ad24a3b674cec7418f6814b"
+    },
+    "patched": {
+      "ref": "n132/arvo:42482360-fix",
+      "digest": "sha256:2e59353b83e1813d3f7f28af911525523215ef62e965cf07572b3e4772d6e4c6"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "SEGV",
+        "direction": "WRITE",
+        "crash_site": "/src/htslib/vcf.c:2462",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 190,
+      "role": "intermediate",
+      "witness": {
+        "method": "ubsan-rebuild",
+        "recipe": "SANITIZER=undefined compile && $ENTRYPOINT",
+        "ubsan_options": "print_stacktrace=1:halt_on_error=0:silence_unsigned_overflow=0:symbolize=1"
+      },
+      "witnessed": false
+    },
+    {
+      "cwe_id": 119,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "SEGV",
+        "direction": "WRITE",
+        "site": "/src/htslib/vcf.c:2462"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

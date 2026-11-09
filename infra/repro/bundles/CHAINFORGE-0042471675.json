@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042471675",
+  "chain": "CWE-20->CWE-125",
+  "project": "aom",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42471675",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "fe996504f76f4204074c1f8f681925852c61b777",
+      "fix_commits": [
+        "fe996504f76f4204074c1f8f681925852c61b777"
+      ],
+      "repo": "https://aomedia.googlesource.com/aom"
+    },
+    "patch": "diff --git a/aom_dsp/x86/intrapred_avx2.c b/aom_dsp/x86/intrapred_avx2.c\nindex 4525f95..5f3e7bb 100644\n--- a/aom_dsp/x86/intrapred_avx2.c\n+++ b/aom_dsp/x86/intrapred_avx2.c\n@@ -1260,7 +1260,6 @@\n                                               const uint16_t *above,\n                                               int upsample_above, int dx) {\n   __m256i dstvec[64];\n-\n   highbd_dr_prediction_z1_16xN_internal_avx2(N, dstvec, above, upsample_above,\n                                              dx);\n   for (int i = 0; i < N; i++) {\n@@ -1307,7 +1306,7 @@\n \n     for (int j = 0; j < 32; j += 16) {\n       int mdif = max_base_x - (base + j);\n-      if (mdif == 0) {\n+      if (mdif <= 0) {\n         res1 = a_mbase_x;\n       } else {\n         a0 = _mm256_cvtepu16_epi32(\n@@ -1325,17 +1324,17 @@\n         res[0] = _mm256_packus_epi32(\n             res[0],\n             _mm256_castsi128_si256(_mm256_extracti128_si256(res[0], 1)));\n-\n-        a0_1 = _mm256_cvtepu16_epi32(\n-            _mm_loadu_si128((__m128i *)(above + base + 8 + j)));\n-        a1_1 = _mm256_cvtepu16_epi32(\n-            _mm_loadu_si128((__m128i *)(above + base + 9 + j)));\n-\n-        diff = _mm256_sub_epi32(a1_1, a0_1);  // a[x+1] - a[x]\n-        a32 = _mm256_slli_epi32(a0_1, 5);     // a[x] * 32\n-        a32 = _mm256_add_epi32(a32, a16);     // a[x] * 32 + 16\n-        b = _mm256_mullo_epi32(diff, shift);\n         if (mdif > 8) {\n+          a0_1 = _mm256_cvtepu16_epi32(\n+              _mm_loadu_si128((__m128i *)(above + base + 8 + j)));\n+          a1_1 = _mm256_cvtepu16_epi32(\n+              _mm_loadu_si128((__m128i *)(above + base + 9 + j)));\n+\n+          diff = _mm256_sub_epi32(a1_1, a0_1);  // a[x+1] - a[x]\n+          a32 = _mm256_slli_epi32(a0_1, 5);     // a[x] * 32\n+          a32 = _mm256_add_epi32(a32, a16);     // a[x] * 32 + 16\n+          b = _mm256_mullo_epi32(diff, shift);\n+\n           res[1] = _mm256_add_epi32(a32, b);\n           res[1] = _mm256_srli_epi32(res[1], 5);\n           res[1] = _mm256_packus_epi32(\n@@ -1424,7 +1423,7 @@\n     __m128i a0_128, a0_1_128, a1_128, a1_1_128;\n     for (int j = 0; j < 64; j += 16) {\n       int mdif = max_base_x - (base + j);\n-      if (mdif == 0) {\n+      if (mdif <= 0) {\n         _mm256_storeu_si256((__m256i *)(dst + j), a_mbase_x);\n       } else {\n         a0_128 = _mm_loadu_si128((__m128i *)(above + base + j));\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42471675-vul",
+      "digest": "sha256:45023c09eafe73dbcb65a42a716d279ab1525dc055b16bdecde3724372b7e675"
+    },
+    "patched": {
+      "ref": "n132/arvo:42471675-fix",
+      "digest": "sha256:acca3373272e80cc0a5fcbe4d43e8a6e70b011a53d85744d0f2e9fe508b0de5f"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/aom/aom_dsp/x86/intrapred_avx2.c:1507",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/aom/aom_dsp/x86/intrapred_avx2.c:1507"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

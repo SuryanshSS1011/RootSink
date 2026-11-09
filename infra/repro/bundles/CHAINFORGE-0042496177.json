@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042496177",
+  "chain": "CWE-456->CWE-457",
+  "project": "selinux",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42496177",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "5661efd459e7aa998390ab70e3ec50125a35e9e9",
+      "fix_commits": [
+        "5661efd459e7aa998390ab70e3ec50125a35e9e9"
+      ],
+      "repo": "https://github.com/SELinuxProject/selinux"
+    },
+    "patch": "From 5661efd459e7aa998390ab70e3ec50125a35e9e9 Mon Sep 17 00:00:00 2001\nFrom: James Carter <jwcart2@gmail.com>\nDate: Thu, 13 May 2021 12:30:37 -0400\nSubject: [PATCH] libsepol/cil: Handle disabled optional blocks in earlier\n passes\n\nA failed tunable resolution in a tunableif can cause an optional\nto be disabled before the CIL_PASS_CALL1 phase. If this occurs, the\noptional block and its subtree should be destroyed, but no reset\nwill be required since tunables are not allowed inside an optional\nblock.\n\nAnytime there are optional blocks in the disabled_optionals list\n(changed == 1), destroy the optional block and its subtree even if\nin a pass before CIL_PASS_CALL1.\n\nThis bug was found by the secilc-fuzzer.\n\nSigned-off-by: James Carter <jwcart2@gmail.com>\n---\n libsepol/cil/src/cil_resolve_ast.c | 54 ++++++++++++++++--------------\n 1 file changed, 28 insertions(+), 26 deletions(-)\n\ndiff --git a/libsepol/cil/src/cil_resolve_ast.c b/libsepol/cil/src/cil_resolve_ast.c\nindex 74e5b78..328add0 100644\n--- a/libsepol/cil/src/cil_resolve_ast.c\n+++ b/libsepol/cil/src/cil_resolve_ast.c\n@@ -4132,35 +4132,37 @@ int cil_resolve_ast(struct cil_db *db, struct cil_tree_node *current)\n \t\t\t}\n \t\t}\n \n-\t\tif (changed && (pass > CIL_PASS_CALL1)) {\n+\t\tif (changed) {\n \t\t\tstruct cil_list_item *item;\n-\t\t\t/* Need to re-resolve because an optional was disabled that contained\n-\t\t\t * one or more declarations. We only need to reset to the call1 pass \n-\t\t\t * because things done in the preceding passes aren't allowed in \n-\t\t\t * optionals, and thus can't be disabled.\n-\t\t\t * Note: set pass to CIL_PASS_CALL1 because the pass++ will increment \n-\t\t\t * it to CIL_PASS_CALL2\n-\t\t\t */\n-\t\t\tcil_log(CIL_INFO, \"Resetting declarations\\n\");\n-\n-\t\t\tif (pass >= CIL_PASS_MISC1) {\n-\t\t\t\t__cil_ordered_lists_reset(&extra_args.sidorder_lists);\n-\t\t\t\t__cil_ordered_lists_reset(&extra_args.classorder_lists);\n-\t\t\t\t__cil_ordered_lists_reset(&extra_args.unordered_classorder_lists);\n-\t\t\t\t__cil_ordered_lists_reset(&extra_args.catorder_lists);\n-\t\t\t\t__cil_ordered_lists_reset(&extra_args.sensitivityorder_lists);\n-\t\t\t\tcil_list_destroy(&db->sidorder, CIL_FALSE);\n-\t\t\t\tcil_list_destroy(&db->classorder, CIL_FALSE);\n-\t\t\t\tcil_list_destroy(&db->catorder, CIL_FALSE);\n-\t\t\t\tcil_list_destroy(&db->sensitivityorder, CIL_FALSE);\n-\t\t\t}\n+\t\t\tif (pass > CIL_PASS_CALL1) {\n+\t\t\t\t/* Need to re-resolve because an optional was disabled that contained\n+\t\t\t\t * one or more declarations. We only need to reset to the call1 pass\n+\t\t\t\t * because things done in the preceding passes aren't allowed in\n+\t\t\t\t * optionals, and thus can't be disabled.\n+\t\t\t\t * Note: set pass to CIL_PASS_CALL1 because the pass++ will increment\n+\t\t\t\t * it to CIL_PASS_CALL2\n+\t\t\t\t */\n+\t\t\t\tcil_log(CIL_INFO, \"Resetting declarations\\n\");\n+\n+\t\t\t\tif (pass >= CIL_PASS_MISC1) {\n+\t\t\t\t\t__cil_ordered_lists_reset(&extra_args.sidorder_lists);\n+\t\t\t\t\t__cil_ordered_lists_reset(&extra_args.classorder_lists);\n+\t\t\t\t\t__cil_ordered_lists_reset(&extra_args.unordered_classorder_lists);\n+\t\t\t\t\t__cil_ordered_lists_reset(&extra_args.catorder_lists);\n+\t\t\t\t\t__cil_ordered_lists_reset(&extra_args.sensitivityorder_lists);\n+\t\t\t\t\tcil_list_destroy(&db->sidorder, CIL_FALSE);\n+\t\t\t\t\tcil_list_destroy(&db->classorder, CIL_FALSE);\n+\t\t\t\t\tcil_list_destroy(&db->catorder, CIL_FALSE);\n+\t\t\t\t\tcil_list_destroy(&db->sensitivityorder, CIL_FALSE);\n+\t\t\t\t}\n \n-\t\t\tpass = CIL_PASS_CALL1;\n+\t\t\t\tpass = CIL_PASS_CALL1;\n \n-\t\t\trc = cil_reset_ast(current);\n-\t\t\tif (rc != SEPOL_OK) {\n-\t\t\t\tcil_log(CIL_ERR, \"Failed to reset declarations\\n\");\n-\t\t\t\tgoto exit;\n+\t\t\t\trc = cil_reset_ast(current);\n+\t\t\t\tif (rc != SEPOL_OK) {\n+\t\t\t\t\tcil_log(CIL_ERR, \"Failed to reset declarations\\n\");\n+\t\t\t\t\tgoto exit;\n+\t\t\t\t}\n \t\t\t}\n \t\t\tcil_list_for_each(item, extra_args.disabled_optionals) {\n \t\t\t\tcil_tree_children_destroy(item->data);\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42496177-vul",
+      "digest": "sha256:a0e230069c076d0df1fe6684a14092678b48046b7de3a9bf44d9a041aca5ac46"
+    },
+    "patched": {
+      "ref": "n132/arvo:42496177-fix",
+      "digest": "sha256:a62af2371d8cdd5e821a72adff6273736405965372bab4b61f7bcfcfc59e5a45"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/selinux/libsepol/src/../cil/src/cil_tree.c:185",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/selinux/libsepol/src/../cil/src/cil_tree.c:185"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

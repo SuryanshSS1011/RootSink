@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042486712",
+  "chain": "CWE-456->CWE-457",
+  "project": "uWebSockets",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42486712",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "8bdae7645f375f0fcf52acefce8f004f166b82c2",
+      "fix_commits": [
+        "8bdae7645f375f0fcf52acefce8f004f166b82c2"
+      ],
+      "repo": "https://github.com/uNetworking/uWebSockets"
+    },
+    "patch": "From 8bdae7645f375f0fcf52acefce8f004f166b82c2 Mon Sep 17 00:00:00 2001\nFrom: Alex Hultman <alexhultman@gmail.com>\nDate: Thu, 20 Aug 2020 21:46:27 +0200\nSubject: [PATCH] Also fuzz client features\n\n---\n fuzzing/EpollHelloWorld.cpp | 35 +++++++++++++++++++++++++++++++++++\n 1 file changed, 35 insertions(+)\n\ndiff --git a/fuzzing/EpollHelloWorld.cpp b/fuzzing/EpollHelloWorld.cpp\nindex 41baaa2..ab70c76 100644\n--- a/fuzzing/EpollHelloWorld.cpp\n+++ b/fuzzing/EpollHelloWorld.cpp\n@@ -5,6 +5,7 @@\n \n /* We keep this one for teardown later on */\n struct us_listen_socket_t *listen_socket;\n+struct us_socket_t *client;\n \n /* This test is run by libEpollFuzzer */\n void test() {\n@@ -52,6 +53,32 @@ void test() {\n             listen_socket = listenSocket;\n         });\n \n+        /* Here we want to stress the connect feature, since nothing else stresses it */\n+        struct us_loop_t *loop = (struct us_loop_t *) uWS::Loop::get();\n+        struct us_socket_context_t *client_context = us_create_socket_context(0, loop, 0, {});\n+        client = us_socket_context_connect(0, client_context, \"hostname\", 5000, NULL, 0, 0);\n+\n+        us_socket_context_on_open(0, client_context, [](struct us_socket_t *s, int is_client, char *ip, int ip_length) {\n+            return s;\n+        });\n+\n+        us_socket_context_on_end(0, client_context, [](struct us_socket_t *s) {\n+            return s;\n+        });\n+\n+        us_socket_context_on_data(0, client_context, [](struct us_socket_t *s, char *data, int length) {\n+            return s;\n+        });\n+\n+        us_socket_context_on_writable(0, client_context, [](struct us_socket_t *s) {\n+            return s;\n+        });\n+\n+        us_socket_context_on_close(0, client_context, [](struct us_socket_t *s, int code, void *reason) {\n+            client = NULL;\n+            return s;\n+        });\n+\n         /* Trigger some context functions */\n         app.addServerName(\"\", {});\n         app.removeServerName(\"\");\n@@ -59,6 +86,9 @@ void test() {\n         app.getNativeHandle();\n \n         app.run();\n+\n+        /* After done we also free the client context */\n+        us_socket_context_free(0, client_context);\n     }\n     uWS::Loop::get()->free();\n }\n@@ -72,6 +102,11 @@ void teardown() {\n \t\texit(-1);\n \t}\n \n+    if (client) {\n+        us_socket_close(0, client, 0, 0);\n+        client = NULL;\n+    }\n+\n \t/* We might have open sockets still, and these will be error-closed by epoll_wait */\n \t// us_socket_context_close - close all open sockets created with this socket context\n \n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42486712-vul",
+      "digest": "sha256:925b5d22f9b7e2bd1f86782d3444274ffbe5212dff1925302817d1fcbae833f1"
+    },
+    "patched": {
+      "ref": "n132/arvo:42486712-fix",
+      "digest": "sha256:a25767f1676cbad3e3d3e82c71ba663bcba554d6a3290eeaf7ca86b72843d936"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/uWebSockets/fuzzing/../uSockets/src/internal/networking/bsd.h:118",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/uWebSockets/fuzzing/../uSockets/src/internal/networking/bsd.h:118"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-965190252",
+  "chain": "CWE-456->CWE-457",
+  "project": "libjxl",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42498268",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/libjxl/libjxl/commit/6e0845247b059bd9efbdc6aba6f2e0f31fcff94b",
+      "fix_commits": [
+        "6e0845247b059bd9efbdc6aba6f2e0f31fcff94b"
+      ],
+      "repo": "https://github.com/libjxl/libjxl"
+    },
+    "patch": "diff --git a/lib/jxl/dec_reconstruct.cc b/lib/jxl/dec_reconstruct.cc\nindex 8576c4eed1d..35dcc8bad52 100644\n--- a/lib/jxl/dec_reconstruct.cc\n+++ b/lib/jxl/dec_reconstruct.cc\n@@ -270,11 +270,22 @@ void DoYCbCrUpsampling(size_t hs, size_t vs, ImageF* plane_in, const Rect& rect,\n   // system.\n   size_t xoff = PassesDecoderState::kGroupDataXBorder;\n   size_t yoff = PassesDecoderState::kGroupDataYBorder;\n-  // This may over-copy, but it should always be safe to do so.\n+\n+  // This X,Y range may include more pixels in the output than what we need.\n+  // Those pixels that fall outside the image boundary are undefined, but it is\n+  // safe to compute them with MulAdd().\n   size_t y0 = rect.y0() - lf.Padding();\n-  size_t y1 = rect.y0() + rect.ysize() + lf.Padding();\n+  size_t y1 = rect.y0() +\n+              std::min(frame_rect.y0() + rect.ysize() + lf.Padding(),\n+                       frame_dim.ysize_padded) -\n+              frame_rect.y0();\n+\n   size_t x0 = rect.x0() - lf.Padding();\n-  size_t x1 = rect.x0() + rect.xsize() + lf.Padding();\n+  size_t x1 = rect.x0() +\n+              std::min(frame_rect.x0() + rect.xsize() + lf.Padding(),\n+                       frame_dim.xsize_padded) -\n+              frame_rect.x0();\n+\n   if (hs == 0 && vs == 0) {\n     JXL_CHECK_IMAGE_INITIALIZED(*plane_in, rect);\n     Rect r(x0, y0, x1 - x0, y1 - y0);\n@@ -289,8 +300,8 @@ void DoYCbCrUpsampling(size_t hs, size_t vs, ImageF* plane_in, const Rect& rect,\n       plane_in->Row(y)[rect.x0() - 1] = plane_in->Row(y)[rect.x0()];\n     }\n   }\n-  if (frame_rect.x0() + frame_rect.xsize() >= frame_dim.xsize_padded) {\n-    size_t borderx = ((rect.x0() + rect.xsize() - xoff) >> hs) + xoff;\n+  if (frame_rect.x0() + x1 - rect.x0() >= frame_dim.xsize_padded) {\n+    ssize_t borderx = static_cast<ssize_t>(x1 - xoff + hs) / (1 << hs) + xoff;\n     for (size_t y = 0; y < plane_in->ysize(); y++) {\n       plane_in->Row(y)[borderx] = plane_in->Row(y)[borderx - 1];\n     }\n@@ -299,10 +310,8 @@ void DoYCbCrUpsampling(size_t hs, size_t vs, ImageF* plane_in, const Rect& rect,\n     memcpy(plane_in->Row(rect.y0() - 1), plane_in->Row(rect.y0()),\n            plane_in->xsize() * sizeof(float));\n   }\n-  if (frame_rect.y0() + frame_rect.ysize() >= frame_dim.ysize_padded) {\n-    ssize_t bordery =\n-        static_cast<ssize_t>(rect.y0() + rect.ysize() - yoff) / (1 << vs) +\n-        yoff;\n+  if (frame_rect.y0() + y1 - rect.y0() >= frame_dim.ysize_padded) {\n+    ssize_t bordery = static_cast<ssize_t>(y1 - yoff + vs) / (1 << vs) + yoff;\n     memcpy(plane_in->Row(bordery), plane_in->Row(bordery - 1),\n            plane_in->xsize() * sizeof(float));\n   }\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42498268-vul",
+      "digest": "sha256:9c77550ee75d70972a634df6a58e5860c12198a70a8a1c7085fb7dddad7f7164"
+    },
+    "patched": {
+      "ref": "n132/arvo:42498268-fix",
+      "digest": "sha256:cef36f7aef8b6c43a58e4a79a56946d86626cdbe40d9b65a0b9e7e2e9dc983de"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/libjxl/third_party/highway/hwy/ops/x86_256-inl.h:2511",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/libjxl/third_party/highway/hwy/ops/x86_256-inl.h:2511"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

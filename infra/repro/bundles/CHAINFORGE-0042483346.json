@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042483346",
+  "chain": "CWE-456->CWE-457",
+  "project": "openvswitch",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42483346",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "1e1a15669e324e0971c46a31f3de233e3a0ba5b2",
+      "fix_commits": [
+        "1e1a15669e324e0971c46a31f3de233e3a0ba5b2"
+      ],
+      "repo": "https://github.com/openvswitch/ovs"
+    },
+    "patch": "From 1e1a15669e324e0971c46a31f3de233e3a0ba5b2 Mon Sep 17 00:00:00 2001\nFrom: Ilya Maximets <i.maximets@ovn.org>\nDate: Sat, 17 Oct 2020 17:21:29 +0200\nSubject: [PATCH] odp-util: Fix using uninitialized gtpu metadata.\n\nIf datapath flow doesn't have one of the fields of gtpu metadata, e.g.\n'tunnel(gtpu())', uninitialized stack memory will be used instead.\n\n ==3485429==WARNING: MemorySanitizer: use-of-uninitialized-value\n    #0 0x853a1b in format_u8x lib/odp-util.c:3474:13\n    #1 0x86ee9c in format_odp_tun_gtpu_opt lib/odp-util.c:3713:5\n    #2 0x86a099 in format_odp_tun_attr lib/odp-util.c:3973:13\n    #3 0x83afe6 in format_odp_key_attr__ lib/odp-util.c:4179:9\n    #4 0x838afb in odp_flow_format lib/odp-util.c:4563:17\n    #5 0x738422 in log_flow_message lib/dpif.c:1750:5\n    #6 0x738e2f in log_flow_put_message lib/dpif.c:1784:9\n    #7 0x7371a4 in dpif_operate lib/dpif.c:1377:21\n    #8 0x7363ef in dpif_flow_put lib/dpif.c:1035:5\n    #9 0xc7aab7 in dpctl_put_flow lib/dpctl.c:1171:13\n    #10 0xc65a4f in dpctl_unixctl_handler lib/dpctl.c:2701:17\n    #11 0xaaad04 in process_command lib/unixctl.c:308:13\n    #12 0xaa87f7 in run_connection lib/unixctl.c:342:17\n    #13 0xaa842e in unixctl_server_run lib/unixctl.c:393:21\n    #14 0x51c09c in main vswitchd/ovs-vswitchd.c:128:9\n    #15 0x7f88344391a2 in __libc_start_main (/lib64/libc.so.6+0x271a2)\n    #16 0x46b92d in _start (vswitchd/ovs-vswitchd+0x46b92d)\n\n  Uninitialized value was stored to memory at\n    #0 0x87da17 in scan_gtpu_metadata lib/odp-util.c:5221:27\n    #1 0x874588 in parse_odp_key_mask_attr__ lib/odp-util.c:5862:9\n    #2 0x83ee14 in parse_odp_key_mask_attr lib/odp-util.c:5808:18\n    #3 0x83e8b5 in odp_flow_from_string lib/odp-util.c:6065:18\n    #4 0xc7a4f3 in dpctl_put_flow lib/dpctl.c:1145:13\n    #5 0xc65a4f in dpctl_unixctl_handler lib/dpctl.c:2701:17\n    #6 0xaaad04 in process_command lib/unixctl.c:308:13\n    #7 0xaa87f7 in run_connection lib/unixctl.c:342:17\n    #8 0xaa842e in unixctl_server_run lib/unixctl.c:393:21\n    #9 0x51c09c in main vswitchd/ovs-vswitchd.c:128:9\n    #10 0x7f88344391a2 in __libc_start_main (/lib64/libc.so.6+0x271a2)\n\n  Uninitialized value was created by an allocation of 'msgtype_ma' in the\n  stack frame of function 'scan_gtpu_metadata'\n    #0 0x87d440 in scan_gtpu_metadata lib/odp-util.c:5187\n\nFix that by initializing fields to all zeroes by default.\n\nReported-at: https://bugs.chromium.org/p/oss-fuzz/issues/detail?id=21426\nFixes: 3c6d05a02e0f (\"userspace: Add GTP-U support.\")\nAcked-by: Yi Yang <yangyi01@inspur.com>\nSigned-off-by: Ilya Maximets <i.maximets@ovn.org>\n---\n lib/odp-util.c | 4 ++--\n 1 file changed, 2 insertions(+), 2 deletions(-)\n\ndiff --git a/lib/odp-util.c b/lib/odp-util.c\nindex 5989381..e7424a9 100644\n--- a/lib/odp-util.c\n+++ b/lib/odp-util.c\n@@ -5186,8 +5186,8 @@ scan_gtpu_metadata(const char *s,\n                    struct gtpu_metadata *mask)\n {\n     const char *s_base = s;\n-    uint8_t flags, flags_ma;\n-    uint8_t msgtype, msgtype_ma;\n+    uint8_t flags = 0, flags_ma = 0;\n+    uint8_t msgtype = 0, msgtype_ma = 0;\n     int len;\n \n     if (!strncmp(s, \"flags=\", 6)) {\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42483346-vul",
+      "digest": "sha256:b7b4632aa2aff3fb0078a21b88f8b6c5980269b0255fed755c2357725b36bc04"
+    },
+    "patched": {
+      "ref": "n132/arvo:42483346-fix",
+      "digest": "sha256:72c4897bf7c50e9714ec17b960cd8f973b41a8c5c40d571e23d63124e42e91ed"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/openvswitch/lib/odp-util.c:3185",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/openvswitch/lib/odp-util.c:3185"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

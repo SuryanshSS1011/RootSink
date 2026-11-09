@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-969929262",
+  "chain": "CWE-456->CWE-457",
+  "project": "zstd",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42532756",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/facebook/zstd/commit/b0e8580dc7f71881361f3a6fe46841af9d70bedf",
+      "fix_commits": [
+        "b0e8580dc7f71881361f3a6fe46841af9d70bedf"
+      ],
+      "repo": "https://github.com/facebook/zstd"
+    },
+    "patch": "diff --git a/lib/compress/zstd_opt.c b/lib/compress/zstd_opt.c\nindex 0449204ddd8..c2ec2a9edcd 100644\n--- a/lib/compress/zstd_opt.c\n+++ b/lib/compress/zstd_opt.c\n@@ -1216,6 +1216,7 @@ ZSTD_compressBlock_opt_generic(ZSTD_matchState_t* ms,\n                     if ( (optLevel >= 1) /* additional check only for higher modes */\n                       && (prevMatch.litlen == 0) /* replace a match */\n                       && (LL_INCPRICE(1) < 0) /* ll1 is cheaper than ll0 */\n+                      && LIKELY(ip + cur < iend)\n                     ) {\n                         /* check next position, in case it would be cheaper */\n                         int with1literal = prevMatch.price + LIT_PRICE(ip+cur) + LL_INCPRICE(1);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42532756-vul",
+      "digest": "sha256:9d77ce964acea6d1734db711741331a00e7547a32e7b8d6f7d85ae9bbd55f942"
+    },
+    "patched": {
+      "ref": "n132/arvo:42532756-fix",
+      "digest": "sha256:f8c2d344214a91fc053e0d1b13a7b8fb7c5e882f2d868fb71adee96678b41c45"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/zstd/tests/fuzz/../../lib/compress/zstd_opt.c:285",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/zstd/tests/fuzz/../../lib/compress/zstd_opt.c:285"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

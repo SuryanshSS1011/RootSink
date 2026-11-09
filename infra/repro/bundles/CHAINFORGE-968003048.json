@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-968003048",
+  "chain": "CWE-456->CWE-457",
+  "project": "curl",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42490732",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/curl/curl/commit/a259eee99f2a3d181f4d3254482707f4a0ec4747",
+      "fix_commits": [
+        "a259eee99f2a3d181f4d3254482707f4a0ec4747"
+      ],
+      "repo": "https://github.com/curl/curl"
+    },
+    "patch": "diff --git a/lib/mqtt.c b/lib/mqtt.c\nindex e324ec3dd7d0..a56c7d5eb270 100644\n--- a/lib/mqtt.c\n+++ b/lib/mqtt.c\n@@ -553,7 +553,7 @@ static CURLcode mqtt_doing(struct connectdata *conn, bool *done)\n   case MQTT_FIRST:\n     /* Read the initial byte only */\n     result = Curl_read(conn, sockfd, (char *)&mq->firstbyte, 1, &nread);\n-    if(result)\n+    if(!nread)\n       break;\n     Curl_debug(data, CURLINFO_HEADER_IN, (char *)&mq->firstbyte, 1);\n     /* remember the first byte */\n@@ -563,7 +563,7 @@ static CURLcode mqtt_doing(struct connectdata *conn, bool *done)\n   case MQTT_REMAINING_LENGTH:\n     do {\n       result = Curl_read(conn, sockfd, (char *)&byte, 1, &nread);\n-      if(result)\n+      if(!nread)\n         break;\n       Curl_debug(data, CURLINFO_HEADER_IN, (char *)&byte, 1);\n       pkt[mq->npacket++] = byte;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42490732-vul",
+      "digest": "sha256:b5b37054b10f2748186c8b9f9133cd0284471fcf07a4cd06fccbb6e835044235"
+    },
+    "patched": {
+      "ref": "n132/arvo:42490732-fix",
+      "digest": "sha256:2a800c60ccb7305952be512b0e2de1ecffe8e06e903474f558b19d3428f1b2b0"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/curl/lib/mqtt.c:574",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/curl/lib/mqtt.c:574"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

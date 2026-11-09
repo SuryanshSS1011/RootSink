@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-955068232",
+  "chain": "CWE-129->CWE-125",
+  "project": "gdal",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42534332",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/OSGeo/gdal/commit/01d97526bd8cf1da723b27dc55ccc73887012973",
+      "fix_commits": [
+        "01d97526bd8cf1da723b27dc55ccc73887012973"
+      ],
+      "repo": "https://github.com/OSGeo/gdal"
+    },
+    "patch": "diff --git a/gdal/ogr/ogrsf_frmts/dgn/dgnlibp.h b/gdal/ogr/ogrsf_frmts/dgn/dgnlibp.h\nindex afaa14ca90cb..0120a0396ee9 100644\n--- a/gdal/ogr/ogrsf_frmts/dgn/dgnlibp.h\n+++ b/gdal/ogr/ogrsf_frmts/dgn/dgnlibp.h\n@@ -39,7 +39,7 @@ typedef struct {\n     int         next_element_id;\n \n     int         nElemBytes;\n-    GByte       abyElem[131076];\n+    GByte       abyElem[131076+1];\n \n     bool        got_tcb;\n     int         dimension;\ndiff --git a/gdal/ogr/ogrsf_frmts/dgn/dgnread.cpp b/gdal/ogr/ogrsf_frmts/dgn/dgnread.cpp\nindex d7452534de0a..2051196cedea 100644\n--- a/gdal/ogr/ogrsf_frmts/dgn/dgnread.cpp\n+++ b/gdal/ogr/ogrsf_frmts/dgn/dgnread.cpp\n@@ -109,12 +109,14 @@ int DGNLoadRawElement( DGNInfo *psDGN, int *pnType, int *pnLevel )\n /* -------------------------------------------------------------------- */\n /*      Read the rest of the element data into the working buffer.      */\n /* -------------------------------------------------------------------- */\n-    if( nWords * 2 + 4 > (int) sizeof(psDGN->abyElem) )\n+    if( nWords * 2 + 4 >= (int) sizeof(psDGN->abyElem) )\n         return FALSE;\n \n     /* coverity[tainted_data] */\n     if( (int) VSIFReadL( psDGN->abyElem + 4, 2, nWords, psDGN->fp ) != nWords )\n         return FALSE;\n+    psDGN->abyElem[4 + 2 * nWords] = 0;\n+    psDGN->abyElem[sizeof(psDGN->abyElem)-1] = 0;\n \n     psDGN->nElemBytes = nWords * 2 + 4;\n \n@@ -1383,7 +1385,35 @@ static DGNElemCore *DGNParseTagSet( DGNInfo * psDGN )\n     {\n         DGNTagDef *tagDef = psTagSet->tagList + iTag;\n \n-        if( nDataOffset >= static_cast<size_t>(psDGN->nElemBytes) )\n+        // Check the buffer is large enough to read all tagDef components\n+        size_t nDataOffsetEnd = nDataOffset;\n+        if( nDataOffsetEnd <= static_cast<size_t>(psDGN->nElemBytes) )\n+        {\n+            nDataOffsetEnd += strlen((char *)psDGN->abyElem + nDataOffsetEnd)+1 +\n+                              2;\n+        }\n+        if( nDataOffsetEnd <= static_cast<size_t>(psDGN->nElemBytes) )\n+        {\n+            nDataOffsetEnd += strlen((char *)psDGN->abyElem + nDataOffsetEnd)+1 +\n+                              2 + 5;\n+            if( tagDef->type == 1 )\n+            {\n+                nDataOffsetEnd += strlen(tagDef->defaultValue.string)+1;\n+            }\n+            else if( tagDef->type == 3 || tagDef->type == 5 )\n+            {\n+                nDataOffsetEnd += 4;\n+            }\n+            else if( tagDef->type == 4 )\n+            {\n+                nDataOffsetEnd += 8;\n+            }\n+            else\n+            {\n+                nDataOffsetEnd += 4;\n+            }\n+        }\n+        if( nDataOffsetEnd > static_cast<size_t>(psDGN->nElemBytes) )\n         {\n             CPLError(CE_Failure, CPLE_AssertionFailed,\n                      \"nDataOffset >= static_cast<size_t>(psDGN->nElemBytes)\");\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42534332-vul",
+      "digest": "sha256:879555b1ef6b3ab59956dabaad09bdbaf583ecc75899fa9979fcfdc7fd607525"
+    },
+    "patched": {
+      "ref": "n132/arvo:42534332-fix",
+      "digest": "sha256:95ba4d919db42b84fdac27a7df731e240160ba3865021909f8899c972eb03200"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "crash_site": "/src/gdal/gdal/ogr/ogrsf_frmts/dgn/dgnread.cpp:1403",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 129,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "site": "/src/gdal/gdal/ogr/ogrsf_frmts/dgn/dgnread.cpp:1403"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

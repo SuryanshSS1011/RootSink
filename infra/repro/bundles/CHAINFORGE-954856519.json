@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-954856519",
+  "chain": "CWE-252->CWE-476",
+  "project": "ghostpdl",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42477726",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://cgit.ghostscript.com/ghostpdl.git77f79475fd0419d16f1efe7812a44a9720fef10b",
+      "fix_commits": [
+        "77f79475fd0419d16f1efe7812a44a9720fef10b"
+      ],
+      "repo": "https://cgit.ghostscript.com/ghostpdl.git"
+    },
+    "patch": "From 77f79475fd0419d16f1efe7812a44a9720fef10b Mon Sep 17 00:00:00 2001\nFrom: Chris Liddell <chris.liddell@artifex.com>\nDate: Fri, 27 Sep 2019 13:26:01 +0100\nSubject: [PATCH] Bug 701634: Correctly handle file name of \"\\0\"\n\nAttempting to open a file with a filename string starting with a NULL\ncharacter should be treated the same as if the string was zero length.\n\nNot doing so created a broken file object leading to several operations\nresulting in a segfault.\n\nAlso, add cleanup in the event of such an error, freeing memory allocated in\npreparing the gs stream object.\n---\n base/sfxcommon.c | 11 +++++++++--\n psi/zfile.c      |  3 +++\n 2 files changed, 12 insertions(+), 2 deletions(-)\n\ndiff --git a/base/sfxcommon.c b/base/sfxcommon.c\nindex e5d5e88..002651b 100644\n--- a/base/sfxcommon.c\n+++ b/base/sfxcommon.c\n@@ -82,8 +82,15 @@ file_open_stream(const char *fname, uint len, const char *file_access,\n         return code;\n     if (fname == 0)\n         return 0;\n-    if (fname[0] == 0)\t\t/* fopen_proc gets NUL terminated string, not len */\n-        return 0;\t\t/* so this is the same as len == 0, so return NULL */\n+    if (fname[0] == 0) {        /* fopen_proc gets NUL terminated string, not len */\n+                                /* so this is the same as len == 0, so return NULL */\n+        /* discard the stuff we allocated to keep from accumulating stuff needing GC */\n+        gs_free_object(mem, (*ps)->cbuf, \"file_close(buffer)\");\n+        gs_free_object(mem, *ps, \"file_prepare_stream(stream)\");\n+        *ps = NULL;\n+\n+        return 0;\n+    }\n     code = (*fopen_proc)(iodev, (char *)(*ps)->cbuf, fmode, &file,\n                          (char *)(*ps)->cbuf, (*ps)->bsize, mem);\n     if (code < 0) {\ndiff --git a/psi/zfile.c b/psi/zfile.c\nindex 2b7d168..2f13992 100644\n--- a/psi/zfile.c\n+++ b/psi/zfile.c\n@@ -282,6 +282,8 @@ zfile(i_ctx_t *i_ctx_p)\n     }\n     if (code < 0)\n         return code;\n+    if (s == NULL)\n+        return_error(gs_error_undefinedfilename);\n     code = ssetfilename(s, op[-1].value.const_bytes, r_size(op - 1));\n     if (code < 0) {\n         sclose(s);\n@@ -667,6 +669,7 @@ zlibfile(i_ctx_t *i_ctx_p)\n         pname.iodev = iodev_dflt;\n     if (pname.iodev != iodev_dflt) { /* Non-OS devices don't have search paths (yet). */\n         code = zopen_file(i_ctx_p, &pname, \"r\", &s, imemory);\n+        if (s == NULL) code = gs_note_error(gs_error_undefinedfilename);\n         if (code >= 0) {\n             code = ssetfilename(s, op->value.const_bytes, r_size(op));\n             if (code < 0) {\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42477726-vul",
+      "digest": "sha256:6e7c0b28d23670abcd347936d19505d1997b21dc002fe32abe57ae94f2490662"
+    },
+    "patched": {
+      "ref": "n132/arvo:42477726-fix",
+      "digest": "sha256:3ae416aee64783aa0d8e34d2fc4e14f4d44da2bd73b447fd4152c0d855db4216"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "SEGV",
+        "direction": "READ",
+        "crash_site": null,
+        "implies_sink_cwe": 476
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 252,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 476,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "SEGV",
+        "direction": "READ",
+        "site": null
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

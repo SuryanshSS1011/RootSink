@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042518489",
+  "chain": "CWE-1284->CWE-787",
+  "project": "krb5",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42518489",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "c5507dff5f5b2936937442b43f6c021b4f8a493d",
+      "fix_commits": [
+        "c5507dff5f5b2936937442b43f6c021b4f8a493d"
+      ],
+      "repo": "https://github.com/krb5/krb5"
+    },
+    "patch": "diff --git a/src/include/k5-unicode.h b/src/include/k5-unicode.h\nindex e51ab2fe861..45c1788b264 100644\n--- a/src/include/k5-unicode.h\n+++ b/src/include/k5-unicode.h\n@@ -127,4 +127,6 @@ int krb5int_utf8_normcmp(\n     const krb5_data *,\n     unsigned);\n \n+krb5_boolean k5_utf8_validate(const krb5_data *data);\n+\n #endif /* K5_UNICODE_H */\ndiff --git a/src/lib/krb5/krb/chpw.c b/src/lib/krb5/krb/chpw.c\nindex cdec5952155..803c80febaf 100644\n--- a/src/lib/krb5/krb/chpw.c\n+++ b/src/lib/krb5/krb/chpw.c\n@@ -477,7 +477,6 @@ krb5_chpw_message(krb5_context context, const krb5_data *server_string,\n                   char **message_out)\n {\n     krb5_error_code ret;\n-    krb5_data *string;\n     char *msg;\n \n     *message_out = NULL;\n@@ -493,11 +492,10 @@ krb5_chpw_message(krb5_context context, const krb5_data *server_string,\n     /* If server_string contains a valid UTF-8 string, return that. */\n     if (server_string->length > 0 &&\n         memchr(server_string->data, 0, server_string->length) == NULL &&\n-        krb5int_utf8_normalize(server_string, &string,\n-                               KRB5_UTF8_APPROX) == 0) {\n-        *message_out = string->data; /* already null terminated */\n-        free(string);\n-        return 0;\n+        k5_utf8_validate(server_string)) {\n+        *message_out = k5memdup0(server_string->data, server_string->length,\n+                                 &ret);\n+        return (*message_out == NULL) ? ENOMEM : 0;\n     }\n \n     /* server_string appears invalid, so try to be helpful. */\ndiff --git a/src/lib/krb5/unicode/ucstr.c b/src/lib/krb5/unicode/ucstr.c\nindex e3ed9bc64a1..0257882cd7e 100644\n--- a/src/lib/krb5/unicode/ucstr.c\n+++ b/src/lib/krb5/unicode/ucstr.c\n@@ -18,6 +18,7 @@\n #include \"k5-int.h\"\n #include \"k5-utf8.h\"\n #include \"k5-unicode.h\"\n+#include \"k5-input.h\"\n #include \"ucdata/ucdata.h\"\n \n #include <ctype.h>\n@@ -100,6 +101,32 @@ krb5int_ucstr2upper(\n     }\n }\n \n+/* Return true if data contains valid UTF-8 sequences. */\n+krb5_boolean\n+k5_utf8_validate(const krb5_data *data)\n+{\n+    struct k5input in;\n+    int len, tmplen, i;\n+    const uint8_t *bytes;\n+\n+    k5_input_init(&in, data->data, data->length);\n+    while (!in.status && in.len > 0) {\n+\tlen = KRB5_UTF8_CHARLEN(in.ptr);\n+\tif (len < 1 || len > 4)\n+\t    return FALSE;\n+\tbytes = k5_input_get_bytes(&in, len);\n+\tif (bytes == NULL)\n+\t    return FALSE;\n+\tif (KRB5_UTF8_CHARLEN2(bytes, tmplen) != len)\n+\t    return FALSE;\n+\tfor (i = 1; i < len; i++) {\n+\t    if ((bytes[i] & 0xc0) != 0x80)\n+\t\treturn FALSE;\n+\t}\n+    }\n+    return !in.status;\n+}\n+\n #define TOUPPER(c)  (islower(c) ? toupper(c) : (c))\n #define TOLOWER(c)  (isupper(c) ? tolower(c) : (c))\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42518489-vul",
+      "digest": "sha256:16701c0082f96b266db1257c8e59bc75e4082e227da7e12babebc5a21b52599c"
+    },
+    "patched": {
+      "ref": "n132/arvo:42518489-fix",
+      "digest": "sha256:5069e8af4824f791c0fcaeab4068dee50951e1b93548d9cd8ef1e9f3247eb2c0"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/krb5/src/lib/krb5/unicode/ucstr.c:238",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/krb5/src/lib/krb5/unicode/ucstr.c:238"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

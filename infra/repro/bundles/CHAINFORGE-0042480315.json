@@ -1,0 +1,77 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042480315",
+  "chain": "CWE-190->CWE-787",
+  "project": "ffmpeg",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42480315",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "a8ceb2a72fa1bef4ab5f1ec6cdc7ce74fffda19d",
+      "fix_commits": [
+        "a8ceb2a72fa1bef4ab5f1ec6cdc7ce74fffda19d"
+      ],
+      "repo": "https://git.ffmpeg.org/ffmpeg.git"
+    },
+    "patch": "From a8ceb2a72fa1bef4ab5f1ec6cdc7ce74fffda19d Mon Sep 17 00:00:00 2001\nFrom: Michael Niedermayer <michael@niedermayer.cc>\nDate: Fri, 13 Dec 2019 00:50:21 +0100\nSubject: [PATCH] avcodec/hevc_mp4toannexb_bsf: check that nalu size doesnt\n overflow\n\nFixes: Out of array access\nFixes: 19299/clusterfuzz-testcase-minimized-ffmpeg_BSF_HEVC_MP4TOANNEXB_fuzzer-5169193398042624\n\nFound-by: continuous fuzzing process https://github.com/google/oss-fuzz/tree/master/projects/ffmpeg\nSigned-off-by: Michael Niedermayer <michael@niedermayer.cc>\n---\n libavcodec/hevc_mp4toannexb_bsf.c | 3 +--\n 1 file changed, 1 insertion(+), 2 deletions(-)\n\ndiff --git a/libavcodec/hevc_mp4toannexb_bsf.c b/libavcodec/hevc_mp4toannexb_bsf.c\nindex d0f1b94..baa9362 100644\n--- a/libavcodec/hevc_mp4toannexb_bsf.c\n+++ b/libavcodec/hevc_mp4toannexb_bsf.c\n@@ -152,8 +152,7 @@ static int hevc_mp4toannexb_filter(AVBSFContext *ctx, AVPacket *out)\n         extra_size    = add_extradata * ctx->par_out->extradata_size;\n         got_irap     |= is_irap;\n \n-        if (SIZE_MAX - nalu_size < 4 ||\n-            SIZE_MAX - 4 - nalu_size < extra_size) {\n+        if (FFMIN(INT_MAX, SIZE_MAX) < 4ULL + nalu_size + extra_size) {\n             ret = AVERROR_INVALIDDATA;\n             goto fail;\n         }\n-- \n2.55.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42480315-vul",
+      "digest": "sha256:5c0ec509c64392b38fb769d3e64f0f6d674b4ec6ccfd7ecf2e82db8983a3ec0a"
+    },
+    "patched": {
+      "ref": "n132/arvo:42480315-fix",
+      "digest": "sha256:a86012d460c6ec6ea9f7e1cb49ba1207f5ec4dd1478cf6430265f716c63de195"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/ffmpeg/libavcodec/bytestream.h:268",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 190,
+      "role": "source",
+      "witness": {
+        "method": "ubsan-rebuild",
+        "recipe": "SANITIZER=undefined compile && $ENTRYPOINT",
+        "ubsan_options": "print_stacktrace=1:halt_on_error=0:silence_unsigned_overflow=0:symbolize=1"
+      },
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/ffmpeg/libavcodec/bytestream.h:268"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

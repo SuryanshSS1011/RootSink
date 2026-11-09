@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042521498",
+  "chain": "CWE-1285->CWE-125",
+  "project": "glog",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42521498",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "319a0dfba4ac4e9b2d6830574afaf06debc8435a",
+      "fix_commits": [
+        "319a0dfba4ac4e9b2d6830574afaf06debc8435a"
+      ],
+      "repo": "https://github.com/google/glog"
+    },
+    "patch": "diff --git a/src/demangle.cc b/src/demangle.cc\nindex 1310c3b3f..090ac570c 100644\n--- a/src/demangle.cc\n+++ b/src/demangle.cc\n@@ -36,6 +36,7 @@\n \n #include \"demangle.h\"\n \n+#include <cstddef>\n #include <cstdio>  // for nullptr\n #include <limits>\n \n@@ -222,6 +223,10 @@ static bool ZeroOrMore(ParseFunc parse_func, State *state) {\n // is set to true for later use.  The output string is ensured to\n // always terminate with '\\0' as long as there is no overflow.\n static void Append(State *state, const char * const str, ssize_t length) {\n+  if (state->out_cur == nullptr) {\n+    state->overflowed = true;\n+    return;\n+  }\n   for (ssize_t i = 0; i < length; ++i) {\n     if (state->out_cur + 1 < state->out_end) {  // +1 for '\\0'\n       *state->out_cur = str[i];\n@@ -667,6 +672,10 @@ static bool ParseIdentifier(State *state, ssize_t length) {\n   } else {\n     MaybeAppendWithLength(state, state->mangled_cur, length);\n   }\n+  if (length < 0 ||\n+      static_cast<std::size_t>(length) > StrLen(state->mangled_cur)) {\n+    return false;\n+  }\n   state->mangled_cur += length;\n   return true;\n }\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42521498-vul",
+      "digest": "sha256:10ecb3fdf1dcbab8d19d4ad48884c853f36c784a9850e5c32d303631df184146"
+    },
+    "patched": {
+      "ref": "n132/arvo:42521498-fix",
+      "digest": "sha256:1c4357d20112ebb26e1bce605c1dd2e874de2e25647f4d379f3a67b6595c3a05"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "dynamic-stack-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/glog/src/demangle.cc:211",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "dynamic-stack-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/glog/src/demangle.cc:211"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

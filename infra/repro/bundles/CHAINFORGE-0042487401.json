@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042487401",
+  "chain": "CWE-456->CWE-457",
+  "project": "php-src",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42487401",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "6d538e83aa1e98694402eea5433e38d387f8729a",
+      "fix_commits": [
+        "6d538e83aa1e98694402eea5433e38d387f8729a"
+      ],
+      "repo": "https://github.com/php/php-src"
+    },
+    "patch": "From 6d538e83aa1e98694402eea5433e38d387f8729a Mon Sep 17 00:00:00 2001\nFrom: Bob Weinand <bobwei9@hotmail.com>\nDate: Tue, 15 Sep 2020 20:07:25 +0200\nSubject: [PATCH] Fix OSS Fuzz issue: yielding from an aborted generator\n\n---\n ..._from_aborted_generator_with_children.phpt | 31 ++++++++++++++++\n Zend/zend_vm_def.h                            | 12 +++----\n Zend/zend_vm_execute.h                        | 36 +++++++++----------\n 3 files changed, 55 insertions(+), 24 deletions(-)\n create mode 100644 Zend/tests/generators/yield_from_aborted_generator_with_children.phpt\n\ndiff --git a/Zend/tests/generators/yield_from_aborted_generator_with_children.phpt b/Zend/tests/generators/yield_from_aborted_generator_with_children.phpt\nnew file mode 100644\nindex 0000000..7074e40\n--- /dev/null\n+++ b/Zend/tests/generators/yield_from_aborted_generator_with_children.phpt\n@@ -0,0 +1,31 @@\n+--TEST--\n+Impossible to yield from a generator which already failed, nested version\n+--FILE--\n+<?php\n+\n+function from() {\n+    yield 0;\n+    throw new Exception();\n+}\n+function gen($gen) {\n+    yield from $gen;\n+}\n+\n+$gen1 = from();\n+$gen2 = gen($gen1);\n+$gen3 = gen($gen1);\n+try {\n+    $gen2->next();\n+} catch (Exception $e) {\n+    unset($gen2);\n+}\n+$gen3->next();\n+\n+?>\n+--EXPECTF--\n+Fatal error: Uncaught Error: Generator passed to yield from was aborted without proper return and is unable to continue in %s:%d\n+Stack trace:\n+#0 [internal function]: gen(Object(Generator))\n+#1 %s(%d): Generator->next()\n+#2 {main}\n+  thrown in %s on line %d\ndiff --git a/Zend/zend_vm_def.h b/Zend/zend_vm_def.h\nindex 02a5e2c..59a49cb 100644\n--- a/Zend/zend_vm_def.h\n+++ b/Zend/zend_vm_def.h\n@@ -8033,7 +8033,12 @@ ZEND_VM_C_LABEL(yield_from_try_again):\n \t\t\tZ_ADDREF_P(val);\n \t\t\tFREE_OP1();\n \n-\t\t\tif (Z_ISUNDEF(new_gen->retval)) {\n+\t\t\tif (UNEXPECTED(new_gen->execute_data == NULL)) {\n+\t\t\t\tzend_throw_error(NULL, \"Generator passed to yield from was aborted without proper return and is unable to continue\");\n+\t\t\t\tzval_ptr_dtor(val);\n+\t\t\t\tUNDEF_RESULT();\n+\t\t\t\tHANDLE_EXCEPTION();\n+\t\t\t} else if (Z_ISUNDEF(new_gen->retval)) {\n \t\t\t\tif (UNEXPECTED(zend_generator_get_current(new_gen) == generator)) {\n \t\t\t\t\tzend_throw_error(NULL, \"Impossible to yield from the Generator being currently run\");\n \t\t\t\t\tzval_ptr_dtor(val);\n@@ -8042,11 +8047,6 @@ ZEND_VM_C_LABEL(yield_from_try_again):\n \t\t\t\t} else {\n \t\t\t\t\tzend_generator_yield_from(generator, new_gen);\n \t\t\t\t}\n-\t\t\t} else if (UNEXPECTED(new_gen->execute_data == NULL)) {\n-\t\t\t\tzend_throw_error(NULL, \"Generator passed to yield from was aborted without proper return and is unable to continue\");\n-\t\t\t\tzval_ptr_dtor(val);\n-\t\t\t\tUNDEF_RESULT();\n-\t\t\t\tHANDLE_EXCEPTION();\n \t\t\t} else {\n \t\t\t\tif (RETURN_VALUE_USED(opline)) {\n \t\t\t\t\tZVAL_COPY(EX_VAR(opline->result.var), &new_gen->retval);\ndiff --git a/Zend/zend_vm_execute.h b/Zend/zend_vm_execute.h\nindex e03712f..0b1795f 100644\n--- a/Zend/zend_vm_execute.h\n+++ b/Zend/zend_vm_execute.h\n@@ -5376,7 +5376,12 @@ yield_from_try_again:\n \n \t\t\tZ_ADDREF_P(val);\n \n-\t\t\tif (Z_ISUNDEF(new_gen->retval)) {\n+\t\t\tif (UNEXPECTED(new_gen->execute_data == NULL)) {\n+\t\t\t\tzend_throw_error(NULL, \"Generator passed to yield from was aborted without proper return and is unable to continue\");\n+\t\t\t\tzval_ptr_dtor(val);\n+\t\t\t\tUNDEF_RESULT();\n+\t\t\t\tHANDLE_EXCEPTION();\n+\t\t\t} else if (Z_ISUNDEF(new_gen->retval)) {\n \t\t\t\tif (UNEXPECTED(zend_generator_get_current(new_gen) == generator)) {\n \t\t\t\t\tzend_throw_error(NULL, \"Impossible to yield from the Generator being currently run\");\n \t\t\t\t\tzval_ptr_dtor(val);\n@@ -5385,11 +5390,6 @@ yield_from_try_again:\n \t\t\t\t} else {\n \t\t\t\t\tzend_generator_yield_from(generator, new_gen);\n \t\t\t\t}\n-\t\t\t} else if (UNEXPECTED(new_gen->execute_data == NULL)) {\n-\t\t\t\tzend_throw_error(NULL, \"Generator passed to yield from was aborted without proper return and is unable to continue\");\n-\t\t\t\tzval_ptr_dtor(val);\n-\t\t\t\tUNDEF_RESULT();\n-\t\t\t\tHANDLE_EXCEPTION();\n \t\t\t} else {\n \t\t\t\tif (RETURN_VALUE_USED(opline)) {\n \t\t\t\t\tZVAL_COPY(EX_VAR(opline->result.var), &new_gen->retval);\n@@ -14615,7 +14615,12 @@ yield_from_try_again:\n \t\t\tZ_ADDREF_P(val);\n \t\t\tzval_ptr_dtor_nogc(EX_VAR(opline->op1.var));\n \n-\t\t\tif (Z_ISUNDEF(new_gen->retval)) {\n+\t\t\tif (UNEXPECTED(new_gen->execute_data == NULL)) {\n+\t\t\t\tzend_throw_error(NULL, \"Generator passed to yield from was aborted without proper return and is unable to continue\");\n+\t\t\t\tzval_ptr_dtor(val);\n+\t\t\t\tUNDEF_RESULT();\n+\t\t\t\tHANDLE_EXCEPTION();\n+\t\t\t} else if (Z_ISUNDEF(new_gen->retval)) {\n \t\t\t\tif (UNEXPECTED(zend_generator_get_current(new_gen) == generator)) {\n \t\t\t\t\tzend_throw_error(NULL, \"Impossible to yield from the Generator being currently run\");\n \t\t\t\t\tzval_ptr_dtor(val);\n@@ -14624,11 +14629,6 @@ yield_from_try_again:\n \t\t\t\t} else {\n \t\t\t\t\tzend_generator_yield_from(generator, new_gen);\n \t\t\t\t}\n-\t\t\t} else if (UNEXPECTED(new_gen->execute_data == NULL)) {\n-\t\t\t\tzend_throw_error(NULL, \"Generator passed to yield from was aborted without proper return and is unable to continue\");\n-\t\t\t\tzval_ptr_dtor(val);\n-\t\t\t\tUNDEF_RESULT();\n-\t\t\t\tHANDLE_EXCEPTION();\n \t\t\t} else {\n \t\t\t\tif (RETURN_VALUE_USED(opline)) {\n \t\t\t\t\tZVAL_COPY(EX_VAR(opline->result.var), &new_gen->retval);\n@@ -39261,7 +39261,12 @@ yield_from_try_again:\n \n \t\t\tZ_ADDREF_P(val);\n \n-\t\t\tif (Z_ISUNDEF(new_gen->retval)) {\n+\t\t\tif (UNEXPECTED(new_gen->execute_data == NULL)) {\n+\t\t\t\tzend_throw_error(NULL, \"Generator passed to yield from was aborted without proper return and is unable to continue\");\n+\t\t\t\tzval_ptr_dtor(val);\n+\t\t\t\tUNDEF_RESULT();\n+\t\t\t\tHANDLE_EXCEPTION();\n+\t\t\t} else if (Z_ISUNDEF(new_gen->retval)) {\n \t\t\t\tif (UNEXPECTED(zend_generator_get_current(new_gen) == generator)) {\n \t\t\t\t\tzend_throw_error(NULL, \"Impossible to yield from the Generator being currently run\");\n \t\t\t\t\tzval_ptr_dtor(val);\n@@ -39270,11 +39275,6 @@ yield_from_try_again:\n \t\t\t\t} else {\n \t\t\t\t\tzend_generator_yield_from(generator, new_gen);\n \t\t\t\t}\n-\t\t\t} else if (UNEXPECTED(new_gen->execute_data == NULL)) {\n-\t\t\t\tzend_throw_error(NULL, \"Generator passed to yield from was aborted without proper return and is unable to continue\");\n-\t\t\t\tzval_ptr_dtor(val);\n-\t\t\t\tUNDEF_RESULT();\n-\t\t\t\tHANDLE_EXCEPTION();\n \t\t\t} else {\n \t\t\t\tif (RETURN_VALUE_USED(opline)) {\n \t\t\t\t\tZVAL_COPY(EX_VAR(opline->result.var), &new_gen->retval);\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42487401-vul",
+      "digest": "sha256:492b81782a311618da5dc074c690536d528672d3a59c630c76b557b1312bfa78"
+    },
+    "patched": {
+      "ref": "n132/arvo:42487401-fix",
+      "digest": "sha256:fd09b90d3702389f5acdbcc6a5c342e2d1f8243f38942cc305ec9257ea0f89e6"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/php-src/Zend/zend_generators.c:448",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/php-src/Zend/zend_generators.c:448"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

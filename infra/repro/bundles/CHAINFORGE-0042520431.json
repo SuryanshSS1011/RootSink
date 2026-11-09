@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042520431",
+  "chain": "CWE-20->CWE-125",
+  "project": "libjpeg-turbo.dev",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42520431",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "9b3a8f36418e8b6a601aa683506bb875f6dd9f12",
+      "fix_commits": [
+        "9b3a8f36418e8b6a601aa683506bb875f6dd9f12"
+      ],
+      "repo": "https://github.com/libjpeg-turbo/libjpeg-turbo"
+    },
+    "patch": "diff --git a/jcapimin.c b/jcapimin.c\nindex 25ce9a110..cbb3d13e1 100644\n--- a/jcapimin.c\n+++ b/jcapimin.c\n@@ -5,7 +5,7 @@\n  * Copyright (C) 1994-1998, Thomas G. Lane.\n  * Modified 2003-2010 by Guido Vollbeding.\n  * libjpeg-turbo Modifications:\n- * Copyright (C) 2022-2023, D. R. Commander.\n+ * Copyright (C) 2022, D. R. Commander.\n  * For conditions of distribution and use, see the accompanying README.ijg\n  * file.\n  *\n@@ -240,11 +240,10 @@ jpeg_write_marker(j_compress_ptr cinfo, int marker, const JOCTET *dataptr,\n \n   (*cinfo->marker->write_marker_header) (cinfo, marker, datalen);\n   write_marker_byte = cinfo->marker->write_marker_byte; /* copy for speed */\n-  do {\n+  while (datalen--) {\n     (*write_marker_byte) (cinfo, *dataptr);\n     dataptr++;\n   }\n-  while (--datalen);\n }\n \n /* Same, but piecemeal. */\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42520431-vul",
+      "digest": "sha256:d0bfc255329eb4d6413d7be3fde9faaf22d5645b7f55f7d078e4c8443615eddb"
+    },
+    "patched": {
+      "ref": "n132/arvo:42520431-fix",
+      "digest": "sha256:97719c9df4e7ec50bcea8b900a6d989ef9cfc6c9b8c12f40b98acf704152569b"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/libjpeg-turbo.dev/jcapimin.c:244",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/libjpeg-turbo.dev/jcapimin.c:244"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

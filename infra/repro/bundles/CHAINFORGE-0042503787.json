@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042503787",
+  "chain": "CWE-1284->CWE-125",
+  "project": "net-snmp",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42503787",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "d814ae86802a8858286b701187040799a6f0c301",
+      "fix_commits": [
+        "d814ae86802a8858286b701187040799a6f0c301"
+      ],
+      "repo": "https://github.com/net-snmp/net-snmp"
+    },
+    "patch": "diff --git a/agent/mibgroup/agentx/protocol.c b/agent/mibgroup/agentx/protocol.c\nindex 78ce5cf0ca..a4e347277f 100644\n--- a/agent/mibgroup/agentx/protocol.c\n+++ b/agent/mibgroup/agentx/protocol.c\n@@ -1643,6 +1643,11 @@ agentx_parse(netsnmp_session * session, netsnmp_pdu *pdu, u_char * data,\n          * expects to find the context in the PDU's context field.  Therefore we\n          * need to copy the context into the PDU's context fields.  */\n         if (pdu->community_len > 0 && pdu->contextName == NULL) {\n+            /*\n+             * strlen() is safe here because snmp_clone_mem() '\\0'-terminates its output\n+             */\n+            if (strlen(pdu->community) != pdu->community_len)\n+                goto parse_err;\n             pdu->contextName    = strdup((char *) pdu->community);\n             pdu->contextNameLen = pdu->community_len;\n         }\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42503787-vul",
+      "digest": "sha256:4a63a4246f4b566cb86d0410dd73204a47d66b758247844ade311a969aece116"
+    },
+    "patched": {
+      "ref": "n132/arvo:42503787-fix",
+      "digest": "sha256:6caf84da09ef159f216aa300dd08b34827d80168398145271dd5d69b4d76247a"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/net-snmp/snmplib/asn1.c:1026",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/net-snmp/snmplib/asn1.c:1026"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

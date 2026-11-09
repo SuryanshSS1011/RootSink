@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042471100",
+  "chain": "CWE-416->CWE-125",
+  "project": "libgit2",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42471100",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "ee11d47e3d907b66eeff99e0ba1e1c71e05164b7",
+      "fix_commits": [
+        "ee11d47e3d907b66eeff99e0ba1e1c71e05164b7"
+      ],
+      "repo": "https://github.com/libgit2/libgit2"
+    },
+    "patch": "diff --git a/src/tag.c b/src/tag.c\nindex 663c7dabde2..c45335151b8 100644\n--- a/src/tag.c\n+++ b/src/tag.c\n@@ -70,10 +70,9 @@ static int tag_parse(git_tag *tag, const char *buffer, const char *buffer_end)\n \tstatic const char *tag_types[] = {\n \t\tNULL, \"commit\\n\", \"tree\\n\", \"blob\\n\", \"tag\\n\"\n \t};\n-\n-\tunsigned int i;\n \tsize_t text_len, alloc_len;\n-\tchar *search;\n+\tconst char *search;\n+\tunsigned int i;\n \n \tif (git_oid__parse(&tag->target, &buffer, buffer_end, \"object \") < 0)\n \t\treturn tag_error(\"object field invalid\");\n@@ -138,8 +137,9 @@ static int tag_parse(git_tag *tag, const char *buffer, const char *buffer_end)\n \ttag->message = NULL;\n \tif (buffer < buffer_end) {\n \t\t/* If we're not at the end of the header, search for it */\n-\t\tif( *buffer != '\\n' ) {\n-\t\t\tsearch = strstr(buffer, \"\\n\\n\");\n+\t\tif(*buffer != '\\n') {\n+\t\t\tsearch = git__memmem(buffer, buffer_end - buffer,\n+\t\t\t\t\t     \"\\n\\n\", 2);\n \t\t\tif (search)\n \t\t\t\tbuffer = search + 1;\n \t\t\telse\ndiff --git a/tests/object/tag/parse.c b/tests/object/tag/parse.c\nindex 7e58ed12bb3..f701f6b8946 100644\n--- a/tests/object/tag/parse.c\n+++ b/tests/object/tag/parse.c\n@@ -198,3 +198,21 @@ void test_object_tag_parse__missing_message_fails(void)\n \t\t\"tagger taggy@taggart.com>\\n\";\n \tassert_tag_fails(tag, 0);\n }\n+\n+void test_object_tag_parse__no_oob_read_when_searching_message(void)\n+{\n+\tconst char *tag =\n+\t\t\"object a8d447f68076d1520f69649bb52629941be7031f\\n\"\n+\t\t\"type tag\\n\"\n+\t\t\"tag \\n\"\n+\t\t\"tagger <>\\n\"\n+\t\t\" \\n\\n\"\n+\t\t\"Message\";\n+\t/*\n+\t * The OOB read previously resulted in an OOM error. We\n+\t * thus want to make sure that the resulting error is the\n+\t * expected one.\n+\t */\n+\tassert_tag_fails(tag, strlen(tag) - strlen(\"\\n\\nMessage\"));\n+\tcl_assert(strstr(giterr_last()->message, \"tag contains no message\"));\n+}\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42471100-vul",
+      "digest": "sha256:fdce4c2be1460791f5497359f66bdc0cf7afab35b8c3966c1cbbdfddeed2d505"
+    },
+    "patched": {
+      "ref": "n132/arvo:42471100-fix",
+      "digest": "sha256:1fee7f54249eef2373d71b086b8499f4c4b002d28541f0f910a2a0ae550b693f"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/libgit2/src/tag.c:142",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/libgit2/src/tag.c:142"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

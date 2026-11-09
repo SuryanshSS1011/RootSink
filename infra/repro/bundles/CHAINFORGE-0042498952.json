@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042498952",
+  "chain": "CWE-456->CWE-457",
+  "project": "libjxl",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42498952",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "84c6421732054399e9b8046f1cdf2e999dbaaab2",
+      "fix_commits": [
+        "84c6421732054399e9b8046f1cdf2e999dbaaab2"
+      ],
+      "repo": "https://github.com/libjxl/libjxl"
+    },
+    "patch": "From 84c6421732054399e9b8046f1cdf2e999dbaaab2 Mon Sep 17 00:00:00 2001\nFrom: Jon Sneyers <jon@cloudinary.com>\nDate: Sun, 18 Jul 2021 21:46:04 +0200\nSubject: [PATCH] fuzz / bitstream bug: squeezing meta-channnels\n\n---\n lib/jxl/modular/transform/squeeze.cc | 9 +++++++++\n 1 file changed, 9 insertions(+)\n\ndiff --git a/lib/jxl/modular/transform/squeeze.cc b/lib/jxl/modular/transform/squeeze.cc\nindex c1940e4..fd8867b 100644\n--- a/lib/jxl/modular/transform/squeeze.cc\n+++ b/lib/jxl/modular/transform/squeeze.cc\n@@ -235,6 +235,15 @@ Status MetaSqueeze(Image &image, std::vector<SqueezeParams> *parameters) {\n     uint32_t endc = (*parameters)[i].begin_c + (*parameters)[i].num_c - 1;\n \n     uint32_t offset;\n+    if (beginc < image.nb_meta_channels) {\n+      if (endc >= image.nb_meta_channels) {\n+        return JXL_FAILURE(\"Invalid squeeze: mix of meta and nonmeta channels\");\n+      }\n+      if (!in_place)\n+        return JXL_FAILURE(\n+            \"Invalid squeeze: meta channels require in-place residuals\");\n+      image.nb_meta_channels += (*parameters)[i].num_c;\n+    }\n     if (in_place) {\n       offset = endc + 1;\n     } else {\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42498952-vul",
+      "digest": "sha256:463d39781282d6ad4c92d0f414b453af70d01a6f68ebe788e79fca8d550349c4"
+    },
+    "patched": {
+      "ref": "n132/arvo:42498952-fix",
+      "digest": "sha256:bef5e132480f7909eb83f593f967433b3d97ca356f74517074435becdcbcacbf"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/libjxl/third_party/highway/hwy/ops/scalar-inl.h:480",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/libjxl/third_party/highway/hwy/ops/scalar-inl.h:480"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042495176",
+  "chain": "CWE-20->CWE-125",
+  "project": "selinux",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42495176",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "340f0eb7f3673e8aacaf0a96cbfcd4d12a405521",
+      "fix_commits": [
+        "340f0eb7f3673e8aacaf0a96cbfcd4d12a405521"
+      ],
+      "repo": "https://github.com/SELinuxProject/selinux"
+    },
+    "patch": "diff --git a/libsepol/cil/src/cil_build_ast.c b/libsepol/cil/src/cil_build_ast.c\nindex 96c944975d..8825485855 100644\n--- a/libsepol/cil/src/cil_build_ast.c\n+++ b/libsepol/cil/src/cil_build_ast.c\n@@ -52,6 +52,7 @@ struct cil_args_build {\n \tstruct cil_tree_node *tunif;\n \tstruct cil_tree_node *in;\n \tstruct cil_tree_node *macro;\n+\tstruct cil_tree_node *optional;\n \tstruct cil_tree_node *boolif;\n };\n \n@@ -6071,6 +6072,7 @@ int __cil_build_ast_node_helper(struct cil_tree_node *parse_current, uint32_t *f\n \tstruct cil_tree_node *tunif = args->tunif;\n \tstruct cil_tree_node *in = args->in;\n \tstruct cil_tree_node *macro = args->macro;\n+\tstruct cil_tree_node *optional = args->optional;\n \tstruct cil_tree_node *boolif = args->boolif;\n \tstruct cil_tree_node *ast_node = NULL;\n \tint rc = SEPOL_ERR;\n@@ -6121,6 +6123,18 @@ int __cil_build_ast_node_helper(struct cil_tree_node *parse_current, uint32_t *f\n \t\t}\n \t}\n \n+\tif (optional != NULL) {\n+\t\tif (parse_current->data == CIL_KEY_TUNABLE ||\n+\t\t\tparse_current->data == CIL_KEY_IN ||\n+\t\t\tparse_current->data == CIL_KEY_BLOCK ||\n+\t\t\tparse_current->data == CIL_KEY_BLOCKABSTRACT ||\n+\t\t\tparse_current->data == CIL_KEY_MACRO) {\n+\t\t\trc = SEPOL_ERR;\n+\t\t\tcil_tree_log(parse_current, CIL_ERR, \"%s is not allowed in optionals\", (char *)parse_current->data);\n+\t\t\tgoto exit;\n+\t\t}\n+\t}\n+\n \tif (boolif != NULL) {\n \t\tif (parse_current->data != CIL_KEY_TUNABLEIF &&\n \t\t\tparse_current->data != CIL_KEY_CALL &&\n@@ -6462,6 +6476,10 @@ int __cil_build_ast_first_child_helper(__attribute__((unused)) struct cil_tree_n\n \t\targs->macro = ast;\n \t}\n \n+\tif (ast->flavor == CIL_OPTIONAL) {\n+\t\targs->optional = ast;\n+\t}\n+\n \tif (ast->flavor == CIL_BOOLEANIF) {\n \t\targs->boolif = ast;\n \t}\n@@ -6492,6 +6510,19 @@ int __cil_build_ast_last_child_helper(struct cil_tree_node *parse_current, void\n \t\targs->macro = NULL;\n \t}\n \n+\tif (ast->flavor == CIL_OPTIONAL) {\n+\t\tstruct cil_tree_node *n = ast->parent;\n+\t\targs->optional = NULL;\n+\t\t/* Optionals can be nested */\n+\t\twhile (n && n->flavor != CIL_ROOT) {\n+\t\t\tif (n->flavor == CIL_OPTIONAL) {\n+\t\t\t\targs->optional = n;\n+\t\t\t\tbreak;\n+\t\t\t}\n+\t\t\tn = n->parent;\n+\t\t}\n+\t}\n+\n \tif (ast->flavor == CIL_BOOLEANIF) {\n \t\targs->boolif = NULL;\n \t}\n@@ -6520,6 +6551,7 @@ int cil_build_ast(struct cil_db *db, struct cil_tree_node *parse_tree, struct ci\n \textra_args.tunif = NULL;\n \textra_args.in = NULL;\n \textra_args.macro = NULL;\n+\textra_args.optional = NULL;\n \textra_args.boolif = NULL;\n \n \trc = cil_tree_walk(parse_tree, __cil_build_ast_node_helper, __cil_build_ast_first_child_helper, __cil_build_ast_last_child_helper, &extra_args);\ndiff --git a/libsepol/cil/src/cil_resolve_ast.c b/libsepol/cil/src/cil_resolve_ast.c\nindex 56295a047b..efff0f2ec4 100644\n--- a/libsepol/cil/src/cil_resolve_ast.c\n+++ b/libsepol/cil/src/cil_resolve_ast.c\n@@ -3808,8 +3808,10 @@ int __cil_resolve_ast_node_helper(struct cil_tree_node *node, uint32_t *finished\n \n \tif (optional != NULL) {\n \t\tif (node->flavor == CIL_TUNABLE ||\n+\t\t\tnode->flavor == CIL_IN ||\n+\t\t\tnode->flavor == CIL_BLOCK ||\n+\t\t\tnode->flavor == CIL_BLOCKABSTRACT ||\n \t\t    node->flavor == CIL_MACRO) {\n-\t\t\t/* tuanbles and macros are not allowed in optionals*/\n \t\t\tcil_tree_log(node, CIL_ERR, \"%s statement is not allowed in optionals\", cil_node_to_string(node));\n \t\t\trc = SEPOL_ERR;\n \t\t\tgoto exit;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42495176-vul",
+      "digest": "sha256:7ff0f4d5a5f5224616eb3e26b1bfeafe9483bc6a56e2015130f05fa479177fd9"
+    },
+    "patched": {
+      "ref": "n132/arvo:42495176-fix",
+      "digest": "sha256:e2218eda027b5d6a6b749664e770af3a62954349f89713a61e41756bef437281"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/selinux/libsepol/src/ebitmap.c:232",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/selinux/libsepol/src/ebitmap.c:232"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

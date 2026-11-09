@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-967742883",
+  "chain": "CWE-456->CWE-457",
+  "project": "imagemagick",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42479021",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/imagemagick/imagemagick/commit/c96c5eac9a0467ffdb1cb67517702bf80d5a5277",
+      "fix_commits": [
+        "c96c5eac9a0467ffdb1cb67517702bf80d5a5277"
+      ],
+      "repo": "https://github.com/imagemagick/imagemagick"
+    },
+    "patch": "diff --git a/MagickCore/quantum-import.c b/MagickCore/quantum-import.c\nindex 99b298b8599..ac255fdb3dc 100644\n--- a/MagickCore/quantum-import.c\n+++ b/MagickCore/quantum-import.c\n@@ -139,20 +139,18 @@ static inline const unsigned char *PushDoublePixel(QuantumInfo *quantum_info,\n       quantum[5]=(*pixels++);\n       quantum[6]=(*pixels++);\n       quantum[7]=(*pixels++);\n-      p=(double *) quantum;\n-      *pixel=(*p);\n-      *pixel-=quantum_info->minimum;\n-      *pixel*=quantum_info->scale;\n-      return(pixels);\n-    }\n-  quantum[7]=(*pixels++);\n-  quantum[6]=(*pixels++);\n-  quantum[5]=(*pixels++);\n-  quantum[4]=(*pixels++);\n-  quantum[3]=(*pixels++);\n-  quantum[2]=(*pixels++);\n-  quantum[1]=(*pixels++);\n-  quantum[0]=(*pixels++);\n+    }\n+  else\n+    {\n+      quantum[7]=(*pixels++);\n+      quantum[6]=(*pixels++);\n+      quantum[5]=(*pixels++);\n+      quantum[4]=(*pixels++);\n+      quantum[3]=(*pixels++);\n+      quantum[2]=(*pixels++);\n+      quantum[1]=(*pixels++);\n+      quantum[0]=(*pixels++);\n+    }\n   p=(double *) quantum;\n   *pixel=(*p);\n   *pixel-=quantum_info->minimum;\n@@ -176,20 +174,23 @@ static inline const unsigned char *PushQuantumFloatPixel(\n       quantum[1]=(*pixels++);\n       quantum[2]=(*pixels++);\n       quantum[3]=(*pixels++);\n-      p=(float *) quantum;\n-      *pixel=(*p);\n-      *pixel-=quantum_info->minimum;\n-      *pixel*=(float) quantum_info->scale;\n-      return(pixels);\n-    }\n-  quantum[3]=(*pixels++);\n-  quantum[2]=(*pixels++);\n-  quantum[1]=(*pixels++);\n-  quantum[0]=(*pixels++);\n+     }\n+   else\n+     {\n+       quantum[3]=(*pixels++);\n+       quantum[2]=(*pixels++);\n+       quantum[1]=(*pixels++);\n+       quantum[0]=(*pixels++);\n+     }\n   p=(float *) quantum;\n   *pixel=(*p);\n   *pixel-=quantum_info->minimum;\n   *pixel*=(float) quantum_info->scale;\n+  if (*pixel < FLT_MIN)\n+    *pixel=FLT_MIN;\n+  else\n+    if (*pixel > FLT_MAX)\n+      *pixel=FLT_MAX;\n   return(pixels);\n }\n \ndiff --git a/MagickCore/quantum.h b/MagickCore/quantum.h\nindex 34a66144698..b76617d55e3 100644\n--- a/MagickCore/quantum.h\n+++ b/MagickCore/quantum.h\n@@ -82,20 +82,16 @@ typedef enum\n typedef struct _QuantumInfo\n   QuantumInfo;\n \n-static inline Quantum ClampToQuantum(const MagickRealType value)\n+static inline Quantum ClampToQuantum(const MagickRealType quantum)\n {\n #if defined(MAGICKCORE_HDRI_SUPPORT)\n-  if (value < DBL_MIN)\n-    return((Quantum) DBL_MIN);\n-  if (value > DBL_MAX)\n-    return((Quantum) DBL_MAX);\n-  return((Quantum) value);\n+  return((Quantum) quantum);\n #else\n-  if (value <= 0.0f)\n+  if (quantum <= 0.0f)\n     return((Quantum) 0);\n   if (value >= (MagickRealType) QuantumRange)\n     return(QuantumRange);\n-  return((Quantum) (value+0.5f));\n+  return((Quantum) (quantum+0.5f));\n #endif\n }\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42479021-vul",
+      "digest": "sha256:d4b0e61b7a10a0b321773d749704b25b0632ae95dc20b8bd53c8299520520592"
+    },
+    "patched": {
+      "ref": "n132/arvo:42479021-fix",
+      "digest": "sha256:68fef2146fd22863a1ef7c63190e18f045e1486bff88cd73b713b8d9d88bac82"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/imagemagick/./MagickCore/quantum.h:88",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/imagemagick/./MagickCore/quantum.h:88"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

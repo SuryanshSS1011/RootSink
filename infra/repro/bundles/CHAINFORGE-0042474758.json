@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042474758",
+  "chain": "CWE-1284->CWE-125",
+  "project": "lwan",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42474758",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "4d04b78ace04a72632a8ccc74b00d8205c75d89a",
+      "fix_commits": [
+        "4d04b78ace04a72632a8ccc74b00d8205c75d89a"
+      ],
+      "repo": "https://github.com/lpereira/lwan"
+    },
+    "patch": "diff --git a/fuzz/clusterfuzz-testcase-request_fuzzer-5675545829834752 b/fuzz/clusterfuzz-testcase-request_fuzzer-5675545829834752\nnew file mode 100644\nindex 000000000..9baabfa25\nBinary files /dev/null and b/fuzz/clusterfuzz-testcase-request_fuzzer-5675545829834752 differ\ndiff --git a/src/lib/lwan-request.c b/src/lib/lwan-request.c\nindex 3bcd00d42..3864e2b94 100644\n--- a/src/lib/lwan-request.c\n+++ b/src/lib/lwan-request.c\n@@ -610,15 +610,17 @@ static bool parse_headers(struct lwan_request_parser_helper *helper,\n #undef HEADER_LENGTH\n #undef HEADER\n \n-static void\n-parse_if_modified_since(struct lwan_request_parser_helper *helper)\n+static void parse_if_modified_since(struct lwan_request_parser_helper *helper)\n {\n+    static const size_t header_len =\n+        sizeof(\"Wed, 17 Apr 2019 13:59:27 GMT\") - 1;\n     time_t parsed;\n \n-    if (UNLIKELY(!helper->if_modified_since.raw.len))\n+    if (UNLIKELY(helper->if_modified_since.raw.len != header_len))\n         return;\n \n-    if (UNLIKELY(lwan_parse_rfc_time(helper->if_modified_since.raw.value, &parsed) < 0))\n+    if (UNLIKELY(lwan_parse_rfc_time(helper->if_modified_since.raw.value,\n+                                     &parsed) < 0))\n         return;\n \n     helper->if_modified_since.parsed = parsed;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42474758-vul",
+      "digest": "sha256:75e5a7e14a382f8b6afb9abfcfd62b1a88fa371b0f278f9d6da6998af24efb3b"
+    },
+    "patched": {
+      "ref": "n132/arvo:42474758-fix",
+      "digest": "sha256:c52c2c924aa3db42a4c5c0b42042111a901efa70490c220f92c8d8952f12d9a4"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "global-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/lwan/src/lib/lwan.h:139",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "global-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/lwan/src/lib/lwan.h:139"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042524023",
+  "chain": "CWE-456->CWE-457",
+  "project": "mupdf",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42524023",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "3cc27abcef30760d655bf00fe46caac87b2e831b",
+      "fix_commits": [
+        "3cc27abcef30760d655bf00fe46caac87b2e831b"
+      ],
+      "repo": "git://git.ghostscript.com/mupdf.git"
+    },
+    "patch": "From 3cc27abcef30760d655bf00fe46caac87b2e831b Mon Sep 17 00:00:00 2001\nFrom: Sebastian Rasmussen <sebras@gmail.com>\nDate: Fri, 2 Mar 2018 12:52:08 +0800\nSubject: [PATCH] Fix 699087: Get scissor from stack after new entry pushed.\n\nWithout this fix the stack may be resized and relocated and\nthen the scissor might point to stale memory.\n---\n source/fitz/draw-device.c | 6 ++++--\n 1 file changed, 4 insertions(+), 2 deletions(-)\n\ndiff --git a/source/fitz/draw-device.c b/source/fitz/draw-device.c\nindex 2ae7354..7d81e4d 100644\n--- a/source/fitz/draw-device.c\n+++ b/source/fitz/draw-device.c\n@@ -751,7 +751,7 @@ fz_draw_clip_path(fz_context *ctx, fz_device *devp, const fz_path *path, int eve\n \tfz_draw_state *state = &dev->stack[dev->top];\n \tfz_colorspace *model;\n \tfz_irect local_scissor;\n-\tfz_irect *scissor_ptr = &state->scissor;\n+\tfz_irect *scissor_ptr;\n \n \tif (dev->top == 0 && dev->resolve_spots)\n \t\t(void)push_group_for_separations(ctx, dev, fz_default_color_params(ctx)/* FIXME */, dev->default_cs);\n@@ -763,6 +763,7 @@ fz_draw_clip_path(fz_context *ctx, fz_device *devp, const fz_path *path, int eve\n \tSTACK_PUSHED(\"clip path\");\n \tmodel = state->dest->colorspace;\n \n+\tscissor_ptr = &state->scissor;\n \tif (scissor)\n \t{\n \t\tfz_rect tscissor = *scissor;\n@@ -827,7 +828,7 @@ fz_draw_clip_stroke_path(fz_context *ctx, fz_device *devp, const fz_path *path,\n \tfloat aa_level = 2.0f/(fz_rasterizer_graphics_aa_level(rast)+2);\n \tfloat mlw = fz_rasterizer_graphics_min_line_width(rast);\n \tfz_irect local_scissor;\n-\tfz_irect *scissor_ptr = &state->scissor;\n+\tfz_irect *scissor_ptr;\n \n \tif (dev->top == 0 && dev->resolve_spots)\n \t\t(void)push_group_for_separations(ctx, dev, fz_default_color_params(ctx) /* FIXME */, dev->default_cs);\n@@ -843,6 +844,7 @@ fz_draw_clip_stroke_path(fz_context *ctx, fz_device *devp, const fz_path *path,\n \tSTACK_PUSHED(\"clip stroke\");\n \tmodel = state->dest->colorspace;\n \n+\tscissor_ptr = &state->scissor;\n \tif (scissor)\n \t{\n \t\tfz_rect tscissor = *scissor;\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42524023-vul",
+      "digest": "sha256:6fc80f712b47092ff009b132bad14e0c75c91769c069a3e77692b70a8eb0128a"
+    },
+    "patched": {
+      "ref": "n132/arvo:42524023-fix",
+      "digest": "sha256:594a47809d50ac8ff83c7f3c1b51f7aa8220485b16ea8bacc4497787584e622d"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/mupdf/include/mupdf/fitz/geometry.h:220",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/mupdf/include/mupdf/fitz/geometry.h:220"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

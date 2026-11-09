@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042523902",
+  "chain": "CWE-1284->CWE-125",
+  "project": "zeek",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42523902",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "7782f7325153e7ad3149f8be13a81fab180771db",
+      "fix_commits": [
+        "7782f7325153e7ad3149f8be13a81fab180771db"
+      ],
+      "repo": "https://github.com/zeek/zeek"
+    },
+    "patch": "diff --git a/src/packet_analysis/protocol/ieee802_11/IEEE802_11.cc b/src/packet_analysis/protocol/ieee802_11/IEEE802_11.cc\nindex df9a8b0f264..bd9d913f788 100644\n--- a/src/packet_analysis/protocol/ieee802_11/IEEE802_11.cc\n+++ b/src/packet_analysis/protocol/ieee802_11/IEEE802_11.cc\n@@ -31,6 +31,12 @@ bool IEEE802_11Analyzer::AnalyzePacket(size_t len, const uint8_t* data, Packet*\n \tif ( (data[1] & 0x03) == 0x03 )\n \t\tlen_80211 += packet->L2_ADDR_LEN;\n \n+\tif ( len_80211 >= len )\n+\t\t{\n+\t\tWeird(\"truncated_802_11_header\", packet);\n+\t\treturn false;\n+\t\t}\n+\n \t// Look for the QoS indicator bit.\n \tif ( (fc_80211 >> 4) & 0x08 )\n \t\t{\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42523902-vul",
+      "digest": "sha256:4bf07a89d0977b9dafb5de004dc8b5ba86acf96e0a41b161d1a27210065ad7a2"
+    },
+    "patched": {
+      "ref": "n132/arvo:42523902-fix",
+      "digest": "sha256:9c2428a2252160ffa9b914f9cc22c0d1b9b175bcabaea43526f2399b5ce2f5d3"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/zeek/src/packet_analysis/protocol/ieee802_11/IEEE802_11.cc:39",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/zeek/src/packet_analysis/protocol/ieee802_11/IEEE802_11.cc:39"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042535461",
+  "chain": "CWE-20->CWE-125",
+  "project": "libultrahdr",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42535461",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "d23e88533c2f3ae2d65917cd04c3f4fbcfd89ec7",
+      "fix_commits": [
+        "d23e88533c2f3ae2d65917cd04c3f4fbcfd89ec7"
+      ],
+      "repo": "https://github.com/google/libultrahdr"
+    },
+    "patch": "diff --git a/lib/include/ultrahdr/gainmapmetadata.h b/lib/include/ultrahdr/gainmapmetadata.h\nindex 142ef7ff..172bba0a 100644\n--- a/lib/include/ultrahdr/gainmapmetadata.h\n+++ b/lib/include/ultrahdr/gainmapmetadata.h\n@@ -24,6 +24,15 @@\n #include <vector>\n \n namespace ultrahdr {\n+\n+#define JPEGR_CHECK(x)                \\\n+  {                                   \\\n+    status_t status = (x);            \\\n+    if ((status) != JPEGR_NO_ERROR) { \\\n+      return status;                  \\\n+    }                                 \\\n+  }\n+\n // Gain map metadata, for tone mapping between SDR and HDR.\n // This is the fraction version of {@code ultrahdr_metadata_struct}.\n struct gain_map_metadata {\ndiff --git a/lib/src/gainmapmetadata.cpp b/lib/src/gainmapmetadata.cpp\nindex db5de24e..24ae817e 100644\n--- a/lib/src/gainmapmetadata.cpp\n+++ b/lib/src/gainmapmetadata.cpp\n@@ -151,16 +151,17 @@ status_t gain_map_metadata::decodeGainmapMetadata(const std::vector<uint8_t> &da\n   if (out_metadata == nullptr) {\n     return ERROR_JPEGR_BAD_PTR;\n   }\n+\n   size_t pos = 0;\n   uint8_t version = 0xff;\n-  streamReadU8(data, version, pos);\n+  JPEGR_CHECK(streamReadU8(data, version, pos))\n \n   if (version != 0) {\n     return ERROR_JPEGR_UNSUPPORTED_FEATURE;\n   }\n \n   uint8_t flags = 0xff;\n-  streamReadU8(data, flags, pos);\n+  JPEGR_CHECK(streamReadU8(data, flags, pos))\n \n   uint8_t channelCount = (flags & 1) * 2 + 1;\n \n@@ -173,41 +174,41 @@ status_t gain_map_metadata::decodeGainmapMetadata(const std::vector<uint8_t> &da\n \n   if (useCommonDenominator) {\n     uint32_t commonDenominator;\n-    streamReadU32(data, commonDenominator, pos);\n+    JPEGR_CHECK(streamReadU32(data, commonDenominator, pos))\n \n-    streamReadU32(data, out_metadata->baseHdrHeadroomN, pos);\n+    JPEGR_CHECK(streamReadU32(data, out_metadata->baseHdrHeadroomN, pos))\n     out_metadata->baseHdrHeadroomD = commonDenominator;\n-    streamReadU32(data, out_metadata->alternateHdrHeadroomN, pos);\n+    JPEGR_CHECK(streamReadU32(data, out_metadata->alternateHdrHeadroomN, pos))\n     out_metadata->alternateHdrHeadroomD = commonDenominator;\n \n     for (int c = 0; c < channelCount; ++c) {\n-      streamReadU32(data, out_metadata->gainMapMinN[c], pos);\n+      JPEGR_CHECK(streamReadU32(data, out_metadata->gainMapMinN[c], pos))\n       out_metadata->gainMapMinD[c] = commonDenominator;\n-      streamReadU32(data, out_metadata->gainMapMaxN[c], pos);\n+      JPEGR_CHECK(streamReadU32(data, out_metadata->gainMapMaxN[c], pos))\n       out_metadata->gainMapMaxD[c] = commonDenominator;\n-      streamReadU32(data, out_metadata->gainMapGammaN[c], pos);\n+      JPEGR_CHECK(streamReadU32(data, out_metadata->gainMapGammaN[c], pos))\n       out_metadata->gainMapGammaD[c] = commonDenominator;\n-      streamReadU32(data, out_metadata->baseOffsetN[c], pos);\n+      JPEGR_CHECK(streamReadU32(data, out_metadata->baseOffsetN[c], pos))\n       out_metadata->baseOffsetD[c] = commonDenominator;\n-      streamReadU32(data, out_metadata->alternateOffsetN[c], pos);\n+      JPEGR_CHECK(streamReadU32(data, out_metadata->alternateOffsetN[c], pos))\n       out_metadata->alternateOffsetD[c] = commonDenominator;\n     }\n   } else {\n-    streamReadU32(data, out_metadata->baseHdrHeadroomN, pos);\n-    streamReadU32(data, out_metadata->baseHdrHeadroomD, pos);\n-    streamReadU32(data, out_metadata->alternateHdrHeadroomN, pos);\n-    streamReadU32(data, out_metadata->alternateHdrHeadroomD, pos);\n+    JPEGR_CHECK(streamReadU32(data, out_metadata->baseHdrHeadroomN, pos))\n+    JPEGR_CHECK(streamReadU32(data, out_metadata->baseHdrHeadroomD, pos))\n+    JPEGR_CHECK(streamReadU32(data, out_metadata->alternateHdrHeadroomN, pos))\n+    JPEGR_CHECK(streamReadU32(data, out_metadata->alternateHdrHeadroomD, pos))\n     for (int c = 0; c < channelCount; ++c) {\n-      streamReadU32(data, out_metadata->gainMapMinN[c], pos);\n-      streamReadU32(data, out_metadata->gainMapMinD[c], pos);\n-      streamReadU32(data, out_metadata->gainMapMaxN[c], pos);\n-      streamReadU32(data, out_metadata->gainMapMaxD[c], pos);\n-      streamReadU32(data, out_metadata->gainMapGammaN[c], pos);\n-      streamReadU32(data, out_metadata->gainMapGammaD[c], pos);\n-      streamReadU32(data, out_metadata->baseOffsetN[c], pos);\n-      streamReadU32(data, out_metadata->baseOffsetD[c], pos);\n-      streamReadU32(data, out_metadata->alternateOffsetN[c], pos);\n-      streamReadU32(data, out_metadata->alternateOffsetD[c], pos);\n+      JPEGR_CHECK(streamReadU32(data, out_metadata->gainMapMinN[c], pos))\n+      JPEGR_CHECK(streamReadU32(data, out_metadata->gainMapMinD[c], pos))\n+      JPEGR_CHECK(streamReadU32(data, out_metadata->gainMapMaxN[c], pos))\n+      JPEGR_CHECK(streamReadU32(data, out_metadata->gainMapMaxD[c], pos))\n+      JPEGR_CHECK(streamReadU32(data, out_metadata->gainMapGammaN[c], pos))\n+      JPEGR_CHECK(streamReadU32(data, out_metadata->gainMapGammaD[c], pos))\n+      JPEGR_CHECK(streamReadU32(data, out_metadata->baseOffsetN[c], pos))\n+      JPEGR_CHECK(streamReadU32(data, out_metadata->baseOffsetD[c], pos))\n+      JPEGR_CHECK(streamReadU32(data, out_metadata->alternateOffsetN[c], pos))\n+      JPEGR_CHECK(streamReadU32(data, out_metadata->alternateOffsetD[c], pos))\n     }\n   }\n \ndiff --git a/lib/src/jpegr.cpp b/lib/src/jpegr.cpp\nindex 29405cfd..800fdef0 100644\n--- a/lib/src/jpegr.cpp\n+++ b/lib/src/jpegr.cpp\n@@ -51,14 +51,6 @@ namespace ultrahdr {\n #define USE_PQ_INVOETF_LUT 1\n #define USE_APPLY_GAIN_LUT 1\n \n-#define JPEGR_CHECK(x)                \\\n-  {                                   \\\n-    status_t status = (x);            \\\n-    if ((status) != JPEGR_NO_ERROR) { \\\n-      return status;                  \\\n-    }                                 \\\n-  }\n-\n // JPEG compress quality (0 ~ 100) for gain map\n static const int kMapCompressQuality = 85;\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42535461-vul",
+      "digest": "sha256:b9f51fff2a752aaabf26069ab8af17950c42d4782e90826dcb7660ca302e730e"
+    },
+    "patched": {
+      "ref": "n132/arvo:42535461-fix",
+      "digest": "sha256:388fbad9047a02c0f7f29669de12e06545fd3e0f54bf9dc36f12002f063de02d"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/libultrahdr/lib/src/gainmapmath.cpp:634",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/libultrahdr/lib/src/gainmapmath.cpp:634"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

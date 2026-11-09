@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042473118",
+  "chain": "CWE-20->CWE-787",
+  "project": "kimageformats",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42473118",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "a51cbd865f922b9a39a0db421ab84b6c4108bd56",
+      "fix_commits": [
+        "a51cbd865f922b9a39a0db421ab84b6c4108bd56"
+      ],
+      "repo": "https://invent.kde.org/frameworks/kimageformats.git"
+    },
+    "patch": "diff --git a/src/imageformats/tga.cpp b/src/imageformats/tga.cpp\nindex ab05e334c95ff66b6ee4b8f8db1597fd2626c498..cbe4089ca4f072d55af52f03bd56ec70541560d3 100644\n--- a/src/imageformats/tga.cpp\n+++ b/src/imageformats/tga.cpp\n@@ -206,6 +206,9 @@ static bool LoadTGA(QDataStream &s, const TgaHeader &tga, QImage &img)\n         // @todo Support palettes in other formats!\n         const int size = 3 * tga.colormap_length;\n         const int dataRead = s.readRawData(palette, size);\n+        if (dataRead < 0) {\n+            return false;\n+        }\n         if (dataRead < size) {\n             memset(&palette[dataRead], 0, size - dataRead);\n         }\n@@ -260,6 +263,10 @@ static bool LoadTGA(QDataStream &s, const TgaHeader &tga, QImage &img)\n     } else {\n         // Read raw image.\n         const int dataRead = s.readRawData((char *)image, size);\n+        if (dataRead < 0) {\n+            free(image);\n+            return false;\n+        }\n         if (dataRead < size) {\n             memset(&image[dataRead], 0, size - dataRead);\n         }\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42473118-vul",
+      "digest": "sha256:0805b65b56c2b290291a2334fefbbe67cb3c7e41b02b23de8438400822afe34c"
+    },
+    "patched": {
+      "ref": "n132/arvo:42473118-fix",
+      "digest": "sha256:ae8856061cd507316ae5c433d058371ebdfef4aff9f0f8978c7f58822513b9b6"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/kimageformats/src/imageformats/tga.cpp:264",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/kimageformats/src/imageformats/tga.cpp:264"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

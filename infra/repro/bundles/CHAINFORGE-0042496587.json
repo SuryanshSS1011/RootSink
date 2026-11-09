@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042496587",
+  "chain": "CWE-416->CWE-125",
+  "project": "serenity",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42496587",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "4d34802f74c859135397f6f4fa2bbf9cf1829118",
+      "fix_commits": [
+        "4d34802f74c859135397f6f4fa2bbf9cf1829118"
+      ],
+      "repo": "https://github.com/SerenityOS/serenity"
+    },
+    "patch": "From 4d34802f74c859135397f6f4fa2bbf9cf1829118 Mon Sep 17 00:00:00 2001\nFrom: Luke <luke.wilde@live.co.uk>\nDate: Fri, 21 May 2021 21:45:47 +0100\nSubject: [PATCH] LibJS: Expose TypedArray.prototype.byteOffset\n\n---\n .../LibJS/Runtime/CommonPropertyNames.h       |  1 +\n .../LibJS/Runtime/TypedArrayPrototype.cpp     | 17 ++++++++---\n .../LibJS/Runtime/TypedArrayPrototype.h       |  1 +\n .../TypedArray.prototype.byteOffset.js        | 28 +++++++++++++++++++\n 4 files changed, 43 insertions(+), 4 deletions(-)\n create mode 100644 Userland/Libraries/LibJS/Tests/builtins/TypedArray/TypedArray.prototype.byteOffset.js\n\ndiff --git a/Userland/Libraries/LibJS/Runtime/CommonPropertyNames.h b/Userland/Libraries/LibJS/Runtime/CommonPropertyNames.h\nindex c702176..8c4f3c4 100644\n--- a/Userland/Libraries/LibJS/Runtime/CommonPropertyNames.h\n+++ b/Userland/Libraries/LibJS/Runtime/CommonPropertyNames.h\n@@ -59,6 +59,7 @@ namespace JS {\n     P(bind)                                  \\\n     P(buffer)                                \\\n     P(byteLength)                            \\\n+    P(byteOffset)                            \\\n     P(call)                                  \\\n     P(callee)                                \\\n     P(cbrt)                                  \\\ndiff --git a/Userland/Libraries/LibJS/Runtime/TypedArrayPrototype.cpp b/Userland/Libraries/LibJS/Runtime/TypedArrayPrototype.cpp\nindex a895ef7..03f2dfa 100644\n--- a/Userland/Libraries/LibJS/Runtime/TypedArrayPrototype.cpp\n+++ b/Userland/Libraries/LibJS/Runtime/TypedArrayPrototype.cpp\n@@ -24,11 +24,8 @@ void TypedArrayPrototype::initialize(GlobalObject& object)\n     // FIXME: This should be an accessor property\n     define_native_property(vm.names.length, length_getter, nullptr, Attribute::Configurable);\n     define_native_property(vm.names.buffer, buffer_getter, nullptr, Attribute::Configurable);\n-<<<<<<< HEAD\n-=======\n     define_native_property(vm.names.byteLength, byte_length_getter, nullptr, Attribute::Configurable);\n-    define_native_property(vm.names.BYTES_PER_ELEMENT, bytes_per_element_getter, nullptr, 0); // FIXME: This should just be a normal property and not a getter.\n->>>>>>> 6be44bc62... LibJS: Expose TypedArray.prototype.byteLength\n+    define_native_property(vm.names.byteOffset, byte_offset_getter, nullptr, Attribute::Configurable);\n     define_native_function(vm.names.at, at, 1, attr);\n }\n \n@@ -102,4 +99,16 @@ JS_DEFINE_NATIVE_FUNCTION(TypedArrayPrototype::byte_length_getter)\n     return Value(typed_array->byte_length());\n }\n \n+// https://tc39.es/ecma262/#sec-get-%typedarray%.prototype.byteoffset\n+JS_DEFINE_NATIVE_FUNCTION(TypedArrayPrototype::byte_offset_getter)\n+{\n+    auto typed_array = typed_array_from(vm, global_object);\n+    if (!typed_array)\n+        return {};\n+    auto* array_buffer = typed_array->viewed_array_buffer();\n+    VERIFY(array_buffer);\n+    // FIXME: If array_buffer is detached, return 0.\n+    return Value(typed_array->byte_offset());\n+}\n+\n }\ndiff --git a/Userland/Libraries/LibJS/Runtime/TypedArrayPrototype.h b/Userland/Libraries/LibJS/Runtime/TypedArrayPrototype.h\nindex 270f996..6bc3aad 100644\n--- a/Userland/Libraries/LibJS/Runtime/TypedArrayPrototype.h\n+++ b/Userland/Libraries/LibJS/Runtime/TypedArrayPrototype.h\n@@ -22,6 +22,7 @@ private:\n     JS_DECLARE_NATIVE_GETTER(length_getter);\n     JS_DECLARE_NATIVE_GETTER(buffer_getter);\n     JS_DECLARE_NATIVE_GETTER(byte_length_getter);\n+    JS_DECLARE_NATIVE_GETTER(byte_offset_getter);\n \n     JS_DECLARE_NATIVE_FUNCTION(at);\n };\ndiff --git a/Userland/Libraries/LibJS/Tests/builtins/TypedArray/TypedArray.prototype.byteOffset.js b/Userland/Libraries/LibJS/Tests/builtins/TypedArray/TypedArray.prototype.byteOffset.js\nnew file mode 100644\nindex 0000000..17c9063\n--- /dev/null\n+++ b/Userland/Libraries/LibJS/Tests/builtins/TypedArray/TypedArray.prototype.byteOffset.js\n@@ -0,0 +1,28 @@\n+// Update when more typed arrays get added\n+const TYPED_ARRAYS = [\n+    Uint8Array,\n+    Uint16Array,\n+    Uint32Array,\n+    Int8Array,\n+    Int16Array,\n+    Int32Array,\n+    Float32Array,\n+    Float64Array,\n+];\n+\n+test(\"basic functionality\", () => {\n+    TYPED_ARRAYS.forEach(T => {\n+        const typedArray = new T([1, 2, 3]);\n+        expect(Object.hasOwn(typedArray, \"byteOffset\")).toBeFalse();\n+        expect(typedArray.byteOffset).toBe(0);\n+        expect(typedArray.length).toBe(3);\n+\n+        const buffer = typedArray.buffer;\n+\n+        const arrayFromOffset = new T(buffer, T.BYTES_PER_ELEMENT);\n+        expect(arrayFromOffset.byteOffset).toBe(T.BYTES_PER_ELEMENT);\n+        expect(arrayFromOffset.length).toBe(2);\n+        expect(arrayFromOffset[0]).toBe(2);\n+        expect(arrayFromOffset[1]).toBe(3);\n+    });\n+});\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42496587-vul",
+      "digest": "sha256:263ca5821b6e5d9b497c0b4efbda069d3295b60d5c366998c2c9d1511199735d"
+    },
+    "patched": {
+      "ref": "n132/arvo:42496587-fix",
+      "digest": "sha256:250f5058e2145b9480613de21a208a80aeed05877a19318dcf3c77fc8e4f197e"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/serenity/Meta/Lagom/build/../../../AK/NonnullOwnPtr.h:125",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/serenity/Meta/Lagom/build/../../../AK/NonnullOwnPtr.h:125"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

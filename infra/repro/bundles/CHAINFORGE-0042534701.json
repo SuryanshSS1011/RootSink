@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042534701",
+  "chain": "CWE-1284->CWE-125",
+  "project": "FreeRDP",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42534701",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "b75727603467b30ff878d2819f8b438e3b8617d3",
+      "fix_commits": [
+        "b75727603467b30ff878d2819f8b438e3b8617d3"
+      ],
+      "repo": "https://github.com/FreeRDP/FreeRDP"
+    },
+    "patch": "diff --git a/libfreerdp/core/redirection.c b/libfreerdp/core/redirection.c\nindex 9aea9147f885..3ad3a828a6e7 100644\n--- a/libfreerdp/core/redirection.c\n+++ b/libfreerdp/core/redirection.c\n@@ -808,40 +808,44 @@ static state_run_t rdp_recv_server_redirection_pdu(rdpRdp* rdp, wStream* s)\n \tif (redirection->flags & LB_TARGET_NET_ADDRESSES)\n \t{\n \t\tUINT32 targetNetAddressesLength = 0;\n+\t\tUINT32 TargetNetAddressesCount = 0;\n \n \t\tif (!Stream_CheckAndLogRequiredLength(TAG, s, 8))\n \t\t\treturn STATE_RUN_FAILED;\n \n \t\tStream_Read_UINT32(s, targetNetAddressesLength);\n-\t\tStream_Read_UINT32(s, redirection->TargetNetAddressesCount);\n-\t\tconst UINT32 count = redirection->TargetNetAddressesCount;\n+\t\tStream_Read_UINT32(s, TargetNetAddressesCount);\n+\n \t\t/* sanity check: the whole packet has a length limit of UINT16_MAX\n \t\t * each TargetNetAddress is a WCHAR string, so minimum length 2 bytes\n \t\t */\n-\t\tif (count * sizeof(WCHAR) > Stream_GetRemainingLength(s))\n+\t\tif (TargetNetAddressesCount * sizeof(WCHAR) > Stream_GetRemainingLength(s))\n \t\t{\n \t\t\tWLog_ERR(TAG,\n \t\t\t         \"Invalid RDP_SERVER_REDIRECTION_PACKET::TargetNetAddressLength %\" PRIuz\n \t\t\t         \", sanity limit is %\" PRIuz,\n-\t\t\t         count * sizeof(WCHAR), Stream_GetRemainingLength(s));\n+\t\t\t         TargetNetAddressesCount * sizeof(WCHAR), Stream_GetRemainingLength(s));\n \t\t\treturn STATE_RUN_FAILED;\n \t\t}\n \n \t\tredirection->TargetNetAddresses = NULL;\n-\t\tif (count > 0)\n+\t\tif (TargetNetAddressesCount > 0)\n \t\t{\n-\t\t\tredirection->TargetNetAddresses = (char**)calloc(count, sizeof(char*));\n+\t\t\tredirection->TargetNetAddresses =\n+\t\t\t    (char**)calloc(TargetNetAddressesCount, sizeof(char*));\n \n \t\t\tif (!redirection->TargetNetAddresses)\n \t\t\t{\n-\t\t\t\tWLog_ERR(TAG, \"TargetNetAddresses %\" PRIu32 \" failed to allocate\", count);\n+\t\t\t\tWLog_ERR(TAG, \"TargetNetAddresses %\" PRIu32 \" failed to allocate\",\n+\t\t\t\t         TargetNetAddressesCount);\n \t\t\t\treturn STATE_RUN_FAILED;\n \t\t\t}\n \t\t}\n+\t\tredirection->TargetNetAddressesCount = TargetNetAddressesCount;\n \n-\t\tWLog_DBG(TAG, \"TargetNetAddressesCount: %\" PRIu32 \"\", count);\n+\t\tWLog_DBG(TAG, \"TargetNetAddressesCount: %\" PRIu32 \"\", TargetNetAddressesCount);\n \n-\t\tfor (UINT32 i = 0; i < count; i++)\n+\t\tfor (UINT32 i = 0; i < TargetNetAddressesCount; i++)\n \t\t{\n \t\t\tif (!rdp_redirection_read_unicode_string(s, &(redirection->TargetNetAddresses[i]), 80))\n \t\t\t\treturn STATE_RUN_FAILED;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42534701-vul",
+      "digest": "sha256:b587971adb9408fac19871588e43b1bf5a06a6996698c6681eec226ae4f7550f"
+    },
+    "patched": {
+      "ref": "n132/arvo:42534701-fix",
+      "digest": "sha256:a6344b026214b22cea3e8a4533bf122e37b4d407de3d9a7e85171986aaad8914"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/FreeRDP/libfreerdp/core/redirection.c:69",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/FreeRDP/libfreerdp/core/redirection.c:69"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

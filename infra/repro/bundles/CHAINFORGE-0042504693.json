@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042504693",
+  "chain": "CWE-456->CWE-457",
+  "project": "libpcap",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42504693",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "06aa793eb84db8b549754e2f9e72988ef4480c54",
+      "fix_commits": [
+        "06aa793eb84db8b549754e2f9e72988ef4480c54"
+      ],
+      "repo": "https://github.com/the-tcpdump-group/libpcap"
+    },
+    "patch": "From 06aa793eb84db8b549754e2f9e72988ef4480c54 Mon Sep 17 00:00:00 2001\nFrom: Archit Shah <archit@cave32.com>\nDate: Fri, 16 Oct 2020 23:52:39 +0000\nSubject: [PATCH] [optimizer] Fix optimizer bug in dead store removal\n\nFix opt_deadstores in the optimizer to update the block val data structure with VAL_UNKNOWN when NOP'ing a dead store instruction. Otherwise, a successor block may assume that value is still available. See test case here: https://bugs.freebsd.org/bugzilla/show_bug.cgi?id=144325.\n---\n optimize.c | 1 +\n 1 file changed, 1 insertion(+)\n\ndiff --git a/optimize.c b/optimize.c\nindex 4115cb5..215f2c9 100644\n--- a/optimize.c\n+++ b/optimize.c\n@@ -1458,6 +1458,7 @@ opt_deadstores(opt_state_t *opt_state, register struct block *b)\n \t\t\t */\n \t\t\topt_state->non_branch_movement_performed = 1;\n \t\t\topt_state->done = 0;\n+\t\t\tvstore(0, &b->val[atom], VAL_UNKNOWN, 0);\n \t\t}\n }\n \n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42504693-vul",
+      "digest": "sha256:0b2f8e5442dec7338325cfcddb7959d5cb97706170935052275ef455f5c7c882"
+    },
+    "patched": {
+      "ref": "n132/arvo:42504693-fix",
+      "digest": "sha256:652680aef3c6725170798649696e36fa9b167f6d89c48ed315077816489422e6"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/libpcap/bpf_filter.c:262",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/libpcap/bpf_filter.c:262"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042532047",
+  "chain": "CWE-1285->CWE-787",
+  "project": "icu",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42532047",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "3eb8923b9730efeae10a92f8054f63495fe8a95f",
+      "fix_commits": [
+        "3eb8923b9730efeae10a92f8054f63495fe8a95f"
+      ],
+      "repo": "https://github.com/unicode-org/icu"
+    },
+    "patch": "diff --git a/icu4c/source/common/util_props.cpp b/icu4c/source/common/util_props.cpp\nindex 5991769d0681..366a555eeebd 100644\n--- a/icu4c/source/common/util_props.cpp\n+++ b/icu4c/source/common/util_props.cpp\n@@ -198,12 +198,11 @@ int32_t ICU_Utility::parseNumber(const UnicodeString& text,\n         if (d < 0) {\n             break;\n         }\n-        n = radix*n + d;\n-        // ASSUME that when a 32-bit integer overflows it becomes\n-        // negative.  E.g., 214748364 * 10 + 8 => negative value.\n-        if (n < 0) {\n+        int64_t update = radix*static_cast<int64_t>(n) + d;\n+        if (update > INT32_MAX) {\n             return -1;\n         }\n+        n = static_cast<int32_t>(update);\n         ++p;\n     }\n     if (p == pos) {\ndiff --git a/icu4c/source/i18n/plurrule.cpp b/icu4c/source/i18n/plurrule.cpp\nindex b8ad0b2736f0..1a9bdf471257 100644\n--- a/icu4c/source/i18n/plurrule.cpp\n+++ b/icu4c/source/i18n/plurrule.cpp\n@@ -678,20 +678,40 @@ PluralRuleParser::parse(const UnicodeString& ruleData, PluralRules *prules, UErr\n             U_ASSERT(curAndConstraint != nullptr);\n             if ( (curAndConstraint->op==AndConstraint::MOD)&&\n                  (curAndConstraint->opNum == -1 ) ) {\n-                curAndConstraint->opNum=getNumberValue(token);\n+                int32_t num = getNumberValue(token);\n+                if (num == -1) {\n+                    status = U_UNEXPECTED_TOKEN;\n+                    break;\n+                }\n+                curAndConstraint->opNum=num;\n             }\n             else {\n                 if (curAndConstraint->rangeList == nullptr) {\n                     // this is for an 'is' rule\n-                    curAndConstraint->value = getNumberValue(token);\n+                    int32_t num = getNumberValue(token);\n+                    if (num == -1) {\n+                        status = U_UNEXPECTED_TOKEN;\n+                        break;\n+                    }\n+                    curAndConstraint->value = num;\n                 } else {\n                     // this is for an 'in' or 'within' rule\n                     if (curAndConstraint->rangeList->elementAti(rangeLowIdx) == -1) {\n-                        curAndConstraint->rangeList->setElementAt(getNumberValue(token), rangeLowIdx);\n-                        curAndConstraint->rangeList->setElementAt(getNumberValue(token), rangeHiIdx);\n+                        int32_t num = getNumberValue(token);\n+                        if (num == -1) {\n+                            status = U_UNEXPECTED_TOKEN;\n+                            break;\n+                        }\n+                        curAndConstraint->rangeList->setElementAt(num, rangeLowIdx);\n+                        curAndConstraint->rangeList->setElementAt(num, rangeHiIdx);\n                     }\n                     else {\n-                        curAndConstraint->rangeList->setElementAt(getNumberValue(token), rangeHiIdx);\n+                        int32_t num = getNumberValue(token);\n+                        if (num == -1) {\n+                            status = U_UNEXPECTED_TOKEN;\n+                            break;\n+                        }\n+                        curAndConstraint->rangeList->setElementAt(num, rangeHiIdx);\n                         if (curAndConstraint->rangeList->elementAti(rangeLowIdx) >\n                                 curAndConstraint->rangeList->elementAti(rangeHiIdx)) {\n                             // Range Lower bound > Range Upper bound.\n@@ -1263,13 +1283,8 @@ PluralRuleParser::~PluralRuleParser() {\n \n int32_t\n PluralRuleParser::getNumberValue(const UnicodeString& token) {\n-    int32_t i;\n-    char digits[128];\n-\n-    i = token.extract(0, token.length(), digits, UPRV_LENGTHOF(digits), US_INV);\n-    digits[i]='\\0';\n-\n-    return((int32_t)atoi(digits));\n+    int32_t pos = 0;\n+    return ICU_Utility::parseNumber(token, pos, 10);\n }\n \n \ndiff --git a/icu4c/source/test/depstest/dependencies.txt b/icu4c/source/test/depstest/dependencies.txt\nindex 8474348b0374..e0484f76329c 100644\n--- a/icu4c/source/test/depstest/dependencies.txt\n+++ b/icu4c/source/test/depstest/dependencies.txt\n@@ -994,6 +994,7 @@ group: number_output\n     # PluralRules internals:\n     unifiedcache\n     display_options\n+    icu_utility_with_props\n \n group: numberformatter\n     # ICU 60+ NumberFormatter API\ndiff --git a/icu4c/source/test/intltest/plurults.cpp b/icu4c/source/test/intltest/plurults.cpp\nindex 0771baa75860..fb95ef43dc7b 100644\n--- a/icu4c/source/test/intltest/plurults.cpp\n+++ b/icu4c/source/test/intltest/plurults.cpp\n@@ -70,6 +70,7 @@ void PluralRulesTest::runIndexedTest( int32_t index, UBool exec, const char* &na\n     TESTCASE_AUTO(testSelectTrailingZeros);\n     TESTCASE_AUTO(testLocaleExtension);\n     TESTCASE_AUTO(testDoubleEqualSign);\n+    TESTCASE_AUTO(test22638LongNumberValue);\n     TESTCASE_AUTO_END;\n }\n \n@@ -1065,6 +1066,16 @@ PluralRulesTest::testDoubleValue() {\n     }\n }\n \n+void\n+PluralRulesTest::test22638LongNumberValue() {\n+    IcuTestErrorCode errorCode(*this, \"test22638LongNumberValue\");\n+    LocalPointer<PluralRules> pr(PluralRules::createRules(\n+        u\"g:c%4422322222232222222222232222222322222223222222232222222322222223\"\n+        u\"2222222322222232222222322222223222232222222222222322222223222222\",\n+        errorCode));\n+    errorCode.expectErrorAndReset(U_UNEXPECTED_TOKEN);\n+}\n+\n void\n PluralRulesTest::testLongValue() {\n     IcuTestErrorCode errorCode(*this, \"testLongValue\");\ndiff --git a/icu4c/source/test/intltest/plurults.h b/icu4c/source/test/intltest/plurults.h\nindex e245a44590b8..14d397e05c14 100644\n--- a/icu4c/source/test/intltest/plurults.h\n+++ b/icu4c/source/test/intltest/plurults.h\n@@ -51,6 +51,7 @@ class PluralRulesTest : public IntlTest {\n     void testSelectTrailingZeros();\n     void testLocaleExtension();\n     void testDoubleEqualSign();\n+    void test22638LongNumberValue();\n \n     void assertRuleValue(const UnicodeString& rule, double expected);\n     void assertRuleKeyValue(const UnicodeString& rule, const UnicodeString& key,\ndiff --git a/icu4j/main/common_tests/src/test/java/com/ibm/icu/dev/test/format/PluralRulesTest.java b/icu4j/main/common_tests/src/test/java/com/ibm/icu/dev/test/format/PluralRulesTest.java\nindex 7a80c7901568..8093d5eb581b 100644\n--- a/icu4j/main/common_tests/src/test/java/com/ibm/icu/dev/test/format/PluralRulesTest.java\n+++ b/icu4j/main/common_tests/src/test/java/com/ibm/icu/dev/test/format/PluralRulesTest.java\n@@ -1757,4 +1757,11 @@ public void testSelectRange() {\n         form = xyz.select(range);\n         assertEquals(\"Fallback form\", \"other\", form);\n     }\n+    @Test\n+    public void test22638LongNumberValue() {\n+        PluralRules test = PluralRules.createRules(\n+            \"g:c%4422322222232222222222232222222322222223222222232222222322222223\" +\n+            \"2222222322222232222222322222223222232222222222222322222223222222\");\n+        assertEquals(\"Long number value should get null\", null, test);\n+    }\n }\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42532047-vul",
+      "digest": "sha256:e94f7aca8e8d2285b8c03728487ab68164b57b4748ff1b15bd80bde3d3996705"
+    },
+    "patched": {
+      "ref": "n132/arvo:42532047-fix",
+      "digest": "sha256:fccb3f15e05da03c8d2387d742416806ea38a0e005344465b9c1e5b740dd77b0"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/icu/icu4c/source/i18n/plurrule.cpp:1265",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/icu/icu4c/source/i18n/plurrule.cpp:1265"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

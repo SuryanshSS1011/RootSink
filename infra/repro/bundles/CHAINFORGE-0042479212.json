@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042479212",
+  "chain": "CWE-416->CWE-787",
+  "project": "imagemagick",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42479212",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "974a84e41b64e6473d8588acd4a35ee0db54b376",
+      "fix_commits": [
+        "974a84e41b64e6473d8588acd4a35ee0db54b376"
+      ],
+      "repo": "https://github.com/imagemagick/imagemagick"
+    },
+    "patch": "diff --git a/coders/tiff.c b/coders/tiff.c\nindex dd0766df937..0c0934c28d3 100644\n--- a/coders/tiff.c\n+++ b/coders/tiff.c\n@@ -1545,8 +1545,6 @@ RestoreMSCWarning\n     option=GetImageOption(image_info,\"tiff:exif-properties\");\n     if (IsStringFalse(option) == MagickFalse) /* enabled by default */\n       TIFFGetEXIFProperties(tiff,image,exception);\n-    (void) TIFFGetFieldDefaulted(tiff,TIFFTAG_SAMPLESPERPIXEL,\n-      &samples_per_pixel);\n     if ((TIFFGetFieldDefaulted(tiff,TIFFTAG_XRESOLUTION,&x_resolution) == 1) &&\n         (TIFFGetFieldDefaulted(tiff,TIFFTAG_YRESOLUTION,&y_resolution) == 1))\n       {\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42479212-vul",
+      "digest": "sha256:92a6302e0c8ee256f138058454694758f39a82ad12bfd0aaad0a13fd140b9bbc"
+    },
+    "patched": {
+      "ref": "n132/arvo:42479212-fix",
+      "digest": "sha256:b55a4fc63f54b9dd7f1c7081f2a5324aa6252918e6397973641ad88f0b2b5f96"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/libtiff/libtiff/tif_dir.c:1132",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/libtiff/libtiff/tif_dir.c:1132"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

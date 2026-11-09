@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042497951",
+  "chain": "CWE-416->CWE-787",
+  "project": "libjxl",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42497951",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "85aa1491b967709701d2d2293627c5cd1c7cb96d",
+      "fix_commits": [
+        "85aa1491b967709701d2d2293627c5cd1c7cb96d"
+      ],
+      "repo": "https://github.com/libjxl/libjxl"
+    },
+    "patch": "diff --git a/lib/jxl/decode.cc b/lib/jxl/decode.cc\nindex ce59161755d..228e5ae749c 100644\n--- a/lib/jxl/decode.cc\n+++ b/lib/jxl/decode.cc\n@@ -1820,9 +1820,8 @@ JXL_EXPORT JxlDecoderStatus JxlDecoderPreviewOutBufferSize(\n   JxlDecoderStatus status = PrepareSizeCheck(dec, format, &bits);\n   if (status != JXL_DEC_SUCCESS) return status;\n \n-  const auto& metadata = dec->metadata.m;\n-  size_t xsize = metadata.preview_size.xsize();\n-  size_t ysize = metadata.preview_size.ysize();\n+  size_t xsize = dec->metadata.oriented_preview_xsize(dec->keep_orientation);\n+  size_t ysize = dec->metadata.oriented_preview_ysize(dec->keep_orientation);\n \n   size_t row_size =\n       jxl::DivCeil(xsize * format->num_channels * bits, jxl::kBitsPerByte);\n@@ -1863,8 +1862,10 @@ JXL_EXPORT JxlDecoderStatus JxlDecoderDCOutBufferSize(\n   JxlDecoderStatus status = PrepareSizeCheck(dec, format, &bits);\n   if (status != JXL_DEC_SUCCESS) return status;\n \n-  size_t xsize = jxl::DivCeil(dec->metadata.size.xsize(), jxl::kBlockDim);\n-  size_t ysize = jxl::DivCeil(dec->metadata.size.ysize(), jxl::kBlockDim);\n+  size_t xsize = jxl::DivCeil(\n+      dec->metadata.oriented_xsize(dec->keep_orientation), jxl::kBlockDim);\n+  size_t ysize = jxl::DivCeil(\n+      dec->metadata.oriented_ysize(dec->keep_orientation), jxl::kBlockDim);\n \n   size_t row_size =\n       jxl::DivCeil(xsize * format->num_channels * bits, jxl::kBitsPerByte);\n@@ -1888,12 +1889,13 @@ JXL_EXPORT JxlDecoderStatus JxlDecoderImageOutBufferSize(\n   if (status != JXL_DEC_SUCCESS) return status;\n \n   size_t row_size =\n-      jxl::DivCeil(dec->metadata.size.xsize() * format->num_channels * bits,\n+      jxl::DivCeil(dec->metadata.oriented_xsize(dec->keep_orientation) *\n+                       format->num_channels * bits,\n                    jxl::kBitsPerByte);\n   if (format->align > 1) {\n     row_size = jxl::DivCeil(row_size, format->align) * format->align;\n   }\n-  *size = row_size * dec->metadata.size.ysize();\n+  *size = row_size * dec->metadata.oriented_ysize(dec->keep_orientation);\n \n   return JXL_DEC_SUCCESS;\n }\ndiff --git a/lib/jxl/image_metadata.h b/lib/jxl/image_metadata.h\nindex 10531b9e955..53a1d8fc2f4 100644\n--- a/lib/jxl/image_metadata.h\n+++ b/lib/jxl/image_metadata.h\n@@ -377,6 +377,34 @@ struct CodecMetadata {\n \n   size_t xsize() const { return size.xsize(); }\n   size_t ysize() const { return size.ysize(); }\n+  size_t oriented_xsize(bool keep_orientation) const {\n+    if (static_cast<uint32_t>(m.GetOrientation()) > 4 && !keep_orientation) {\n+      return ysize();\n+    } else {\n+      return xsize();\n+    }\n+  }\n+  size_t oriented_preview_xsize(bool keep_orientation) const {\n+    if (static_cast<uint32_t>(m.GetOrientation()) > 4 && !keep_orientation) {\n+      return m.preview_size.ysize();\n+    } else {\n+      return m.preview_size.xsize();\n+    }\n+  }\n+  size_t oriented_ysize(bool keep_orientation) const {\n+    if (static_cast<uint32_t>(m.GetOrientation()) > 4 && !keep_orientation) {\n+      return xsize();\n+    } else {\n+      return ysize();\n+    }\n+  }\n+  size_t oriented_preview_ysize(bool keep_orientation) const {\n+    if (static_cast<uint32_t>(m.GetOrientation()) > 4 && !keep_orientation) {\n+      return m.preview_size.xsize();\n+    } else {\n+      return m.preview_size.ysize();\n+    }\n+  }\n };\n \n }  // namespace jxl\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42497951-vul",
+      "digest": "sha256:e8ff14b3fa6b8ff094c1026811ef09fa204d668a0e43f9f564d387b9bcec9c42"
+    },
+    "patched": {
+      "ref": "n132/arvo:42497951-fix",
+      "digest": "sha256:a1407c77c43c61724becec8215a35c2396365b18e5eba12c2afa20eb077f681e"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/libjxl/lib/jxl/base/byte_order.h:199",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/libjxl/lib/jxl/base/byte_order.h:199"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

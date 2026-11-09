@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042495497",
+  "chain": "CWE-20->CWE-787",
+  "project": "libjpeg-turbo",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42495497",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "f35fd27ec641c42d6b115bfa595e483ec58188d2",
+      "fix_commits": [
+        "f35fd27ec641c42d6b115bfa595e483ec58188d2"
+      ],
+      "repo": "https://github.com/libjpeg-turbo/libjpeg-turbo"
+    },
+    "patch": "diff --git a/ChangeLog.md b/ChangeLog.md\nindex 968969c6b..12e730a0e 100644\n--- a/ChangeLog.md\n+++ b/ChangeLog.md\n@@ -35,6 +35,16 @@ applications that use the TurboJPEG API to guard against an exploit of the\n progressive JPEG format described in the report\n [\"Two Issues with the JPEG Standard\"](https://libjpeg-turbo.org/pmwiki/uploads/About/TwoIssueswiththeJPEGStandard.pdf).\n \n+7. The PPM reader now throws an error, rather than segfaulting (due to a buffer\n+overrun) or generating incorrect pixels, if an application attempts to use the\n+`tjLoadImage()` function to load a 16-bit binary PPM file (a binary PPM file\n+with a maximum value greater than 255) into a grayscale image buffer or to load\n+a 16-bit binary PGM file into an RGB image buffer.\n+\n+8. Fixed an issue in the PPM reader that caused incorrect pixels to be\n+generated when using the `tjLoadImage()` function to load a 16-bit binary PPM\n+file into an extended RGB image buffer.\n+\n \n 2.0.90 (2.1 beta1)\n ==================\ndiff --git a/rdppm.c b/rdppm.c\nindex c4c937e8a..6ac8fdbf7 100644\n--- a/rdppm.c\n+++ b/rdppm.c\n@@ -5,7 +5,7 @@\n  * Copyright (C) 1991-1997, Thomas G. Lane.\n  * Modified 2009 by Bill Allombert, Guido Vollbeding.\n  * libjpeg-turbo Modifications:\n- * Copyright (C) 2015-2017, 2020, D. R. Commander.\n+ * Copyright (C) 2015-2017, 2020-2021, D. R. Commander.\n  * For conditions of distribution and use, see the accompanying README.ijg\n  * file.\n  *\n@@ -516,6 +516,11 @@ get_word_rgb_row(j_compress_ptr cinfo, cjpeg_source_ptr sinfo)\n   register JSAMPLE *rescale = source->rescale;\n   JDIMENSION col;\n   unsigned int maxval = source->maxval;\n+  register int rindex = rgb_red[cinfo->in_color_space];\n+  register int gindex = rgb_green[cinfo->in_color_space];\n+  register int bindex = rgb_blue[cinfo->in_color_space];\n+  register int aindex = alpha_index[cinfo->in_color_space];\n+  register int ps = rgb_pixelsize[cinfo->in_color_space];\n \n   if (!ReadOK(source->pub.input_file, source->iobuffer, source->buffer_width))\n     ERREXIT(cinfo, JERR_INPUT_EOF);\n@@ -527,17 +532,20 @@ get_word_rgb_row(j_compress_ptr cinfo, cjpeg_source_ptr sinfo)\n     temp |= UCH(*bufferptr++);\n     if (temp > maxval)\n       ERREXIT(cinfo, JERR_PPM_OUTOFRANGE);\n-    *ptr++ = rescale[temp];\n+    ptr[rindex] = rescale[temp];\n     temp  = UCH(*bufferptr++) << 8;\n     temp |= UCH(*bufferptr++);\n     if (temp > maxval)\n       ERREXIT(cinfo, JERR_PPM_OUTOFRANGE);\n-    *ptr++ = rescale[temp];\n+    ptr[gindex] = rescale[temp];\n     temp  = UCH(*bufferptr++) << 8;\n     temp |= UCH(*bufferptr++);\n     if (temp > maxval)\n       ERREXIT(cinfo, JERR_PPM_OUTOFRANGE);\n-    *ptr++ = rescale[temp];\n+    ptr[bindex] = rescale[temp];\n+    if (aindex >= 0)\n+      ptr[aindex] = 0xFF;\n+    ptr += ps;\n   }\n   return 1;\n }\n@@ -624,7 +632,10 @@ start_input_ppm(j_compress_ptr cinfo, cjpeg_source_ptr sinfo)\n       cinfo->in_color_space = JCS_GRAYSCALE;\n     TRACEMS2(cinfo, 1, JTRC_PGM, w, h);\n     if (maxval > 255) {\n-      source->pub.get_pixel_rows = get_word_gray_row;\n+      if (cinfo->in_color_space == JCS_GRAYSCALE)\n+        source->pub.get_pixel_rows = get_word_gray_row;\n+      else\n+        ERREXIT(cinfo, JERR_BAD_IN_COLORSPACE);\n     } else if (maxval == MAXJSAMPLE && sizeof(JSAMPLE) == sizeof(U_CHAR) &&\n                cinfo->in_color_space == JCS_GRAYSCALE) {\n       source->pub.get_pixel_rows = get_raw_row;\n@@ -647,7 +658,10 @@ start_input_ppm(j_compress_ptr cinfo, cjpeg_source_ptr sinfo)\n       cinfo->in_color_space = JCS_EXT_RGB;\n     TRACEMS2(cinfo, 1, JTRC_PPM, w, h);\n     if (maxval > 255) {\n-      source->pub.get_pixel_rows = get_word_rgb_row;\n+      if (IsExtRGB(cinfo->in_color_space))\n+        source->pub.get_pixel_rows = get_word_rgb_row;\n+      else\n+        ERREXIT(cinfo, JERR_BAD_IN_COLORSPACE);\n     } else if (maxval == MAXJSAMPLE && sizeof(JSAMPLE) == sizeof(U_CHAR) &&\n #if RGB_RED == 0 && RGB_GREEN == 1 && RGB_BLUE == 2 && RGB_PIXELSIZE == 3\n                (cinfo->in_color_space == JCS_EXT_RGB ||\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42495497-vul",
+      "digest": "sha256:33569bbf4964db549aec3f9078abca3478e14abeb617f726ed1d74e8fd243b1f"
+    },
+    "patched": {
+      "ref": "n132/arvo:42495497-fix",
+      "digest": "sha256:cdf19f1a9936f1faa43fa0a6125d16a70bae34256c45643616c730a90fa2fbca"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/libjpeg-turbo/rdppm.c:530",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/libjpeg-turbo/rdppm.c:530"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

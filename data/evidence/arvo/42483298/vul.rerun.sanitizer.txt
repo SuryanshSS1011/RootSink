@@ -1,0 +1,91 @@
+INFO: Seed: 3730706894
+INFO: Loaded 1 modules   (17770 inline 8-bit counters): 17770 [0x854aad4, 0x854f03e), 
+INFO: Loaded 1 PC tables (17770 PCs): 17770 [0x854f040,0x8571b90), 
+/out/test_connect_null_fuzzer: Running 1 inputs 1 time(s) each.
+Running: /tmp/poc
+=================================================================
+==7==ERROR: AddressSanitizer: heap-buffer-overflow on address 0xe3304900 at pc 0x081660cc bp 0xe4cff0d8 sp 0xe4cfecb0
+WRITE of size 8215 at 0xe3304900 thread T3 (ZMQbg/IO/0)
+SCARINESS: 45 (multi-byte-write-heap-buffer-overflow)
+    #0 0x81660cb in recv /src/llvm-project/compiler-rt/lib/asan/../sanitizer_common/sanitizer_common_interceptors.inc:6398:5
+    #1 0x831b80d in zmq::tcp_read(int, void*, unsigned int) /src/libzmq/src/tcp.cpp:299:24
+    #2 0x831a389 in zmq::stream_engine_base_t::read(void*, unsigned int) /src/libzmq/src/stream_engine_base.cpp:746:20
+    #3 0x8313386 in zmq::stream_engine_base_t::in_event_internal() /src/libzmq/src/stream_engine_base.cpp:278:24
+    #4 0x820cbed in zmq::epoll_t::loop() /src/libzmq/src/epoll.cpp:206:29
+    #5 0x8272a23 in thread_routine(void*) /src/libzmq/src/thread.cpp:250:5
+    #6 0x8198ab2 in __asan::AsanThread::ThreadStart(unsigned long long, __sanitizer::atomic_uintptr_t*) /src/llvm-project/compiler-rt/lib/asan/asan_thread.cpp:262:25
+    #7 0x81775d7 in asan_thread_start(void*) /src/llvm-project/compiler-rt/lib/asan/asan_interceptors.cpp:205:13
+    #8 0xeb9e1269 in start_thread /build/glibc-LK5gWL/glibc-2.23/nptl/pthread_create.c:333
+    #9 0xeb89441d in clone (/lib32/libc.so.6+0xe541d)
+
+DEDUP_TOKEN: recv--zmq::tcp_read(int, void*, unsigned int)--zmq::stream_engine_base_t::read(void*, unsigned int)
+0xe3304900 is located 0 bytes to the right of 8192-byte region [0xe3302900,0xe3304900)
+allocated by thread T3 (ZMQbg/IO/0) here:
+    #0 0x818d1f5 in malloc /src/llvm-project/compiler-rt/lib/asan/asan_malloc_linux.cpp:145:3
+    #1 0x8326ae0 in zmq::c_single_allocator::c_single_allocator(unsigned int) /src/libzmq/./src/decoder_allocators.hpp:48:45
+    #2 0x8324a18 in zmq::decoder_base_t<zmq::v1_decoder_t, zmq::c_single_allocator>::decoder_base_t(unsigned int) /src/libzmq/./src/decoder.hpp:64:9
+    #3 0x832468f in zmq::v1_decoder_t::v1_decoder_t(unsigned int, long long) /src/libzmq/src/v1_decoder.cpp:43:5
+    #4 0x82a7e4f in zmq::zmtp_engine_t::handshake_v1_0_unversioned() /src/libzmq/src/zmtp_engine.cpp:270:7
+    #5 0x82a6a70 in zmq::zmtp_engine_t::handshake() /src/libzmq/src/zmtp_engine.cpp:132:10
+    #6 0x8313bac in zmq::stream_engine_base_t::in_event_internal() /src/libzmq/src/stream_engine_base.cpp:251:13
+    #7 0x8312aef in non-virtual thunk to zmq::stream_engine_base_t::plug(zmq::io_thread_t*, zmq::session_base_t*) /src/libzmq/src/stream_engine_base.cpp
+    #8 0x8301025 in zmq::session_base_t::process_attach(zmq::i_engine*) /src/libzmq/src/session_base.cpp:442:14
+    #9 0x821c0ec in zmq::object_t::process_command(zmq::command_t const&) /src/libzmq/src/object.cpp:97:13
+    #10 0x821010e in zmq::io_thread_t::in_event() /src/libzmq/src/io_thread.cpp:91:30
+    #11 0x8210397 in non-virtual thunk to zmq::io_thread_t::in_event() /src/libzmq/src/io_thread.cpp
+    #12 0x820cbed in zmq::epoll_t::loop() /src/libzmq/src/epoll.cpp:206:29
+    #13 0x8272a23 in thread_routine(void*) /src/libzmq/src/thread.cpp:250:5
+    #14 0x8198ab2 in __asan::AsanThread::ThreadStart(unsigned long long, __sanitizer::atomic_uintptr_t*) /src/llvm-project/compiler-rt/lib/asan/asan_thread.cpp:262:25
+
+DEDUP_TOKEN: malloc--zmq::c_single_allocator::c_single_allocator(unsigned int)--zmq::decoder_base_t<zmq::v1_decoder_t, zmq::c_single_allocator>::decoder_base_t(unsigned int)
+Thread T3 (ZMQbg/IO/0) created by T0 here:
+    #0 0x81774cc in pthread_create /src/llvm-project/compiler-rt/lib/asan/asan_interceptors.cpp:214:3
+    #1 0x827276c in zmq::thread_t::start(void (*)(void*), void*, char const*) /src/libzmq/src/thread.cpp:261:14
+    #2 0x81e0ad0 in zmq::thread_ctx_t::start_thread(zmq::thread_t&, void (*)(void*), void*, char const*) const /src/libzmq/src/ctx.cpp:561:13
+    #3 0x823a24e in zmq::worker_poller_base_t::start(char const*) /src/libzmq/src/poller_base.cpp:123:10
+    #4 0x820ff03 in zmq::io_thread_t::start() /src/libzmq/src/io_thread.cpp:63:14
+    #5 0x81df278 in zmq::ctx_t::start() /src/libzmq/src/ctx.cpp:456:20
+    #6 0x81dccb6 in zmq::ctx_t::create_socket(int) /src/libzmq/src/ctx.cpp:490:14
+    #7 0x81c60a9 in test_context_socket(int) /src/libzmq/tests/testutil_unity.cpp:229:26
+    #8 0x81c2426 in LLVMFuzzerTestOneInput /src/libzmq/tests/test_connect_null_fuzzer.cpp:45:20
+    #9 0x80c6bd6 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned int) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:556:15
+    #10 0x80b3083 in fuzzer::RunOneTest(fuzzer::Fuzzer*, char const*, unsigned int) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:292:6
+    #11 0x80b8788 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned int)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:774:9
+    #12 0x80dd597 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:19:10
+    #13 0xeb7c7636 in __libc_start_main (/lib32/libc.so.6+0x18636)
+
+DEDUP_TOKEN: pthread_create--zmq::thread_t::start(void (*)(void*), void*, char const*)--zmq::thread_ctx_t::start_thread(zmq::thread_t&, void (*)(void*), void*, char const*) const
+SUMMARY: AddressSanitizer: heap-buffer-overflow /src/llvm-project/compiler-rt/lib/asan/../sanitizer_common/sanitizer_common_interceptors.inc:6398:5 in recv
+Shadow bytes around the buggy address:
+  0x3c6608d0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x3c6608e0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x3c6608f0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x3c660900: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x3c660910: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x3c660920:[fa]fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x3c660930: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x3c660940: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x3c660950: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x3c660960: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x3c660970: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+  Shadow gap:              cc
+==7==ABORTING

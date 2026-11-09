@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042533949",
+  "chain": "CWE-1284->CWE-125",
+  "project": "libspdm",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42533949",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "907da5f6ee1eee9efb91aa1722d8284bc5a92272",
+      "fix_commits": [
+        "907da5f6ee1eee9efb91aa1722d8284bc5a92272"
+      ],
+      "repo": "https://github.com/DMTF/libspdm"
+    },
+    "patch": "diff --git a/library/spdm_responder_lib/libspdm_rsp_chunk_send_ack.c b/library/spdm_responder_lib/libspdm_rsp_chunk_send_ack.c\nindex 906dbcbd335..961235a6e02 100644\n--- a/library/spdm_responder_lib/libspdm_rsp_chunk_send_ack.c\n+++ b/library/spdm_responder_lib/libspdm_rsp_chunk_send_ack.c\n@@ -92,6 +92,13 @@ libspdm_return_t libspdm_get_response_chunk_send(libspdm_context_t *spdm_context\n \n     if (!send_info->chunk_in_use) {\n \n+        if (request_size < sizeof(spdm_chunk_send_request_t) + sizeof(uint32_t)) {\n+            libspdm_generate_error_response(\n+                spdm_context, SPDM_ERROR_CODE_INVALID_REQUEST, 0,\n+                response_size, response);\n+            return LIBSPDM_STATUS_SUCCESS;\n+        }\n+\n         large_message_size = *(const uint32_t*) (spdm_request + 1);\n         chunk = (((const uint8_t*) (spdm_request + 1)) + sizeof(uint32_t));\n         calc_max_chunk_size =\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42533949-vul",
+      "digest": "sha256:69c6b902b61a821c4db664115707f1af5532227c89e69b51ac7ebce12a75f4f8"
+    },
+    "patched": {
+      "ref": "n132/arvo:42533949-fix",
+      "digest": "sha256:faafeb9319b54fcf1c4146eb59e61ba1d61bbab94c32ad603c725385dd229621"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/libspdm/os_stub/memlib/copy_mem.c:30",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/libspdm/os_stub/memlib/copy_mem.c:30"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

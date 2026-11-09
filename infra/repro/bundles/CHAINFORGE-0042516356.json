@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042516356",
+  "chain": "CWE-416->CWE-125",
+  "project": "ghostpdl",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42516356",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "ebfb46da46e3f2872e4d1136571224a60891f80a",
+      "fix_commits": [
+        "ebfb46da46e3f2872e4d1136571224a60891f80a"
+      ],
+      "repo": "https://cgit.ghostscript.com/ghostpdl.git"
+    },
+    "patch": "From ebfb46da46e3f2872e4d1136571224a60891f80a Mon Sep 17 00:00:00 2001\nFrom: Ken Sharp <ken.sharp@artifex.com>\nDate: Mon, 26 Sep 2022 17:14:48 +0100\nSubject: [PATCH] pdfwrite - clean up proerly after errors writing TrueType\n fonts\n\nOSS-fuzz #51745\n\nCommit bd08091d295effb51de2cc7e739870e7b2628e38 already tackled a number\nof other cases of the same problem, but sadly missed this one. Once\nwe've begun writing a font file we must end it before returning or we\nwill end up with the wrong stream in the pdfwrite device structure\nwhich will lead to all kinds of problems.\n\nAdd code to handle the missing case here.\n---\n devices/vector/gdevpdtb.c | 4 ++--\n 1 file changed, 2 insertions(+), 2 deletions(-)\n\ndiff --git a/devices/vector/gdevpdtb.c b/devices/vector/gdevpdtb.c\nindex 5c8fb8d..77341cc 100644\n--- a/devices/vector/gdevpdtb.c\n+++ b/devices/vector/gdevpdtb.c\n@@ -743,10 +743,10 @@ pdf_write_embedded_font(gx_device_pdf *pdev, pdf_base_font_t *pbfont, font_type\n         swrite_position_only(&poss);\n         code = psf_write_truetype_font(&poss, pfont, options, NULL, 0, &fnstr);\n         if (code < 0)\n-            return code;\n+            goto finish;\n         code = cos_dict_put_c_key_int((cos_dict_t *)writer.pres->object, \"/Length1\", stell(&poss));\n         if (code < 0)\n-            return code;\n+            goto finish;\n         code = psf_write_truetype_font(writer.binary.strm, pfont,\n                                        options, NULL, 0, &fnstr);\n         goto finish;\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42516356-vul",
+      "digest": "sha256:97d6777c06c144cffe70928160611f1f7458132ac1c5a7fae59d759ee038c253"
+    },
+    "patched": {
+      "ref": "n132/arvo:42516356-fix",
+      "digest": "sha256:912beddd5250b122e38e8647fca6dbb5653b13b61d192305cc0f37e5d847ee01"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/ghostpdl/./base/gp.h:296",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/ghostpdl/./base/gp.h:296"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

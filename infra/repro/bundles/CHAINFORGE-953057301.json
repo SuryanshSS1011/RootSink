@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-953057301",
+  "chain": "CWE-843->CWE-119",
+  "project": "gdal",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42538664",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/OSGeo/gdal/commit/459dca6392fd5ad0e3d3f0ee9930e61bddbf795b",
+      "fix_commits": [
+        "459dca6392fd5ad0e3d3f0ee9930e61bddbf795b"
+      ],
+      "repo": "https://github.com/OSGeo/gdal"
+    },
+    "patch": "diff --git a/gdal/ogr/ogrpgeogeometry.cpp b/gdal/ogr/ogrpgeogeometry.cpp\nindex a5abbff420ae..d435da5c9f01 100644\n--- a/gdal/ogr/ogrpgeogeometry.cpp\n+++ b/gdal/ogr/ogrpgeogeometry.cpp\n@@ -1430,8 +1430,11 @@ OGRErr OGRCreateMultiPatch( const OGRGeometry *poGeomConst,\n     {\n         poGeomToDelete = std::unique_ptr<OGRGeometry>(\n                 OGRGeometryFactory::forceToMultiPolygon(poGeom->clone()));\n-        if( poGeomToDelete.get() )\n+        if( poGeomToDelete.get() &&\n+            wkbFlatten(poGeomToDelete->getGeometryType()) == wkbMultiPolygon )\n+        {\n             poMPoly = poGeomToDelete->toMultiPolygon();\n+        }\n     }\n     if( poMPoly == nullptr )\n     {\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42538664-vul",
+      "digest": "sha256:eacda0478606774a688bc044457aab9c6a46b4d583fc12963eb39212e3be5f68"
+    },
+    "patched": {
+      "ref": "n132/arvo:42538664-fix",
+      "digest": "sha256:f67213936e0eadb03baf9913701082212f4dec6827f989b4390e4837fb7e7af6"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "crash_site": "/src/gdal/gdal/port/cpl_conv.h:398",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 843,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 119,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "site": "/src/gdal/gdal/port/cpl_conv.h:398"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

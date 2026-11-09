@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042487091",
+  "chain": "CWE-1285->CWE-125",
+  "project": "openexr",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42487091",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "b0bbe24152b603afa5fed50e8f2203d0a88925fe",
+      "fix_commits": [
+        "b0bbe24152b603afa5fed50e8f2203d0a88925fe"
+      ],
+      "repo": "https://github.com/AcademySoftwareFoundation/openexr"
+    },
+    "patch": "diff --git a/OpenEXR/IlmImf/ImfFastHuf.cpp b/OpenEXR/IlmImf/ImfFastHuf.cpp\nindex 1c95fc7774..97782f8051 100644\n--- a/OpenEXR/IlmImf/ImfFastHuf.cpp\n+++ b/OpenEXR/IlmImf/ImfFastHuf.cpp\n@@ -127,7 +127,7 @@ FastHufDecoder::FastHufDecoder\n \n     for (Int64 symbol = static_cast<Int64>(minSymbol); symbol <= static_cast<Int64>(maxSymbol); symbol++)\n     {\n-        if (currByte - table > numBytes)\n+        if (currByte - table >= numBytes)\n         {\n             throw IEX_NAMESPACE::InputExc (\"Error decoding Huffman table \"\n                                            \"(Truncated table data).\");\n@@ -144,7 +144,7 @@ FastHufDecoder::FastHufDecoder\n \n         if (codeLen == (Int64) LONG_ZEROCODE_RUN)\n         {\n-            if (currByte - table > numBytes)\n+            if (currByte - table >= numBytes)\n             {\n                 throw IEX_NAMESPACE::InputExc (\"Error decoding Huffman table \"\n                                                \"(Truncated table data).\");\ndiff --git a/OpenEXR/IlmImf/ImfPizCompressor.cpp b/OpenEXR/IlmImf/ImfPizCompressor.cpp\nindex edc141ad9d..ffcd9e9aa9 100644\n--- a/OpenEXR/IlmImf/ImfPizCompressor.cpp\n+++ b/OpenEXR/IlmImf/ImfPizCompressor.cpp\n@@ -594,7 +594,7 @@ Xdr::read <CharPtrIO> (inPtr, (char *) &bitmap[0] + minNonZero,\n     int length;\n     Xdr::read <CharPtrIO> (inPtr, length);\n \n-    if (length > inSize)\n+    if (inPtr + length > inputEnd || length<0 )\n     {\n \tthrow InputExc (\"Error in header for PIZ-compressed data \"\n \t\t\t\"(invalid array length).\");\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42487091-vul",
+      "digest": "sha256:ba391e545bc93d2e721f7684423f748d843eb1a70024ded3bee1755476f7664f"
+    },
+    "patched": {
+      "ref": "n132/arvo:42487091-fix",
+      "digest": "sha256:bb40e3c5ca71c1c570deda81615d18533bd6af5d70d34c1a4aae95999e82f075"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/openexr/OpenEXR/IlmImf/ImfFastHuf.cpp:576",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/openexr/OpenEXR/IlmImf/ImfFastHuf.cpp:576"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

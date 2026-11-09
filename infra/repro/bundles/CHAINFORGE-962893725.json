@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-962893725",
+  "chain": "CWE-456->CWE-457",
+  "project": "leptonica",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42494189",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/DanBloomberg/leptonica/commit/2dca1322b1d429a043b63ba05e2db7effbf5be19",
+      "fix_commits": [
+        "2dca1322b1d429a043b63ba05e2db7effbf5be19"
+      ],
+      "repo": "https://github.com/DanBloomberg/leptonica"
+    },
+    "patch": "diff --git a/src/allheaders.h b/src/allheaders.h\nindex 102eedd76..4478cd997 100644\n--- a/src/allheaders.h\n+++ b/src/allheaders.h\n@@ -1464,7 +1464,6 @@ LEPT_DLL extern void pixDestroy ( PIX **ppix );\n LEPT_DLL extern PIX * pixCopy ( PIX *pixd, const PIX *pixs );\n LEPT_DLL extern l_ok pixResizeImageData ( PIX *pixd, const PIX *pixs );\n LEPT_DLL extern l_ok pixCopyColormap ( PIX *pixd, const PIX *pixs );\n-LEPT_DLL extern l_int32 pixSizesEqual ( const PIX *pix1, const PIX *pix2 );\n LEPT_DLL extern l_ok pixTransferAllData ( PIX *pixd, PIX **ppixs, l_int32 copytext, l_int32 copyformat );\n LEPT_DLL extern l_ok pixSwapAndDestroy ( PIX **ppixd, PIX **ppixs );\n LEPT_DLL extern l_int32 pixGetWidth ( const PIX *pix );\n@@ -1509,6 +1508,8 @@ LEPT_DLL extern l_int32 pixSetData ( PIX *pix, l_uint32 *data );\n LEPT_DLL extern l_uint32 * pixExtractData ( PIX *pixs );\n LEPT_DLL extern l_int32 pixFreeData ( PIX *pix );\n LEPT_DLL extern void ** pixGetLinePtrs ( PIX *pix, l_int32 *psize );\n+LEPT_DLL extern l_int32 pixSizesEqual ( const PIX *pix1, const PIX *pix2 );\n+LEPT_DLL extern l_ok pixMaxAspectRatio ( PIX *pixs, l_float32 *pratio );\n LEPT_DLL extern l_ok pixPrintStreamInfo ( FILE *fp, const PIX *pix, const char *text );\n LEPT_DLL extern l_ok pixGetPixel ( PIX *pix, l_int32 x, l_int32 y, l_uint32 *pval );\n LEPT_DLL extern l_ok pixSetPixel ( PIX *pix, l_int32 x, l_int32 y, l_uint32 val );\ndiff --git a/src/enhance.c b/src/enhance.c\nindex 9d4bf000d..cd23bda72 100644\n--- a/src/enhance.c\n+++ b/src/enhance.c\n@@ -1825,7 +1825,9 @@ l_uint32  *data, *line;\n  *          and the deviations from this are shown separately for deltas\n  *          in r, g and b.  For each component, we show 2 * %nincr + 1\n  *          images.\n- *      (3) Usage: color prints differ from the original due to three factors:\n+ *      (3) The pix must have minimum dimensions of 100 and an aspect\n+ *          ratio not exceeding 5.0.\n+ *      (4) Usage: color prints differ from the original due to three factors:\n  *          illumination, calibration of the camera in acquisition,\n  *          and calibration of the printer.  This function can be used\n  *          to iteratively match a color print to the original.  On each\n@@ -1842,8 +1844,8 @@ pixMosaicColorShiftRGB(PIX       *pixs,\n                        l_int32    nincr)\n {\n char       buf[64];\n-l_int32    i;\n-l_float32  del;\n+l_int32    i, w, h;\n+l_float32  del, ratio;\n L_BMF     *bmf;\n PIX       *pix1, *pix2, *pix3;\n PIXA      *pixa;\n@@ -1865,6 +1867,16 @@ PIXA      *pixa;\n         return (PIX *)ERROR_PTR(\"nincr not in [0, 6]\", procName, NULL);\n     if (nincr == 0) nincr = 2;\n \n+        /* Require width and height to be >= 100, and the aspect ratio <= 5.0 */\n+    pixGetDimensions(pixs, &w, &h, NULL);\n+    if (w < 100 || h < 100)\n+        return (PIX *)ERROR_PTR(\"w and h not both >= 100\", procName, NULL);\n+    pixMaxAspectRatio(pixs, &ratio);\n+    if (ratio < 1.0 || ratio > 5.0) {\n+        L_ERROR(\"invalid aspect ratio %5.1f\\n\", procName, ratio);\n+        return NULL;\n+    }\n+\n     pixa = pixaCreate(3 * (2 * nincr + 1));\n     bmf = bmfCreate(NULL, 8);\n     pix1 = pixScaleToSize(pixs, 400, 0);\ndiff --git a/src/pix1.c b/src/pix1.c\nindex 22589c0e9..35fa8832f 100644\n--- a/src/pix1.c\n+++ b/src/pix1.c\n@@ -62,7 +62,6 @@\n  *          PIX          *pixCopy()\n  *          l_int32       pixResizeImageData()\n  *          l_int32       pixCopyColormap()\n- *          l_int32       pixSizesEqual()\n  *          l_int32       pixTransferAllData()\n  *          l_int32       pixSwapAndDestroy()\n  *\n@@ -112,6 +111,10 @@\n  *    Pix line ptrs\n  *          void        **pixGetLinePtrs()\n  *\n+ *    Pix size comparisons\n+ *          l_int32       pixSizesEqual()\n+ *          l_int32       pixMaxAspectRatio()\n+ *\n  *    Pix debug\n  *          l_int32       pixPrintStreamInfo()\n  *\n@@ -299,7 +302,7 @@ setPixMemoryManager(alloc_fn   allocator,\n \n \n /*--------------------------------------------------------------------*\n- *                              Pix Creation                          *\n+ *                             Pix Creation                           *\n  *--------------------------------------------------------------------*/\n /*!\n  * \\brief   pixCreate()\n@@ -835,33 +838,6 @@ PIXCMAP        *cmapd;\n }\n \n \n-/*!\n- * \\brief   pixSizesEqual()\n- *\n- * \\param[in]    pix1, pix2\n- * \\return  1 if the two pix have same {h, w, d}; 0 otherwise.\n- */\n-l_int32\n-pixSizesEqual(const PIX  *pix1,\n-              const PIX  *pix2)\n-{\n-    PROCNAME(\"pixSizesEqual\");\n-\n-    if (!pix1 || !pix2)\n-        return ERROR_INT(\"pix1 and pix2 not both defined\", procName, 0);\n-\n-    if (pix1 == pix2)\n-        return 1;\n-\n-    if ((pixGetWidth(pix1) != pixGetWidth(pix2)) ||\n-        (pixGetHeight(pix1) != pixGetHeight(pix2)) ||\n-        (pixGetDepth(pix1) != pixGetDepth(pix2)))\n-        return 0;\n-    else\n-        return 1;\n-}\n-\n-\n /*!\n  * \\brief   pixTransferAllData()\n  *\n@@ -1029,7 +1005,7 @@ pixSwapAndDestroy(PIX  **ppixd,\n \n \n /*--------------------------------------------------------------------*\n- *                                Accessors                           *\n+ *                              Pix Accessors                         *\n  *--------------------------------------------------------------------*/\n l_int32\n pixGetWidth(const PIX  *pix)\n@@ -1989,6 +1965,67 @@ void     **lines;\n }\n \n \n+/*--------------------------------------------------------------------*\n+ *                         Pix Size Comparisons                       *\n+ *--------------------------------------------------------------------*/\n+/*!\n+ * \\brief   pixSizesEqual()\n+ *\n+ * \\param[in]    pix1, pix2\n+ * \\return  1 if the two pix have same {h, w, d}; 0 otherwise.\n+ */\n+l_int32\n+pixSizesEqual(const PIX  *pix1,\n+              const PIX  *pix2)\n+{\n+    PROCNAME(\"pixSizesEqual\");\n+\n+    if (!pix1 || !pix2)\n+        return ERROR_INT(\"pix1 and pix2 not both defined\", procName, 0);\n+\n+    if (pix1 == pix2)\n+        return 1;\n+\n+    if ((pixGetWidth(pix1) != pixGetWidth(pix2)) ||\n+        (pixGetHeight(pix1) != pixGetHeight(pix2)) ||\n+        (pixGetDepth(pix1) != pixGetDepth(pix2)))\n+        return 0;\n+    else\n+        return 1;\n+}\n+\n+\n+/*!\n+ * \\brief   pixMaxAspectRatio()\n+ *\n+ * \\param[in]    pixs      32 bpp rgb\n+ * \\param[out]   pratio    max aspect ratio, >= 1.0; -1.0 on error\n+ * \\return  0 if OK, 1 on error\n+ */\n+l_ok\n+pixMaxAspectRatio(PIX        *pixs,\n+                  l_float32  *pratio)\n+{\n+l_int32  w, h;\n+\n+    PROCNAME(\"pixMaxAspectRatio\");\n+\n+    if (!pratio)\n+        return ERROR_INT(\"&ratio not defined\", procName, 1);\n+    *pratio = -1.0;\n+    if (!pixs)\n+        return ERROR_INT(\"pixs not defined\", procName, 1);\n+    pixGetDimensions(pixs, &w, &h, NULL);\n+    if (w == 0 || h == 0) {\n+        L_ERROR(\"invalid size: w = %d, h = %d\\n\", procName, w, h);\n+        return 1;\n+    }\n+\n+    *pratio = L_MAX((l_float32)h / (l_float32)w, (l_float32)w / (l_float32)h);\n+    return 0;\n+}\n+\n+\n /*--------------------------------------------------------------------*\n  *                    Print output for debugging                      *\n  *--------------------------------------------------------------------*/\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42494189-vul",
+      "digest": "sha256:105038e186a9100f3abee8add08c2c69d391edb0ed2588cb21a7e10a80f291c9"
+    },
+    "patched": {
+      "ref": "n132/arvo:42494189-fix",
+      "digest": "sha256:da681b159851b54aa655d1611217daf74bc4e21930b294ac9f4675e24c90af1a"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/leptonica/src/textops.c:226",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/leptonica/src/textops.c:226"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,77 @@
+======================= INFO =========================
+This binary is built for AFL-fuzz.
+To run the target function on individual input(s) execute this:
+  /out/gdal_vrt_fuzzer < INPUT_FILE
+or
+  /out/gdal_vrt_fuzzer INPUT_FILE1 [INPUT_FILE2 ... ]
+To fuzz with afl-fuzz execute this:
+  afl-fuzz [afl-flags] /out/gdal_vrt_fuzzer [-N]
+afl-fuzz will run N iterations before re-spawning the process (default: 1000)
+======================================================
+Reading 1181 bytes from /tmp/poc
+=================================================================
+==7==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x602000008c94 at pc 0x0000009155ff bp 0x7ffd5fa42730 sp 0x7ffd5fa42728
+READ of size 1 at 0x602000008c94 thread T0
+SCARINESS: 12 (1-byte-read-heap-buffer-overflow)
+    #0 0x9155fe in RIKRasterBand::IReadBlock(int, int, void*) /src/gdal/gdal/frmts/rik/rikdataset.cpp:358:44
+    #1 0xc1bcfa in GDALRasterBand::GetLockedBlockRef(int, int, int) /src/gdal/gdal/gcore/gdalrasterband.cpp:1333:20
+    #2 0xc58e7d in GDALRasterBand::IRasterIO(GDALRWFlag, int, int, int, int, void*, int, int, GDALDataType, long long, long long, GDALRasterIOExtraArg*) /src/gdal/gdal/gcore/rasterio.cpp:357:27
+    #3 0xc192c0 in GDALRasterBand::RasterIO(GDALRWFlag, int, int, int, int, void*, int, int, GDALDataType, long long, long long, GDALRasterIOExtraArg*) /src/gdal/gdal/gcore/gdalrasterband.cpp:387:16
+    #4 0xc19934 in GDALRasterIO /src/gdal/gdal/gcore/gdalrasterband.cpp:421:21
+    #5 0xe2cc53 in GDALChecksumImage /src/gdal/gdal/alg/gdalchecksum.cpp:155:17
+    #6 0x52c51d in LLVMFuzzerTestOneInput /src/gdal/gdal/./fuzzers/gdal_fuzzer.cpp:219:17
+    #7 0x52cecf in ExecuteFilesOnyByOne(int, char**) /src/libfuzzer/afl/afl_driver.cpp:279:5
+    #8 0x52d46f in main /src/libfuzzer/afl/afl_driver.cpp:316:12
+    #9 0x7effc6fed82f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+    #10 0x4279e8 in _start (/out/gdal_vrt_fuzzer+0x4279e8)
+
+DEDUP_TOKEN: RIKRasterBand::IReadBlock(int, int, void*)--GDALRasterBand::GetLockedBlockRef(int, int, int)--GDALRasterBand::IRasterIO(GDALRWFlag, int, int, int, int, void*, int, int, GDALDataType, long long, long long, GDALRasterIOExtraArg*)
+0x602000008c94 is located 3 bytes to the right of 1-byte region [0x602000008c90,0x602000008c91)
+allocated by thread T0 here:
+    #0 0x4f00c8 in __interceptor_malloc /src/llvm/projects/compiler-rt/lib/asan/asan_malloc_linux.cc:88
+    #1 0xd66f17 in VSIMallocVerbose /src/gdal/gdal/port/cpl_vsisimple.cpp:1136:18
+    #2 0x9143e7 in RIKRasterBand::IReadBlock(int, int, void*) /src/gdal/gdal/frmts/rik/rikdataset.cpp:322:51
+    #3 0xc1bcfa in GDALRasterBand::GetLockedBlockRef(int, int, int) /src/gdal/gdal/gcore/gdalrasterband.cpp:1333:20
+    #4 0xc58e7d in GDALRasterBand::IRasterIO(GDALRWFlag, int, int, int, int, void*, int, int, GDALDataType, long long, long long, GDALRasterIOExtraArg*) /src/gdal/gdal/gcore/rasterio.cpp:357:27
+    #5 0xc192c0 in GDALRasterBand::RasterIO(GDALRWFlag, int, int, int, int, void*, int, int, GDALDataType, long long, long long, GDALRasterIOExtraArg*) /src/gdal/gdal/gcore/gdalrasterband.cpp:387:16
+    #6 0xc19934 in GDALRasterIO /src/gdal/gdal/gcore/gdalrasterband.cpp:421:21
+    #7 0xe2cc53 in GDALChecksumImage /src/gdal/gdal/alg/gdalchecksum.cpp:155:17
+    #8 0x52c51d in LLVMFuzzerTestOneInput /src/gdal/gdal/./fuzzers/gdal_fuzzer.cpp:219:17
+    #9 0x52cecf in ExecuteFilesOnyByOne(int, char**) /src/libfuzzer/afl/afl_driver.cpp:279:5
+    #10 0x52d46f in main /src/libfuzzer/afl/afl_driver.cpp:316:12
+    #11 0x7effc6fed82f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+
+DEDUP_TOKEN: __interceptor_malloc--VSIMallocVerbose--RIKRasterBand::IReadBlock(int, int, void*)
+SUMMARY: AddressSanitizer: heap-buffer-overflow /src/gdal/gdal/frmts/rik/rikdataset.cpp:358:44 in RIKRasterBand::IReadBlock(int, int, void*)
+Shadow bytes around the buggy address:
+  0x0c047fff9140: fa fa fd fd fa fa 00 01 fa fa fd fd fa fa fd fd
+  0x0c047fff9150: fa fa fd fa fa fa fd fa fa fa fd fd fa fa fd fa
+  0x0c047fff9160: fa fa fd fd fa fa 00 fa fa fa fd fd fa fa fd fd
+  0x0c047fff9170: fa fa fd fd fa fa fd fd fa fa 00 00 fa fa 00 01
+  0x0c047fff9180: fa fa 04 fa fa fa 00 00 fa fa 00 00 fa fa 00 00
+=>0x0c047fff9190: fa fa[01]fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c047fff91a0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c047fff91b0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c047fff91c0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c047fff91d0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c047fff91e0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+==7==ABORTING

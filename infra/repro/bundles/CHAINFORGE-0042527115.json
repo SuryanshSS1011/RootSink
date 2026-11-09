@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042527115",
+  "chain": "CWE-416->CWE-125",
+  "project": "binutils-gdb",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42527115",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "fa62aafb7d81b89d68752e830a757ef4199d0b21",
+      "fix_commits": [
+        "fa62aafb7d81b89d68752e830a757ef4199d0b21"
+      ],
+      "repo": "git://sourceware.org/git/binutils-gdb.git"
+    },
+    "patch": "diff --git a/bfd/elf64-ia64-vms.c b/bfd/elf64-ia64-vms.c\nindex f8e9922fc4a..ab1f18b8d81 100644\n--- a/bfd/elf64-ia64-vms.c\n+++ b/bfd/elf64-ia64-vms.c\n@@ -4713,7 +4713,8 @@ static bool\n elf64_vms_close_and_cleanup (bfd *abfd)\n {\n   bool ret = true;\n-  if (bfd_get_format (abfd) == bfd_object)\n+  if (bfd_get_format (abfd) == bfd_object\n+      && bfd_write_p (abfd))\n     {\n       long isize;\n \ndiff --git a/bfd/opncls.c b/bfd/opncls.c\nindex 56a90046b1a..741d20e81da 100644\n--- a/bfd/opncls.c\n+++ b/bfd/opncls.c\n@@ -920,13 +920,11 @@ bfd_close_all_done (bfd *abfd)\n {\n   bool ret = BFD_SEND (abfd, _close_and_cleanup, (abfd));\n \n-  if (ret && abfd->iovec != NULL)\n-    {\n-      ret = abfd->iovec->bclose (abfd) == 0;\n+  if (abfd->iovec != NULL)\n+    ret &= abfd->iovec->bclose (abfd) == 0;\n \n-      if (ret)\n-\t_maybe_make_executable (abfd);\n-    }\n+  if (ret)\n+    _maybe_make_executable (abfd);\n \n   _bfd_delete_bfd (abfd);\n   free (_bfd_error_buf);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42527115-vul",
+      "digest": "sha256:d107f3e7f8e3fa063fce7f58d85bc2267089384aaf0526de244da5755a297e2e"
+    },
+    "patched": {
+      "ref": "n132/arvo:42527115-fix",
+      "digest": "sha256:c59c754a43480efcd51f96a549bbbb169f1862749cbedd94ec0d5381b7f950ac"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/binutils-gdb/bfd/cache.c:139",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/binutils-gdb/bfd/cache.c:139"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

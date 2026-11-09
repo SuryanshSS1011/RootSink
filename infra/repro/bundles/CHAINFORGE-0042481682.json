@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042481682",
+  "chain": "CWE-416->CWE-125",
+  "project": "janus-gateway",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42481682",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "03cfcd34a472e1a249221a8fb1d275784ee63ea3",
+      "fix_commits": [
+        "03cfcd34a472e1a249221a8fb1d275784ee63ea3"
+      ],
+      "repo": "https://github.com/meetecho/janus-gateway"
+    },
+    "patch": "diff --git a/fuzzers/corpora/rtcp_fuzzer/1meetecho/rtcp_fuzzer-crash-1640b2f21ba20409d930e9653052d579d450073a b/fuzzers/corpora/rtcp_fuzzer/1meetecho/rtcp_fuzzer-crash-1640b2f21ba20409d930e9653052d579d450073a\nnew file mode 100644\nindex 0000000000..22892eb553\nBinary files /dev/null and b/fuzzers/corpora/rtcp_fuzzer/1meetecho/rtcp_fuzzer-crash-1640b2f21ba20409d930e9653052d579d450073a differ\ndiff --git a/rtcp.c b/rtcp.c\nindex 8364e3352c..5d1f99da7f 100644\n--- a/rtcp.c\n+++ b/rtcp.c\n@@ -168,7 +168,9 @@ static void janus_rtcp_incoming_sr(janus_rtcp_context *ctx, janus_rtcp_sr *sr) {\n \n /* Helper to handle an incoming transport-cc feedback: triggered by a call to janus_rtcp_fix_ssrc a valid context pointer */\n static void janus_rtcp_incoming_transport_cc(janus_rtcp_context *ctx, janus_rtcp_fb *twcc, int total) {\n-\tif(ctx == NULL || twcc == NULL || total < 16)\n+\tif(ctx == NULL || twcc == NULL || total < 20)\n+\t\treturn;\n+\tif(!janus_rtcp_check_fci((janus_rtcp_header *)twcc, total, 4))\n \t\treturn;\n \t/* Parse the header first */\n \tuint8_t *data = (uint8_t *)twcc->fci;\n@@ -185,7 +187,7 @@ static void janus_rtcp_incoming_transport_cc(janus_rtcp_context *ctx, janus_rtcp\n \tJANUS_LOG(LOG_HUGE, \"[TWCC] seq=%\"SCNu16\", psc=%\"SCNu16\", ref=%\"SCNu32\", fbpc=%\"SCNu8\"\\n\",\n \t\tbase_seq, status_count, reference, fb_pkt);\n \t/* Now traverse the feedback: packet chunks first, and then recv deltas */\n-\ttotal -= 16;\n+\ttotal -= 20;\n \tdata += 8;\n \tint psc = status_count;\n \tuint16_t chunk = 0;\n@@ -229,6 +231,10 @@ static void janus_rtcp_incoming_transport_cc(janus_rtcp_context *ctx, janus_rtcp\n \t\ttotal -= 2;\n \t\tdata += 2;\n \t}\n+\tif(psc > 0) {\n+\t\t/* Incomplete feedback? Drop... */\n+\t\treturn;\n+\t}\n \t/* Iterate on all recv deltas */\n \tJANUS_LOG(LOG_HUGE, \"[TWCC] Recv Deltas (%d/%\"SCNu16\"):\\n\", g_list_length(list), status_count);\n \tnum = 0;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42481682-vul",
+      "digest": "sha256:2cf98e811777f6926309652aba73999c843c6e60b4e67a6e127a5d662a036791"
+    },
+    "patched": {
+      "ref": "n132/arvo:42481682-fix",
+      "digest": "sha256:cc2dfdca2021ae2c18a965c9b0921559499ea4921cbdb52aa4b68ca10a9d3c6a"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "dynamic-stack-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/janus-gateway/rtcp.c:199",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "dynamic-stack-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/janus-gateway/rtcp.c:199"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

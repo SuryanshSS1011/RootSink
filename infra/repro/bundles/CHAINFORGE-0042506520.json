@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042506520",
+  "chain": "CWE-456->CWE-457",
+  "project": "librawspeed",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42506520",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "02f01031a47c011b6a2d06d79f92cda0e1e728c8",
+      "fix_commits": [
+        "02f01031a47c011b6a2d06d79f92cda0e1e728c8"
+      ],
+      "repo": "https://github.com/darktable-org/rawspeed"
+    },
+    "patch": "From 02f01031a47c011b6a2d06d79f92cda0e1e728c8 Mon Sep 17 00:00:00 2001\nFrom: Roman Lebedev <lebedev.ri@gmail.com>\nDate: Sun, 19 Nov 2017 18:20:23 +0300\nSubject: [PATCH] SamsungV0Decompressor: can not have upward prediction on the\n first two rows\n\n---\n src/librawspeed/decompressors/SamsungV0Decompressor.cpp | 4 ++++\n 1 file changed, 4 insertions(+)\n\ndiff --git a/src/librawspeed/decompressors/SamsungV0Decompressor.cpp b/src/librawspeed/decompressors/SamsungV0Decompressor.cpp\nindex 891d0db..274c0f3 100644\n--- a/src/librawspeed/decompressors/SamsungV0Decompressor.cpp\n+++ b/src/librawspeed/decompressors/SamsungV0Decompressor.cpp\n@@ -125,6 +125,7 @@ int32 SamsungV0Decompressor::calcAdj(BitPumpMSB32* bits, int b) {\n void SamsungV0Decompressor::decompressStrip(uint32 y,\n                                             const ByteStream& bs) const {\n   const uint32 width = mRaw->dim.x;\n+  assert(width > 0);\n \n   BitPumpMSB32 bits(bs);\n \n@@ -176,6 +177,9 @@ void SamsungV0Decompressor::decompressStrip(uint32 y,\n     if (dir) {\n       // Upward prediction\n \n+      if (y < 2)\n+        ThrowRDE(\"Upward prediction for the first two rows. Raw corrupt\");\n+\n       if (x + 16 >= width)\n         ThrowRDE(\"Upward prediction for the last block of pixels. Raw corrupt\");\n \n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42506520-vul",
+      "digest": "sha256:304bda3190f264b5fb36d903c14878d4309411d6331a56f5c6bb5f9dc10b0b67"
+    },
+    "patched": {
+      "ref": "n132/arvo:42506520-fix",
+      "digest": "sha256:3e861d1cbd25a80a1772f95135555e18ba4fb2492b873a7b55fb4686c08b4228"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/librawspeed/src/librawspeed/common/RawImage.cpp:168",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/librawspeed/src/librawspeed/common/RawImage.cpp:168"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

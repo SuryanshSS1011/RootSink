@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-951342264",
+  "chain": "CWE-129->CWE-125",
+  "project": "ffmpeg",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42475916",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://git.ffmpeg.org/gitweb/ffmpeg.git/commitdiff/ae021c1239ec3bc0a30dc5a4720569071599ece4",
+      "fix_commits": [
+        "ae021c1239ec3bc0a30dc5a4720569071599ece4"
+      ],
+      "repo": "https://git.ffmpeg.org/gitweb/ffmpeg.git/commitdiff"
+    },
+    "patch": "From ae021c1239ec3bc0a30dc5a4720569071599ece4 Mon Sep 17 00:00:00 2001\nFrom: Michael Niedermayer <michael@niedermayer.cc>\nDate: Mon, 24 Jun 2019 01:01:02 +0200\nSubject: [PATCH] avcodec/qdm2: Do not read out of array in\n fix_coding_method_array()\n\nInstead we ask for a sample, its unclear what to do in this case.\n\nFixes: index 30 out of bounds for type 'int8_t [30][64]'\nFixes: 15339/clusterfuzz-testcase-minimized-ffmpeg_AV_CODEC_ID_QDM2_fuzzer-5749441484554240\n\nFound-by: continuous fuzzing process https://github.com/google/oss-fuzz/tree/master/projects/ffmpeg\nSigned-off-by: Michael Niedermayer <michael@niedermayer.cc>\n---\n libavcodec/qdm2.c | 7 ++++++-\n 1 file changed, 6 insertions(+), 1 deletion(-)\n\ndiff --git a/libavcodec/qdm2.c b/libavcodec/qdm2.c\nindex 1397218..44ff4fa 100644\n--- a/libavcodec/qdm2.c\n+++ b/libavcodec/qdm2.c\n@@ -408,7 +408,12 @@ static int fix_coding_method_array(int sb, int channels,\n             }\n             for (k = 0; k < run; k++) {\n                 if (j + k < 128) {\n-                    if (coding_method[ch][sb + (j + k) / 64][(j + k) % 64] > coding_method[ch][sb][j]) {\n+                    int sbjk = sb + (j + k) / 64;\n+                    if (sbjk > 29) {\n+                        SAMPLES_NEEDED\n+                        continue;\n+                    }\n+                    if (coding_method[ch][sbjk][(j + k) % 64] > coding_method[ch][sb][j]) {\n                         if (k > 0) {\n                             SAMPLES_NEEDED\n                             //not debugged, almost never used\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42475916-vul",
+      "digest": "sha256:d65360355a5dfd1a4de867e42a361a67680c44b8b1263606a0ac50966d570fdd"
+    },
+    "patched": {
+      "ref": "n132/arvo:42475916-fix",
+      "digest": "sha256:ef7f313e2d7fad48d45125c7725c7449bfcfb9f5f22986db0caa146a10e37cd7"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "crash_site": "/src/ffmpeg/libavcodec/qdm2.c:411",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 129,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "site": "/src/ffmpeg/libavcodec/qdm2.c:411"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042494318",
+  "chain": "CWE-20->CWE-125",
+  "project": "gpac",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42494318",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "758135e91e623d7dfe7f6aaad7aeb3f791b7a4e5",
+      "fix_commits": [
+        "758135e91e623d7dfe7f6aaad7aeb3f791b7a4e5"
+      ],
+      "repo": "https://github.com/gpac/gpac"
+    },
+    "patch": "diff --git a/src/isomedia/box_code_adobe.c b/src/isomedia/box_code_adobe.c\nindex ab5115f25a..711d84bf0d 100644\n--- a/src/isomedia/box_code_adobe.c\n+++ b/src/isomedia/box_code_adobe.c\n@@ -79,6 +79,7 @@ GF_Err abst_box_read(GF_Box *s, GF_BitStream *bs)\n \tint i;\n \tu32 tmp_strsize;\n \tchar *tmp_str;\n+\tBool zfound=GF_FALSE;\n \tGF_Err e;\n \n \tISOM_DECREASE_SIZE(ptr, 25)\n@@ -102,10 +103,14 @@ GF_Err abst_box_read(GF_Box *s, GF_BitStream *bs)\n \t\tISOM_DECREASE_SIZE(ptr, 1)\n \t\ttmp_str[i] = gf_bs_read_u8(bs);\n \t\ttmp_strsize--;\n-\t\tif (!tmp_str[i])\n+\t\tif (!tmp_str[i]) {\n+\t\t\tzfound = GF_TRUE;\n \t\t\tbreak;\n+\t\t}\n \t\ti++;\n \t}\n+\tif (!zfound)\n+\t\treturn GF_ISOM_INVALID_FILE;\n \tif (i) {\n \t\tptr->movie_identifier = gf_strdup(tmp_str);\n \t}\n@@ -114,15 +119,20 @@ GF_Err abst_box_read(GF_Box *s, GF_BitStream *bs)\n \tptr->server_entry_count = gf_bs_read_u8(bs);\n \tfor (i=0; i<ptr->server_entry_count; i++) {\n \t\tint j=0;\n+\t\tzfound = GF_FALSE;\n \t\ttmp_strsize=(u32)ptr->size;\n \t\twhile (tmp_strsize) {\n \t\t\tISOM_DECREASE_SIZE(ptr, 1)\n \t\t\ttmp_str[j] = gf_bs_read_u8(bs);\n \t\t\ttmp_strsize--;\n-\t\t\tif (!tmp_str[j])\n+\t\t\tif (!tmp_str[j]) {\n+\t\t\t\tzfound = GF_TRUE;\n \t\t\t\tbreak;\n+\t\t\t}\n \t\t\tj++;\n \t\t}\n+\t\tif (!zfound)\n+\t\t\treturn GF_ISOM_INVALID_FILE;\n \t\tif (j) {\n \t\t\tgf_list_insert(ptr->server_entry_table, gf_strdup(tmp_str), i);\n \t\t}\n@@ -132,16 +142,21 @@ GF_Err abst_box_read(GF_Box *s, GF_BitStream *bs)\n \tptr->quality_entry_count = gf_bs_read_u8(bs);\n \tfor (i=0; i<ptr->quality_entry_count; i++) {\n \t\tint j=0;\n+\t\tzfound = GF_FALSE;\n \t\ttmp_strsize=(u32)ptr->size;\n \t\twhile (tmp_strsize) {\n \t\t\tISOM_DECREASE_SIZE(ptr, 1)\n \t\t\ttmp_str[j] = gf_bs_read_u8(bs);\n \t\t\ttmp_strsize--;\n-\t\t\tif (!tmp_str[j])\n+\t\t\tif (!tmp_str[j]) {\n+\t\t\t\tzfound = GF_TRUE;\n \t\t\t\tbreak;\n+\t\t\t}\n \t\t\tj++;\n \t\t}\n \n+\t\tif (!zfound)\n+\t\t\treturn GF_ISOM_INVALID_FILE;\n \t\tif (j) {\n \t\t\tgf_list_insert(ptr->quality_entry_table, gf_strdup(tmp_str), i);\n \t\t}\n@@ -149,28 +164,38 @@ GF_Err abst_box_read(GF_Box *s, GF_BitStream *bs)\n \n \ti=0;\n \ttmp_strsize=(u32)ptr->size;\n+\tzfound = GF_FALSE;\n \twhile (tmp_strsize) {\n \t\tISOM_DECREASE_SIZE(ptr, 1)\n \t\ttmp_str[i] = gf_bs_read_u8(bs);\n \t\ttmp_strsize--;\n-\t\tif (!tmp_str[i])\n+\t\tif (!tmp_str[i]) {\n+\t\t\tzfound = GF_TRUE;\n \t\t\tbreak;\n+\t\t}\n \t\ti++;\n \t}\n+\tif (!zfound)\n+\t\treturn GF_ISOM_INVALID_FILE;\n \tif (i) {\n \t\tptr->drm_data = gf_strdup(tmp_str);\n \t}\n \n \ti=0;\n \ttmp_strsize=(u32)ptr->size;\n+\tzfound = GF_FALSE;\n \twhile (tmp_strsize) {\n \t\tISOM_DECREASE_SIZE(ptr, 1)\n \t\ttmp_str[i] = gf_bs_read_u8(bs);\n \t\ttmp_strsize--;\n-\t\tif (!tmp_str[i])\n+\t\tif (!tmp_str[i]) {\n+\t\t\tzfound = GF_TRUE;\n \t\t\tbreak;\n+\t\t}\n \t\ti++;\n \t}\n+\tif (!zfound)\n+\t\treturn GF_ISOM_INVALID_FILE;\n \tif (i) {\n \t\tptr->meta_data = gf_strdup(tmp_str);\n \t}\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42494318-vul",
+      "digest": "sha256:ed905b89747ce7d028e661a84536a9b0b11bad7866d019500f8b68a809cd723c"
+    },
+    "patched": {
+      "ref": "n132/arvo:42494318-fix",
+      "digest": "sha256:c6c8f0673573d4eb35d679a10592f35c694e0647c8230c50602edfe66e743ea7"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/gpac/src/utils/alloc.c:170",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/gpac/src/utils/alloc.c:170"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

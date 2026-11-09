@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-950042434",
+  "chain": "CWE-129->CWE-119",
+  "project": "wireshark",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42517400",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/wireshark/wireshark/commit/39910654d3010fc1d199754c962979592293ebd6",
+      "fix_commits": [
+        "39910654d3010fc1d199754c962979592293ebd6"
+      ],
+      "repo": "https://github.com/wireshark/wireshark"
+    },
+    "patch": "diff --git a/epan/dissectors/packet-ieee80211.c b/epan/dissectors/packet-ieee80211.c\nindex 45bd1efb002..133855aa366 100644\n--- a/epan/dissectors/packet-ieee80211.c\n+++ b/epan/dissectors/packet-ieee80211.c\n@@ -15163,22 +15163,21 @@ he_get_bits(tvbuff_t *tvb, int bit_offset, int bit_len)\n }\n \n static int\n-dissect_he_feedback_matrix(proto_tree *tree, tvbuff_t *tvb, int offset,\n+dissect_he_feedback_matrix(proto_tree *tree, tvbuff_t *tvb, packet_info *pinfo, int offset,\n                            int bit_offset, int scidx, int nr, int nc,\n                            int phi_bits, int psi_bits)\n {\n   int ri, ci;\n   int start_bit_offset = bit_offset;\n   int start_offset = offset;\n-  int str_offset = 0;\n-  char angles[512];\n+  wmem_strbuf_t *angles = wmem_strbuf_new_label(pinfo->pool);\n \n   if (nc == nr)  /* If they are the same, reduce Nc by one */\n     nc -= 1;\n \n   /*\n- *    * Figure out how many bits we need\n- *       */\n+   * Figure out how many bits we need\n+   */\n   for (ci = 1; ci <= nc; ci++) {\n     for (ri = ci; ri < nr; ri++) {\n       bit_offset += phi_bits;\n@@ -15188,21 +15187,19 @@ dissect_he_feedback_matrix(proto_tree *tree, tvbuff_t *tvb, int offset,\n     }\n   }\n \n-  str_offset = snprintf(angles, sizeof(angles), \"%d\", scidx);\n+  wmem_strbuf_append_printf(angles, \"%d\", scidx);\n   /* Reset to the start bit offset */\n   bit_offset = start_bit_offset;\n \n   for (ci = 1; ci <= nc; ci++) {\n     for (ri = ci; ri < nr; ri++) {\n       int angle = he_get_bits(tvb, bit_offset, phi_bits);\n-      str_offset += snprintf(angles + str_offset, sizeof(angles) - str_offset,\n-                             \", \u03c6%d%d:%d\", ri, ci, angle);\n+      wmem_strbuf_append_printf(angles, \", \u03c6%d%d:%d\", ri, ci, angle);\n       bit_offset += phi_bits;\n     }\n     for (ri = ci + 1; ri <= nr; ri++) {\n       int angle = he_get_bits(tvb, bit_offset, psi_bits);\n-      str_offset += snprintf(angles + str_offset, sizeof(angles) - str_offset,\n-                             \", \u03c8%d%d:%d\", ri, ci, angle);\n+      wmem_strbuf_append_printf(angles, \", \u03c8%d%d:%d\", ri, ci, angle);\n       bit_offset += psi_bits;\n     }\n   }\n@@ -15210,7 +15207,7 @@ dissect_he_feedback_matrix(proto_tree *tree, tvbuff_t *tvb, int offset,\n   /* Update this */\n   proto_tree_add_string(tree, hf_ieee80211_he_compressed_beamform_scidx,\n                 tvb, offset, ((start_bit_offset + 7) / 8) - start_offset,\n-                angles);\n+                wmem_strbuf_finalize(angles));\n \n   return bit_offset;\n }\n@@ -15314,7 +15311,7 @@ dissect_compressed_beamforming_and_cqi(proto_tree *tree, tvbuff_t *tvb, packet_i\n   while ((scidx = next_he_scidx(scidx, bw, grouping, feedback,\n           ru_start_index, ru_end_index)) != (int)SCIDX_END_SENTINAL) {\n     int prev_bit_offset = bit_offset;\n-    bit_offset = dissect_he_feedback_matrix(feedback_tree, tvb, offset,\n+    bit_offset = dissect_he_feedback_matrix(feedback_tree, tvb, pinfo, offset,\n                         bit_offset, scidx, nr, nc, phi_bits, psi_bits);\n     if (bit_offset <= prev_bit_offset) {\n       expert_add_info(pinfo, tree, &ei_ieee80211_bad_length);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42517400-vul",
+      "digest": "sha256:3822da172fa01c849bbfc94f9f318a8c0b669e6fb9dbd045532d0c83046efa79"
+    },
+    "patched": {
+      "ref": "n132/arvo:42517400-fix",
+      "digest": "sha256:051826aefc56c5776d07c3d9772990d690114834bbcef8266acbbcf209332bb0"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "crash_site": "/src/wireshark/epan/dissectors/packet-ieee80211.c:15197",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 129,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 119,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "site": "/src/wireshark/epan/dissectors/packet-ieee80211.c:15197"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042479758",
+  "chain": "CWE-1285->CWE-125",
+  "project": "opensc",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42479758",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "e50bc29bd9519c9f4c43e9f3cf34b5b8a9aa38da",
+      "fix_commits": [
+        "e50bc29bd9519c9f4c43e9f3cf34b5b8a9aa38da"
+      ],
+      "repo": "https://github.com/OpenSC/OpenSC"
+    },
+    "patch": "diff --git a/src/libopensc/card-setcos.c b/src/libopensc/card-setcos.c\nindex 1b4e8f3e23..2d3692ccd1 100644\n--- a/src/libopensc/card-setcos.c\n+++ b/src/libopensc/card-setcos.c\n@@ -787,9 +787,9 @@ static void parse_sec_attr_44(sc_file_t *file, const u8 *buf, size_t len)\n \tconst int*\tp_idx;\n \n \t/* Check all sub-AC definitions within the total AC */\n-\twhile (len > 1) {\t\t\t\t/* minimum length = 2 */\n+\twhile (len > 1 && (size_t)iOffset < len) {\t/* minimum length = 2 */\n \t\tsize_t iACLen   = buf[iOffset] & 0x0F;\n-\t\tif (iACLen > len)\n+\t\tif (iACLen >= len)\n \t\t\tbreak;\n \n \t\tiMethod = SC_AC_NONE;\t\t/* default no authentication required */\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42479758-vul",
+      "digest": "sha256:713c23fed343adce8b04dadecd17de48041539da08ccc7669e4be1b7abf05eae"
+    },
+    "patched": {
+      "ref": "n132/arvo:42479758-fix",
+      "digest": "sha256:507de33138e32804d381043b7267889faab4c4d23d2d6ad6b042f2ce59d82a3c"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/opensc/src/libopensc/card-setcos.c:791",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/opensc/src/libopensc/card-setcos.c:791"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

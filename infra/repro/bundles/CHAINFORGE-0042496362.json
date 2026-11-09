@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042496362",
+  "chain": "CWE-416->CWE-787",
+  "project": "kimageformats",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42496362",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "297ed9a2fe339bfe36916b9fce628c3242e5be0f",
+      "fix_commits": [
+        "297ed9a2fe339bfe36916b9fce628c3242e5be0f"
+      ],
+      "repo": "https://invent.kde.org/frameworks/kimageformats.git"
+    },
+    "patch": "diff --git a/src/imageformats/xcf.cpp b/src/imageformats/xcf.cpp\nindex 7373d31f7bd222f20cdfcdf9d52cb7268fc1b37c..fe228a3810c1ce701cd9aa0f1b080e1924b9a5f8 100644\n--- a/src/imageformats/xcf.cpp\n+++ b/src/imageformats/xcf.cpp\n@@ -537,6 +537,7 @@ inline QRgb qRgba(const QRgb rgb, int a)\n  */\n XCFImageFormat::XCFImageFormat()\n {\n+    static_assert(sizeof(QRgb) == 4, \"the code assumes sizeof(QRgb) == 4, if that's not your case, help us fix it :)\");\n }\n \n /*!\n@@ -1361,6 +1362,11 @@ bool XCFImageFormat::loadHierarchy(QDataStream &xcf_io, Layer &layer)\n         break;\n     }\n \n+    if (bpp > 4) {\n+        qCDebug(XCFPLUGIN) << \"bpp is\" << bpp << \"We don't support layers with bpp > 4\";\n+        return false;\n+    }\n+\n     // GIMP stores images in a \"mipmap\"-like format (multiple levels of\n     // increasingly lower resolution). Only the top level is used here,\n     // however.\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42496362-vul",
+      "digest": "sha256:fffc5e027804cccd2db8f4de270709c9dbb8440f8564ad21c2f5899a8eaf8bd8"
+    },
+    "patched": {
+      "ref": "n132/arvo:42496362-fix",
+      "digest": "sha256:929c6a133e030d936aa58c51388559160b509504a1cbfc25de059320d2947e85"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/kimageformats/src/imageformats/xcf.cpp:1669",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/kimageformats/src/imageformats/xcf.cpp:1669"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

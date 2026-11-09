@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-963196133",
+  "chain": "CWE-456->CWE-457",
+  "project": "curl",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42477424",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/curl/curl/commit/65fda739ee35c090b2e6d91229287de734f0fbae",
+      "fix_commits": [
+        "65fda739ee35c090b2e6d91229287de734f0fbae"
+      ],
+      "repo": "https://github.com/curl/curl"
+    },
+    "patch": "diff --git a/lib/http.h b/lib/http.h\nindex 6232bbc3a5f1..5bacb1754542 100644\n--- a/lib/http.h\n+++ b/lib/http.h\n@@ -176,7 +176,6 @@ struct HTTP {\n   int status_code; /* HTTP status code */\n   const uint8_t *pausedata; /* pointer to data received in on_data_chunk */\n   size_t pauselen; /* the number of bytes left in data */\n-  bool closed; /* TRUE on HTTP2 stream close */\n   bool close_handled; /* TRUE if stream closure is handled by libcurl */\n \n   char **push_headers;       /* allocated array */\n@@ -184,6 +183,7 @@ struct HTTP {\n   size_t push_headers_alloc; /* number of entries allocated */\n #endif\n #if defined(USE_NGHTTP2) || defined(USE_NGHTTP3)\n+  bool closed; /* TRUE on HTTP2 stream close */\n   char *mem;     /* points to a buffer in memory to store received data */\n   size_t len;    /* size of the buffer 'mem' points to */\n   size_t memlen; /* size of data copied to mem */\ndiff --git a/lib/vquic/ngtcp2.c b/lib/vquic/ngtcp2.c\nindex 008a75cfdc46..1cdbb7d39df4 100644\n--- a/lib/vquic/ngtcp2.c\n+++ b/lib/vquic/ngtcp2.c\n@@ -1784,12 +1784,6 @@ static CURLcode http_request(struct connectdata *conn, const void *mem,\n     }\n   }\n \n-  stream->header_recvbuf = Curl_add_buffer_init();\n-  if(!stream->header_recvbuf) {\n-    result = CURLE_OUT_OF_MEMORY;\n-    goto fail;\n-  }\n-\n   switch(data->set.httpreq) {\n   case HTTPREQ_POST:\n   case HTTPREQ_POST_FORM:\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42477424-vul",
+      "digest": "sha256:51048394e7c778dc6731fc9eb6ecc01e851fba886f2c5a3e39cd8c26db952628"
+    },
+    "patched": {
+      "ref": "n132/arvo:42477424-fix",
+      "digest": "sha256:751138fb00be695de706b241a45a77edb56c47333000195de2c7ae343ac654f6"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/curl/lib/rand.c:178",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/curl/lib/rand.c:178"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

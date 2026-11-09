@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042510333",
+  "chain": "CWE-416->CWE-125",
+  "project": "libxml2",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42510333",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "41afa89fc94a6b1cef0d0cb19263875ecf08adb6",
+      "fix_commits": [
+        "41afa89fc94a6b1cef0d0cb19263875ecf08adb6"
+      ],
+      "repo": "https://gitlab.gnome.org/GNOME/libxml2.git"
+    },
+    "patch": "From 41afa89fc94a6b1cef0d0cb19263875ecf08adb6 Mon Sep 17 00:00:00 2001\nFrom: Nick Wellnhofer <wellnhofer@aevum.de>\nDate: Sun, 10 Apr 2022 14:09:29 +0200\nSubject: [PATCH] Fix short-lived regression in xmlStaticCopyNode\n\nCommit 7618a3b1 didn't account for coalesced text nodes.\n\nI think it would be better if xmlStaticCopyNode didn't try to coalesce\ntext nodes at all. This code path can only be triggered if some other\ncode doesn't coalesce text nodes properly. In this case, OSS-Fuzz found\nsuch behavior in xinclude.c.\n---\n result/XInclude/coalesce.xml     | 10 ++++++++++\n result/XInclude/coalesce.xml.rdr | 17 +++++++++++++++++\n test/XInclude/docs/coalesce.xml  |  4 ++++\n test/XInclude/ents/coalesce1.xml |  5 +++++\n tree.c                           | 23 +++++++++++++++++------\n xinclude.c                       |  3 +++\n 6 files changed, 56 insertions(+), 6 deletions(-)\n create mode 100644 result/XInclude/coalesce.xml\n create mode 100644 result/XInclude/coalesce.xml.rdr\n create mode 100644 test/XInclude/docs/coalesce.xml\n create mode 100644 test/XInclude/ents/coalesce1.xml\n\ndiff --git a/result/XInclude/coalesce.xml b/result/XInclude/coalesce.xml\nnew file mode 100644\nindex 0000000..192015a\n--- /dev/null\n+++ b/result/XInclude/coalesce.xml\n@@ -0,0 +1,10 @@\n+<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n+<test xmlns:xi=\"http://www.w3.org/2001/XInclude\">\n+    <t1 xmlns:xi=\"http://www.w3.org/2001/XInclude\" xml:base=\"../ents/coalesce1.xml\">\n+    start\n+    \n+    start\n+    \n+    end\n+</t1>\n+</test>\ndiff --git a/result/XInclude/coalesce.xml.rdr b/result/XInclude/coalesce.xml.rdr\nnew file mode 100644\nindex 0000000..95a32aa\n--- /dev/null\n+++ b/result/XInclude/coalesce.xml.rdr\n@@ -0,0 +1,17 @@\n+0 1 test 0 0\n+1 14 #text 0 1 \n+    \n+1 1 t1 0 0\n+2 3 #text 0 1 \n+    start\n+    \n+2 3 #text 0 1 \n+    start\n+    \n+2 3 #text 0 1 \n+    end\n+\n+1 15 t1 0 0\n+1 14 #text 0 1 \n+\n+0 15 test 0 0\ndiff --git a/test/XInclude/docs/coalesce.xml b/test/XInclude/docs/coalesce.xml\nnew file mode 100644\nindex 0000000..33d5cb6\n--- /dev/null\n+++ b/test/XInclude/docs/coalesce.xml\n@@ -0,0 +1,4 @@\n+<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n+<test xmlns:xi=\"http://www.w3.org/2001/XInclude\">\n+    <xi:include href=\"../ents/coalesce1.xml#xpointer(/t1))\"/>\n+</test>\ndiff --git a/test/XInclude/ents/coalesce1.xml b/test/XInclude/ents/coalesce1.xml\nnew file mode 100644\nindex 0000000..bba7b69\n--- /dev/null\n+++ b/test/XInclude/ents/coalesce1.xml\n@@ -0,0 +1,5 @@\n+<t1 xmlns:xi=\"http://www.w3.org/2001/XInclude\">\n+    start\n+    <xi:include href=\"#xpointer(/t1/text()[1])\"/>\n+    end\n+</t1>\ndiff --git a/tree.c b/tree.c\nindex 8077348..0749948 100644\n--- a/tree.c\n+++ b/tree.c\n@@ -4287,6 +4287,14 @@ xmlStaticCopyNode(xmlNodePtr node, xmlDocPtr doc, xmlNodePtr parent,\n \tif ((__xmlRegisterCallbacks) && (xmlRegisterNodeDefaultValue))\n \t    xmlRegisterNodeDefaultValue((xmlNodePtr)ret);\n \n+        /*\n+         * Note that since ret->parent is already set, xmlAddChild will\n+         * return early and not actually insert the node. It will only\n+         * coalesce text nodes and unnecessarily call xmlSetTreeDoc.\n+         * Assuming that the subtree to be copied always has its text\n+         * nodes coalesced, the somewhat confusing call to xmlAddChild\n+         * could be removed.\n+         */\n         tmp = xmlAddChild(parent, ret);\n \t/* node could have coalesced */\n \tif (tmp != ret)\n@@ -4353,13 +4361,16 @@ xmlStaticCopyNode(xmlNodePtr node, xmlDocPtr doc, xmlNodePtr parent,\n                 return(NULL);\n             }\n \n-            if (insert->last == NULL) {\n-                insert->children = copy;\n-            } else {\n-                copy->prev = insert->last;\n-                insert->last->next = copy;\n+            /* Check for coalesced text nodes */\n+            if (insert->last != copy) {\n+                if (insert->last == NULL) {\n+                    insert->children = copy;\n+                } else {\n+                    copy->prev = insert->last;\n+                    insert->last->next = copy;\n+                }\n+                insert->last = copy;\n             }\n-            insert->last = copy;\n \n             if (cur->children != NULL) {\n                 cur = cur->children;\ndiff --git a/xinclude.c b/xinclude.c\nindex 180e70b..c700fb1 100644\n--- a/xinclude.c\n+++ b/xinclude.c\n@@ -2232,6 +2232,9 @@ xmlXIncludeIncludeNode(xmlXIncludeCtxtPtr ctxt, int nr) {\n \n \t    xmlAddPrevSibling(cur, end);\n \t}\n+        /*\n+         * FIXME: xmlUnlinkNode doesn't coalesce text nodes.\n+         */\n \txmlUnlinkNode(cur);\n \txmlFreeNode(cur);\n     } else {\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42510333-vul",
+      "digest": "sha256:2d80a2efadb917015f6611a6c807b412e68da14c869018639d5ab4e54d3c6ecf"
+    },
+    "patched": {
+      "ref": "n132/arvo:42510333-fix",
+      "digest": "sha256:eb2a1b18ec3cd9fddba4f66e108a95d0b07c0b5e0e20423c9cc65b69d841c9fc"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/libxml2/tree.c:3704",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/libxml2/tree.c:3704"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

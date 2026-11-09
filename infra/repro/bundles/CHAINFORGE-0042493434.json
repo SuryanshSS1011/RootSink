@@ -1,0 +1,73 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042493434",
+  "chain": "CWE-1284->CWE-125",
+  "project": "tmux",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42493434",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "fb42ae3071763fdc6a2fe2e57feec774623b1c33\n11e404ca3c80893f59b1001f000c9390216c7e7a",
+      "fix_commits": [
+        "fb42ae3071763fdc6a2fe2e57feec774623b1c33",
+        "11e404ca3c80893f59b1001f000c9390216c7e7a"
+      ],
+      "repo": "https://github.com/tmux/tmux"
+    },
+    "patch": "diff --git a/input.c b/input.c\nindex 590a157d55..f6aeb02799 100644\n--- a/input.c\n+++ b/input.c\n@@ -2460,8 +2460,10 @@ input_osc_parse_colour(const char *p)\n \t\t    (1 - m) * (1 - k) * 255,\n \t\t    (1 - y) * (1 - k) * 255);\n \t} else {\n-\t\twhile (*p == ' ')\n+\t\twhile (len != 0 && *p == ' ') {\n \t\t\tp++;\n+\t\t\tlen--;\n+\t\t}\n \t\twhile (len != 0 && p[len - 1] == ' ')\n \t\t\tlen--;\n \t\tcopy = xstrndup(p, len);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42493434-vul",
+      "digest": "sha256:2bf6415a16bd6b765524628cd0e7fcb2b99ad370d9fe57e66ed57adf60d4adcf"
+    },
+    "patched": {
+      "ref": "n132/arvo:42493434-fix",
+      "digest": "sha256:2924ae6ca7d6803b65467c5be23df6080688d973151e346bf19586b7f77fd0a1"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/tmux/input.c:2465",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/tmux/input.c:2465"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

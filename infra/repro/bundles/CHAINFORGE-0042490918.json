@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042490918",
+  "chain": "CWE-416->CWE-125",
+  "project": "opensc",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42490918",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "1db88374bb7706a115d5c3617c6f16115c33bf27",
+      "fix_commits": [
+        "1db88374bb7706a115d5c3617c6f16115c33bf27"
+      ],
+      "repo": "https://github.com/OpenSC/OpenSC"
+    },
+    "patch": "From 1db88374bb7706a115d5c3617c6f16115c33bf27 Mon Sep 17 00:00:00 2001\nFrom: Jakub Jelen <jjelen@redhat.com>\nDate: Thu, 7 Jan 2021 14:20:31 +0100\nSubject: [PATCH] oberthur: Correctly check for return values\n\nThanks oss-fuzz\n\nhttps://bugs.chromium.org/p/oss-fuzz/issues/detail?id=28843\n---\n src/libopensc/pkcs15-oberthur.c | 13 +++++++------\n 1 file changed, 7 insertions(+), 6 deletions(-)\n\ndiff --git a/src/libopensc/pkcs15-oberthur.c b/src/libopensc/pkcs15-oberthur.c\nindex 29aab0b..576e3cf 100644\n--- a/src/libopensc/pkcs15-oberthur.c\n+++ b/src/libopensc/pkcs15-oberthur.c\n@@ -304,7 +304,7 @@ sc_oberthur_read_file(struct sc_pkcs15_card *p15card, const char *in_path,\n \tif (verify_pin && rv == SC_ERROR_SECURITY_STATUS_NOT_SATISFIED)   {\n \t\tstruct sc_pkcs15_object *objs[0x10], *pin_obj = NULL;\n \t\tconst struct sc_acl_entry *acl = sc_file_get_acl_entry(file, SC_AC_OP_READ);\n-\t\tint ii;\n+\t\tint ii, nobjs;\n \n \t\tif (acl == NULL) {\n \t\t\tsc_file_free(file);\n@@ -313,18 +313,19 @@ sc_oberthur_read_file(struct sc_pkcs15_card *p15card, const char *in_path,\n \t\t\tLOG_FUNC_RETURN(ctx, SC_ERROR_INVALID_DATA);\n \t\t}\n \n-\t\trv = sc_pkcs15_get_objects(p15card, SC_PKCS15_TYPE_AUTH_PIN, objs, 0x10);\n-\t\tif (rv != SC_SUCCESS) {\n+\t\tnobjs = sc_pkcs15_get_objects(p15card, SC_PKCS15_TYPE_AUTH_PIN, objs, 0x10);\n+\t\tif (nobjs < 1) {\n \t\t\tsc_file_free(file);\n \t\t\tfree(*out);\n \t\t\t*out = NULL;\n-\t\t\tLOG_TEST_RET(ctx, rv, \"Cannot read oberthur file: get AUTH objects error\");\n+\t\t\tLOG_TEST_RET(ctx, SC_ERROR_DATA_OBJECT_NOT_FOUND,\n+\t\t\t\t\"Cannot read oberthur file: get AUTH objects error\");\n \t\t}\n \n-\t\tfor (ii=0; ii<rv; ii++)   {\n+\t\tfor (ii = 0; ii < nobjs; ii++) {\n \t\t\tstruct sc_pkcs15_auth_info *auth_info = (struct sc_pkcs15_auth_info *) objs[ii]->data;\n \t\t\tsc_log(ctx, \"compare PIN/ACL refs:%i/%i, method:%i/%i\",\n-\t\t\t\t\tauth_info->attrs.pin.reference, acl->key_ref, auth_info->auth_method, acl->method);\n+\t\t\t\tauth_info->attrs.pin.reference, acl->key_ref, auth_info->auth_method, acl->method);\n \t\t\tif (auth_info->attrs.pin.reference == (int)acl->key_ref && auth_info->auth_method == (unsigned)acl->method)   {\n \t\t\t\tpin_obj = objs[ii];\n \t\t\t\tbreak;\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42490918-vul",
+      "digest": "sha256:6e1b95811931ba76f7d0fcf5dead5dc4a81a55908492878e770d814b3762902c"
+    },
+    "patched": {
+      "ref": "n132/arvo:42490918-fix",
+      "digest": "sha256:cdbf94fd6724a39a87373144d8ae4559089e579bec5cc8a137fc9a18cc106e33"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/opensc/src/libopensc/sc.c:810",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/opensc/src/libopensc/sc.c:810"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

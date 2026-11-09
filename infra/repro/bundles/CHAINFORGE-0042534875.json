@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042534875",
+  "chain": "CWE-456->CWE-457",
+  "project": "oniguruma",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42534875",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "9ae7a3634fe814bb86d600bfdec19e74f6cfd7ad",
+      "fix_commits": [
+        "9ae7a3634fe814bb86d600bfdec19e74f6cfd7ad"
+      ],
+      "repo": "https://github.com/kkos/oniguruma"
+    },
+    "patch": "From 9ae7a3634fe814bb86d600bfdec19e74f6cfd7ad Mon Sep 17 00:00:00 2001\nFrom: \"K.Kosako\" <kkosako0@gmail.com>\nDate: Fri, 3 May 2024 10:53:19 +0900\nSubject: [PATCH] fix: oss-fuzz Issue 68418: Use-of-uninitialized-value\n\n---\n src/regparse.c | 2 ++\n 1 file changed, 2 insertions(+)\n\ndiff --git a/src/regparse.c b/src/regparse.c\nindex 4f8128f..3f764cb 100644\n--- a/src/regparse.c\n+++ b/src/regparse.c\n@@ -4835,6 +4835,7 @@ fetch_name_with_level(OnigCodePoint start_code, UChar** src, UChar* end,\n \n   end_code = get_name_end_code_point(start_code);\n \n+  *rlevel = 0;\n   digit_count = 0;\n   name_end = end;\n   r = 0;\n@@ -5918,6 +5919,7 @@ fetch_token(PToken* tok, UChar** src, UChar* end, ParseEnv* env)\n         tok->u.backref.by_name = 0;\n #ifdef USE_BACKREF_WITH_LEVEL\n         tok->u.backref.exist_level = 0;\n+        tok->u.backref.level = 0;\n #endif\n         break;\n       }\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42534875-vul",
+      "digest": "sha256:aac53b899a2d3c8c4811a5359f7c70e40855e3d3061b9442c4cdb5f61d815889"
+    },
+    "patched": {
+      "ref": "n132/arvo:42534875-fix",
+      "digest": "sha256:161d22df3cf0020e4c1dbad060c454c481ccc925d22a08f191162d04c48e3b40"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/oniguruma/src/regparse.c:9029",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/oniguruma/src/regparse.c:9029"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

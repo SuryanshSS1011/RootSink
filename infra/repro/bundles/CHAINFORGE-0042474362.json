@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042474362",
+  "chain": "CWE-416->CWE-787",
+  "project": "mupdf",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42474362",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "152b3f31096f83d6507d400b2e43ac02033dc7a0",
+      "fix_commits": [
+        "152b3f31096f83d6507d400b2e43ac02033dc7a0"
+      ],
+      "repo": "git://git.ghostscript.com/mupdf.git"
+    },
+    "patch": "diff --git a/source/pdf/pdf-function.c b/source/pdf/pdf-function.c\nindex e67b9ec542..85a229a062 100644\n--- a/source/pdf/pdf-function.c\n+++ b/source/pdf/pdf-function.c\n@@ -1330,7 +1330,7 @@ eval_stitching_func(fz_context *ctx, pdf_function *func, float in, float *out)\n \n \tin = lerp(in, low, high, func->u.st.encode[i * 2 + 0], func->u.st.encode[i * 2 + 1]);\n \n-\tpdf_eval_function(ctx, func->u.st.funcs[i], &in, 1, out, func->u.st.funcs[i]->n);\n+\tpdf_eval_function(ctx, func->u.st.funcs[i], &in, 1, out, func->n);\n }\n \n /*\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42474362-vul",
+      "digest": "sha256:236a635393907287f3544bcff90a9735823fe4eb5eb09b957af90cf627af21c5"
+    },
+    "patched": {
+      "ref": "n132/arvo:42474362-fix",
+      "digest": "sha256:310d9bdd5eafad5eb46fba50825556f259654f3e7f446f47c9459ab6ee208af3"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/mupdf/source/pdf/pdf-function.c:1112",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/mupdf/source/pdf/pdf-function.c:1112"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

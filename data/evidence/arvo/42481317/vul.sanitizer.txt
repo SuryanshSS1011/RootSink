@@ -1,0 +1,67 @@
+INFO: Seed: 3482556076
+INFO: Loaded 1 modules (288011 guards): [0x3134d10, 0x324e13c), 
+/out/shape_fuzzer: Running 1 inputs 1 time(s) each.
+Running: /tmp/poc
+=================================================================
+==7==ERROR: AddressSanitizer: stack-buffer-overflow on address 0x7ff373b60214 at pc 0x0000004cc768 bp 0x7ffd44beece0 sp 0x7ffd44bee490
+WRITE of size 501 at 0x7ff373b60214 thread T0
+SCARINESS: 60 (multi-byte-write-stack-buffer-overflow)
+    #0 0x4cc767 in __asan_memcpy /src/llvm/projects/compiler-rt/lib/asan/asan_interceptors.cc:469
+    #1 0x5a4d63 in VSIMemHandle::Read(void*, unsigned long, unsigned long) /src/gdal/gdal/port/cpl_vsi_mem.cpp:394:9
+    #2 0x5d0cb6 in VSISubFileHandle::Read(void*, unsigned long, unsigned long) /src/gdal/gdal/port/cpl_vsil_subfile.cpp
+    #3 0x129f9a6 in TigerPolygon::GetFeature(int) /src/gdal/gdal/ogr/ogrsf_frmts/tiger/tigerpolygon.cpp:501:9
+    #4 0x11b3e33 in OGRTigerLayer::GetFeature(long long) /src/gdal/gdal/ogr/ogrsf_frmts/tiger/ogrtigerlayer.cpp:145:19
+    #5 0x11b41c1 in OGRTigerLayer::GetNextFeature() /src/gdal/gdal/ogr/ogrsf_frmts/tiger/ogrtigerlayer.cpp:176:38
+    #6 0x5e2b42 in OGR_L_GetNextFeature /src/gdal/gdal/ogr/ogrsf_frmts/generic/ogrlayer.cpp:549:48
+    #7 0x51f78f in LLVMFuzzerTestOneInput /src/gdal/gdal/./fuzzers/shape_fuzzer.cpp:53:32
+    #8 0x548bd9 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/libfuzzer/FuzzerLoop.cpp:458:13
+    #9 0x54940a in fuzzer::Fuzzer::RunOne(unsigned char const*, unsigned long) /src/libfuzzer/FuzzerLoop.cpp:397:3
+    #10 0x520336 in fuzzer::RunOneTest(fuzzer::Fuzzer*, char const*, unsigned long) /src/libfuzzer/FuzzerDriver.cpp:268:6
+    #11 0x52b89c in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/libfuzzer/FuzzerDriver.cpp:683:9
+    #12 0x51f948 in main /src/libfuzzer/FuzzerMain.cpp:20:10
+    #13 0x7ff373c5782f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+    #14 0x423f28 in _start (/out/shape_fuzzer+0x423f28)
+
+DEDUP_TOKEN: __asan_memcpy--VSIMemHandle::Read(void*, unsigned long, unsigned long)--VSISubFileHandle::Read(void*, unsigned long, unsigned long)
+Address 0x7ff373b60214 is located in stack of thread T0 at offset 532 in frame
+    #0 0x129f5ef in TigerPolygon::GetFeature(int) /src/gdal/gdal/ogr/ogrsf_frmts/tiger/tigerpolygon.cpp:476
+
+DEDUP_TOKEN: TigerPolygon::GetFeature(int)
+  This frame has 2 object(s):
+    [32, 532) 'achRecord' (line 477)
+    [608, 1108) 'achRTSRec' (line 523) <== Memory access at offset 532 partially underflows this variable
+HINT: this may be a false positive if your program uses some custom stack unwind mechanism or swapcontext
+      (longjmp and C++ exceptions *are* supported)
+SUMMARY: AddressSanitizer: stack-buffer-overflow /src/llvm/projects/compiler-rt/lib/asan/asan_interceptors.cc:469 in __asan_memcpy
+Shadow bytes around the buggy address:
+  0x0ffeee763ff0: f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5
+  0x0ffeee764000: f1 f1 f1 f1 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0ffeee764010: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0ffeee764020: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0ffeee764030: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x0ffeee764040: 00 00[04]f2 f2 f2 f2 f2 f2 f2 f2 f2 f8 f8 f8 f8
+  0x0ffeee764050: f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8
+  0x0ffeee764060: f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8
+  0x0ffeee764070: f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8
+  0x0ffeee764080: f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f8 f3 f3 f3 f3 f3
+  0x0ffeee764090: f3 f3 f3 f3 00 00 00 00 00 00 00 00 00 00 00 00
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+==7==ABORTING

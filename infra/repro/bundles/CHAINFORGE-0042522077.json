@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042522077",
+  "chain": "CWE-20->CWE-125",
+  "project": "libmpeg2",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42522077",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "87c991c90c773ad97cad036246e7219f5843708e",
+      "fix_commits": [
+        "87c991c90c773ad97cad036246e7219f5843708e"
+      ],
+      "repo": "https://github.com/ittiam-systems/libmpeg2"
+    },
+    "patch": "diff --git a/decoder/impeg2d_dec_hdr.c b/decoder/impeg2d_dec_hdr.c\nindex 904df6f..dc43e7d 100644\n--- a/decoder/impeg2d_dec_hdr.c\n+++ b/decoder/impeg2d_dec_hdr.c\n@@ -1041,12 +1041,8 @@ void impeg2d_dec_pic_data_thread(dec_state_t *ps_dec)\n \n             if ((IMPEG2D_ERROR_CODES_T)IVD_ERROR_NONE != e_error)\n             {\n-                impeg2d_next_start_code(ps_dec);\n-                if(ps_dec->s_bit_stream.u4_offset >= ps_dec->s_bit_stream.u4_max_offset)\n-                {\n-                    ps_dec->u4_error_code = IMPEG2D_BITSTREAM_BUFF_EXCEEDED_ERR;\n-                    return;\n-                }\n+                ps_dec->u2_num_mbs_left = 0;\n+                break;\n             }\n \n             /* Detecting next slice start code */\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42522077-vul",
+      "digest": "sha256:f4df06d68108e58288d419d9fd8cd6a9ef3645d8a94bec3a29e36b4bb862b78a"
+    },
+    "patched": {
+      "ref": "n132/arvo:42522077-fix",
+      "digest": "sha256:e34534c03bf186defd28293e13137683334875bb1c8940cdeaa1ca4d2721a56b"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/libmpeg2/decoder/impeg2d_mv_dec.c:126",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/libmpeg2/decoder/impeg2d_mv_dec.c:126"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

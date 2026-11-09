@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042524598",
+  "chain": "CWE-416->CWE-125",
+  "project": "wireshark",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42524598",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "285a4cb39eb3d066103ba4a8976ca46b2ea41bc2",
+      "fix_commits": [
+        "285a4cb39eb3d066103ba4a8976ca46b2ea41bc2"
+      ],
+      "repo": "https://github.com/wireshark/wireshark"
+    },
+    "patch": "From 285a4cb39eb3d066103ba4a8976ca46b2ea41bc2 Mon Sep 17 00:00:00 2001\nFrom: John Thacker <johnthacker@gmail.com>\nDate: Sun, 21 May 2023 21:11:55 -0400\nSubject: [PATCH] Reassembly: Attach a replaced tvb to a new one in reassembled\n tables\n\nFixup 32e175034392f41ce59b97edf517f9635cb42e08 a bit. We can't\nnecessarily free a tvb for an entry in the reassembled table that\nis being replaced, because there might be an address that directly\nshares the tvb memory (thanks to set_address_tvb()).\n\nIf we can, add it to the chain for the replacement reassembly's tvb,\nso it will still be freed.\n\nFix #19094\n---\n epan/reassemble.c | 58 +++++++++++++++++++++++++++++++++--------------\n 1 file changed, 41 insertions(+), 17 deletions(-)\n\ndiff --git a/epan/reassemble.c b/epan/reassemble.c\nindex affeaee..c0d6623 100644\n--- a/epan/reassemble.c\n+++ b/epan/reassemble.c\n@@ -389,7 +389,7 @@ free_fd_head(fragment_head *fd_head)\n \tg_slice_free(fragment_head, fd_head);\n }\n \n-void\n+static void\n unref_fd_head(gpointer data)\n {\n \tfragment_head *fd_head = (fragment_head *) data;\n@@ -400,6 +400,38 @@ unref_fd_head(gpointer data)\n \t}\n }\n \n+static void\n+reassembled_table_insert(GHashTable *reassembled_table, reassembled_key *key, fragment_head *fd_head)\n+{\n+\tfragment_head *old_fd_head;\n+\tfd_head->ref_count++;\n+\tif ((old_fd_head = g_hash_table_lookup(reassembled_table, key)) != NULL) {\n+\t\tif (old_fd_head->ref_count == 1) {\n+\t\t\t/* We're replacing the last entry in the reassembled\n+\t\t\t * table for an old reassembly. Does it have a tvb?\n+\t\t\t * We might still be using that tvb's memory for an\n+\t\t\t * address via set_address_tvb(). (See #19094.)\n+\t\t\t */\n+\t\t\tif (old_fd_head->tvb_data && fd_head->tvb_data) {\n+\t\t\t\t/* Free it when the new tvb is freed */\n+\t\t\t\ttvb_set_child_real_data_tvbuff(fd_head->tvb_data, old_fd_head->tvb_data);\n+\t\t\t}\n+\t\t\t/* XXX: Set the old data to NULL regardless. If we\n+\t\t\t * have old data but not new data, that is odd (we're\n+\t\t\t * replacing a reassembly with tvb data with something\n+\t\t\t * with no tvb data, possibly because a zero length or\n+\t\t\t * null tvb was passed into a defragment function,\n+\t\t\t * which is a dissector bug.)\n+\t\t\t * This leaks the tvb data if we couldn't add it to\n+\t\t\t * a new tvb's chain, but we might not be able to free\n+\t\t\t * it yet if set_address_tvb() was used.\n+\t\t\t */\n+\t\t\told_fd_head->tvb_data = NULL;\n+\t\t}\n+\t}\n+\tg_hash_table_insert(reassembled_table, key, fd_head);\n+}\n+\n typedef struct register_reassembly_table {\n \treassembly_table *table;\n \tconst reassembly_table_functions *funcs;\n@@ -997,6 +1029,7 @@ fragment_reassembled(reassembly_table *table, fragment_head *fd_head,\n \treassembled_key *new_key;\n \tfragment_item *fd;\n \n+\tfd_head->ref_count = 0;\n \tif (fd_head->next == NULL) {\n \t\t/*\n \t\t * This was not fragmented, so there's no fragment\n@@ -1005,20 +1038,16 @@ fragment_reassembled(reassembly_table *table, fragment_head *fd_head,\n \t\tnew_key = g_slice_new(reassembled_key);\n \t\tnew_key->frame = pinfo->num;\n \t\tnew_key->id = id;\n-\t\tfd_head->ref_count = 1;\n-\t\tg_hash_table_insert(table->reassembled_table, new_key, fd_head);\n+\t\treassembled_table_insert(table->reassembled_table, new_key, fd_head);\n \t} else {\n \t\t/*\n \t\t * Hash it with the frame numbers for all the frames.\n \t\t */\n-\t\tfd_head->ref_count = 0;\n \t\tfor (fd = fd_head->next; fd != NULL; fd = fd->next){\n \t\t\tnew_key = g_slice_new(reassembled_key);\n \t\t\tnew_key->frame = fd->frame;\n \t\t\tnew_key->id = id;\n-\t\t\tfd_head->ref_count++;\n-\t\t\tg_hash_table_insert(table->reassembled_table, new_key,\n-\t\t\t\tfd_head);\n+\t\t\treassembled_table_insert(table->reassembled_table, new_key, fd_head);\n \t\t}\n \t}\n \tfd_head->flags |= FD_DEFRAGMENTED;\n@@ -1038,6 +1067,7 @@ fragment_reassembled_single(reassembly_table *table, fragment_head *fd_head,\n \treassembled_key *new_key;\n \tfragment_item *fd;\n \n+\tfd_head->ref_count = 0;\n \tif (fd_head->next == NULL) {\n \t\t/*\n \t\t * This was not fragmented, so there's no fragment\n@@ -1046,20 +1076,16 @@ fragment_reassembled_single(reassembly_table *table, fragment_head *fd_head,\n \t\tnew_key = g_slice_new(reassembled_key);\n \t\tnew_key->frame = pinfo->num;\n \t\tnew_key->id = id;\n-\t\tfd_head->ref_count = 1;\n-\t\tg_hash_table_insert(table->reassembled_table, new_key, fd_head);\n+\t\treassembled_table_insert(table->reassembled_table, new_key, fd_head);\n \t} else {\n \t\t/*\n \t\t * Hash it with the frame numbers for all the frames.\n \t\t */\n-\t\tfd_head->ref_count = 0;\n \t\tfor (fd = fd_head->next; fd != NULL; fd = fd->next){\n \t\t\tnew_key = g_slice_new(reassembled_key);\n \t\t\tnew_key->frame = fd->frame;\n \t\t\tnew_key->id = id + fd->offset;\n-\t\t\tfd_head->ref_count++;\n-\t\t\tg_hash_table_insert(table->reassembled_table, new_key,\n-\t\t\t\tfd_head);\n+\t\t\treassembled_table_insert(table->reassembled_table, new_key, fd_head);\n \t\t}\n \t}\n \tfd_head->flags |= FD_DEFRAGMENTED;\n@@ -1767,8 +1793,7 @@ fragment_add_check_with_fallback(reassembly_table *table, tvbuff_t *tvb, const i\n \t\t\treassembled_key *new_key = g_slice_new(reassembled_key);\n \t\t\tnew_key->frame = pinfo->num;\n \t\t\tnew_key->id = id;\n-\t\t\tfd_head->ref_count++;\n-\t\t\tg_hash_table_insert(table->reassembled_table, new_key, fd_head);\n+\t\t\treassembled_table_insert(table->reassembled_table, new_key, fd_head);\n \t\t\tlate_retransmission = TRUE;\n \t\t}\n \t}\n@@ -2796,8 +2821,7 @@ fragment_end_seq_next(reassembly_table *table, const packet_info *pinfo,\n \t\t\tnew_key = g_slice_new(reassembled_key);\n \t\t\tnew_key->frame = pinfo->num;\n \t\t\tnew_key->id = id;\n-\t\t\tfd_head->ref_count++;\n-\t\t\tg_hash_table_insert(table->reassembled_table, new_key, fd_head);\n+\t\t\treassembled_table_insert(table->reassembled_table, new_key, fd_head);\n \t\t}\n \n \t\treturn fd_head;\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42524598-vul",
+      "digest": "sha256:94d08fdb3431b0147011365797625826d81610ce2c3817b5b07a9a4827339609"
+    },
+    "patched": {
+      "ref": "n132/arvo:42524598-fix",
+      "digest": "sha256:1dbf53156170c96d58f40a94756421060531e9c04757108b5095f7a6837473e1"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/wireshark/wsutil/wmem/wmem_miscutl.c:27",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/wireshark/wsutil/wmem/wmem_miscutl.c:27"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

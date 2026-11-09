@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042491698",
+  "chain": "CWE-416->CWE-787",
+  "project": "matio",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42491698",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "b8156d287254b2fca00f266d4b5b12d982329625",
+      "fix_commits": [
+        "b8156d287254b2fca00f266d4b5b12d982329625"
+      ],
+      "repo": "https://github.com/tbeu/matio"
+    },
+    "patch": "diff --git a/src/mat73.c b/src/mat73.c\nindex 827454a4..20cd5011 100644\n--- a/src/mat73.c\n+++ b/src/mat73.c\n@@ -791,8 +791,12 @@ Mat_H5ReadDatasetInfo(mat_t *mat,matvar_t *matvar,hid_t dset_id)\n                     cells[i]->internal->hdf5_ref = ref_ids[i];\n                     /* Closing of ref_id is done in Mat_H5ReadNextReferenceInfo */\n                     ref_id = H5RDEREFERENCE(dset_id,H5R_OBJECT,ref_ids+i);\n-                    cells[i]->internal->id = ref_id;\n-                    err = Mat_H5ReadNextReferenceInfo(ref_id,cells[i],mat);\n+                    if ( ref_id < 0 ) {\n+                        err = MATIO_E_GENERIC_READ_ERROR;\n+                    } else {\n+                        cells[i]->internal->id = ref_id;\n+                        err = Mat_H5ReadNextReferenceInfo(ref_id,cells[i],mat);\n+                    }\n                     if ( err ) {\n                         break;\n                     }\n@@ -1028,8 +1032,12 @@ Mat_H5ReadGroupInfo(mat_t *mat,matvar_t *matvar,hid_t dset_id)\n                                 fields[l*nfields+k]->internal->hdf5_ref=ref_ids[l];\n                                 /* Closing of ref_id is done in Mat_H5ReadNextReferenceInfo */\n                                 ref_id = H5RDEREFERENCE(field_id,H5R_OBJECT,ref_ids+l);\n-                                fields[l*nfields+k]->internal->id = ref_id;\n-                                err = Mat_H5ReadNextReferenceInfo(ref_id,fields[l*nfields+k],mat);\n+                                if ( ref_id < 0 ) {\n+                                    err = MATIO_E_GENERIC_READ_ERROR;\n+                                } else {\n+                                    fields[l*nfields+k]->internal->id = ref_id;\n+                                    err = Mat_H5ReadNextReferenceInfo(ref_id,fields[l*nfields+k],mat);\n+                                }\n                                 if ( err ) {\n                                     break;\n                                 }\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42491698-vul",
+      "digest": "sha256:886269927b93fab10ff2b4d0ccd91fecdafc91008309c81cfd237fac60f18ab5"
+    },
+    "patched": {
+      "ref": "n132/arvo:42491698-fix",
+      "digest": "sha256:43d703745da675836fc4e1e186e15ef923e8708587341ba2dca34df6c1fca9f5"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "ABRT",
+        "direction": null,
+        "crash_site": "/src/matio/ossfuzz/./fuzzer_temp_file.h:70",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "ABRT",
+        "direction": null,
+        "site": "/src/matio/ossfuzz/./fuzzer_temp_file.h:70"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042523470",
+  "chain": "CWE-1285->CWE-125",
+  "project": "libheif",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42523470",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "f2d7c57c71a0810b25fc2bead63c5ab35e5d0284",
+      "fix_commits": [
+        "f2d7c57c71a0810b25fc2bead63c5ab35e5d0284"
+      ],
+      "repo": "https://github.com/strukturag/libheif"
+    },
+    "patch": "diff --git a/libheif/region.cc b/libheif/region.cc\nindex 4c3fccc769..417fade49e 100644\n--- a/libheif/region.cc\n+++ b/libheif/region.cc\n@@ -60,6 +60,11 @@ Error RegionItem::parse(const std::vector<uint8_t>& data)\n   uint8_t region_count = data[dataOffset];\n   dataOffset += 1;\n   for (int i = 0; i < region_count; i++) {\n+    if (data.size() <= dataOffset) {\n+      return Error(heif_error_Invalid_input, heif_suberror_Invalid_region_data,\n+                   \"Region data incomplete\");\n+    }\n+\n     uint8_t geometry_type = data[dataOffset];\n     dataOffset += 1;\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42523470-vul",
+      "digest": "sha256:aa0202df34dbf23ed1a9424a2c5e23b70748cf1a5a44005864431469a96be205"
+    },
+    "patched": {
+      "ref": "n132/arvo:42523470-fix",
+      "digest": "sha256:6cc8c2f9c8762f335cdb56fe886a74f681899fe110eb35449a8f0f33b151e2a1"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/libheif/libheif/region.cc:63",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/libheif/libheif/region.cc:63"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042536108",
+  "chain": "CWE-1284->CWE-125",
+  "project": "miniz",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42536108",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "0283a1796edb3fee469a84d9421e8ec149a2fcea",
+      "fix_commits": [
+        "0283a1796edb3fee469a84d9421e8ec149a2fcea"
+      ],
+      "repo": "https://github.com/richgel999/miniz"
+    },
+    "patch": "diff --git a/miniz_zip.c b/miniz_zip.c\nindex 399972ff..a831909c 100644\n--- a/miniz_zip.c\n+++ b/miniz_zip.c\n@@ -790,6 +790,9 @@ static int mz_stat64(const char *path, struct __stat64 *buffer)\n         if ((cdir_ofs + (mz_uint64)cdir_size) > pZip->m_archive_size)\n             return mz_zip_set_error(pZip, MZ_ZIP_INVALID_HEADER_OR_CORRUPTED);\n \n+        if (eocd_ofs < cdir_ofs + cdir_size)\n+            return mz_zip_set_error(pZip, MZ_ZIP_INVALID_HEADER_OR_CORRUPTED);\n+\n         /* The end of central dir follows the central dir, unless the zip file has\n          * some trailing data (e.g. it is appended to an executable file). */\n         archive_ofs = eocd_ofs - (cdir_ofs + cdir_size);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42536108-vul",
+      "digest": "sha256:d29337e3f755aa33c3df1f6e5248cc30f9225318041cc50ffccaa2032d73852b"
+    },
+    "patched": {
+      "ref": "n132/arvo:42536108-fix",
+      "digest": "sha256:688d61d7c7b6a4cd48ef348d888f56656ba21dc504e1e3afe00425b9023e4c54"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/miniz/build/amalgamation/miniz.c:4050",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/miniz/build/amalgamation/miniz.c:4050"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042525447",
+  "chain": "CWE-416->CWE-125",
+  "project": "mruby",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42525447",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "0713f2a84004da66d0d6263f7dd65f0c40994951",
+      "fix_commits": [
+        "0713f2a84004da66d0d6263f7dd65f0c40994951"
+      ],
+      "repo": "https://github.com/mruby/mruby"
+    },
+    "patch": "From 0713f2a84004da66d0d6263f7dd65f0c40994951 Mon Sep 17 00:00:00 2001\nFrom: \"Yukihiro \\\"Matz\\\" Matsumoto\" <matz@ruby.or.jp>\nDate: Tue, 20 Jun 2023 11:25:49 +0900\nSubject: [PATCH] mruby-set/set.rb (inspect): add recursive inspect check to\n Set#inspect\n\n---\n mrbgems/mruby-set/mrblib/set.rb | 10 +++-------\n 1 file changed, 3 insertions(+), 7 deletions(-)\n\ndiff --git a/mrbgems/mruby-set/mrblib/set.rb b/mrbgems/mruby-set/mrblib/set.rb\nindex 0116e18..467290c 100644\n--- a/mrbgems/mruby-set/mrblib/set.rb\n+++ b/mrbgems/mruby-set/mrblib/set.rb\n@@ -306,17 +306,13 @@ class Set\n     to_a.join(separator)\n   end\n \n-  def _inspect(recur_list)\n+  def inspect\n     return \"#<#{self.class}: {}>\" if empty?\n-    return \"#<#{self.class}: {...}>\" if recur_list[self.object_id]\n-    recur_list[self.object_id] = true\n-    ary = map { |o| o._inspect(recur_list) }\n+    return \"#<#{self.class}: {...}>\" if self.__inspect_recursive?\n+    ary = map {|o| o.inspect }\n     \"#<#{self.class}: {#{ary.join(\", \")}}>\"\n   end\n \n-  def inspect\n-    _inspect({})\n-  end\n   alias to_s inspect\n \n   def reset\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42525447-vul",
+      "digest": "sha256:862b9f3f5f590f81fe3a7c2dfa926704b1eb9fae26566ecebed03e9a36342d6f"
+    },
+    "patched": {
+      "ref": "n132/arvo:42525447-fix",
+      "digest": "sha256:891987934d02451a10276bb2be2ea2f8dea0292c36212a5f3b3c8196c858855a"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/mruby/src/gc.c:801",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/mruby/src/gc.c:801"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

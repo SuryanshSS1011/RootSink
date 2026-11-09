@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042517915",
+  "chain": "CWE-1284->CWE-787",
+  "project": "util-linux",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42517915",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "32bd447fd7d0933c5aecac75cc1823b3ee897f11",
+      "fix_commits": [
+        "32bd447fd7d0933c5aecac75cc1823b3ee897f11"
+      ],
+      "repo": "https://github.com/util-linux/util-linux"
+    },
+    "patch": "diff --git a/libblkid/src/superblocks/iso9660.c b/libblkid/src/superblocks/iso9660.c\nindex 503126c0060..1172f9c259b 100644\n--- a/libblkid/src/superblocks/iso9660.c\n+++ b/libblkid/src/superblocks/iso9660.c\n@@ -70,6 +70,8 @@ struct boot_record {\n #define ISO_VD_SUPPLEMENTARY\t\t0x2\n #define ISO_VD_END\t\t\t0xff\n #define ISO_VD_MAX\t\t\t16\n+/* maximal string field size used anywhere in ISO; update if necessary */\n+#define ISO_MAX_FIELDSIZ  sizeof(((struct iso_volume_descriptor  *)0)->volume_set_id)\n \n struct high_sierra_volume_descriptor {\n \tunsigned char\tfoo[8];\n@@ -169,11 +171,11 @@ static int is_utf16be_str_empty(unsigned char *utf16, size_t len)\n /* if @utf16 is prefix of @ascii (ignoring non-representable characters and upper-case conversion)\n  * then reconstruct prefix from @utf16 and @ascii, append suffix from @ascii, fill it into @out\n  * and returns length of bytes written into @out; otherwise returns zero */\n-static size_t merge_utf16be_ascii(unsigned char *out, const unsigned char *utf16, const unsigned char *ascii, size_t len)\n+static size_t merge_utf16be_ascii(unsigned char *out, size_t out_len, const unsigned char *utf16, const unsigned char *ascii, size_t len)\n {\n \tsize_t o, a, u;\n \n-\tfor (o = 0, a = 0, u = 0; u + 1 < len && a < len; o += 2, a++, u += 2) {\n+\tfor (o = 0, a = 0, u = 0; u + 1 < len && a < len && o + 1 < out_len; o += 2, a++, u += 2) {\n \t\t/* Surrogate pair with code point above U+FFFF */\n \t\tif (utf16[u] >= 0xD8 && utf16[u] <= 0xDB && u + 3 < len &&\n \t\t    utf16[u + 2] >= 0xDC && utf16[u + 2] <= 0xDF) {\n@@ -195,7 +197,7 @@ static size_t merge_utf16be_ascii(unsigned char *out, const unsigned char *utf16\n \t\t}\n \t}\n \n-\tfor (; a < len; o += 2, a++) {\n+\tfor (; a < len && o + 1 < out_len; o += 2, a++) {\n \t\tout[o] = 0x00;\n \t\tout[o + 1] = ascii[a];\n \t}\n@@ -209,7 +211,8 @@ static int probe_iso9660(blkid_probe pr, const struct blkid_idmag *mag)\n \tstruct boot_record *boot = NULL;\n \tstruct iso_volume_descriptor *pvd = NULL;\n \tstruct iso_volume_descriptor *joliet = NULL;\n-\tunsigned char buf[256];\n+\t/* space for merge_utf16be_ascii(ISO_ID_BUFSIZ bytes) */\n+\tunsigned char buf[ISO_MAX_FIELDSIZ * 5 / 2];\n \tsize_t len;\n \tint is_unicode_empty;\n \tint is_ascii_empty;\n@@ -253,14 +256,14 @@ static int probe_iso9660(blkid_probe pr, const struct blkid_idmag *mag)\n \tblkid_probe_set_fsblocksize(pr, ISO_SECTOR_SIZE);\n \tblkid_probe_set_block_size(pr, ISO_SECTOR_SIZE);\n \n-\tif (joliet && (len = merge_utf16be_ascii(buf, joliet->system_id, pvd->system_id, sizeof(pvd->system_id))) != 0)\n+\tif (joliet && (len = merge_utf16be_ascii(buf, sizeof(buf), joliet->system_id, pvd->system_id, sizeof(pvd->system_id))) != 0)\n \t\tblkid_probe_set_utf8_id_label(pr, \"SYSTEM_ID\", buf, len, UL_ENCODE_UTF16BE);\n \telse if (joliet)\n \t\tblkid_probe_set_utf8_id_label(pr, \"SYSTEM_ID\", joliet->system_id, sizeof(joliet->system_id), UL_ENCODE_UTF16BE);\n \telse\n \t\tblkid_probe_set_id_label(pr, \"SYSTEM_ID\", pvd->system_id, sizeof(pvd->system_id));\n \n-\tif (joliet && (len = merge_utf16be_ascii(buf, joliet->volume_set_id, pvd->volume_set_id, sizeof(pvd->volume_set_id))) != 0)\n+\tif (joliet && (len = merge_utf16be_ascii(buf, sizeof(buf), joliet->volume_set_id, pvd->volume_set_id, sizeof(pvd->volume_set_id))) != 0)\n \t\tblkid_probe_set_utf8_id_label(pr, \"VOLUME_SET_ID\", buf, len, UL_ENCODE_UTF16BE);\n \telse if (joliet)\n \t\tblkid_probe_set_utf8_id_label(pr, \"VOLUME_SET_ID\", joliet->volume_set_id, sizeof(joliet->volume_set_id), UL_ENCODE_UTF16BE);\n@@ -269,7 +272,7 @@ static int probe_iso9660(blkid_probe pr, const struct blkid_idmag *mag)\n \n \tis_ascii_empty = (is_str_empty(pvd->publisher_id, sizeof(pvd->publisher_id)) || pvd->publisher_id[0] == '_');\n \tis_unicode_empty = (!joliet || is_utf16be_str_empty(joliet->publisher_id, sizeof(joliet->publisher_id)) || (joliet->publisher_id[0] == 0x00 && joliet->publisher_id[1] == '_'));\n-\tif (!is_unicode_empty && !is_ascii_empty && (len = merge_utf16be_ascii(buf, joliet->publisher_id, pvd->publisher_id, sizeof(pvd->publisher_id))) != 0)\n+\tif (!is_unicode_empty && !is_ascii_empty && (len = merge_utf16be_ascii(buf, sizeof(buf), joliet->publisher_id, pvd->publisher_id, sizeof(pvd->publisher_id))) != 0)\n \t\tblkid_probe_set_utf8_id_label(pr, \"PUBLISHER_ID\", buf, len, UL_ENCODE_UTF16BE);\n \telse if (!is_unicode_empty)\n \t\tblkid_probe_set_utf8_id_label(pr, \"PUBLISHER_ID\", joliet->publisher_id, sizeof(joliet->publisher_id), UL_ENCODE_UTF16BE);\n@@ -278,7 +281,7 @@ static int probe_iso9660(blkid_probe pr, const struct blkid_idmag *mag)\n \n \tis_ascii_empty = (is_str_empty(pvd->data_preparer_id, sizeof(pvd->data_preparer_id)) || pvd->data_preparer_id[0] == '_');\n \tis_unicode_empty = (!joliet || is_utf16be_str_empty(joliet->data_preparer_id, sizeof(joliet->data_preparer_id)) || (joliet->data_preparer_id[0] == 0x00 && joliet->data_preparer_id[1] == '_'));\n-\tif (!is_unicode_empty && !is_ascii_empty && (len = merge_utf16be_ascii(buf, joliet->data_preparer_id, pvd->data_preparer_id, sizeof(pvd->data_preparer_id))) != 0)\n+\tif (!is_unicode_empty && !is_ascii_empty && (len = merge_utf16be_ascii(buf, sizeof(buf), joliet->data_preparer_id, pvd->data_preparer_id, sizeof(pvd->data_preparer_id))) != 0)\n \t\tblkid_probe_set_utf8_id_label(pr, \"DATA_PREPARER_ID\", buf, len, UL_ENCODE_UTF16BE);\n \telse if (!is_unicode_empty)\n \t\tblkid_probe_set_utf8_id_label(pr, \"DATA_PREPARER_ID\", joliet->data_preparer_id, sizeof(joliet->data_preparer_id), UL_ENCODE_UTF16BE);\n@@ -287,7 +290,7 @@ static int probe_iso9660(blkid_probe pr, const struct blkid_idmag *mag)\n \n \tis_ascii_empty = (is_str_empty(pvd->application_id, sizeof(pvd->application_id)) || pvd->application_id[0] == '_');\n \tis_unicode_empty = (!joliet || is_utf16be_str_empty(joliet->application_id, sizeof(joliet->application_id)) || (joliet->application_id[0] == 0x00 && joliet->application_id[1] == '_'));\n-\tif (!is_unicode_empty && !is_ascii_empty && (len = merge_utf16be_ascii(buf, joliet->application_id, pvd->application_id, sizeof(pvd->application_id))) != 0)\n+\tif (!is_unicode_empty && !is_ascii_empty && (len = merge_utf16be_ascii(buf, sizeof(buf), joliet->application_id, pvd->application_id, sizeof(pvd->application_id))) != 0)\n \t\tblkid_probe_set_utf8_id_label(pr, \"APPLICATION_ID\", buf, len, UL_ENCODE_UTF16BE);\n \telse if (!is_unicode_empty)\n \t\tblkid_probe_set_utf8_id_label(pr, \"APPLICATION_ID\", joliet->application_id, sizeof(joliet->application_id), UL_ENCODE_UTF16BE);\n@@ -312,7 +315,7 @@ static int probe_iso9660(blkid_probe pr, const struct blkid_idmag *mag)\n \t * version of label in PVD. Based on these facts try to reconstruct original label if label\n \t * in Joliet is prefix of the label in PVD (ignoring non-representable characters).\n \t */\n-\tif (joliet && (len = merge_utf16be_ascii(buf, joliet->volume_id, pvd->volume_id, sizeof(pvd->volume_id))) != 0)\n+\tif (joliet && (len = merge_utf16be_ascii(buf, sizeof(buf), joliet->volume_id, pvd->volume_id, sizeof(pvd->volume_id))) != 0)\n \t\tblkid_probe_set_utf8label(pr, buf, len, UL_ENCODE_UTF16BE);\n \telse if (joliet)\n \t\tblkid_probe_set_utf8label(pr, joliet->volume_id, sizeof(joliet->volume_id), UL_ENCODE_UTF16BE);\ndiff --git a/tests/ts/fuzzers/test_blkid_fuzz_files/oss-fuzz-53149 b/tests/ts/fuzzers/test_blkid_fuzz_files/oss-fuzz-53149\nnew file mode 100644\nindex 00000000000..f1c6c3cf392\nBinary files /dev/null and b/tests/ts/fuzzers/test_blkid_fuzz_files/oss-fuzz-53149 differ\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42517915-vul",
+      "digest": "sha256:8aa653b06476a83f9dea8bc026e0e99e31e280b8fc5c7754f6c3553a21a705ea"
+    },
+    "patched": {
+      "ref": "n132/arvo:42517915-fix",
+      "digest": "sha256:69c12a4132db10ef2f50fffdbea024a517ab3e3410ae39e261a8a53323af2fba"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/util-linux/libblkid/src/superblocks/iso9660.c:199",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/util-linux/libblkid/src/superblocks/iso9660.c:199"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

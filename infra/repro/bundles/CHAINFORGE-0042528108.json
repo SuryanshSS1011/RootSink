@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042528108",
+  "chain": "CWE-20->CWE-125",
+  "project": "tarantool",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42528108",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "509cc68bf575fd34f03b7066138901c4b97b8979",
+      "fix_commits": [
+        "509cc68bf575fd34f03b7066138901c4b97b8979"
+      ],
+      "repo": "https://github.com/tarantool/luajit"
+    },
+    "patch": "diff --git a/src/lj_parse.c b/src/lj_parse.c\nindex 420b95cb4d..5a4ab7c834 100644\n--- a/src/lj_parse.c\n+++ b/src/lj_parse.c\n@@ -2527,9 +2527,11 @@ static void parse_for_num(LexState *ls, GCstr *varname, BCLine line)\n */\n static int predict_next(LexState *ls, FuncState *fs, BCPos pc)\n {\n-  BCIns ins = fs->bcbase[pc].ins;\n+  BCIns ins;\n   GCstr *name;\n   cTValue *o;\n+  if (pc >= fs->bclim) return 0;\n+  ins = fs->bcbase[pc].ins;\n   switch (bc_op(ins)) {\n   case BC_MOV:\n     if (bc_d(ins) >= fs->nactvar) return 0;\ndiff --git a/test/tarantool-tests/lj-1054-fix-incorrect-pc-value-in-predict-next.test.lua b/test/tarantool-tests/lj-1054-fix-incorrect-pc-value-in-predict-next.test.lua\nnew file mode 100644\nindex 0000000000..23c3ae756c\n--- /dev/null\n+++ b/test/tarantool-tests/lj-1054-fix-incorrect-pc-value-in-predict-next.test.lua\n@@ -0,0 +1,25 @@\n+local tap = require('tap')\n+local test = tap.test('lj-1054-fix-incorrect-pc-value-in-predict_next')\n+test:plan(3)\n+\n+-- The test demonstrates a problem with out-of-boundary\n+-- access to a stack. The problem can be easily observed\n+-- on execution of the sample by LuaJIT instrumented by ASAN,\n+-- where the sanitizer reports a heap-based buffer overflow.\n+-- See also https://github.com/LuaJIT/LuaJIT/issues/1054.\n+\n+local res_f = loadstring([[\n+a, b, c = 1, 2, 3\n+local d\n+for _ in nil do end\n+]])\n+\n+test:ok(res_f, 'chunk loaded successfully')\n+\n+local res, err = pcall(res_f)\n+\n+-- Check consistency with PUC Rio Lua 5.1 behaviour.\n+test:ok(not res, 'loaded function is failed (expected)')\n+test:like(err, 'attempt to call a nil value', 'correct error message')\n+\n+test:done(true)\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42528108-vul",
+      "digest": "sha256:cf5a80b0843418a72f04aa6aaa472ae9171db9c997a549db3192f10d9b67b95a"
+    },
+    "patched": {
+      "ref": "n132/arvo:42528108-fix",
+      "digest": "sha256:0d6fcd9e67df78cca5e5e7517d26921d09c67ff2cc7be4b540be88a9c0342cb2"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/tarantool/third_party/luajit/src/lj_parse.c:2530",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/tarantool/third_party/luajit/src/lj_parse.c:2530"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

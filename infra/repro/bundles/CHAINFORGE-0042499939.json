@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042499939",
+  "chain": "CWE-1284->CWE-125",
+  "project": "net-snmp",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42499939",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "d0f3c225864825d24c1143f8de4a54b1c6d83247",
+      "fix_commits": [
+        "d0f3c225864825d24c1143f8de4a54b1c6d83247"
+      ],
+      "repo": "https://github.com/net-snmp/net-snmp"
+    },
+    "patch": "diff --git a/agent/mibgroup/if-mib/data_access/interface_linux.c b/agent/mibgroup/if-mib/data_access/interface_linux.c\nindex e56cadf466..5322ee9371 100644\n--- a/agent/mibgroup/if-mib/data_access/interface_linux.c\n+++ b/agent/mibgroup/if-mib/data_access/interface_linux.c\n@@ -927,7 +927,7 @@ netsnmp_arch_interface_container_load(netsnmp_container* container,\n             netsnmp_interface_entry *existing =\n                 CONTAINER_FIND(container, entry);\n             NETSNMP_LOGONCE((LOG_WARNING,\n-                             \"Encountered interface with index %\" NETSNMP_PRIz \"u twice: %s <> %s\",\n+                             \"Encountered interface with index %\" NETSNMP_PRIz \"u twice: %s <> %s\\n\",\n                              entry->index, existing ? existing->name : \"(?)\",\n                              entry->name));\n             netsnmp_access_interface_entry_free(entry);\ndiff --git a/snmplib/parse.c b/snmplib/parse.c\nindex 8fa036fc56..0f1b4152f0 100644\n--- a/snmplib/parse.c\n+++ b/snmplib/parse.c\n@@ -1913,11 +1913,12 @@ getoid(FILE * fp, struct subid_s *id_arg, int length)\n         type = get_token(fp, token, MAXTOKEN);\n     }\n     print_error(\"Too long OID\", token, type);\n+    --count;\n \n free_labels:\n-    for (i = 0; i < count; i++) {\n-        free(id[i].label);\n-        id[i].label = NULL;\n+    for (i = 0; i <= count; i++) {\n+        free(id_arg[i].label);\n+        id_arg[i].label = NULL;\n     }\n \n     return 0;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42499939-vul",
+      "digest": "sha256:61d1f0a73733d249cee5ac0e1776c0e371b9f198684abcfe40a0bdbef24d2b26"
+    },
+    "patched": {
+      "ref": "n132/arvo:42499939-fix",
+      "digest": "sha256:b6d3a1b9b51c4a27b1dd017a08867d7913071988991118253c2fd8115da8627d"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/net-snmp/snmplib/parse.c:1919",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/net-snmp/snmplib/parse.c:1919"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

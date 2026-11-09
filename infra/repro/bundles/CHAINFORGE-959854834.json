@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-959854834",
+  "chain": "CWE-129->CWE-125",
+  "project": "ffmpeg",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42477749",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://git.ffmpeg.org/gitweb/ffmpeg.git/commitdiff/64ea4d102a070b95832ae4a751688f87da7760a2",
+      "fix_commits": [
+        "64ea4d102a070b95832ae4a751688f87da7760a2"
+      ],
+      "repo": "https://git.ffmpeg.org/gitweb/ffmpeg.git/commitdiff"
+    },
+    "patch": "From 64ea4d102a070b95832ae4a751688f87da7760a2 Mon Sep 17 00:00:00 2001\nFrom: Michael Niedermayer <michael@niedermayer.cc>\nDate: Sat, 20 May 2017 01:23:01 +0200\nSubject: [PATCH] avcodec/mlpdec: Do not leave a invalid num_primitive_matrices\n in the context\n\nFixes: runtime error: index 8 out of bounds for type 'uint8_t [8]'\nFixes: 1699/clusterfuzz-testcase-minimized-6327177438035968\n\nFound-by: continuous fuzzing process https://github.com/google/oss-fuzz/tree/master/targets/ffmpeg\nSigned-off-by: Michael Niedermayer <michael@niedermayer.cc>\n---\n libavcodec/mlpdec.c | 1 +\n 1 file changed, 1 insertion(+)\n\ndiff --git a/libavcodec/mlpdec.c b/libavcodec/mlpdec.c\nindex 5426712..eac19a0 100644\n--- a/libavcodec/mlpdec.c\n+++ b/libavcodec/mlpdec.c\n@@ -729,6 +729,7 @@ static int read_matrix_params(MLPDecodeContext *m, unsigned int substr, GetBitCo\n         av_log(m->avctx, AV_LOG_ERROR,\n                \"Number of primitive matrices cannot be greater than %d.\\n\",\n                max_primitive_matrices);\n+        s->num_primitive_matrices = 0;\n         return AVERROR_INVALIDDATA;\n     }\n \n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42477749-vul",
+      "digest": "sha256:8ab2f29146a2f293e48a9a246b93131f705cd12ee6b861d641d146dae3f86899"
+    },
+    "patched": {
+      "ref": "n132/arvo:42477749-fix",
+      "digest": "sha256:e30fc166f809e9715c65b815bed54fe9f0f04589265bfad576d2859bb8e67717"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "crash_site": "/src/ffmpeg/libavcodec/mlpdec.c:1061",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 129,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "site": "/src/ffmpeg/libavcodec/mlpdec.c:1061"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

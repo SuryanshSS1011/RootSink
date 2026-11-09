@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042479370",
+  "chain": "CWE-20->CWE-125",
+  "project": "lwan",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42479370",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "742ecf1c535b0b3b1350253faef6289fdc8f8e12",
+      "fix_commits": [
+        "742ecf1c535b0b3b1350253faef6289fdc8f8e12"
+      ],
+      "repo": "https://github.com/lpereira/lwan"
+    },
+    "patch": "diff --git a/src/lib/lwan-config.c b/src/lib/lwan-config.c\nindex e19249c1c..bf282b23e 100644\n--- a/src/lib/lwan-config.c\n+++ b/src/lib/lwan-config.c\n@@ -606,6 +606,11 @@ static void *parse_section(struct parser *parser)\n     if (!lexeme_buffer_consume(&parser->buffer, &lexeme))\n         return NULL;\n \n+    if (!lexeme->value.len) {\n+        lwan_status_error(\"Section is empty\");\n+        return NULL;\n+    }\n+\n     lwan_strbuf_append_str(&parser->strbuf, lexeme->value.value, lexeme->value.len);\n     name_len = lexeme->value.len;\n     lwan_strbuf_append_char(&parser->strbuf, '\\0');\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42479370-vul",
+      "digest": "sha256:326cbbbad7db88f0a4787ea88e2f8aaff5300b445f73c4410a9f75b12ff20cd3"
+    },
+    "patched": {
+      "ref": "n132/arvo:42479370-fix",
+      "digest": "sha256:7f33dd793050d6dcc9c48b180ebcba0375494d48c4793cf5fd8367cd11045ad8"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "global-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/lwan/src/lib/lwan-strbuf.c:170",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "global-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/lwan/src/lib/lwan-strbuf.c:170"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

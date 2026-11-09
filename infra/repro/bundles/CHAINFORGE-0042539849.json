@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042539849",
+  "chain": "CWE-416->CWE-125",
+  "project": "imagemagick",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42539849",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "b67f17367ac8993062eed89b86234a007ff89a1a",
+      "fix_commits": [
+        "b67f17367ac8993062eed89b86234a007ff89a1a"
+      ],
+      "repo": "https://github.com/imagemagick/imagemagick"
+    },
+    "patch": "From b67f17367ac8993062eed89b86234a007ff89a1a Mon Sep 17 00:00:00 2001\nFrom: Cristy <urban-warrior@imagemagick.org>\nDate: Sat, 14 Jul 2018 10:16:36 -0400\nSubject: [PATCH] https://github.com/ImageMagick/ImageMagick/issues/1211\n\n---\n MagickCore/blob.c | 3 +--\n coders/mat.c      | 2 +-\n 2 files changed, 2 insertions(+), 3 deletions(-)\n\ndiff --git a/MagickCore/blob.c b/MagickCore/blob.c\nindex 8a6b163..d2956fe 100644\n--- a/MagickCore/blob.c\n+++ b/MagickCore/blob.c\n@@ -609,9 +609,8 @@ MagickExport MagickBooleanType CloseBlob(Image *image)\n   assert(image->signature == MagickCoreSignature);\n   if (image->debug != MagickFalse)\n     (void) LogMagickEvent(TraceEvent,GetMagickModule(),\"%s\",image->filename);\n-  assert(image->blob != (BlobInfo *) NULL);\n   blob_info=image->blob;\n-  if (blob_info->type == UndefinedStream)\n+  if ((blob_info == (BlobInfo *) NULL) || (blob_info->type == UndefinedStream))\n     return(MagickTrue);\n   status=SyncBlob(image);\n   switch (blob_info->type)\ndiff --git a/coders/mat.c b/coders/mat.c\nindex 3be3bcb..5858ff5 100644\n--- a/coders/mat.c\n+++ b/coders/mat.c\n@@ -1085,7 +1085,7 @@ MATLAB_KO:\n         MATLAB_HDR.StructureClass != mxINT64_CLASS &&\n         MATLAB_HDR.StructureClass != mxUINT64_CLASS)    /* uint64 + uint64 3D */\n       {\n-        if (image2 != (Image*) NULL)\n+        if ((image2 != (Image*) NULL) && (image2 != image))\n           {\n             CloseBlob(image2);\n             DeleteImageFromList(&image2);\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42539849-vul",
+      "digest": "sha256:8d3e527da2a83d6e5be90405524b4074c374544fb06ac20f5d1fc92751263d8b"
+    },
+    "patched": {
+      "ref": "n132/arvo:42539849-fix",
+      "digest": "sha256:bd117c011115ce3fa3c111d8d1fbe083820310bd50ac7da592731a8222f8509a"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/imagemagick/MagickCore/blob.c:605",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/imagemagick/MagickCore/blob.c:605"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042509256",
+  "chain": "CWE-1284->CWE-125",
+  "project": "libvips",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42509256",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "2fdab9ba70f5ebf22588943e951339ceb19b184e",
+      "fix_commits": [
+        "2fdab9ba70f5ebf22588943e951339ceb19b184e"
+      ],
+      "repo": "https://github.com/libvips/libvips"
+    },
+    "patch": "diff --git a/libvips/foreign/pdfiumload.c b/libvips/foreign/pdfiumload.c\nindex f55f91c79a..918d7132d1 100644\n--- a/libvips/foreign/pdfiumload.c\n+++ b/libvips/foreign/pdfiumload.c\n@@ -481,6 +481,17 @@ vips_foreign_load_pdf_header( VipsForeignLoad *load )\n \t\tpdf->pages[i].height = VIPS_RINT( \n \t\t\tFPDF_GetPageHeight( pdf->page ) * pdf->scale );\n \n+\t\t/* PDFium allows page width or height to be less than 1 (!!).\n+\t\t */\n+\t\tif( pdf->pages[i].width < 1 ||\n+\t\t\tpdf->pages[i].height < 1 ||\n+\t\t\tpdf->pages[i].width > VIPS_MAX_COORD ||\n+\t\t\tpdf->pages[i].height > VIPS_MAX_COORD ) {\n+\t\t\tvips_error( class->nickname, \n+\t\t\t\t\"%s\", _( \"page size out of range\" ) );\n+\t\t\treturn( -1 ); \n+\t\t}\n+\n \t\tif( pdf->pages[i].width > pdf->image.width )\n \t\t\tpdf->image.width = pdf->pages[i].width;\n \t\tpdf->image.height += pdf->pages[i].height;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42509256-vul",
+      "digest": "sha256:5f163cacc363ec1885f6b741eb1d1c94a5cd32edfd50f1cb654527b042dbdbb2"
+    },
+    "patched": {
+      "ref": "n132/arvo:42509256-fix",
+      "digest": "sha256:7437d53566409c404e46591f6aeeac3c6c6c7805aeffd5fb84fa7068fe2389d5"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/libvips/build/../libvips/iofuncs/rect.c:181",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/libvips/build/../libvips/iofuncs/rect.c:181"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

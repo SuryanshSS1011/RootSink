@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042523621",
+  "chain": "CWE-1285->CWE-787",
+  "project": "faad2",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42523621",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "5cee79dded54abbe3a5fbf5f87ca1f3951bd0347",
+      "fix_commits": [
+        "5cee79dded54abbe3a5fbf5f87ca1f3951bd0347"
+      ],
+      "repo": "https://github.com/knik0/faad2"
+    },
+    "patch": "diff --git a/libfaad/pns.c b/libfaad/pns.c\nindex 3e7a6504..9f4187de 100644\n--- a/libfaad/pns.c\n+++ b/libfaad/pns.c\n@@ -161,7 +161,7 @@ void pns_decode(ic_stream *ics_left, ic_stream *ics_right,\n                 /* RNG states */ uint32_t *__r1, uint32_t *__r2)\n {\n     uint8_t g, sfb, b;\n-    uint16_t size, offs;\n+    uint16_t begin, end;\n \n     uint8_t group = 0;\n     uint16_t nshort = frame_len >> 3;\n@@ -186,6 +186,7 @@ void pns_decode(ic_stream *ics_left, ic_stream *ics_right,\n         /* Do perceptual noise substitution decoding */\n         for (b = 0; b < ics_left->window_group_length[g]; b++)\n         {\n+            uint16_t base = group * nshort;\n             for (sfb = 0; sfb < ics_left->max_sfb; sfb++)\n             {\n                 uint32_t r1_dep = 0, r2_dep = 0;\n@@ -208,16 +209,15 @@ void pns_decode(ic_stream *ics_left, ic_stream *ics_right,\n                     */\n                     ics_left->pred.prediction_used[sfb] = 0;\n #endif\n-\n-                    offs = ics_left->swb_offset[sfb];\n-                    size = min(ics_left->swb_offset[sfb+1], ics_left->swb_offset_max) - offs;\n+                    begin = min(base + ics_right->swb_offset[sfb], ics_right->swb_offset_max);\n+                    end = min(base + ics_left->swb_offset[sfb+1], ics_left->swb_offset_max);\n \n                     r1_dep = *__r1;\n                     r2_dep = *__r2;\n \n                     /* Generate random vector */\n-                    gen_rand_vector(&spec_left[(group*nshort)+offs],\n-                        ics_left->scale_factors[g][sfb], size, sub, __r1, __r2);\n+                    gen_rand_vector(&spec_left[begin],\n+                        ics_left->scale_factors[g][sfb], end - begin, sub, __r1, __r2);\n                 }\n \n /* From the spec:\n@@ -253,21 +253,20 @@ void pns_decode(ic_stream *ics_left, ic_stream *ics_right,\n                     {\n                         /*uint16_t c;*/\n \n-                        offs = ics_right->swb_offset[sfb];\n-                        size = min(ics_right->swb_offset[sfb+1], ics_right->swb_offset_max) - offs;\n+                        begin = min(base + ics_right->swb_offset[sfb], ics_right->swb_offset_max);\n+                        end = min(base + ics_right->swb_offset[sfb+1], ics_right->swb_offset_max);\n \n                         /* Generate random vector dependent on left channel*/\n-                        gen_rand_vector(&spec_right[(group*nshort)+offs],\n-                            ics_right->scale_factors[g][sfb], size, sub, &r1_dep, &r2_dep);\n+                        gen_rand_vector(&spec_right[begin],\n+                            ics_right->scale_factors[g][sfb], end - begin, sub, &r1_dep, &r2_dep);\n \n                     } else /*if (ics_left->ms_mask_present == 0)*/ {\n-\n-                        offs = ics_right->swb_offset[sfb];\n-                        size = min(ics_right->swb_offset[sfb+1], ics_right->swb_offset_max) - offs;\n+                        begin = min(base + ics_right->swb_offset[sfb], ics_right->swb_offset_max);\n+                        end = min(base + ics_right->swb_offset[sfb+1], ics_right->swb_offset_max);\n \n                         /* Generate random vector */\n-                        gen_rand_vector(&spec_right[(group*nshort)+offs],\n-                            ics_right->scale_factors[g][sfb], size, sub, __r1, __r2);\n+                        gen_rand_vector(&spec_right[begin],\n+                            ics_right->scale_factors[g][sfb], end - begin, sub, __r1, __r2);\n                     }\n                 }\n             } /* sfb */\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42523621-vul",
+      "digest": "sha256:bc0418bb65b83a1e584980593727c0355d4920bc42e75a4e32639b7f783da3af"
+    },
+    "patched": {
+      "ref": "n132/arvo:42523621-fix",
+      "digest": "sha256:0dbaca09782ea79d8bca71dc1b0a9837825f78519ddf253d3e208fada4a912c6"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/faad2/libfaad/pns.c:102",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/faad2/libfaad/pns.c:102"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

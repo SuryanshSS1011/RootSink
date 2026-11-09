@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042480591",
+  "chain": "CWE-1284->CWE-787",
+  "project": "opensc",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42480591",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "333c41c5d51450177553b8fd8cb2d710a7f7dec5",
+      "fix_commits": [
+        "333c41c5d51450177553b8fd8cb2d710a7f7dec5"
+      ],
+      "repo": "https://github.com/OpenSC/OpenSC"
+    },
+    "patch": "diff --git a/src/libopensc/card-openpgp.c b/src/libopensc/card-openpgp.c\nindex b8cdd45205..27128cf78c 100644\n--- a/src/libopensc/card-openpgp.c\n+++ b/src/libopensc/card-openpgp.c\n@@ -721,7 +721,7 @@ pgp_parse_algo_attr_blob(const pgp_blob_t *blob, sc_cardctl_openpgp_keygen_info_\n \n \t\t\tsc_init_oid(&oid);\n \t\t\t/* Create copy of oid from blob */\n-\t\t\tfor (j=0; j < (blob->len-1); j++) {\n+\t\t\tfor (j=0; j < (blob->len-1) && j < SC_MAX_OBJECT_ID_OCTETS; j++) {\n \t\t\t\toid.value[j] = blob->data[j+1]; /* ignore first byte of blob (algo ID) */\n \t\t\t}\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42480591-vul",
+      "digest": "sha256:b96e89eef66bb32d6d498dcea4df67a38acc0d338b553d998e888c823a5113c5"
+    },
+    "patched": {
+      "ref": "n132/arvo:42480591-fix",
+      "digest": "sha256:5def6cf656b64fa5955fb22e4002fd46e0764a6e83ccf0b9fd8f6aa31f106cde"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/opensc/src/libopensc/card-openpgp.c:725",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/opensc/src/libopensc/card-openpgp.c:725"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

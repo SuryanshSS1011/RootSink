@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042533061",
+  "chain": "CWE-1284->CWE-787",
+  "project": "gpac",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42533061",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "08d2d3128f17bd83d534efd708bdaf1248005e9e",
+      "fix_commits": [
+        "08d2d3128f17bd83d534efd708bdaf1248005e9e"
+      ],
+      "repo": "https://github.com/gpac/gpac"
+    },
+    "patch": "diff --git a/src/media_tools/mpegts.c b/src/media_tools/mpegts.c\nindex 7fc7efcbfe..0afdd46ae3 100644\n--- a/src/media_tools/mpegts.c\n+++ b/src/media_tools/mpegts.c\n@@ -2461,18 +2461,20 @@ static void gf_m2ts_get_adaptation_field(GF_M2TS_Demuxer *ts, GF_M2TS_Adaptation\n \t\t\t\t\t\tchar *_url = URL;\n \t\t\t\t\t\tu8 scheme = gf_bs_read_int(bs, 8);\n \t\t\t\t\t\tu8 url_len = gf_bs_read_int(bs, 8);\n+\t\t\t\t\t\tu8 scheme_len = 0;\n \t\t\t\t\t\tswitch (scheme) {\n \t\t\t\t\t\tcase 1:\n \t\t\t\t\t\t\tstrcpy(URL, \"http://\");\n-\t\t\t\t\t\t\t_url = URL+7;\n+\t\t\t\t\t\t\tscheme_len = 7;\n \t\t\t\t\t\t\tbreak;\n \t\t\t\t\t\tcase 2:\n \t\t\t\t\t\t\tstrcpy(URL, \"https://\");\n-\t\t\t\t\t\t\t_url = URL+8;\n+\t\t\t\t\t\t\tscheme_len = 8;\n \t\t\t\t\t\t\tbreak;\n \t\t\t\t\t\t}\n+\t\t\t\t\t\t_url = URL + scheme_len;\n \t\t\t\t\t\tgf_bs_read_data(bs, _url, url_len);\n-\t\t\t\t\t\t_url[url_len >= GF_ARRAY_LENGTH(URL) ? GF_ARRAY_LENGTH(URL)-1 : url_len] = 0;\n+\t\t\t\t\t\t_url[MIN(url_len, GF_ARRAY_LENGTH(URL)-1-scheme_len)] = 0;\n \t\t\t\t\t}\n \t\t\t\t\ttemi_loc.external_URL = URL;\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42533061-vul",
+      "digest": "sha256:c6a2acddf42c9496c4a8820a22484df9e561db8fd0bf85c9c5c5d0df07a55e1a"
+    },
+    "patched": {
+      "ref": "n132/arvo:42533061-fix",
+      "digest": "sha256:29e9fffad7447e165c2c7a9bca686ca29a17d4c4e05b612b214f863c5fa9187a"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/gpac/src/media_tools/mpegts.c:2475",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/gpac/src/media_tools/mpegts.c:2475"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

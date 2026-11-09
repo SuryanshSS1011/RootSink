@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042517450",
+  "chain": "CWE-20->CWE-125",
+  "project": "openexr",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42517450",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "063a881e7a5cd57156dbd0c9b6ad4d30f7023e55",
+      "fix_commits": [
+        "063a881e7a5cd57156dbd0c9b6ad4d30f7023e55"
+      ],
+      "repo": "https://github.com/AcademySoftwareFoundation/openexr"
+    },
+    "patch": "diff --git a/src/lib/OpenEXRCore/internal_huf.c b/src/lib/OpenEXRCore/internal_huf.c\nindex fa769c9ef2..92fcc32335 100644\n--- a/src/lib/OpenEXRCore/internal_huf.c\n+++ b/src/lib/OpenEXRCore/internal_huf.c\n@@ -1280,9 +1280,21 @@ fasthuf_initialize (\n             codeCount[codeLen]++;\n         }\n         else if (codeLen == (uint64_t) LONG_ZEROCODE_RUN)\n+        {\n+            if (currByte >= topByte)\n+            {\n+                if (pctxt)\n+                    pctxt->print_error (\n+                        pctxt,\n+                        EXR_ERR_CORRUPT_CHUNK,\n+                        \"Error decoding Huffman table (Truncated table data).\");\n+                return EXR_ERR_CORRUPT_CHUNK;\n+            }\n+\n             symbol +=\n                 fasthuf_read_bits (8, &currBits, &currBitCount, &currByte) +\n                 SHORTEST_LONG_RUN - 1;\n+        }\n         else\n             symbol += codeLen - SHORT_ZEROCODE_RUN + 1;\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42517450-vul",
+      "digest": "sha256:b5e32df59916e925f82d1a608c0371b48aa578956e12c84bf6ecd7644b1f25cc"
+    },
+    "patched": {
+      "ref": "n132/arvo:42517450-fix",
+      "digest": "sha256:ba2a7ec59894ef675764a1b46fe0fa858834e758c0cc5bc2b529159f3c69b16c"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/openexr/src/lib/OpenEXRCore/internal_huf.c:1186",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/openexr/src/lib/OpenEXRCore/internal_huf.c:1186"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

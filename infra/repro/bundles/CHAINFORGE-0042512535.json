@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042512535",
+  "chain": "CWE-416->CWE-125",
+  "project": "ghostpdl",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42512535",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "b609c25f7f881bea4b10c8e1b9b950b635437320",
+      "fix_commits": [
+        "b609c25f7f881bea4b10c8e1b9b950b635437320"
+      ],
+      "repo": "https://cgit.ghostscript.com/ghostpdl.git"
+    },
+    "patch": "From b609c25f7f881bea4b10c8e1b9b950b635437320 Mon Sep 17 00:00:00 2001\nFrom: Chris Liddell <chris.liddell@artifex.com>\nDate: Tue, 28 Jun 2022 13:23:02 +0100\nSubject: [PATCH] oss-fuzz 48305: Use ref counting for subclass child device\n\nThe .currentoutputdevice (custom) operator leaves the chance that PS VM still\nhas a reference to the \"child\" of a subclassed device. In normal operation,\nthis isn't a problem, but on an error, that PS reference may persist until\nafter the unsubclass operation, meaning the \"child\" is freed while there is\nstill an active reference to it.\n\nChange the code to use reference counting to ensure that works. This means\nconsiderable fiddling to ensure that, after subclassing, anything sent to the\n(now moribund) child device doesn't end up affecting the parent.\n---\n base/gdevdflt.c   | 39 ++++++++++++++++++++++-----------------\n base/gdevsclass.c |  5 ++---\n psi/zdevice.c     |  7 ++++---\n 3 files changed, 28 insertions(+), 23 deletions(-)\n\ndiff --git a/base/gdevdflt.c b/base/gdevdflt.c\nindex 72a43ff..616052c 100644\n--- a/base/gdevdflt.c\n+++ b/base/gdevdflt.c\n@@ -1347,6 +1347,9 @@ int gx_device_subclass(gx_device *dev_to_subclass, gx_device *new_prototype, uns\n     child_dev->stype = a_std;\n     child_dev->stype_is_dynamic = 1;\n \n+    /* At this point, the only counted reference to the child is from its parent, and we need it to use the right allocator */\n+    rc_init(child_dev, dev_to_subclass->memory->stable_memory, 1);\n+\n     psubclass_data = (void *)gs_alloc_bytes(dev_to_subclass->memory->non_gc_memory, private_data_size, \"subclass memory for subclassing device\");\n     if (psubclass_data == 0){\n         gs_free_const_object(dev_to_subclass->memory->non_gc_memory, b_std, \"gs_device_subclass(stype)\");\n@@ -1432,12 +1435,15 @@ void gx_device_unsubclass(gx_device *dev)\n     gx_device *parent, *child;\n     gs_memory_struct_type_t *a_std = 0, *b_std = 0;\n     int dynamic, ref_count;\n+    gs_memory_t *rcmem;\n \n     /* This should not happen... */\n     if (!dev)\n         return;\n \n     ref_count = dev->rc.ref_count;\n+    rcmem = dev->rc.memory;\n+\n     child = dev->child;\n     psubclass_data = (generic_subclass_data *)dev->subclass_data;\n     parent = dev->parent;\n@@ -1484,6 +1490,7 @@ void gx_device_unsubclass(gx_device *dev)\n          * when we copy back the subclassed device.\n          */\n         dev->rc.ref_count = ref_count;\n+        dev->rc.memory = rcmem;\n \n         /* If we have a chain of devices, make sure the chain beyond the\n          * device we're unsubclassing doesn't get broken, we need to\n@@ -1502,12 +1509,6 @@ void gx_device_unsubclass(gx_device *dev)\n      * devices it's possible that their child pointer can then be NULL.\n      */\n     if (child) {\n-        if (child->icc_struct)\n-            rc_decrement(child->icc_struct, \"gx_device_unsubclass, icc_struct\");\n-        if (child->PageList)\n-            rc_decrement(child->PageList, \"gx_device_unsubclass, PageList\");\n-        if (child->NupControl)\n-            rc_decrement(child->NupControl, \"gx_device_unsubclass, NupControl\");\n         /* We cannot afford to free the child device if its stype is not\n          * dynamic because we can't 'null' the finalise routine, and we\n          * cannot permit the device to be finalised because we have copied\n@@ -1520,8 +1521,7 @@ void gx_device_unsubclass(gx_device *dev)\n              * just security here. */\n             child->parent = NULL;\n             child->child = NULL;\n-            /* Make certain the memory will be freed, zap the reference count */\n-            child->rc.ref_count = 0;\n+\n             /* We *don't* want to run the finalize routine. This would free\n              * the stype and properly handle the icc_struct and PageList,\n              * but for devices with a custom finalize (eg psdcmyk) it might\n@@ -1530,22 +1530,27 @@ void gx_device_unsubclass(gx_device *dev)\n              * variable is just to get rid of const warnings.\n              */\n             b_std = (gs_memory_struct_type_t *)child->stype;\n-            b_std->finalize = NULL;\n-            /* Having patched the stype, we need to make sure the memory\n+            gs_free_const_object(dev->memory->non_gc_memory, b_std, \"gs_device_unsubclass(stype)\");\n+            /* Make this into a generic device */\n+            child->stype = &st_device;\n+            child->stype_is_dynamic = false;\n+\n+            /* We can't simply discard the child device, because there may be references to it elsewhere,\n+               but equally, we really don't want it doing anything, so set the procs so actions are just discarded.\n+             */\n+            gx_copy_device_procs(child, (gx_device *)&gs_null_device, (gx_device *)&gs_null_device);\n+\n+            /* Having changed the stype, we need to make sure the memory\n              * manager uses it. It keeps a copy in its own data structure,\n              * and would use that copy, which would mean it would call the\n              * finalize routine that we just patched out.\n              */\n-            gs_set_object_type(dev->memory->stable_memory, child, b_std);\n+            gs_set_object_type(dev->memory->stable_memory, child, child->stype);\n+            child->finalize = NULL;\n             /* Now (finally) free the child memory */\n-            gs_free_object(dev->memory->stable_memory, child, \"gx_device_unsubclass(device)\");\n-            /* And the stype for it */\n-            gs_free_const_object(dev->memory->non_gc_memory, b_std, \"gs_device_unsubclass(stype)\");\n-            child = 0;\n+            rc_decrement(child, \"gx_device_unsubclass(device)\");\n         }\n     }\n-    if(child)\n-        child->parent = dev;\n     dev->parent = parent;\n \n     /* If this device has a dynamic stype, we wnt to keep using it, but we copied\ndiff --git a/base/gdevsclass.c b/base/gdevsclass.c\nindex 85a6d2d..15a2f19 100644\n--- a/base/gdevsclass.c\n+++ b/base/gdevsclass.c\n@@ -875,9 +875,8 @@ void default_subclass_finalize(const gs_memory_t *cmem, void *vptr)\n     if (dev->finalize)\n         dev->finalize(dev);\n \n-    if (dev->child) {\n-        gs_free_object(dev->memory->stable_memory, dev->child, \"free child device memory for subclassing device\");\n-    }\n+    rc_decrement(dev->child, \"de-reference child device\");\n+\n     if (psubclass_data) {\n         gs_free_object(dev->memory->non_gc_memory, psubclass_data, \"gx_epo_finalize(suclass data)\");\n         dev->subclass_data = NULL;\ndiff --git a/psi/zdevice.c b/psi/zdevice.c\nindex 99beaff..7e9779f 100644\n--- a/psi/zdevice.c\n+++ b/psi/zdevice.c\n@@ -45,7 +45,7 @@ ENUM_PTRS_WITH(psi_device_ref_enum_ptrs, psi_device_ref *devref)\n       }\n     case 0:\n       {\n-          if (devref->device->memory != NULL) {\n+          if (devref->device != NULL && devref->device->memory != NULL) {\n               ENUM_RETURN(gx_device_enum_ptr(devref->device));\n           }\n           return 0;\n@@ -54,7 +54,7 @@ ENUM_PTRS_END\n \n static\n RELOC_PTRS_WITH(psi_device_ref_reloc_ptrs, psi_device_ref *devref)\n-    if (devref->device->memory != NULL) {\n+    if (devref->device != NULL && devref->device->memory != NULL) {\n         devref->device = gx_device_reloc_ptr(devref->device, gcst);\n     }\n RELOC_PTRS_END\n@@ -71,7 +71,7 @@ psi_device_ref_finalize(const gs_memory_t *cmem, void *vptr)\n     /* pdref->device->memory == NULL indicates either a device prototype\n        or a device allocated on the stack rather than the heap\n      */\n-    if (pdref->device->memory != NULL)\n+    if (pdref->device != NULL && pdref->device->memory != NULL)\n         rc_decrement(pdref->device, \"psi_device_ref_finalize\");\n \n     pdref->device = NULL;\n@@ -456,6 +456,7 @@ zmakewordimagedevice(i_ctx_t *i_ctx_p)\n             return_error(gs_error_VMerror);\n         }\n         psdev->device = new_dev;\n+        rc_increment(new_dev);\n         make_tav(op - 4, t_device, imemory_space(iimemory) | a_all, pdevice, psdev);\n         pop(4);\n     }\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42512535-vul",
+      "digest": "sha256:3f91c7b98fba2642d87d042f078a2b91152b8fed85be9b193e64236c20e00dd2"
+    },
+    "patched": {
+      "ref": "n132/arvo:42512535-fix",
+      "digest": "sha256:fcfa2b5d5017c03662533462bbe02cf33ab0d0a1e6599b27bc8d76d4add1a46c"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/ghostpdl/./psi/zdevice.c:74",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/ghostpdl/./psi/zdevice.c:74"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

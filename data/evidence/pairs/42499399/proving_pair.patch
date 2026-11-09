@@ -1,0 +1,38 @@
+diff --git a/src/tpm2/NVMarshal.c b/src/tpm2/NVMarshal.c
+index 8e0ec0b4d..e3db9d644 100644
+--- a/src/tpm2/NVMarshal.c
++++ b/src/tpm2/NVMarshal.c
+@@ -4269,6 +4269,12 @@ INDEX_ORDERLY_RAM_Marshal(void *array, size_t array_size,
+                                      datasize, buffer, size);
+         }
+         offset += nrh.size;
++        if (offset + sizeof(NV_RAM_HEADER) > array_size) {
++            /* nothing will fit anymore and there won't be a 0-sized
++             * terminating node (@1).
++             */
++            break;
++        }
+     }
+ 
+     written += BLOCK_SKIP_WRITE_PUSH(TRUE, buffer, size);
+diff --git a/src/tpm2/NVMarshal.c b/src/tpm2/NVMarshal.c
+index 8e0ec0b4d..e3db9d644 100644
+--- a/src/tpm2/NVMarshal.c
++++ b/src/tpm2/NVMarshal.c
+@@ -4311,6 +4317,16 @@ INDEX_ORDERLY_RAM_Unmarshal(void *array, size_t array_size,
+          */
+         nrhp = array + offset;
+ 
++        if (offset + sizeof(NV_RAM_HEADER) > sourceside_size) {
++            /* this case can occur with the previous entry filling up the
++             * space; in this case there will not be a 0-sized terminating
++             * node (see @1 above). We clear the rest of our space.
++             */
++            if (array_size > offset)
++                memset(nrhp, 0, array_size - offset);
++            break;
++        }
++
+         /* write the NVRAM header;
+            nrh->size holds the complete size including data;
+            nrh->size = 0 indicates the end */

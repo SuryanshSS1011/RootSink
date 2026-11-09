@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-969575343",
+  "chain": "CWE-456->CWE-457",
+  "project": "open62541",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42486708",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/open62541/open62541/commit/e1f8fd3b18dd237c1660df79eae411c250348250",
+      "fix_commits": [
+        "e1f8fd3b18dd237c1660df79eae411c250348250"
+      ],
+      "repo": "https://github.com/open62541/open62541"
+    },
+    "patch": "diff --git a/CMakeLists.txt b/CMakeLists.txt\nindex ba03be91ca3..bcdc7a74473 100644\n--- a/CMakeLists.txt\n+++ b/CMakeLists.txt\n@@ -627,7 +627,7 @@ if(NOT UA_FORCE_CPP AND (CMAKE_COMPILER_IS_GNUCC OR \"x${CMAKE_C_COMPILER_ID}\" ST\n \tcheck_add_cc_flag(\"-m32\")\n     endif()\n \n-    if(NOT MINGW)\n+    if(NOT MINGW AND NOT UA_BUILD_OSS_FUZZ)\n         if(UA_ENABLE_HARDENING)\n             check_add_cc_flag(\"-fstack-protector-strong\") # more performant stack protector, available since gcc 4.9\n             check_add_cc_flag(\"-fstack-clash-protection\") # increased reliability of stack overflow detection, available since gcc 8\n@@ -665,27 +665,23 @@ if(NOT UA_FORCE_CPP AND (CMAKE_COMPILER_IS_GNUCC OR \"x${CMAKE_C_COMPILER_ID}\" ST\n     set(CMAKE_SHARED_LIBRARY_LINK_C_FLAGS \"\") # cmake sets -rdynamic by default\n \n     # Debug\n-    if(BUILD_TYPE_LOWER_CASE STREQUAL \"debug\" AND UNIX)\n-        if(\"x${CMAKE_C_COMPILER_ID}\" STREQUAL \"xClang\" AND NOT UA_ENABLE_UNIT_TESTS_MEMCHECK)\n-            # Add default sanitizer settings when using clang and Debug build.\n-            # This allows e.g. CLion to find memory locations for SegFaults\n-            message(STATUS \"Sanitizer enabled\")\n-            set(SANITIZER_FLAGS \"-g -fno-omit-frame-pointer -gline-tables-only -fsanitize=address -fsanitize-address-use-after-scope -fsanitize=leak -fsanitize=undefined\")\n-            if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS 10.0)\n-                set(SANITIZER_FLAGS \"${SANITIZER_FLAGS} -fsanitize-coverage=trace-pc-guard\")\n-            endif()\n-            set(CMAKE_C_FLAGS \"${CMAKE_C_FLAGS} ${SANITIZER_FLAGS}\")\n-            set(CMAKE_CXX_FLAGS \"${CMAKE_CXX_FLAGS} ${SANITIZER_FLAGS}\")\n+    if(BUILD_TYPE_LOWER_CASE STREQUAL \"debug\" AND UNIX AND NOT UA_BUILD_OSS_FUZZ AND\n+       \"x${CMAKE_C_COMPILER_ID}\" STREQUAL \"xClang\" AND NOT UA_ENABLE_UNIT_TESTS_MEMCHECK)\n+        # Add default sanitizer settings when using clang and Debug build.\n+        # This allows e.g. CLion to find memory locations for SegFaults\n+        message(STATUS \"Sanitizer enabled\")\n+        set(SANITIZER_FLAGS \"-g -fno-omit-frame-pointer -gline-tables-only -fsanitize=address -fsanitize-address-use-after-scope -fsanitize=leak -fsanitize=undefined\")\n+        if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS 10.0)\n+            set(SANITIZER_FLAGS \"${SANITIZER_FLAGS} -fsanitize-coverage=trace-pc-guard\")\n         endif()\n+        set(CMAKE_C_FLAGS \"${CMAKE_C_FLAGS} ${SANITIZER_FLAGS}\")\n+        set(CMAKE_CXX_FLAGS \"${CMAKE_CXX_FLAGS} ${SANITIZER_FLAGS}\")\n     endif()\n \n-    if (NOT MINGW)\n-        if(UA_ENABLE_HARDENING AND ((CMAKE_BUILD_TYPE STREQUAL \"Release\") OR (CMAKE_BUILD_TYPE STREQUAL \"RelWithDebInfo\")))\n-            check_add_cc_flag(\"-D_FORTIFY_SOURCE=2\") # run-time buffer overflow detection (needs at least -O1)\n-        endif()\n+    if(NOT MINGW AND UA_ENABLE_HARDENING AND ((CMAKE_BUILD_TYPE STREQUAL \"Release\") OR (CMAKE_BUILD_TYPE STREQUAL \"RelWithDebInfo\")))\n+        check_add_cc_flag(\"-D_FORTIFY_SOURCE=2\") # run-time buffer overflow detection (needs at least -O1)\n     endif()\n \n-\n     # Strip release builds\n     if(CMAKE_BUILD_TYPE STREQUAL \"MinSizeRel\" OR CMAKE_BUILD_TYPE STREQUAL \"Release\")\n         check_add_cc_flag(\"-ffunction-sections\")\ndiff --git a/tests/fuzz/CMakeLists.txt b/tests/fuzz/CMakeLists.txt\nindex 2cd99206a06..cc011927154 100644\n--- a/tests/fuzz/CMakeLists.txt\n+++ b/tests/fuzz/CMakeLists.txt\n@@ -30,7 +30,6 @@ remove_definitions(-std=c99 -Wmissing-prototypes -Wstrict-prototypes)\n set(CMAKE_CXX_STANDARD 11)\n \n if(NOT UA_BUILD_OSS_FUZZ)\n-\n     if(NOT \"x${CMAKE_C_COMPILER_ID}\" STREQUAL \"xClang\")\n         MESSAGE(FATAL_ERROR \"To build fuzzing, you need to use Clang as the compiler\")\n     endif()\n@@ -52,11 +51,12 @@ if(NOT UA_BUILD_OSS_FUZZ)\n     endif()\n     set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})\n else()\n-    if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS 10.0)\n-        set(LIBS $ENV{LIB_FUZZING_ENGINE})\n-    endif()\n+    set(LIBS $ENV{LIB_FUZZING_ENGINE})\n     set(CMAKE_RUNTIME_OUTPUT_DIRECTORY $ENV{OUT})\n endif()\n+\n+#set(CMAKE_EXE_LINKER_FLAGS  \"${CMAKE_EXE_LINKER_FLAGS} $ENV{CFLAGS}\")\n+#link_libraries(\"-fsanitize-coverage=trace-pc-guard\")\n list(APPEND LIBS \"${open62541_LIBRARIES}\")\n link_libraries(\"-fsanitize=fuzzer\")\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42486708-vul",
+      "digest": "sha256:2f496f6e4cfdd64595dab7e1edf465b7a36fcecbbb01d2c81d4fda48071a1338"
+    },
+    "patched": {
+      "ref": "n132/arvo:42486708-fix",
+      "digest": "sha256:d01f96a230bf287625b0df073ebb0347161aca774886301208bc73011359a9d8"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/open62541/tests/fuzz/custom_memory_manager.c:78",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/open62541/tests/fuzz/custom_memory_manager.c:78"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

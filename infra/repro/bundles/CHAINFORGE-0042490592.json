@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042490592",
+  "chain": "CWE-1284->CWE-125",
+  "project": "openthread",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42490592",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "e2d027c8a53b42bf5451e8c6fbf1abacd7e73c4a",
+      "fix_commits": [
+        "e2d027c8a53b42bf5451e8c6fbf1abacd7e73c4a"
+      ],
+      "repo": "https://github.com/openthread/openthread"
+    },
+    "patch": "diff --git a/src/core/coap/coap_header.cpp b/src/core/coap/coap_header.cpp\nindex 294d2cf3aac..24d2f187c90 100644\n--- a/src/core/coap/coap_header.cpp\n+++ b/src/core/coap/coap_header.cpp\n@@ -77,32 +77,31 @@ otError Header::FromMessage(const Message &aMessage, uint16_t aMetadataSize)\n \n     Init();\n \n-    VerifyOrExit(length >= kTokenOffset, error = OT_ERROR_PARSE);\n+    VerifyOrExit(kTokenOffset <= length);\n     aMessage.Read(offset, kTokenOffset, mHeader.mBytes);\n     mHeaderLength = kTokenOffset;\n     offset += kTokenOffset;\n-    length -= kTokenOffset;\n \n-    VerifyOrExit(GetVersion() == 1, error = OT_ERROR_PARSE);\n+    VerifyOrExit(GetVersion() == 1);\n \n     tokenLength = GetTokenLength();\n-    VerifyOrExit(tokenLength <= kMaxTokenLength && tokenLength <= length, error = OT_ERROR_PARSE);\n+    VerifyOrExit(tokenLength <= kMaxTokenLength && (mHeaderLength + tokenLength) <= length);\n     aMessage.Read(offset, tokenLength, mHeader.mBytes + mHeaderLength);\n     mHeaderLength += tokenLength;\n     offset += tokenLength;\n-    length -= tokenLength;\n \n-    while (length > 0)\n+    while (mHeaderLength < length)\n     {\n+        VerifyOrExit(mHeaderLength + kMaxOptionHeaderSize <= kMaxHeaderLength);\n+\n         aMessage.Read(offset, kMaxOptionHeaderSize, mHeader.mBytes + mHeaderLength);\n \n         if (mHeader.mBytes[mHeaderLength] == 0xff)\n         {\n             mHeaderLength += sizeof(uint8_t);\n-            length -= sizeof(uint8_t);\n             // RFC7252: The presence of a marker followed by a zero-length payload MUST be processed\n             // as a message format error.\n-            VerifyOrExit(length > 0, error = OT_ERROR_PARSE);\n+            VerifyOrExit(mHeaderLength < length);\n             ExitNow(error = OT_ERROR_NONE);\n         }\n \n@@ -115,7 +114,6 @@ otError Header::FromMessage(const Message &aMessage, uint16_t aMetadataSize)\n         optionLength = mHeader.mBytes[mHeaderLength] & 0xf;\n         mHeaderLength += sizeof(uint8_t);\n         offset += sizeof(uint8_t);\n-        length -= sizeof(uint8_t);\n \n         if (optionDelta < kOption1ByteExtension)\n         {\n@@ -126,15 +124,14 @@ otError Header::FromMessage(const Message &aMessage, uint16_t aMetadataSize)\n             optionDelta = kOption1ByteExtensionOffset + mHeader.mBytes[mHeaderLength];\n             mHeaderLength += sizeof(uint8_t);\n             offset += sizeof(uint8_t);\n-            length -= sizeof(uint8_t);\n         }\n         else if (optionDelta == kOption2ByteExtension)\n         {\n             optionDelta = kOption2ByteExtensionOffset +\n-                          static_cast<uint16_t>((mHeader.mBytes[mHeaderLength] << 8) | mHeader.mBytes[mHeaderLength + 1]);\n+                          static_cast<uint16_t>((mHeader.mBytes[mHeaderLength] << 8) |\n+                                                (mHeader.mBytes[mHeaderLength + 1]));\n             mHeaderLength += sizeof(uint16_t);\n             offset += sizeof(uint16_t);\n-            length -= sizeof(uint16_t);\n         }\n         else\n         {\n@@ -150,15 +147,14 @@ otError Header::FromMessage(const Message &aMessage, uint16_t aMetadataSize)\n             optionLength = kOption1ByteExtensionOffset + mHeader.mBytes[mHeaderLength];\n             mHeaderLength += sizeof(uint8_t);\n             offset += sizeof(uint8_t);\n-            length -= sizeof(uint8_t);\n         }\n         else if (optionLength == kOption2ByteExtension)\n         {\n             optionLength = kOption2ByteExtensionOffset +\n-                           static_cast<uint16_t>((mHeader.mBytes[mHeaderLength] << 8) | mHeader.mBytes[mHeaderLength + 1]);\n+                           static_cast<uint16_t>((mHeader.mBytes[mHeaderLength] << 8) |\n+                                                 (mHeader.mBytes[mHeaderLength + 1]));\n             mHeaderLength += sizeof(uint16_t);\n             offset += sizeof(uint16_t);\n-            length -= sizeof(uint16_t);\n         }\n         else\n         {\n@@ -174,14 +170,15 @@ otError Header::FromMessage(const Message &aMessage, uint16_t aMetadataSize)\n             firstOption = false;\n         }\n \n-        VerifyOrExit(optionLength <= length, error = OT_ERROR_PARSE);\n+        VerifyOrExit(mHeaderLength + optionLength <= kMaxHeaderLength);\n+        VerifyOrExit(mHeaderLength + optionLength <= length);\n+\n         aMessage.Read(offset, optionLength, mHeader.mBytes + mHeaderLength);\n         mHeaderLength += static_cast<uint8_t>(optionLength);\n         offset += optionLength;\n-        length -= optionLength;\n     }\n \n-    if (length == 0)\n+    if (mHeaderLength == length)\n     {\n         // No payload present - return success.\n         error = OT_ERROR_NONE;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42490592-vul",
+      "digest": "sha256:dde80b8ca2fe25c455e2c257449b4cbef13afde53688e813542e7cec864a0fc0"
+    },
+    "patched": {
+      "ref": "n132/arvo:42490592-fix",
+      "digest": "sha256:c34f7266369fee37b08bcb883be419fbd73c6c19a931f707cea7907752ddbaa7"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/openthread/src/core/coap/coap_header.cpp:99",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/openthread/src/core/coap/coap_header.cpp:99"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

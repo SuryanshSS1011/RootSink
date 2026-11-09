@@ -1,0 +1,64 @@
+Accepting input from '/tmp/poc'
+Usage for fuzzing: honggfuzz -P [flags] -- /out/cli-uart-received-fuzzer
+=================================================================
+==788==ERROR: AddressSanitizer: stack-buffer-overflow on address 0x7f7fe0d2cde4 at pc 0x0000005104fc bp 0x7ffc546d1ef0 sp 0x7ffc546d1ee8
+READ of size 1 at 0x7f7fe0d2cde4 thread T0
+SCARINESS: 27 (1-byte-read-stack-buffer-overflow)
+    #0 0x5104fb in ot::Coap::Message::AppendUintOption(unsigned short, unsigned int) /src/openthread/build/../src/core/coap/coap_message.cpp:203:12
+    #1 0x510b46 in ot::Coap::Message::AppendBlockOption(ot::Coap::Message::BlockType, unsigned int, bool, otCoapBlockSzx) /src/openthread/build/../src/core/coap/coap_message.cpp:278:13
+    #2 0x4f9ef6 in otCoapMessageAppendBlock2Option /src/openthread/build/../src/core/api/coap_api.cpp:112:52
+    #3 0x4e6ca7 in ot::Cli::CoapSecure::ProcessRequest(unsigned char, char**) /src/openthread/build/../src/cli/cli_coap_secure.cpp:372:13
+    #4 0x4e8012 in ot::Cli::CoapSecure::Process(unsigned char, char**) /src/openthread/build/../src/cli/cli_coap_secure.cpp:529:13
+    #5 0x4d06b1 in ot::Cli::Interpreter::ProcessCoapSecure(unsigned char, char**) /src/openthread/build/../src/cli/cli.cpp:1080:24
+    #6 0x4e1748 in ot::Cli::Interpreter::ProcessLine(char*, unsigned short) /src/openthread/build/../src/cli/cli.cpp:4544:22
+    #7 0x4ccb47 in ot::Cli::Uart::ProcessCommand() /src/openthread/build/../src/cli/cli_uart.cpp:230:9
+    #8 0x4cc512 in ot::Cli::Uart::ReceiveTask(unsigned char const*, unsigned short) /src/openthread/build/../src/cli/cli_uart.cpp:147:29
+    #9 0x4cce89 in otPlatUartReceived /src/openthread/build/../src/cli/cli_uart.cpp:336:56
+    #10 0x4cb3ed in LLVMFuzzerTestOneInput /src/openthread/build/../tests/fuzz/cli_uart_received.cpp:68:5
+    #11 0x66bc1b in main (/out/cli-uart-received-fuzzer+0x66bc1b)
+    #12 0x7f7fdfcf483f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2083f)
+    #13 0x41c7b8 in _start (/out/cli-uart-received-fuzzer+0x41c7b8)
+
+DEDUP_TOKEN: ot::Coap::Message::AppendUintOption(unsigned short, unsigned int)--ot::Coap::Message::AppendBlockOption(ot::Coap::Message::BlockType, unsigned int, bool, otCoapBlockSzx)--otCoapMessageAppendBlock2Option
+Address 0x7f7fe0d2cde4 is located in stack of thread T0 at offset 36 in frame
+    #0 0x51038f in ot::Coap::Message::AppendUintOption(unsigned short, unsigned int) /src/openthread/build/../src/core/coap/coap_message.cpp:196
+
+DEDUP_TOKEN: ot::Coap::Message::AppendUintOption(unsigned short, unsigned int)
+  This frame has 1 object(s):
+    [32, 36) 'buffer' (line 197) <== Memory access at offset 36 overflows this variable
+HINT: this may be a false positive if your program uses some custom stack unwind mechanism, swapcontext or vfork
+      (longjmp and C++ exceptions *are* supported)
+SUMMARY: AddressSanitizer: stack-buffer-overflow /src/openthread/build/../src/core/coap/coap_message.cpp:203:12 in ot::Coap::Message::AppendUintOption(unsigned short, unsigned int)
+Shadow bytes around the buggy address:
+  0x0ff07c19d960: f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5
+  0x0ff07c19d970: f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5
+  0x0ff07c19d980: f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5
+  0x0ff07c19d990: f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5
+  0x0ff07c19d9a0: f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5
+=>0x0ff07c19d9b0: f5 f5 f5 f5 f5 f5 f5 f5 f1 f1 f1 f1[04]f3 f3 f3
+  0x0ff07c19d9c0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0ff07c19d9d0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0ff07c19d9e0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0ff07c19d9f0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0ff07c19da00: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+  Shadow gap:              cc
+==788==ABORTING

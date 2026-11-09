@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042535128",
+  "chain": "CWE-1284->CWE-125",
+  "project": "edk2",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42535128",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "03ad59e631aaab0143c5b1c1d64f27f5da1eb8c4",
+      "fix_commits": [
+        "03ad59e631aaab0143c5b1c1d64f27f5da1eb8c4"
+      ],
+      "repo": "https://github.com/tianocore/edk2"
+    },
+    "patch": "diff --git a/MdeModulePkg/MdeModulePkg.dec b/MdeModulePkg/MdeModulePkg.dec\nindex e6e0139fdcb3..6ed4c5bf1cf3 100644\n--- a/MdeModulePkg/MdeModulePkg.dec\n+++ b/MdeModulePkg/MdeModulePkg.dec\n@@ -475,6 +475,9 @@\n   ## Include/Guid/VariableRuntimeCacheInfo.h\r\n   gEdkiiVariableRuntimeCacheInfoHobGuid = { 0x0f472f7d, 0x6713, 0x4915, { 0x96, 0x14, 0x5d, 0xda, 0x28, 0x40, 0x10, 0x56 }}\r\n \r\n+  ## HOB GUID to get ACPI table after FSP is done. The ACPI table that related SOC will be pass by this HOB.\r\n+  gAcpiTableHobGuid = { 0xf9886b57, 0x8a35, 0x455e, { 0xbb, 0xb1, 0x14, 0x65, 0x5e, 0x7b, 0xe7, 0xec }}\r\n+\r\n [Ppis]\r\n   ## Include/Ppi/FirmwareVolumeShadowPpi.h\r\n   gEdkiiPeiFirmwareVolumeShadowPpiGuid = { 0x7dfe756c, 0xed8d, 0x4d77, {0x9e, 0xc4, 0x39, 0x9a, 0x8a, 0x81, 0x51, 0x16 } }\r\ndiff --git a/MdeModulePkg/Universal/Acpi/AcpiTableDxe/AcpiTable.h b/MdeModulePkg/Universal/Acpi/AcpiTableDxe/AcpiTable.h\nindex 9cfef3d718ca..3caa20d9eb76 100644\n--- a/MdeModulePkg/Universal/Acpi/AcpiTableDxe/AcpiTable.h\n+++ b/MdeModulePkg/Universal/Acpi/AcpiTableDxe/AcpiTable.h\n@@ -126,6 +126,12 @@ typedef struct {\n       EFI_ACPI_TABLE_SIGNATURE \\\r\n       )\r\n \r\n+//\r\n+// ACPI HOB produced by silicon initialization code will provide the RSDP structure.\r\n+//\r\n+typedef struct {\r\n+  EFI_PHYSICAL_ADDRESS    Rsdp;\r\n+} ACPI_SILICON_HOB;\r\n //\r\n // Protocol Constructor functions\r\n //\r\ndiff --git a/MdeModulePkg/Universal/Acpi/AcpiTableDxe/AcpiTableDxe.inf b/MdeModulePkg/Universal/Acpi/AcpiTableDxe/AcpiTableDxe.inf\nindex be498a56cff0..8d147a3a0d46 100644\n--- a/MdeModulePkg/Universal/Acpi/AcpiTableDxe/AcpiTableDxe.inf\n+++ b/MdeModulePkg/Universal/Acpi/AcpiTableDxe/AcpiTableDxe.inf\n@@ -57,6 +57,7 @@\n   gEfiAcpi10TableGuid                           ## PRODUCES           ## SystemTable\r\n   gEfiAcpiTableGuid                             ## PRODUCES           ## SystemTable\r\n   gUniversalPayloadAcpiTableGuid                ## SOMETIMES_CONSUMES ## HOB\r\n+  gAcpiTableHobGuid                             ## SOMETIMES_CONSUMES ## HOB\r\n \r\n [FeaturePcd]\r\n   gEfiMdeModulePkgTokenSpaceGuid.PcdInstallAcpiSdtProtocol  ## CONSUMES\r\ndiff --git a/MdeModulePkg/Universal/Acpi/AcpiTableDxe/AcpiTableProtocol.c b/MdeModulePkg/Universal/Acpi/AcpiTableDxe/AcpiTableProtocol.c\nindex 45c0ae6c80a6..f2a7be577855 100644\n--- a/MdeModulePkg/Universal/Acpi/AcpiTableDxe/AcpiTableProtocol.c\n+++ b/MdeModulePkg/Universal/Acpi/AcpiTableDxe/AcpiTableProtocol.c\n@@ -1947,6 +1947,107 @@ InstallAcpiTableFromHob (\n   return Status;\r\n }\r\n \r\n+/**\r\n+  This function is updating the instance with RSDP and RSDT, these are steps in the constructor that will be skipped if this HOB is available.\r\n+\r\n+  @param  AcpiTableInstance  Protocol instance private data.\r\n+  @param  GuidHob            GUID HOB header.\r\n+\r\n+  @return EFI_SUCCESS        The function completed successfully.\r\n+  @return EFI_NOT_FOUND      The function doesn't find the Rsdp from AcpiSiliconHob.\r\n+  @return EFI_ABORTED        The function could not complete successfully.\r\n+\r\n+**/\r\n+EFI_STATUS\r\n+InstallAcpiTableFromAcpiSiliconHob (\r\n+  EFI_ACPI_TABLE_INSTANCE  *AcpiTableInstance,\r\n+  EFI_HOB_GUID_TYPE        *GuidHob\r\n+  )\r\n+{\r\n+  ACPI_SILICON_HOB                              *AcpiSiliconHob;\r\n+  EFI_ACPI_3_0_ROOT_SYSTEM_DESCRIPTION_POINTER  *SiAcpiHobRsdp;\r\n+  EFI_ACPI_DESCRIPTION_HEADER                   *SiCommonAcpiTable;\r\n+  EFI_STATUS                                    Status;\r\n+  UINT8                                         *TempBuffer;\r\n+  UINTN                                         NumOfTblEntries;\r\n+\r\n+  DEBUG ((DEBUG_INFO, \"InstallAcpiTableFromAcpiSiliconHob\\n\"));\r\n+  //\r\n+  // Initial variable.\r\n+  //\r\n+  SiAcpiHobRsdp     = NULL;\r\n+  SiCommonAcpiTable = NULL;\r\n+  AcpiSiliconHob    = GET_GUID_HOB_DATA (GuidHob);\r\n+  Status            = EFI_SUCCESS;\r\n+  //\r\n+  // Got RSDP table from ACPI Silicon Hob.\r\n+  //\r\n+  SiAcpiHobRsdp = (EFI_ACPI_3_0_ROOT_SYSTEM_DESCRIPTION_POINTER *)(UINTN)(AcpiSiliconHob->Rsdp);\r\n+  if (SiAcpiHobRsdp == NULL) {\r\n+    DEBUG ((DEBUG_ERROR, \"InstallAcpiTableFromAcpiSiliconHob: Fail to locate RSDP Acpi table!!\\n\"));\r\n+    return EFI_NOT_FOUND;\r\n+  }\r\n+\r\n+  DEBUG ((DEBUG_INFO, \"Silicon ACPI RSDP address : 0x%lx\\n\", SiAcpiHobRsdp));\r\n+  AcpiTableInstance->Rsdp3 = SiAcpiHobRsdp;\r\n+\r\n+  if (SiAcpiHobRsdp->RsdtAddress != 0x00000000) {\r\n+    //\r\n+    // Initial RSDT.\r\n+    //\r\n+    TempBuffer               = (UINT8 *)(UINTN)(SiAcpiHobRsdp->RsdtAddress);\r\n+    SiCommonAcpiTable        = (EFI_ACPI_DESCRIPTION_HEADER *)TempBuffer;\r\n+    AcpiTableInstance->Rsdt3 = SiCommonAcpiTable;\r\n+\r\n+    if (SiCommonAcpiTable->Length <= sizeof (EFI_ACPI_DESCRIPTION_HEADER)) {\r\n+      DEBUG ((DEBUG_ERROR, \"RSDT length is incorrect\\n\"));\r\n+      return EFI_ABORTED;\r\n+    }\r\n+\r\n+    //\r\n+    // Calcaue 32bit Acpi table number.\r\n+    //\r\n+    NumOfTblEntries                          = (SiCommonAcpiTable->Length - sizeof (EFI_ACPI_DESCRIPTION_HEADER)) / sizeof (UINT32);\r\n+    AcpiTableInstance->NumberOfTableEntries1 = NumOfTblEntries;\r\n+    DEBUG ((DEBUG_INFO, \"32bit NumOfTblEntries : 0x%x\\n\", NumOfTblEntries));\r\n+    //\r\n+    // Enlarge the max table number from mEfiAcpiMaxNumTables to current ACPI tables + EFI_ACPI_MAX_NUM_TABLES\r\n+    //\r\n+    if (AcpiTableInstance->NumberOfTableEntries1 >= EFI_ACPI_MAX_NUM_TABLES) {\r\n+      mEfiAcpiMaxNumTables = AcpiTableInstance->NumberOfTableEntries1 + EFI_ACPI_MAX_NUM_TABLES;\r\n+      DEBUG ((DEBUG_ERROR, \"mEfiAcpiMaxNumTables : 0x%x\\n\", mEfiAcpiMaxNumTables));\r\n+    }\r\n+  } else {\r\n+    //\r\n+    // Initial XSDT.\r\n+    //\r\n+    TempBuffer              = (UINT8 *)(UINTN)(SiAcpiHobRsdp->XsdtAddress);\r\n+    SiCommonAcpiTable       = (EFI_ACPI_DESCRIPTION_HEADER *)TempBuffer;\r\n+    AcpiTableInstance->Xsdt = SiCommonAcpiTable;\r\n+\r\n+    if (SiCommonAcpiTable->Length <= sizeof (EFI_ACPI_DESCRIPTION_HEADER)) {\r\n+      DEBUG ((DEBUG_ERROR, \"XSDT length is incorrect\\n\"));\r\n+      return EFI_ABORTED;\r\n+    }\r\n+\r\n+    //\r\n+    // Calcaue 64bit Acpi table number.\r\n+    //\r\n+    NumOfTblEntries                          = (SiCommonAcpiTable->Length - sizeof (EFI_ACPI_DESCRIPTION_HEADER)) / sizeof (UINT64);\r\n+    AcpiTableInstance->NumberOfTableEntries3 = NumOfTblEntries;\r\n+    DEBUG ((DEBUG_ERROR, \"64bit NumOfTblEntries : 0x%x\\n\", NumOfTblEntries));\r\n+    //\r\n+    // Enlarge the max table number from mEfiAcpiMaxNumTables to current ACPI tables + EFI_ACPI_MAX_NUM_TABLES\r\n+    //\r\n+    if (AcpiTableInstance->NumberOfTableEntries3 >= EFI_ACPI_MAX_NUM_TABLES) {\r\n+      mEfiAcpiMaxNumTables = AcpiTableInstance->NumberOfTableEntries3 + EFI_ACPI_MAX_NUM_TABLES;\r\n+      DEBUG ((DEBUG_ERROR, \"mEfiAcpiMaxNumTables : 0x%x\\n\", mEfiAcpiMaxNumTables));\r\n+    }\r\n+  }\r\n+\r\n+  return Status;\r\n+}\r\n+\r\n /**\r\n   Constructor for the ACPI table protocol.  Initializes instance\r\n   data.\r\n@@ -1969,6 +2070,7 @@ AcpiTableAcpiTableConstructor (\n   UINT8                 *Pointer;\r\n   EFI_PHYSICAL_ADDRESS  PageAddress;\r\n   EFI_MEMORY_TYPE       AcpiAllocateMemoryType;\r\n+  EFI_HOB_GUID_TYPE     *GuidHob;\r\n \r\n   //\r\n   // Check for invalid input parameters\r\n@@ -1995,6 +2097,23 @@ AcpiTableAcpiTableConstructor (\n     SdtAcpiTableAcpiSdtConstructor (AcpiTableInstance);\r\n   }\r\n \r\n+  //\r\n+  // Check Silicon ACPI Hob.\r\n+  //\r\n+  GuidHob = GetFirstGuidHob (&gAcpiTableHobGuid);\r\n+  if (GuidHob != NULL) {\r\n+    Status = InstallAcpiTableFromAcpiSiliconHob (AcpiTableInstance, GuidHob);\r\n+    if (Status == EFI_SUCCESS) {\r\n+      DEBUG ((DEBUG_INFO, \"Installed ACPI Table from AcpiSiliconHob.\\n\"));\r\n+      return EFI_SUCCESS;\r\n+    } else {\r\n+      DEBUG ((DEBUG_ERROR, \"Fail to Installed ACPI Table from AcpiSiliconHob!!\\n\"));\r\n+      ASSERT (Status != EFI_SUCCESS);\r\n+    }\r\n+  } else {\r\n+    DEBUG ((DEBUG_INFO, \"Fail to locate AcpiSiliconHob!!\\n\"));\r\n+  }\r\n+\r\n   //\r\n   // Create RSDP table\r\n   //\r\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42535128-vul",
+      "digest": "sha256:999c9147a818b86f608e2d41a4b732da79e61e34b8577bccd432ab1fb42b38b1"
+    },
+    "patched": {
+      "ref": "n132/arvo:42535128-fix",
+      "digest": "sha256:f3ba555631aa8016bc2eddabcb4c48b90e4162fa73a16c133a11d78fdc0edd72"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/edk2/MdeModulePkg/Library/BaseBmpSupportLib/BmpSupportLib.c:387",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/edk2/MdeModulePkg/Library/BaseBmpSupportLib/BmpSupportLib.c:387"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042514715",
+  "chain": "CWE-20->CWE-787",
+  "project": "ghostpdl",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42514715",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "fc370414d680550407d6cb2a8f692c755fa02f6d",
+      "fix_commits": [
+        "fc370414d680550407d6cb2a8f692c755fa02f6d"
+      ],
+      "repo": "https://cgit.ghostscript.com/ghostpdl.git"
+    },
+    "patch": "From fc370414d680550407d6cb2a8f692c755fa02f6d Mon Sep 17 00:00:00 2001\nFrom: Chris Liddell <chris.liddell@artifex.com>\nDate: Tue, 16 Aug 2022 08:54:24 +0100\nSubject: [PATCH] oss-fuzz 50267: Type 2 charstrings, bounds check \"control\"\n stack\n\nWe have a \"control\" stack which we push/pop onto when running Subrs/GlobalSubrs.\n\nAdd bounds checking to ensure we don't over flow that stack.\n---\n base/gstype2.c | 4 +++-\n 1 file changed, 3 insertions(+), 1 deletion(-)\n\ndiff --git a/base/gstype2.c b/base/gstype2.c\nindex a4a4433..35b7f3f 100644\n--- a/base/gstype2.c\n+++ b/base/gstype2.c\n@@ -1,4 +1,4 @@\n-/* Copyright (C) 2001-2021 Artifex Software, Inc.\n+/* Copyright (C) 2001-2022 Artifex Software, Inc.\n    All Rights Reserved.\n \n    This software is provided AS-IS with no warranty, either express or\n@@ -223,6 +223,7 @@ gs_type2_interpret(gs_type1_state * pcis, const gs_glyph_data_t *pgd,\n                 return_error(gs_error_invalidfont);\n             case c_callsubr:\n                 if (CS_CHECK_CSTACK_BOUNDS(csp, cstack)) {\n+                    CS_CHECK_IPSTACK(&(ipsp[1]), pcis->ipstack);\n                     c = fixed2int_var(*csp) + pdata->subroutineNumberBias;\n                     code = pdata->procs.subr_data\n                         (pfont, c, false, &ipsp[1].cs_data);\n@@ -556,6 +557,7 @@ gs_type2_interpret(gs_type1_state * pcis, const gs_glyph_data_t *pgd,\n                 continue;\n             case c2_callgsubr:\n                 if (CS_CHECK_CSTACK_BOUNDS(csp, cstack)) {\n+                    CS_CHECK_IPSTACK(&(ipsp[1]), pcis->ipstack);\n                     c = fixed2int_var(*csp) + pdata->gsubrNumberBias;\n                     code = pdata->procs.subr_data\n                         (pfont, c, true, &ipsp[1].cs_data);\n-- \n2.55.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42514715-vul",
+      "digest": "sha256:01daefce708de910f8b86ea8147658d74f902200dadde4e958611e0a66e836e0"
+    },
+    "patched": {
+      "ref": "n132/arvo:42514715-fix",
+      "digest": "sha256:c5f220a1deb0f6eccfb847c009c0814fd39fa90b90584b0d48e2f528e4c995e1"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/ghostpdl/./base/gsgdata.c:119",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/ghostpdl/./base/gsgdata.c:119"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

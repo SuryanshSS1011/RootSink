@@ -1,0 +1,82 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-937496795",
+  "chain": "CWE-1285->CWE-190->CWE-125",
+  "project": "libexif",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42500238",
+    "commit_range": {
+      "introduced": null,
+      "fixed": null,
+      "fix_commits": [
+        "eb452f533b2d906130a557ced3d6e38d7b064ff9"
+      ],
+      "repo": "https://github.com/libexif/libexif"
+    },
+    "patch": "diff --git a/libexif/apple/exif-mnote-data-apple.c b/libexif/apple/exif-mnote-data-apple.c\nindex e9ab90cf..dd9edcc3 100644\n--- a/libexif/apple/exif-mnote-data-apple.c\n+++ b/libexif/apple/exif-mnote-data-apple.c\n@@ -90,7 +90,7 @@ exif_mnote_data_apple_load(ExifMnoteData *md, const unsigned char *buf, unsigned\n     tcount = (unsigned int) exif_get_short(buf + ofs + 14, d->order);\n \n     /* Sanity check the offset */\n-    if (buf_size < 6 + 16 + tcount * 6 + 4) {\n+    if (buf_size < d->offset + 6 + 16 + tcount * 12 + 4) {\n         exif_log(md->log, EXIF_LOG_CODE_CORRUPT_DATA,\n                  \"ExifMnoteDataApple\", \"Short MakerNote\");\n         /*printf(\"%s(%d)\\n\", __FUNCTION__, __LINE__);*/\n@@ -110,8 +110,14 @@ exif_mnote_data_apple_load(ExifMnoteData *md, const unsigned char *buf, unsigned\n         /*printf(\"%s(%d)\\n\", __FUNCTION__, __LINE__);*/\n         return;\n     }\n+    memset(d->entries, 0, sizeof(MnoteAppleEntry) * tcount);\n \n     for (i = 0; i < tcount; i++) {\n+\tif (ofs + 12 > buf_size) {\n+\t\texif_log (md->log, EXIF_LOG_CODE_CORRUPT_DATA,\n+                                  \"ExifMnoteApplet\", \"Tag size overflow detected (%u vs size %u)\", ofs + 12, buf_size);\n+\t\tbreak;\n+\t}\n         d->entries[i].tag = exif_get_short(buf + ofs, d->order);\n         d->entries[i].format = exif_get_short(buf + ofs + 2, d->order);\n         d->entries[i].components = exif_get_long(buf + ofs + 4, d->order);\n@@ -170,9 +176,8 @@ exif_mnote_data_apple_set_byte_order(ExifMnoteData *md , ExifByteOrder o) {\n     }\n \n     for (i = 0; i < d->count; i++) {\n-        if (d->entries[i].size != (exif_format_get_size(d->entries[i].format) * d->entries[i].components)) {\n-            continue;\n-        }\n+\tif (d->entries[i].components && (d->entries[i].size/d->entries[i].components < exif_format_get_size (d->entries[i].format)))\n+\t\tcontinue;\n         exif_array_set_byte_order(d->entries[i].format, d->entries[i].data,\n                                   d->entries[i].components, d->entries[i].order, o);\n         d->entries[i].order = o;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42500238-vul",
+      "digest": "sha256:9b276784d43155a8d8a1870bc58bb120a40ce9fbb5db75f36e9c01fb39badddd"
+    },
+    "patched": {
+      "ref": "n132/arvo:42500238-fix",
+      "digest": "sha256:fe08f23cc7196cc2e1c9c1422b921da63dd5bc49931b84835dcf19b2d2b06012"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/libexif/libexif/exif-utils.c:137",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 190,
+      "role": "intermediate",
+      "witness": {
+        "method": "ubsan-rebuild",
+        "recipe": "SANITIZER=undefined compile && $ENTRYPOINT",
+        "ubsan_options": "print_stacktrace=1:halt_on_error=0:silence_unsigned_overflow=0:symbolize=1"
+      },
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/libexif/libexif/exif-utils.c:137"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

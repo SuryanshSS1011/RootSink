@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042482549",
+  "chain": "CWE-456->CWE-457",
+  "project": "ndpi",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42482549",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "3e259aac986bc86aa89adc2994811bb6f26a0649",
+      "fix_commits": [
+        "3e259aac986bc86aa89adc2994811bb6f26a0649"
+      ],
+      "repo": "https://github.com/ntop/nDPI"
+    },
+    "patch": "From 3e259aac986bc86aa89adc2994811bb6f26a0649 Mon Sep 17 00:00:00 2001\nFrom: Philippe Antoine <contact@catenacyber.fr>\nDate: Thu, 19 Mar 2020 17:19:28 +0100\nSubject: [PATCH] tls_supported_versions only if version_str is initialized\n\nWith version_len == (extension_len-1)\n---\n src/lib/protocols/tls.c | 4 ++--\n 1 file changed, 2 insertions(+), 2 deletions(-)\n\ndiff --git a/src/lib/protocols/tls.c b/src/lib/protocols/tls.c\nindex 9cf11b2..d32584b 100644\n--- a/src/lib/protocols/tls.c\n+++ b/src/lib/protocols/tls.c\n@@ -1136,10 +1136,10 @@ int processClientServerHello(struct ndpi_detection_module_struct *ndpi_struct,\n \t\t\tversion_str_len += rc;\n \t\t    }\n \t\t  }\n-\t\t}\n-\n \t\tif(flow->protos.stun_ssl.ssl.tls_supported_versions == NULL)\n \t\t  flow->protos.stun_ssl.ssl.tls_supported_versions = ndpi_strdup(version_str);\n+\t\t}\n+\n \t      }\n \t      \n \t      extension_offset += extension_len;\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42482549-vul",
+      "digest": "sha256:9935fa8b618525fda5997d51ecce52e62de3df8d88afab7cfb45b8215dcee7f5"
+    },
+    "patched": {
+      "ref": "n132/arvo:42482549-fix",
+      "digest": "sha256:a6e79d93831f6620a199189c9d1942c9db36ebdf850bf3f49cd0a9f19a2d9042"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/ndpi/src/lib/ndpi_main.c:139",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/ndpi/src/lib/ndpi_main.c:139"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

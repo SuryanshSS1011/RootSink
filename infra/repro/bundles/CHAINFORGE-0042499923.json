@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042499923",
+  "chain": "CWE-20->CWE-125",
+  "project": "bloaty",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42499923",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "cc46dac3c0dd55b06c53206744db058f03c2b10a",
+      "fix_commits": [
+        "cc46dac3c0dd55b06c53206744db058f03c2b10a"
+      ],
+      "repo": "https://github.com/google/bloaty"
+    },
+    "patch": "diff --git a/src/pe.cc b/src/pe.cc\nindex 63264506..02824ba7 100644\n--- a/src/pe.cc\n+++ b/src/pe.cc\n@@ -109,13 +109,9 @@ bool PeFile::Initialize() {\n     return false;\n   }\n \n-  if ((dos_header_.AddressOfNewExeHeader + sizeof(pe_header)) > data_.size()) {\n-    // Cannot fit the headers\n-    return false;\n-  }\n-\n-  memcpy(&pe_header_, data_.data() + dos_header_.AddressOfNewExeHeader,\n-         sizeof(pe_header_));\n+  string_view exe_header =\n+      GetRegion(dos_header_.AddressOfNewExeHeader, sizeof(pe_header));\n+  memcpy(&pe_header_, exe_header.data(), exe_header.size());\n \n   if (!std::equal(pe_header_.signature, pe_header_.signature + sizeof(PE_Magic),\n                   std::begin(PE_Magic))) {\ndiff --git a/tests/testdata/fuzz_corpus/clusterfuzz-testcase-minimized-fuzz_target-4987539889979392 b/tests/testdata/fuzz_corpus/clusterfuzz-testcase-minimized-fuzz_target-4987539889979392\nnew file mode 100644\nindex 00000000..52ac8404\n--- /dev/null\n+++ b/tests/testdata/fuzz_corpus/clusterfuzz-testcase-minimized-fuzz_target-4987539889979392\n@@ -0,0 +1 @@\n+MZ   \ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd  \ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd    \ufffd\ufffd          \ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd \ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\ufffd\n\\ No newline at end of file\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42499923-vul",
+      "digest": "sha256:cb8d994531af5750941b67b8ec42989b1892bf8b11f8a2b6ef1af9453e6a1c64"
+    },
+    "patched": {
+      "ref": "n132/arvo:42499923-fix",
+      "digest": "sha256:edf03c43a647dfb30fc43b3f2d5b7b828a8c45d7c59e61a79060685f6fca8710"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/bloaty/src/pe.cc:117",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/bloaty/src/pe.cc:117"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

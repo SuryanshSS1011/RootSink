@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042522181",
+  "chain": "CWE-416->CWE-125",
+  "project": "mruby",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42522181",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "8d1192f8a28034b1931a41e8c55cd86715101d0c",
+      "fix_commits": [
+        "8d1192f8a28034b1931a41e8c55cd86715101d0c"
+      ],
+      "repo": "https://github.com/mruby/mruby"
+    },
+    "patch": "From 8d1192f8a28034b1931a41e8c55cd86715101d0c Mon Sep 17 00:00:00 2001\nFrom: \"Yukihiro \\\"Matz\\\" Matsumoto\" <matz@ruby.or.jp>\nDate: Mon, 13 Mar 2023 18:52:03 +0900\nSubject: [PATCH] gc.c (mrb_field_write_barrier): change the condition\n\nMinor GC may be suspended with the MRB_GC_STATE_SWEEP.\n---\n src/gc.c | 7 +++----\n 1 file changed, 3 insertions(+), 4 deletions(-)\n\ndiff --git a/src/gc.c b/src/gc.c\nindex e5488df..8232976 100644\n--- a/src/gc.c\n+++ b/src/gc.c\n@@ -1349,12 +1349,11 @@ mrb_field_write_barrier(mrb_state *mrb, struct RBasic *obj, struct RBasic *value\n   mrb_assert(gc->state == MRB_GC_STATE_MARK || (!is_dead(gc, value) && !is_dead(gc, obj)));\n   mrb_assert(is_generational(gc) || gc->state != MRB_GC_STATE_ROOT);\n \n-  if (is_generational(gc) || gc->state == MRB_GC_STATE_MARK) {\n-    add_gray_list(mrb, gc, value);\n+  if (gc->state == MRB_GC_STATE_SWEEP) {\n+    paint_partial_white(gc, obj); /* for never write barriers */\n   }\n   else {\n-    mrb_assert(gc->state == MRB_GC_STATE_SWEEP);\n-    paint_partial_white(gc, obj); /* for never write barriers */\n+    add_gray_list(mrb, gc, value);\n   }\n }\n \n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42522181-vul",
+      "digest": "sha256:61fab6e587511ff73bc4b36523fecdd9a8df70e9b28e96a03788130f1377a66b"
+    },
+    "patched": {
+      "ref": "n132/arvo:42522181-fix",
+      "digest": "sha256:88e70c4d45328cb0bfbf19c6416015cf9221c874e42fd1fe226a3e2ef2fdfca9"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/mruby/src/gc.c:789",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/mruby/src/gc.c:789"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

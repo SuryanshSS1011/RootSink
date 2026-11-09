@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-963793831",
+  "chain": "CWE-456->CWE-457",
+  "project": "curl",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42477658",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/curl/curl/commit/6de10536928d212387cc22fbf6e9793f260fc390",
+      "fix_commits": [
+        "6de10536928d212387cc22fbf6e9793f260fc390"
+      ],
+      "repo": "https://github.com/curl/curl"
+    },
+    "patch": "diff --git a/lib/smb.c b/lib/smb.c\nindex f66c05ca4265..12f99257fca8 100644\n--- a/lib/smb.c\n+++ b/lib/smb.c\n@@ -682,7 +682,8 @@ static CURLcode smb_connection_state(struct connectdata *conn, bool *done)\n \n   switch(smbc->state) {\n   case SMB_NEGOTIATE:\n-    if(h->status || smbc->got < sizeof(*nrsp) + sizeof(smbc->challenge) - 1) {\n+    if((smbc->got < sizeof(*nrsp) + sizeof(smbc->challenge) - 1) ||\n+       h->status) {\n       connclose(conn, \"SMB: negotiation failed\");\n       return CURLE_COULDNT_CONNECT;\n     }\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42477658-vul",
+      "digest": "sha256:71a77e1b0a41b23627818d3ef3925edd04dd2c5bc836a97bdad5870b6de558dd"
+    },
+    "patched": {
+      "ref": "n132/arvo:42477658-fix",
+      "digest": "sha256:36880cacadba33b91d8c172592ba198c9979578182444d57c75c547084eadc9d"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/curl/lib/smb.c:684",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/curl/lib/smb.c:684"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042511252",
+  "chain": "CWE-20->CWE-125",
+  "project": "libdwarf",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42511252",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "24dff940cc4c71a9c3cb5475aee231b19163a12c",
+      "fix_commits": [
+        "24dff940cc4c71a9c3cb5475aee231b19163a12c"
+      ],
+      "repo": "https://github.com/davea42/libdwarf-code"
+    },
+    "patch": "diff --git a/src/lib/libdwarf/dwarf_debuglink.c b/src/lib/libdwarf/dwarf_debuglink.c\nindex f07bafbd..e3b9029b 100644\n--- a/src/lib/libdwarf/dwarf_debuglink.c\n+++ b/src/lib/libdwarf/dwarf_debuglink.c\n@@ -75,10 +75,18 @@ is_full_path(char *path,int joinchar)\n {\n     unsigned char c = path[0];\n     unsigned char c1 = 0;\n+    if (!c) {\n+        /* empty string. */\n+        return FALSE;\n+    }\n     if (c == joinchar) {\n         return TRUE;\n     }\n     c1 = path[1];\n+    if (!c1) {\n+        /* No second character */\n+        return FALSE;\n+    }\n     if (c1 == ':') {\n         /*  Windows full path, we assume\n             We just assume nobody would be silly enough\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42511252-vul",
+      "digest": "sha256:b0fcdcc4f0bc0408fd0675e382cfd24236e581ed56f3dc78ab1ff63e29048277"
+    },
+    "patched": {
+      "ref": "n132/arvo:42511252-fix",
+      "digest": "sha256:c487ffaf77fa63931c77bc94f27059233d90288db172f0905ec3411b6e3adead"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "global-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/libdwarf/src/lib/libdwarf/dwarf_debuglink.c:81",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "global-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/libdwarf/src/lib/libdwarf/dwarf_debuglink.c:81"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

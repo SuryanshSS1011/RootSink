@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042486096",
+  "chain": "CWE-1285->CWE-125",
+  "project": "assimp",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42486096",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "1fe9d405f5c4811eb6073cf5fc6622842192e06b",
+      "fix_commits": [
+        "1fe9d405f5c4811eb6073cf5fc6622842192e06b"
+      ],
+      "repo": "https://github.com/assimp/assimp"
+    },
+    "patch": "diff --git a/code/AssetLib/MDL/MDLLoader.cpp b/code/AssetLib/MDL/MDLLoader.cpp\nindex 40475021b8..c59375da03 100644\n--- a/code/AssetLib/MDL/MDLLoader.cpp\n+++ b/code/AssetLib/MDL/MDLLoader.cpp\n@@ -600,7 +600,7 @@ void MDLImporter::InternReadFile_3DGS_MDL345() {\n \n     // need to read all textures\n     for (unsigned int i = 0; i < (unsigned int)pcHeader->num_skins; ++i) {\n-        if (szCurrent >= szEnd) {\n+        if (szCurrent + sizeof(uint32_t) > szEnd) {\n             throw DeadlyImportError(\"Texture data past end of file.\");\n         }\n         BE_NCONST MDL::Skin *pcSkin;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42486096-vul",
+      "digest": "sha256:5c405df4ebe10bd9f7eef9065fd27755d101deabb10274ab96034d9bc14e11f7"
+    },
+    "patched": {
+      "ref": "n132/arvo:42486096-fix",
+      "digest": "sha256:70705a8f8f7eff64165000a46ab3fc9ae6ef344c967da3c6a0af1a9ae82b3359"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/assimp/code/AssetLib/MDL/MDLLoader.cpp:604",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/assimp/code/AssetLib/MDL/MDLLoader.cpp:604"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

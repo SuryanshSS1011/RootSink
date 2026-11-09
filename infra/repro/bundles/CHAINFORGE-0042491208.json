@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042491208",
+  "chain": "CWE-1285->CWE-125",
+  "project": "wolfssl",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42491208",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "46e260dd61971cc180e9313a6bbda79e5fc88f00",
+      "fix_commits": [
+        "46e260dd61971cc180e9313a6bbda79e5fc88f00"
+      ],
+      "repo": "https://github.com/wolfssl/wolfssl"
+    },
+    "patch": "diff --git a/src/tls.c b/src/tls.c\nindex 4aa1078daad..15252055089 100644\n--- a/src/tls.c\n+++ b/src/tls.c\n@@ -3091,14 +3091,14 @@ static int TLSX_CSR_Parse(WOLFSSL* ssl, byte* input, word16 length,\n             case WOLFSSL_CSR_OCSP: {\n \n                 /* skip responder_id_list */\n-                if (length - offset < OPAQUE16_LEN)\n+                if ((int)(length - offset) < OPAQUE16_LEN)\n                     return BUFFER_ERROR;\n \n                 ato16(input + offset, &size);\n                 offset += OPAQUE16_LEN + size;\n \n                 /* skip request_extensions */\n-                if (length - offset < OPAQUE16_LEN)\n+                if ((int)(length - offset) < OPAQUE16_LEN)\n                     return BUFFER_ERROR;\n \n                 ato16(input + offset, &size);\n@@ -3502,7 +3502,7 @@ static int TLSX_CSR2_Parse(WOLFSSL* ssl, byte* input, word16 length,\n             return BUFFER_ERROR;\n \n         while (length > offset) {\n-            if (length - offset < ENUM_LEN + OPAQUE16_LEN)\n+            if ((int)(length - offset) < ENUM_LEN + OPAQUE16_LEN)\n                 return BUFFER_ERROR;\n \n             status_type = input[offset++];\n@@ -3517,7 +3517,7 @@ static int TLSX_CSR2_Parse(WOLFSSL* ssl, byte* input, word16 length,\n                 case WOLFSSL_CSR2_OCSP:\n                 case WOLFSSL_CSR2_OCSP_MULTI:\n                     /* skip responder_id_list */\n-                    if (length - offset < OPAQUE16_LEN)\n+                    if ((int)(length - offset) < OPAQUE16_LEN)\n                         return BUFFER_ERROR;\n \n                     ato16(input + offset, &size);\n@@ -3526,7 +3526,7 @@ static int TLSX_CSR2_Parse(WOLFSSL* ssl, byte* input, word16 length,\n \n                     offset += OPAQUE16_LEN + size;\n                     /* skip request_extensions */\n-                    if (length - offset < OPAQUE16_LEN)\n+                    if ((int)(length - offset) < OPAQUE16_LEN)\n                         return BUFFER_ERROR;\n \n                     ato16(input + offset, &size);\n@@ -8517,7 +8517,7 @@ static int TLSX_PreSharedKey_Parse(WOLFSSL* ssl, byte* input, word16 length,\n         TLSX_Remove(&ssl->extensions, TLSX_PRE_SHARED_KEY, ssl->heap);\n \n         /* Length of identities and of binders. */\n-        if (length - idx < OPAQUE16_LEN + OPAQUE16_LEN)\n+        if ((int)(length - idx) < OPAQUE16_LEN + OPAQUE16_LEN)\n             return BUFFER_E;\n \n         /* Length of identities. */\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42491208-vul",
+      "digest": "sha256:691bcc553cb8bb1f91ee26461b42cf5e3868aa58dcda0be42ca28bf4774e932a"
+    },
+    "patched": {
+      "ref": "n132/arvo:42491208-fix",
+      "digest": "sha256:588eaf4c7b4c57457741baab320b7e64d4a5a8b08260f4aeab62f1200aa4ef22"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/wolf-ssl-ssh-fuzzers/oss-fuzz/projects/wolf-ssl-ssh/fuzzers/wolfssl/wolfssl/./wolfcrypt/src/misc.c:378",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/wolf-ssl-ssh-fuzzers/oss-fuzz/projects/wolf-ssl-ssh/fuzzers/wolfssl/wolfssl/./wolfcrypt/src/misc.c:378"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

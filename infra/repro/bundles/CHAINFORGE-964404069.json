@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-964404069",
+  "chain": "CWE-456->CWE-457",
+  "project": "c-blosc2",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42488598",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/Blosc/c-blosc2/commit/2bebd7ae5ef645ea13023faacb2339663c1c2377",
+      "fix_commits": [
+        "2bebd7ae5ef645ea13023faacb2339663c1c2377"
+      ],
+      "repo": "https://github.com/Blosc/c-blosc2"
+    },
+    "patch": "diff --git a/.github/workflows/cmake.yml b/.github/workflows/cmake.yml\nindex b211ef310..a1fdc5554 100644\n--- a/.github/workflows/cmake.yml\n+++ b/.github/workflows/cmake.yml\n@@ -7,32 +7,6 @@ jobs:\n     strategy:\n       fail-fast: false\n       matrix:\n-        name: [\n-          Ubuntu GCC,\n-          Ubuntu GCC OSB,\n-          Ubuntu GCC External LZ4,\n-          Ubuntu GCC External LIZARD,\n-          Ubuntu GCC External ZLIB,\n-          # Not too recent Zstd libs (< 1.4.4) in distros perform pretty bad on compression\n-          # ratios when using dictionaries, making some tests not passing.\n-          # Commenting this out for the time being.\n-          # Ubuntu GCC External ZSTD,\n-          Ubuntu Clang,\n-          Ubuntu Clang No AVX2,\n-          Ubuntu Clang No LZ4,\n-          Ubuntu Clang No LIZARD,\n-          Ubuntu Clang No SNAPPY,\n-          Ubuntu Clang No ZLIB,\n-          Ubuntu Clang No ZSTD,\n-          Windows MSVC Win32,\n-          Windows MSVC Win64,\n-          # Windows GCC started to fail with commit 39e4c3c which was just a printf removal.\n-          # Looks like this is a problem with this platform in upstream CI.\n-          # Commenting this out for now.\n-          # Windows GCC,\n-          macOS Clang,\n-          macOS GCC\n-        ]\n         include:\n           - name: Ubuntu GCC\n             os: ubuntu-latest\n@@ -63,6 +37,9 @@ jobs:\n             packages: zlib1g-dev\n             cmake-args: -DPREFER_EXTERNAL_ZLIB=ON\n \n+            # Not too recent Zstd libs (< 1.4.4) in distros perform pretty bad on compression\n+            # ratios when using dictionaries, making some tests not passing.\n+            # Commenting this out for the time being.\n             # - name: Ubuntu GCC External ZSTD\n             #   os: ubuntu-latest\n             #   compiler: gcc\n@@ -113,6 +90,9 @@ jobs:\n             compiler: cl\n             cmake-args: -A x64\n \n+            # Windows GCC started to fail with commit 39e4c3c which was just a printf removal.\n+            # Looks like this is a problem with this platform in upstream CI.\n+            # Commenting this out for now.\n             # - name: Windows GCC\n             # os: windows-latest\n             # compiler: gcc\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42488598-vul",
+      "digest": "sha256:7f0f3a881a18b5947e6fbd558ba5e906491fc258fb5b4b967f27f35c31b304a7"
+    },
+    "patched": {
+      "ref": "n132/arvo:42488598-fix",
+      "digest": "sha256:dc7f843d34e204357b9cf48011a13550a77733aa90d2bb26720e77cea2ef1d5f"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/c-blosc2/internal-complibs/lizard-1.0/lizard_decompress_liz.h:166",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/c-blosc2/internal-complibs/lizard-1.0/lizard_decompress_liz.h:166"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

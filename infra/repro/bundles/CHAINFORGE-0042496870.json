@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042496870",
+  "chain": "CWE-1285->CWE-125",
+  "project": "json",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42496870",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "871cebaf84d4f896bc730a92937f8d02e09b0023",
+      "fix_commits": [
+        "871cebaf84d4f896bc730a92937f8d02e09b0023"
+      ],
+      "repo": "https://github.com/nlohmann/json"
+    },
+    "patch": "diff --git a/src/json.hpp b/src/json.hpp\nindex 4515ca6796..76824cf850 100644\n--- a/src/json.hpp\n+++ b/src/json.hpp\n@@ -6871,6 +6871,12 @@ class basic_json\n         {\n             throw std::out_of_range(\"len+offset out of range\");\n         }\n+\n+        // last case: reading past the end of the vector\n+        if (len + offset > size)\n+        {\n+            throw std::out_of_range(\"len+offset out of range\");\n+        }\n     }\n \n     /*!\ndiff --git a/src/json.hpp.re2c b/src/json.hpp.re2c\nindex 6d649db347..10bfaf575f 100644\n--- a/src/json.hpp.re2c\n+++ b/src/json.hpp.re2c\n@@ -6871,6 +6871,12 @@ class basic_json\n         {\n             throw std::out_of_range(\"len+offset out of range\");\n         }\n+\n+        // last case: reading past the end of the vector\n+        if (len + offset > size)\n+        {\n+            throw std::out_of_range(\"len+offset out of range\");\n+        }\n     }\n \n     /*!\ndiff --git a/test/src/unit-regression.cpp b/test/src/unit-regression.cpp\nindex 1e720ddbf3..033041ab9a 100644\n--- a/test/src/unit-regression.cpp\n+++ b/test/src/unit-regression.cpp\n@@ -540,4 +540,11 @@ TEST_CASE(\"regression tests\")\n         CHECK(j.is_number_float());\n         CHECK(j.dump() == \"1.66020696663386e+20\");\n     }\n+\n+    SECTION(\"issue #405 - Heap-buffer-overflow (OSS-Fuzz issue 342)\")\n+    {\n+        // original test case\n+        std::vector<uint8_t> vec {0x65, 0xf5, 0x0a, 0x48, 0x21};\n+        CHECK_THROWS_AS(json::from_cbor(vec), std::out_of_range);\n+    }\n }\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42496870-vul",
+      "digest": "sha256:5acc81c3faf56c1a40d98e7813135265c8c2da2761c0cf6240efb9279d51a748"
+    },
+    "patched": {
+      "ref": "n132/arvo:42496870-fix",
+      "digest": "sha256:e85a069c6996fb0a4af4f493d7a4e3118d4609d50e4cf593cb397e226ceeee31"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/json/src/json.hpp:7290",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/json/src/json.hpp:7290"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

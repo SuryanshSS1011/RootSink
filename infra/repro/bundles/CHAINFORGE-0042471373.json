@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042471373",
+  "chain": "CWE-416->CWE-125",
+  "project": "poppler",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42471373",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "08572e1bdca03baed694dd9828bb2b878865e669",
+      "fix_commits": [
+        "08572e1bdca03baed694dd9828bb2b878865e669"
+      ],
+      "repo": "https://gitlab.freedesktop.org/poppler/poppler.git"
+    },
+    "patch": "From 08572e1bdca03baed694dd9828bb2b878865e669 Mon Sep 17 00:00:00 2001\nFrom: Albert Astals Cid <aacid@kde.org>\nDate: Sat, 3 Nov 2018 12:21:41 +0100\nSubject: [PATCH] Parser::makeStream: Fix crash on malformed files\n\nfixes oss-fuzz/11244\n---\n poppler/Parser.cc | 4 ++++\n 1 file changed, 4 insertions(+)\n\ndiff --git a/poppler/Parser.cc b/poppler/Parser.cc\nindex 8774541..2cf2bd1 100644\n--- a/poppler/Parser.cc\n+++ b/poppler/Parser.cc\n@@ -230,6 +230,10 @@ Stream *Parser::makeStream(Object &&dict, Guchar *fileKey,\n     length = 0;\n   }\n \n+  // the above dictLookup can cause a xref reconstruction if the file is damaged\n+  // so we need to update the entry pointer\n+  entry = xref ? xref->getEntry(objNum, false) : nullptr;\n+\n   // check for length in damaged file\n   if (xref && xref->getStreamEnd(pos, &endPos)) {\n     length = endPos - pos;\n-- \n2.55.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42471373-vul",
+      "digest": "sha256:4d42edaeb81552ceeef0763ab5648c3c51b727d065678bb0597d2229099215d2"
+    },
+    "patched": {
+      "ref": "n132/arvo:42471373-fix",
+      "digest": "sha256:a059cf71faa8fddb0f0466222cc2a4a0290d3274fe6f4c5648078974216d6e7d"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/poppler/poppler/XRef.h:86",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/poppler/poppler/XRef.h:86"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

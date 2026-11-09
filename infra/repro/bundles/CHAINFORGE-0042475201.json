@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042475201",
+  "chain": "CWE-1285->CWE-125",
+  "project": "karchive",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42475201",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "9bf237c71c36aea23b96e0bf5cd2752234f0e330",
+      "fix_commits": [
+        "9bf237c71c36aea23b96e0bf5cd2752234f0e330"
+      ],
+      "repo": "https://invent.kde.org/frameworks/karchive.git"
+    },
+    "patch": "diff --git a/src/kar.cpp b/src/kar.cpp\nindex eb87eeaa9e30a4f0639d08eac3442ffb56ecd0f8..2d6686106ada1b02d815676ea19bb385c30230e9 100644\n--- a/src/kar.cpp\n+++ b/src/kar.cpp\n@@ -164,7 +164,13 @@ bool KAr::openArchive(QIODevice::OpenMode mode)\n                     delete[] ar_longnames;\n                     return false;\n                 }\n-                name = &ar_longnames[name.mid(1, 15).toInt()];\n+                const int ar_longnamesIndex = name.mid(1, 15).toInt();\n+                if (ar_longnamesIndex >= size) {\n+                    setErrorString(tr(\"Invalid longfilename position reference\"));\n+                    delete[] ar_longnames;\n+                    return false;\n+                }\n+                name = &ar_longnames[ar_longnamesIndex];\n                 name = name.left(name.indexOf(\"/\"));\n             }\n         }\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42475201-vul",
+      "digest": "sha256:738463316e1ee56a5d66754940f0554a4f4e0231628d35722f656c08325d9c4a"
+    },
+    "patched": {
+      "ref": "n132/arvo:42475201-fix",
+      "digest": "sha256:aace9c14a465b51c31668a85591c6dd1f1f25944a0d07988cf48a47ed5a6660d"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/qtbase/src/corelib/tools/qbytearray.cpp:1305",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/qtbase/src/corelib/tools/qbytearray.cpp:1305"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

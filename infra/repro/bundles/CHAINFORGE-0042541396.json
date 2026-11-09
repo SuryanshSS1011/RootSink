@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042541396",
+  "chain": "CWE-456->CWE-457",
+  "project": "mupdf",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42541396",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "e1a691ca498dd4aa4808b94edfb9b3448ca7ed51",
+      "fix_commits": [
+        "e1a691ca498dd4aa4808b94edfb9b3448ca7ed51"
+      ],
+      "repo": "git://git.ghostscript.com/jbig2dec.git"
+    },
+    "patch": "From e1a691ca498dd4aa4808b94edfb9b3448ca7ed51 Mon Sep 17 00:00:00 2001\nFrom: Sebastian Rasmussen <sebras@gmail.com>\nDate: Fri, 3 Aug 2018 12:28:23 +0800\nSubject: [PATCH] jbig2dec: Initialize entire page structure upon allocation.\n\nWithout this uninitialized values in the page structure will be\nused when parsing segments. An example of this is in\njbig2_immediate_generic_region() when a the height of the page is\nused to determine if the region is outside of the page.\n---\n jbig2.c | 8 ++++++++\n 1 file changed, 8 insertions(+)\n\ndiff --git a/jbig2.c b/jbig2.c\nindex 38d10bb..ab507a7 100644\n--- a/jbig2.c\n+++ b/jbig2.c\n@@ -150,6 +150,14 @@ jbig2_ctx_new(Jbig2Allocator *allocator, Jbig2Options options, Jbig2GlobalCtx *g\n         for (index = 0; index < result->max_page_index; index++) {\n             result->pages[index].state = JBIG2_PAGE_FREE;\n             result->pages[index].number = 0;\n+            result->pages[index].width = 0;\n+            result->pages[index].height = 0xffffffff;\n+            result->pages[index].x_resolution = 0;\n+            result->pages[index].y_resolution = 0;\n+            result->pages[index].stripe_size = 0;\n+            result->pages[index].striped = 0;\n+            result->pages[index].end_row = 0;\n+            result->pages[index].flags = 0;\n             result->pages[index].image = NULL;\n         }\n     }\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42541396-vul",
+      "digest": "sha256:149cb8d13056a0cd28038a2d22fa4cb98e0589b419644efd42dcca3834b5c616"
+    },
+    "patched": {
+      "ref": "n132/arvo:42541396-fix",
+      "digest": "sha256:2b98ee416b6d821f74ce5368726fbd7b70440c4fbc848dacb3b5117501e87dc2"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/mupdf/thirdparty/jbig2dec/jbig2_generic.c:880",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/mupdf/thirdparty/jbig2dec/jbig2_generic.c:880"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

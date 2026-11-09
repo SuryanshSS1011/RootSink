@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-953988706",
+  "chain": "CWE-129->CWE-119",
+  "project": "aom",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42470635",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://aomedia.googlesource.com/aom/+/2dffbafc910846896f1fb77b4a47173ba26f781e%5E%21/",
+      "fix_commits": [
+        "2dffbafc910846896f1fb77b4a47173ba26f781e"
+      ],
+      "repo": "https://aomedia.googlesource.com/aom"
+    },
+    "patch": "diff --git a/av1/common/av1_loopfilter.c b/av1/common/av1_loopfilter.c\nindex ff24a3e..0b2446f 100644\n--- a/av1/common/av1_loopfilter.c\n+++ b/av1/common/av1_loopfilter.c\n@@ -1319,12 +1319,16 @@\n   int count;\n   const int step = 1 << subsampling;\n   const unsigned int two_block_mask = subsampling ? 5 : 3;\n+  int offset = 0;\n \n   for (mask = mask_16x16 | mask_8x8 | mask_4x4; mask; mask >>= step * count) {\n     const loop_filter_thresh *lfi = lfi_n->lfthr + *lfl;\n-    // Next block's thresholds.\n-    const loop_filter_thresh *lfin = lfi_n->lfthr + *(lfl + step);\n-    (void)lfin;\n+    // Next block's thresholds, when it is within current 64x64 block.\n+    // If it is out of bound, its mask is zero, and it points to current edge's\n+    // filter parameters, instead of next edge's.\n+    int next_edge = step;\n+    if (offset + next_edge >= MI_SIZE_64X64) next_edge = 0;\n+    const loop_filter_thresh *lfin = lfi_n->lfthr + *(lfl + next_edge);\n \n     count = 1;\n     if (mask & 1) {\n@@ -1385,6 +1389,7 @@\n     mask_16x16 >>= step * count;\n     mask_8x8 >>= step * count;\n     mask_4x4 >>= step * count;\n+    offset += step * count;\n   }\n }\n \n@@ -1396,12 +1401,16 @@\n   int count;\n   const int step = 1 << subsampling;\n   const unsigned int two_block_mask = subsampling ? 5 : 3;\n+  int offset = 0;\n \n   for (mask = mask_16x16 | mask_8x8 | mask_4x4; mask; mask >>= step * count) {\n     const loop_filter_thresh *lfi = lfi_n->lfthr + *lfl;\n-    // Next block's thresholds.\n-    const loop_filter_thresh *lfin = lfi_n->lfthr + *(lfl + step);\n-    (void)lfin;\n+    // Next block's thresholds, when it is within current 64x64 block.\n+    // If it is out of bound, its mask is zero, and it points to current edge's\n+    // filter parameters, instead of next edge's.\n+    int next_edge = step;\n+    if (offset + next_edge >= MI_SIZE_64X64) next_edge = 0;\n+    const loop_filter_thresh *lfin = lfi_n->lfthr + *(lfl + next_edge);\n \n     count = 1;\n     if (mask & 1) {\n@@ -1461,6 +1470,7 @@\n     mask_16x16 >>= step * count;\n     mask_8x8 >>= step * count;\n     mask_4x4 >>= step * count;\n+    offset += step * count;\n   }\n }\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42470635-vul",
+      "digest": "sha256:7aa944f22b2b280b76d29214c15f2cc6b2c8b45d0ba70c1104583c9d61b4939c"
+    },
+    "patched": {
+      "ref": "n132/arvo:42470635-fix",
+      "digest": "sha256:9041ad32e64520a25d5fd5cc9386e82e946cd91a63c667c42852b278275a9d85"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "crash_site": "/src/aom/av1/common/av1_loopfilter.c:1326",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 129,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 119,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "site": "/src/aom/av1/common/av1_loopfilter.c:1326"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042493548",
+  "chain": "CWE-416->CWE-787",
+  "project": "uWebSockets",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42493548",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "09aef610e0dbc1de7297fda3a873a6d84498d4f7",
+      "fix_commits": [
+        "09aef610e0dbc1de7297fda3a873a6d84498d4f7"
+      ],
+      "repo": "https://github.com/uNetworking/uWebSockets"
+    },
+    "patch": "diff --git a/fuzzing/EpollEchoServer.cpp b/fuzzing/EpollEchoServer.cpp\nindex 1388baa89..ba97741d3 100644\n--- a/fuzzing/EpollEchoServer.cpp\n+++ b/fuzzing/EpollEchoServer.cpp\n@@ -45,8 +45,8 @@ void test() {\n             .idleTimeout = 12,\n             /* Handlers */\n             .open = [](auto *ws) {\n-                    /* Subscribe to anything */\n-                    ws->subscribe(/*req->getHeader(*/\"topic\"/*)*/);\n+                /* Subscribe to anything */\n+                ws->subscribe(/*req->getHeader(*/\"topic\"/*)*/);\n             },\n             .message = [](auto *ws, std::string_view message, uWS::OpCode opCode) {\n                 if (message.length() && message[0] == 'C') {\n@@ -58,7 +58,7 @@ void test() {\n                     ws->publish(message, message, opCode, true);\n \n                     if (message.length() && message[0] == 'U') {\n-                    ws->unsubscribe(message);\n+                        ws->unsubscribe(message);\n                     }\n                 }\n             },\n@@ -83,8 +83,7 @@ void test() {\n             /* Handlers */\n             .open = [](auto *ws) {\n \n-                PerSocketData *psd = (PerSocketData *) ws->getUserData();\n-                psd->valid.reset(new bool{true});\n+                ws->getUserData()->valid.reset(new bool{true});\n \n                 //if (req->getHeader(\"close_me\").length()) {\n                 //    ws->close();\n@@ -115,7 +114,7 @@ void test() {\n                 PerSocketData *psd = (PerSocketData *) ws->getUserData();\n \n                 uWS::Loop::get()->defer([ws, valid = psd->valid]() {\n-                    if (valid.get()) {\n+                    if (*valid.get()) {\n                         /* We haven't been closed */\n                         ws->send(\"Hello!\", uWS::TEXT, false);\n                         ws->end(1000);\n@@ -126,7 +125,7 @@ void test() {\n \n             },\n             .close = [](auto *ws, int code, std::string_view message) {\n-\n+                (*ws->getUserData()->valid.get()) = false;\n             }\n         }).listen(9001, [](us_listen_socket_t *listenSocket) {\n             listen_socket = listenSocket;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42493548-vul",
+      "digest": "sha256:0901306ef4e38a20c8dd0940fc83e2c4bda608a4ee945d94bd28ebe7823051fc"
+    },
+    "patched": {
+      "ref": "n132/arvo:42493548-fix",
+      "digest": "sha256:3847c4709ddfeda6cb019db6dc3a565473b5dcf62b255c175b3ad15dbe382233"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "WRITE",
+        "crash_site": "/src/uWebSockets/fuzzing/EpollEchoServer.cpp:118",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "WRITE",
+        "site": "/src/uWebSockets/fuzzing/EpollEchoServer.cpp:118"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

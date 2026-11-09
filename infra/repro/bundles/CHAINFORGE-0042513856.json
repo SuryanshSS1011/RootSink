@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042513856",
+  "chain": "CWE-456->CWE-457",
+  "project": "lcms",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42513856",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "b7e119beadd56e5d6aefcf4a3edee33dc78c92c6",
+      "fix_commits": [
+        "b7e119beadd56e5d6aefcf4a3edee33dc78c92c6"
+      ],
+      "repo": "https://github.com/mm2/Little-CMS"
+    },
+    "patch": "From b7e119beadd56e5d6aefcf4a3edee33dc78c92c6 Mon Sep 17 00:00:00 2001\nFrom: Marti Maria <marti.maria@littlecms.com>\nDate: Tue, 26 Jul 2022 08:53:11 +0200\nSubject: [PATCH] Check for duplicated tags\n\nIf so, discard profile\n---\n src/cmscnvrt.c |  2 +-\n src/cmsio0.c   | 17 +++++++++++++++--\n 2 files changed, 16 insertions(+), 3 deletions(-)\n\ndiff --git a/src/cmscnvrt.c b/src/cmscnvrt.c\nindex fe25525..abac021 100644\n--- a/src/cmscnvrt.c\n+++ b/src/cmscnvrt.c\n@@ -386,7 +386,7 @@ cmsBool ComputeConversion(cmsUInt32Number i,\n \n         if (BPC) {\n \n-            cmsCIEXYZ BlackPointIn, BlackPointOut;\n+            cmsCIEXYZ BlackPointIn = { 0, 0, 0}, BlackPointOut = { 0, 0, 0 };\n \n             cmsDetectBlackPoint(&BlackPointIn,  hProfiles[i-1], Intent, 0);\n             cmsDetectDestinationBlackPoint(&BlackPointOut, hProfiles[i], Intent, 0);\ndiff --git a/src/cmsio0.c b/src/cmsio0.c\nindex f02d240..9c07aa1 100644\n--- a/src/cmsio0.c\n+++ b/src/cmsio0.c\n@@ -815,11 +815,11 @@ cmsBool _cmsReadHeader(_cmsICCPROFILE* Icc)\n \n        // Search for links\n         for (j=0; j < Icc ->TagCount; j++) {\n-\n+           \n             if ((Icc ->TagOffsets[j] == Tag.offset) &&\n                 (Icc ->TagSizes[j]   == Tag.size)) {\n \n-                // Check types. Abort whole profile if a forged link is found\n+                // Check types. \n                 if (CompatibleTypes(_cmsGetTagDescriptor(Icc->ContextID, Icc->TagNames[j]),\n                                     _cmsGetTagDescriptor(Icc->ContextID, Tag.sig))) {\n \n@@ -832,6 +832,19 @@ cmsBool _cmsReadHeader(_cmsICCPROFILE* Icc)\n         Icc ->TagCount++;\n     }\n \n+\n+    for (i = 0; i < Icc->TagCount; i++) {\n+        for (j = 0; j < Icc->TagCount; j++) {\n+\n+            // Tags cannot be duplicate\n+            if ((i != j) && (Icc->TagNames[i] == Icc->TagNames[j])) {\n+                cmsSignalError(Icc->ContextID, cmsERROR_RANGE, \"Duplicate tag found\");\n+                return FALSE;\n+            }\n+\n+        }\n+    }\n+\n     return TRUE;\n }\n \n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42513856-vul",
+      "digest": "sha256:ac52d0e4e5192f9633fd27e614317ca65b937e80bff9ccdf85393e171ede50a4"
+    },
+    "patched": {
+      "ref": "n132/arvo:42513856-fix",
+      "digest": "sha256:12f7501c038b3ddbc43ce7dc9dc5f6f4a560f96397baee5d2ce275990da93e60"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/lcms/src/cmscnvrt.c:395",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/lcms/src/cmscnvrt.c:395"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

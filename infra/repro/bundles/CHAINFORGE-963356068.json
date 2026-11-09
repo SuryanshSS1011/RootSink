@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-963356068",
+  "chain": "CWE-456->CWE-457",
+  "project": "capstonenext",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42475665",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/aquynh/capstone/commit/3fc1d8ed86084f281583b074d86dc992cb9558c9",
+      "fix_commits": [
+        "3fc1d8ed86084f281583b074d86dc992cb9558c9"
+      ],
+      "repo": "https://github.com/aquynh/capstone"
+    },
+    "patch": "diff --git a/arch/MOS65XX/MOS65XXDisassembler.c b/arch/MOS65XX/MOS65XXDisassembler.c\nindex f09c0e2dfb..74297f10f3 100644\n--- a/arch/MOS65XX/MOS65XXDisassembler.c\n+++ b/arch/MOS65XX/MOS65XXDisassembler.c\n@@ -65,12 +65,12 @@ static void fillDetails(MCInst *MI, struct OpInfo opinfo, int cpu_type)\n \tdetail->mos65xx.op_count = 0;\n \n \tif (insinfo.group_type != MOS65XX_GRP_INVALID) {\n-\t\tdetail->groups[0] = insinfo.group_type;\n+\t\tdetail->groups[detail->groups_count] = insinfo.group_type;\n \t\tdetail->groups_count++;\n \t}\n \n \tif (opinfo.am == MOS65XX_AM_REL || opinfo.am == MOS65XX_AM_ZP_REL) {\n-\t\tdetail->groups[0] = MOS65XX_GRP_BRANCH_RELATIVE;\n+\t\tdetail->groups[detail->groups_count] = MOS65XX_GRP_BRANCH_RELATIVE;\n \t\tdetail->groups_count++;\t\n \t}\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42475665-vul",
+      "digest": "sha256:1606cff6a47245a36b2f354644ac7b18c22b76ffb36e54b53c3f1b540f949ac6"
+    },
+    "patched": {
+      "ref": "n132/arvo:42475665-fix",
+      "digest": "sha256:d9cef4b92223da44cc36aabedee3d9d106c51de4360e2cfdc6b7f967a0542fe7"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/capstonenext/arch/MOS65XX/MOS65XXDisassembler.c:517",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/capstonenext/arch/MOS65XX/MOS65XXDisassembler.c:517"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

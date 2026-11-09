@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-955339994",
+  "chain": "CWE-129->CWE-787",
+  "project": "gdal",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42539662",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/OSGeo/gdal/commit/fad6bf6f646cc44e18af22ed53f74cfcf46b0b0a",
+      "fix_commits": [
+        "fad6bf6f646cc44e18af22ed53f74cfcf46b0b0a"
+      ],
+      "repo": "https://github.com/OSGeo/gdal"
+    },
+    "patch": "diff --git a/gdal/frmts/rik/rikdataset.cpp b/gdal/frmts/rik/rikdataset.cpp\nindex 6dde0ccf8c7a..fde68d2fc4c4 100644\n--- a/gdal/frmts/rik/rikdataset.cpp\n+++ b/gdal/frmts/rik/rikdataset.cpp\n@@ -518,11 +518,12 @@ CPLErr RIKRasterBand::IReadBlock( int nBlockXOff, int nBlockYOff,\n                 if( lastCode != LZW_NO_SUCH_CODE &&\n                     lastAdded != LZW_CODES - 1 )\n                 {\n-                    if( lastAdded == 8192 )\n+                    ++lastAdded;\n+                    if( lastAdded >= 8192 )\n                     {\n                         throw \"Decode error\";\n                     }\n-                    prefix[++lastAdded] = lastCode;\n+                    prefix[lastAdded] = lastCode;\n                     character[lastAdded] = lastOutput;\n                 }\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42539662-vul",
+      "digest": "sha256:d67bd6f303d4af13800c11f0b2285b7af78e6aec65b91b6a5aaa28f82a2d0375"
+    },
+    "patched": {
+      "ref": "n132/arvo:42539662-fix",
+      "digest": "sha256:f08e34d81dd2cb555a1a3d3adb1809fd87f592af3747c56ab3add763736c8856"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "crash_site": "/src/gdal/gdal/frmts/rik/rikdataset.cpp:510",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 129,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "site": "/src/gdal/gdal/frmts/rik/rikdataset.cpp:510"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

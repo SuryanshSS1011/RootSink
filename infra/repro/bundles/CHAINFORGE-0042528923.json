@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042528923",
+  "chain": "CWE-1284->CWE-125",
+  "project": "ntopng",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42528923",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "7672814a9c93550e00e0461e61d52a9950fdd387",
+      "fix_commits": [
+        "7672814a9c93550e00e0461e61d52a9950fdd387"
+      ],
+      "repo": "https://github.com/ntop/ntopng"
+    },
+    "patch": "diff --git a/src/Flow.cpp b/src/Flow.cpp\nindex 82e9b5d7643d..6296620432c5 100644\n--- a/src/Flow.cpp\n+++ b/src/Flow.cpp\n@@ -6138,6 +6138,9 @@ void Flow::dissectMDNS(u_int8_t *payload, u_int16_t payload_len) {\n       first_char = false;\n     }\n \n+    if((i+sizeof(rsp)) >= payload_len)\n+      return; /* packet too short */\n+    \n     memcpy(&rsp, &payload[i], sizeof(rsp));\n     data_len = ntohs(rsp.data_len), rsp_type = ntohs(rsp.rsp_type);\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42528923-vul",
+      "digest": "sha256:500a619f63a9c1ce489d89ddb1b49c94276d78cc8edef163a045e8c48b76fd6c"
+    },
+    "patched": {
+      "ref": "n132/arvo:42528923-fix",
+      "digest": "sha256:5612953635305b7991527ee41ada277c9bf1bcbe53b139185ebc49cbff373350"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/ntopng/src/Flow.cpp:6004",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/ntopng/src/Flow.cpp:6004"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

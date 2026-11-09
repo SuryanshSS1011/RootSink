@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042477355",
+  "chain": "CWE-416->CWE-787",
+  "project": "file",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42477355",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "06de62c022138f63de9bcd04074491945eaa8662",
+      "fix_commits": [
+        "06de62c022138f63de9bcd04074491945eaa8662"
+      ],
+      "repo": "https://github.com/file/file"
+    },
+    "patch": "diff --git a/src/cdf.c b/src/cdf.c\nindex 556a3ff868..9d63967421 100644\n--- a/src/cdf.c\n+++ b/src/cdf.c\n@@ -35,7 +35,7 @@\n #include \"file.h\"\n \n #ifndef lint\n-FILE_RCSID(\"@(#)$File: cdf.c,v 1.114 2019/02/20 02:35:27 christos Exp $\")\n+FILE_RCSID(\"@(#)$File: cdf.c,v 1.115 2019/08/23 14:29:14 christos Exp $\")\n #endif\n \n #include <assert.h>\n@@ -53,6 +53,10 @@ FILE_RCSID(\"@(#)$File: cdf.c,v 1.114 2019/02/20 02:35:27 christos Exp $\")\n #define EFTYPE EINVAL\n #endif\n \n+#ifndef SIZE_T_MAX\n+#define SIZE_T_MAX CAST(size_t, ~0ULL)\n+#endif\n+\n #include \"cdf.h\"\n \n #ifdef CDF_DEBUG\n@@ -405,7 +409,12 @@ cdf_read_sector(const cdf_info_t *info, void *buf, size_t offs, size_t len,\n     const cdf_header_t *h, cdf_secid_t id)\n {\n \tsize_t ss = CDF_SEC_SIZE(h);\n-\tsize_t pos = CDF_SEC_POS(h, id);\n+\tsize_t pos;\n+\n+\tif (SIZE_T_MAX / ss < CAST(size_t, id))\n+\t\treturn -1;\n+\n+\tpos = CDF_SEC_POS(h, id);\n \tassert(ss == len);\n \treturn cdf_read(info, CAST(off_t, pos), RCAST(char *, buf) + offs, len);\n }\n@@ -415,7 +424,12 @@ cdf_read_short_sector(const cdf_stream_t *sst, void *buf, size_t offs,\n     size_t len, const cdf_header_t *h, cdf_secid_t id)\n {\n \tsize_t ss = CDF_SHORT_SEC_SIZE(h);\n-\tsize_t pos = CDF_SHORT_SEC_POS(h, id);\n+\tsize_t pos;\n+\n+\tif (SIZE_T_MAX / ss < CAST(size_t, id))\n+\t\treturn -1;\n+\n+\tpos = CDF_SHORT_SEC_POS(h, id);\n \tassert(ss == len);\n \tif (pos + len > CDF_SEC_SIZE(h) * sst->sst_len) {\n \t\tDPRINTF((\"Out of bounds read %\" SIZE_T_FORMAT \"u > %\"\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42477355-vul",
+      "digest": "sha256:b969a84d22d98eb06823fddf63d643975ed0ea1c18bca71814516652613cfc9c"
+    },
+    "patched": {
+      "ref": "n132/arvo:42477355-fix",
+      "digest": "sha256:b78dac59b47bf75db92685104a87d8e11ac9b853e9614961b4b6919e45b47e3f"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/file/src/cdf.c:1074",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/file/src/cdf.c:1074"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

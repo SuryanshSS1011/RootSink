@@ -1,0 +1,77 @@
+======================= INFO =========================
+This binary is built for AFL-fuzz.
+To run the target function on individual input(s) execute this:
+  /out/parquet-arrow-fuzz < INPUT_FILE
+or
+  /out/parquet-arrow-fuzz INPUT_FILE1 [INPUT_FILE2 ... ]
+To fuzz with afl-fuzz execute this:
+  afl-fuzz [afl-flags] /out/parquet-arrow-fuzz [-N]
+afl-fuzz will run N iterations before re-spawning the process (default: 1000)
+======================================================
+Reading 268 bytes from /tmp/poc
+=================================================================
+==2995735==ERROR: AddressSanitizer: global-buffer-overflow on address 0x000003096664 at pc 0x000000657dba bp 0x7ffd5798efe0 sp 0x7ffd5798e7a8
+WRITE of size 45 at 0x000003096664 thread T0
+SCARINESS: 45 (multi-byte-write-global-buffer-overflow)
+    #0 0x657db9 in __asan_memcpy /src/llvm-project/compiler-rt/lib/asan/asan_interceptors_memintrinsics.cpp:22:3
+    #1 0x1b0a913 in WriteRingBuffer /work/brotli_ep-prefix/src/brotli_ep/c/dec/decode.c:1274:7
+    #2 0x1b04953 in BrotliDecoderDecompressStream /work/brotli_ep-prefix/src/brotli_ep/c/dec/decode.c:2021:56
+    #3 0x1b04249 in BrotliDecoderDecompress /work/brotli_ep-prefix/src/brotli_ep/c/dec/decode.c:1966:12
+    #4 0x17675f4 in arrow::util::internal::(anonymous namespace)::BrotliCodec::Decompress(long, unsigned char const*, long, unsigned char*) /src/arrow/cpp/src/arrow/util/compression_brotli.cc:189:9
+    #5 0x7dff80 in parquet::SerializedPageReader::DecompressPage(int, int, unsigned char const*) /src/arrow/cpp/src/parquet/column_reader.cc:450:5
+    #6 0x7d799a in parquet::SerializedPageReader::NextPage() /src/arrow/cpp/src/parquet/column_reader.cc:379:21
+    #7 0x829f7d in parquet::ColumnReaderImplBase<parquet::PhysicalType<(parquet::Type::type)2> >::ReadNewPage() /src/arrow/cpp/src/parquet/column_reader.cc:563:31
+    #8 0x8a2ded in HasNextInternal /src/arrow/cpp/src/parquet/column_reader.cc:543:12
+    #9 0x8a2ded in parquet::internal::TypedRecordReader<parquet::PhysicalType<(parquet::Type::type)2> >::ReadRecords(long) /src/arrow/cpp/src/parquet/column_reader.cc:1105:18
+    #10 0x6b20cd in parquet::arrow::(anonymous namespace)::LeafReader::LoadBatch(long) /src/arrow/cpp/src/parquet/arrow/reader.cc:444:46
+    #11 0x6b1014 in parquet::arrow::ColumnReaderImpl::NextBatch(long, std::__1::shared_ptr<arrow::ChunkedArray>*) /src/arrow/cpp/src/parquet/arrow/reader.cc:103:5
+    #12 0x6d77c6 in parquet::arrow::(anonymous namespace)::FileReaderImpl::ReadColumn(int, std::__1::vector<int, std::__1::allocator<int> > const&, parquet::arrow::ColumnReader*, std::__1::shared_ptr<arrow::ChunkedArray>*) /src/arrow/cpp/src/parquet/arrow/reader.cc:268:20
+    #13 0x6a2a22 in operator() /src/arrow/cpp/src/parquet/arrow/reader.cc:923:12
+    #14 0x6a2a22 in parquet::arrow::(anonymous namespace)::FileReaderImpl::ReadRowGroups(std::__1::vector<int, std::__1::allocator<int> > const&, std::__1::vector<int, std::__1::allocator<int> > const&, std::__1::shared_ptr<arrow::Table>*) /src/arrow/cpp/src/parquet/arrow/reader.cc:940:7
+    #15 0x69f8ae in parquet::arrow::(anonymous namespace)::FileReaderImpl::ReadRowGroup(int, std::__1::vector<int, std::__1::allocator<int> > const&, std::__1::shared_ptr<arrow::Table>*) /src/arrow/cpp/src/parquet/arrow/reader.cc:298:12
+    #16 0x69ffe5 in parquet::arrow::(anonymous namespace)::FileReaderImpl::ReadRowGroup(int, std::__1::shared_ptr<arrow::Table>*) /src/arrow/cpp/src/parquet/arrow/reader.cc:302:12
+    #17 0x6922a4 in parquet::arrow::internal::FuzzReader(std::__1::unique_ptr<parquet::arrow::FileReader, std::__1::default_delete<parquet::arrow::FileReader> >) /src/arrow/cpp/src/parquet/arrow/reader.cc:1035:37
+    #18 0x693dbb in parquet::arrow::internal::FuzzReader(unsigned char const*, long) /src/arrow/cpp/src/parquet/arrow/reader.cc:1052:10
+    #19 0x68cca9 in LLVMFuzzerTestOneInput /src/arrow/cpp/src/parquet/arrow/fuzz.cc:22:17
+    #20 0x68b33e in ExecuteFilesOnyByOne /src/libfuzzer/afl/afl_driver.cpp:217:5
+    #21 0x68b33e in main /src/libfuzzer/afl/afl_driver.cpp:254:12
+    #22 0x150ed3f7683f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2083f)
+    #23 0x5dd448 in _start (/out/parquet-arrow-fuzz+0x5dd448)
+
+DEDUP_TOKEN: __asan_memcpy--WriteRingBuffer--BrotliDecoderDecompressStream
+0x000003096664 is located 60 bytes to the left of global variable 'kEmpty' defined in '/src/arrow/cpp/src/arrow/sparse_tensor.cc:435:28' (0x30966a0) of size 24
+0x000003096664 is located 0 bytes to the right of global variable 'arrow::ArrayPrinter::epoch_' defined in '/src/arrow/cpp/src/arrow/pretty_print.cc:420:46' (0x3096660) of size 4
+SUMMARY: AddressSanitizer: global-buffer-overflow /src/llvm-project/compiler-rt/lib/asan/asan_interceptors_memintrinsics.cpp:22:3 in __asan_memcpy
+Shadow bytes around the buggy address:
+  0x00008060ac70: 01 f9 f9 f9 f9 f9 f9 f9 01 f9 f9 f9 f9 f9 f9 f9
+  0x00008060ac80: 01 f9 f9 f9 f9 f9 f9 f9 01 f9 f9 f9 f9 f9 f9 f9
+  0x00008060ac90: 01 f9 f9 f9 f9 f9 f9 f9 00 00 f9 f9 f9 f9 f9 f9
+  0x00008060aca0: 00 f9 f9 f9 f9 f9 f9 f9 00 00 f9 f9 f9 f9 f9 f9
+  0x00008060acb0: 00 f9 f9 f9 f9 f9 f9 f9 00 00 f9 f9 f9 f9 f9 f9
+=>0x00008060acc0: 00 f9 f9 f9 f9 f9 f9 f9 00 00 00 00[04]f9 f9 f9
+  0x00008060acd0: f9 f9 f9 f9 00 00 00 f9 f9 f9 f9 f9 00 f9 f9 f9
+  0x00008060ace0: f9 f9 f9 f9 00 00 00 00 00 00 00 f9 f9 f9 f9 f9
+  0x00008060acf0: 00 f9 f9 f9 f9 f9 f9 f9 01 f9 f9 f9 f9 f9 f9 f9
+  0x00008060ad00: 00 00 f9 f9 f9 f9 f9 f9 00 f9 f9 f9 f9 f9 f9 f9
+  0x00008060ad10: 00 00 f9 f9 f9 f9 f9 f9 00 f9 f9 f9 f9 f9 f9 f9
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+  Shadow gap:              cc
+==2995735==ABORTING

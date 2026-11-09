@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042480836",
+  "chain": "CWE-20->CWE-787",
+  "project": "imagemagick",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42480836",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "1410b61985d074d39714794eec61f9acf1bf0db1",
+      "fix_commits": [
+        "1410b61985d074d39714794eec61f9acf1bf0db1"
+      ],
+      "repo": "https://github.com/imagemagick/imagemagick"
+    },
+    "patch": "diff --git a/MagickCore/fx.c b/MagickCore/fx.c\nindex 282a8cd5d8d..77c9fda6e56 100644\n--- a/MagickCore/fx.c\n+++ b/MagickCore/fx.c\n@@ -1248,6 +1248,8 @@ static inline MagickBooleanType IsFxFunction(const char *expression,\n     c;\n \n   c=name[length];\n+  if (c == '\\0')\n+    return(MagickFalse);\n   if ((LocaleNCompare(expression,name,length) == 0) &&\n       ((isspace(c) == 0) || (c == '(')))\n     return(MagickTrue);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42480836-vul",
+      "digest": "sha256:d561977f2cedb6bd4a066909eca762045f0024c61fc832865fdb445636aeecb3"
+    },
+    "patched": {
+      "ref": "n132/arvo:42480836-fix",
+      "digest": "sha256:d4c432e37751d8c56b4aae7860d901b0f9ee89dbf1fd4b767cfa71d29a25f07f"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/imagemagick/MagickCore/fx.c:3105",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/imagemagick/MagickCore/fx.c:3105"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

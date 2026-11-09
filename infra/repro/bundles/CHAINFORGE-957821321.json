@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-957821321",
+  "chain": "CWE-252->CWE-476",
+  "project": "open62541",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42471585",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/open62541/open62541/commit/56bb742e2ba12c9f2453d27b158aaa5b6a97141a",
+      "fix_commits": [
+        "56bb742e2ba12c9f2453d27b158aaa5b6a97141a"
+      ],
+      "repo": "https://github.com/open62541/open62541"
+    },
+    "patch": "diff --git a/arch/ua_network_tcp.c b/arch/ua_network_tcp.c\nindex 4ee317b398f..51e7d8625a5 100644\n--- a/arch/ua_network_tcp.c\n+++ b/arch/ua_network_tcp.c\n@@ -525,20 +525,22 @@ UA_ServerNetworkLayer\n UA_ServerNetworkLayerTCP(UA_ConnectionConfig config, UA_UInt16 port, UA_Logger logger) {\n     UA_ServerNetworkLayer nl;\n     memset(&nl, 0, sizeof(UA_ServerNetworkLayer));\n+    nl.deleteMembers = ServerNetworkLayerTCP_deleteMembers;\n+    nl.localConnectionConfig = config;\n+    nl.start = ServerNetworkLayerTCP_start;\n+    nl.listen = ServerNetworkLayerTCP_listen;\n+    nl.stop = ServerNetworkLayerTCP_stop;\n+    nl.handle = NULL;\n+\n     ServerNetworkLayerTCP *layer = (ServerNetworkLayerTCP*)\n         UA_calloc(1,sizeof(ServerNetworkLayerTCP));\n     if(!layer)\n         return nl;\n+    nl.handle = layer;\n \n     layer->logger = (logger != NULL ? logger : UA_Log_Stdout);\n     layer->port = port;\n \n-    nl.handle = layer;\n-    nl.localConnectionConfig = config;\n-    nl.start = ServerNetworkLayerTCP_start;\n-    nl.listen = ServerNetworkLayerTCP_listen;\n-    nl.stop = ServerNetworkLayerTCP_stop;\n-    nl.deleteMembers = ServerNetworkLayerTCP_deleteMembers;\n     return nl;\n }\n \ndiff --git a/plugins/ua_config_default.c b/plugins/ua_config_default.c\nindex cbeec02dfa7..4a400c1c5ca 100644\n--- a/plugins/ua_config_default.c\n+++ b/plugins/ua_config_default.c\n@@ -321,6 +321,8 @@ addDefaultNetworkLayers(UA_ServerConfig *conf, UA_UInt16 portNumber, UA_UInt32 s\n \n     conf->networkLayers[0] =\n         UA_ServerNetworkLayerTCP(config, portNumber, conf->logger);\n+    if (!conf->networkLayers[0].handle)\n+        return UA_STATUSCODE_BADOUTOFMEMORY;\n     conf->networkLayersSize = 1;\n \n     return UA_STATUSCODE_GOOD;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42471585-vul",
+      "digest": "sha256:172b8c4ea54dbda1397cea9000cd76946e7316c6242aa0f04cf069743eb785eb"
+    },
+    "patched": {
+      "ref": "n132/arvo:42471585-fix",
+      "digest": "sha256:923b8d8382590431addb91c178eb8322873e6d43dad254a4b35046d13bbc7f74"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "undefined",
+        "bug_class": "SEGV",
+        "direction": "READ",
+        "crash_site": null,
+        "implies_sink_cwe": 476
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 252,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 476,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "undefined",
+        "bug_class": "SEGV",
+        "direction": "READ",
+        "site": null
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

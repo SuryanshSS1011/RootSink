@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042537072",
+  "chain": "CWE-20->CWE-125",
+  "project": "lcms",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42537072",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "1c9021be51ad9fbeabdd4f55d9453c394d8d52ae",
+      "fix_commits": [
+        "1c9021be51ad9fbeabdd4f55d9453c394d8d52ae"
+      ],
+      "repo": "https://github.com/mm2/Little-CMS"
+    },
+    "patch": "diff --git a/src/cmsxform.c b/src/cmsxform.c\nindex 99e9bb96..2f8b4e5e 100644\n--- a/src/cmsxform.c\n+++ b/src/cmsxform.c\n@@ -1070,7 +1070,7 @@ cmsBool  IsProperColorSpace(cmsColorSpaceSignature Check, cmsUInt32Number dwForm\n     int Space1 = (int) T_COLORSPACE(dwFormat);\n     int Space2 = _cmsLCMScolorSpace(Check);\n \n-    if (Space1 == PT_ANY) return TRUE;\n+    if (Space1 == PT_ANY) return (T_CHANNELS(dwFormat) == cmsChannelsOf(Check));\n     if (Space1 == Space2) return TRUE;\n \n     if (Space1 == PT_LabV2 && Space2 == PT_Lab) return TRUE;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42537072-vul",
+      "digest": "sha256:e41bcf0919656a4e278992c93de91d8ad80940331a45617a8444d0d37f352483"
+    },
+    "patched": {
+      "ref": "n132/arvo:42537072-fix",
+      "digest": "sha256:30bebf8e891aafa10ff6b6d0f77b5108b8e6e9a6e29e7a759d8aee50327812db"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/lcms/src/cmspack.c:130",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/lcms/src/cmspack.c:130"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

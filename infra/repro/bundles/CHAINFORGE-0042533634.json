@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042533634",
+  "chain": "CWE-456->CWE-457",
+  "project": "gnutls",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42533634",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "ec20f4178950a54f4bfbed72c2bbbabe6561c414",
+      "fix_commits": [
+        "ec20f4178950a54f4bfbed72c2bbbabe6561c414"
+      ],
+      "repo": "https://gitlab.com/gnutls/gnutls.git"
+    },
+    "patch": "diff --git a/lib/x509/key_decode.c b/lib/x509/key_decode.c\nindex 1cd5ee2bcba3a1a422a05cceeac6e9c1946c1c29..7328878099dbc89983d6c5a2528aa8db6a062eec 100644\n--- a/lib/x509/key_decode.c\n+++ b/lib/x509/key_decode.c\n@@ -302,7 +302,7 @@ static int check_mgf1(asn1_node root, const char *name,\n \n \tsize = sizeof(oid);\n \tresult = asn1_read_value(root, buffer, oid, &size);\n-\tif (result < 0) {\n+\tif (result != ASN1_SUCCESS) {\n \t\tif (result == ASN1_ELEMENT_NOT_FOUND && allow_null)\n \t\t\treturn 0;\n \t\tgnutls_assert();\n@@ -471,7 +471,7 @@ static int read_rsa_oaep_label(asn1_node root, const char *name,\n \n \tsize = sizeof(oid);\n \tresult = asn1_read_value(root, buffer, oid, &size);\n-\tif (result < 0) {\n+\tif (result != ASN1_SUCCESS) {\n \t\tif (result != ASN1_ELEMENT_NOT_FOUND && allow_null)\n \t\t\treturn 0;\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42533634-vul",
+      "digest": "sha256:448a2a5e541decf783e5d2c895fc2b9fd0e6355ffe5603e04d3df334a4bec042"
+    },
+    "patched": {
+      "ref": "n132/arvo:42533634-fix",
+      "digest": "sha256:039ae4800a877e5d7c4fa4b79dbcd62a289de1b64d397978c8f89e96d8494a4e"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/gnutls/lib/x509/key_decode.c:313",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/gnutls/lib/x509/key_decode.c:313"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

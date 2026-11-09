@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042539878",
+  "chain": "CWE-1284->CWE-787",
+  "project": "libreoffice",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42539878",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "e89350cc1e0b8696ef51251acfb7543fd196ff3a",
+      "fix_commits": [
+        "e89350cc1e0b8696ef51251acfb7543fd196ff3a"
+      ],
+      "repo": "https://git.libreoffice.org/core"
+    },
+    "patch": "From e89350cc1e0b8696ef51251acfb7543fd196ff3a Mon Sep 17 00:00:00 2001\nFrom: =?UTF-8?q?Caol=C3=A1n=20McNamara?= <caolanm@redhat.com>\nDate: Sun, 13 May 2018 19:22:05 +0100\nSubject: [PATCH] ofz#8252 fallout from rework as OUStringBuffer\nMIME-Version: 1.0\nContent-Type: text/plain; charset=UTF-8\nContent-Transfer-Encoding: 8bit\n\nChange-Id: Ide3732627eb145e191061608ac0325df0fcceff0\nReviewed-on: https://gerrit.libreoffice.org/54198\nTested-by: Jenkins <ci@libreoffice.org>\nReviewed-by: Caol\u00e1n McNamara <caolanm@redhat.com>\nTested-by: Caol\u00e1n McNamara <caolanm@redhat.com>\n---\n starmath/source/mathtype.cxx | 3 ++-\n 1 file changed, 2 insertions(+), 1 deletion(-)\n\ndiff --git a/starmath/source/mathtype.cxx b/starmath/source/mathtype.cxx\nindex 1a6f31931..c1d4c9c2c 100644\n--- a/starmath/source/mathtype.cxx\n+++ b/starmath/source/mathtype.cxx\n@@ -2646,7 +2646,8 @@ bool MathType::HandlePile(int &rSetAlign, int nLevel, sal_uInt8 nSelector, sal_u\n \n     rRet.append(\" stack {\\n\");\n     bool bRet = HandleRecords( nLevel+1, nSelector, nVariation, -1, -1 );\n-    rRet.remove(rRet.getLength()-3, 2);\n+    int nRemoveFrom = rRet.getLength() >= 3 ? rRet.getLength() - 3 : 0;\n+    rRet.remove(nRemoveFrom, 2);\n     rRet.append(\"} \");\n \n     while (rSetAlign)\n-- \n2.55.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42539878-vul",
+      "digest": "sha256:333d987a5cec540a0b891e4bf759322ff5ad8ee3431fb35bd9c201b638d4de79"
+    },
+    "patched": {
+      "ref": "n132/arvo:42539878-fix",
+      "digest": "sha256:d45bfe621e402ef0a83c1816d6a5b21cba5406facc5d3e72ddc5e1ff45f41afd"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/libreoffice/sal/rtl/ustrbuf.cxx:258",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/libreoffice/sal/rtl/ustrbuf.cxx:258"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

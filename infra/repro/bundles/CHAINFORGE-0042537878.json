@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042537878",
+  "chain": "CWE-456->CWE-457",
+  "project": "mupdf",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42537878",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "9d7b467d807844ab3d13e9d9f518bac58efc5620",
+      "fix_commits": [
+        "9d7b467d807844ab3d13e9d9f518bac58efc5620"
+      ],
+      "repo": "git://git.ghostscript.com/jbig2dec.git"
+    },
+    "patch": "From 9d7b467d807844ab3d13e9d9f518bac58efc5620 Mon Sep 17 00:00:00 2001\nFrom: Sebastian Rasmussen <sebras@gmail.com>\nDate: Mon, 26 Mar 2018 02:10:10 +0800\nSubject: [PATCH] Fix 699142: Adaptive pixels can not be pixel to be predicted.\n\nThe fix for 699127 didn't account for the adaptive pixel location\nbeing that of the pixel to be predicted. This is of course invalid,\nand this is now recitified.\n---\n jbig2_generic.c | 2 +-\n 1 file changed, 1 insertion(+), 1 deletion(-)\n\ndiff --git a/jbig2_generic.c b/jbig2_generic.c\nindex 8d4a3c2..54002e8 100644\n--- a/jbig2_generic.c\n+++ b/jbig2_generic.c\n@@ -112,7 +112,7 @@ jbig2_generic_stats_size(Jbig2Ctx *ctx, int template)\n }\n \n #define pixel_outside_field(x, y) \\\n-    ((y) < -128 || (y) > 0 || (x) < -128 || ((y) < 0 && (x) > 127) || ((y) == 0 && (x) > 0))\n+    ((y) < -128 || (y) > 0 || (x) < -128 || ((y) < 0 && (x) > 127) || ((y) == 0 && (x) >= 0))\n \n static int\n jbig2_decode_generic_template0_unopt(Jbig2Ctx *ctx,\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42537878-vul",
+      "digest": "sha256:04626e9a23d0c801138788ea7d63a091abdcd1957167d81e6baf553d4456f4aa"
+    },
+    "patched": {
+      "ref": "n132/arvo:42537878-fix",
+      "digest": "sha256:1651419ec1689826acb27fbdc748745000420a0a85d319ce32addeeac4a23344"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/mupdf/thirdparty/jbig2dec/jbig2_arith.c:268",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/mupdf/thirdparty/jbig2dec/jbig2_arith.c:268"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

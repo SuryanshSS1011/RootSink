@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-961460397",
+  "chain": "CWE-456->CWE-457",
+  "project": "c-blosc2",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42493928",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/Blosc/c-blosc2/commit/4f6d42ab4b25e781dad94c5324dab8a4dbb702ad",
+      "fix_commits": [
+        "4f6d42ab4b25e781dad94c5324dab8a4dbb702ad"
+      ],
+      "repo": "https://github.com/Blosc/c-blosc2"
+    },
+    "patch": "diff --git a/blosc/frame.c b/blosc/frame.c\nindex 45fa58fed..43af22eb5 100644\n--- a/blosc/frame.c\n+++ b/blosc/frame.c\n@@ -994,7 +994,7 @@ uint8_t* get_coffsets(blosc2_frame_s *frame, int32_t header_len, int64_t cbytes,\n         return NULL;\n       }\n       *off_cbytes = (int32_t)chunk_cbytes;\n-      if (*off_cbytes < 0 || *off_cbytes > frame->len) {\n+      if (*off_cbytes < 0 || off_pos + *off_cbytes > frame->len) {\n         BLOSC_TRACE_ERROR(\"Cannot read the cbytes outside of frame boundary.\");\n         return NULL;\n       }\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42493928-vul",
+      "digest": "sha256:45aee3cb8a9892b23b9a9e86fe2284428bf5bf252da9030c52783b4bb1af6c13"
+    },
+    "patched": {
+      "ref": "n132/arvo:42493928-fix",
+      "digest": "sha256:9fb6cefa11ad4175212c4b3038e063be586e8cf8bcf1468658ab388492fed21b"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/c-blosc2/blosc/frame.c:1680",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/c-blosc2/blosc/frame.c:1680"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

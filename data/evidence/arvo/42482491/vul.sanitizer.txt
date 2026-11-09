@@ -1,0 +1,72 @@
+======================= INFO =========================
+This binary is built for AFL-fuzz.
+To run the target function on individual input(s) execute this:
+  /out/fuzz_ndpi_reader < INPUT_FILE
+or
+  /out/fuzz_ndpi_reader INPUT_FILE1 [INPUT_FILE2 ... ]
+To fuzz with afl-fuzz execute this:
+  afl-fuzz [afl-flags] /out/fuzz_ndpi_reader [-N]
+afl-fuzz will run N iterations before re-spawning the process (default: 1000)
+======================================================
+Reading 855 bytes from /tmp/poc
+=================================================================
+==7==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x60b000000202 at pc 0x000000535ba3 bp 0x7ffcd315f7c0 sp 0x7ffcd315f7b8
+READ of size 4 at 0x60b000000202 thread T0
+SCARINESS: 17 (4-byte-read-heap-buffer-overflow)
+    #0 0x535ba2 in concat_hash_string /src/ndpi/src/lib/protocols/ssh.c:99:19
+    #1 0x5340fd in ndpi_search_ssh_tcp /src/ndpi/src/lib/protocols/ssh.c:308:10
+    #2 0x535d83 in search_ssh_again /src/ndpi/src/lib/protocols/ssh.c:64:3
+    #3 0x50c403 in ndpi_process_extra_packet /src/ndpi/src/lib/ndpi_main.c:4357:9
+    #4 0x50c403 in ndpi_detection_process_packet /src/ndpi/src/lib/ndpi_main.c:4713:7
+    #5 0x4d6bbe in packet_processing /src/ndpi/example/reader_util.c:1319:31
+    #6 0x4d5169 in ndpi_workflow_process_packet /src/ndpi/example/reader_util.c:1741:10
+    #7 0x4c9dcb in LLVMFuzzerTestOneInput /src/ndpi/fuzz/fuzz_ndpi_reader.c:82:9
+    #8 0x64ce7e in ExecuteFilesOnyByOne /src/libfuzzer/afl/afl_driver.cpp:216:5
+    #9 0x64ce7e in main /src/libfuzzer/afl/afl_driver.cpp:253:12
+    #10 0x7fc7d32ed82f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+    #11 0x41e5e8 in _start (/out/fuzz_ndpi_reader+0x41e5e8)
+
+DEDUP_TOKEN: concat_hash_string--ndpi_search_ssh_tcp--search_ssh_again
+0x60b000000204 is located 0 bytes to the right of 100-byte region [0x60b0000001a0,0x60b000000204)
+allocated by thread T0 here:
+    #0 0x4971cd in malloc /src/llvm-project/compiler-rt/lib/asan/asan_malloc_linux.cpp:145:3
+    #1 0x4c9d88 in LLVMFuzzerTestOneInput /src/ndpi/fuzz/fuzz_ndpi_reader.c:80:35
+    #2 0x64ce7e in ExecuteFilesOnyByOne /src/libfuzzer/afl/afl_driver.cpp:216:5
+    #3 0x64ce7e in main /src/libfuzzer/afl/afl_driver.cpp:253:12
+    #4 0x7fc7d32ed82f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+
+DEDUP_TOKEN: malloc--LLVMFuzzerTestOneInput--ExecuteFilesOnyByOne
+SUMMARY: AddressSanitizer: heap-buffer-overflow /src/ndpi/src/lib/protocols/ssh.c:99:19 in concat_hash_string
+Shadow bytes around the buggy address:
+  0x0c167fff7ff0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c167fff8000: fa fa fa fa fa fa fa fa fd fd fd fd fd fd fd fd
+  0x0c167fff8010: fd fd fd fd fd fa fa fa fa fa fa fa fa fa fd fd
+  0x0c167fff8020: fd fd fd fd fd fd fd fd fd fd fd fa fa fa fa fa
+  0x0c167fff8030: fa fa fa fa 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x0c167fff8040:[04]fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c167fff8050: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c167fff8060: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c167fff8070: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c167fff8080: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c167fff8090: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+  Shadow gap:              cc
+==7==ABORTING

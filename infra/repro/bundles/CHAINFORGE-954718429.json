@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-954718429",
+  "chain": "CWE-129->CWE-125",
+  "project": "openthread",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42539882",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/openthread/openthread/commit/5659668aca694a3fd252f0b5adc6f0c95d6673d4",
+      "fix_commits": [
+        "5659668aca694a3fd252f0b5adc6f0c95d6673d4"
+      ],
+      "repo": "https://github.com/openthread/openthread"
+    },
+    "patch": "diff --git a/src/core/thread/router_table.cpp b/src/core/thread/router_table.cpp\nindex c5f5cfd338b..1f9c5af005e 100644\n--- a/src/core/thread/router_table.cpp\n+++ b/src/core/thread/router_table.cpp\n@@ -241,7 +241,7 @@ Router *RouterTable::Allocate(uint8_t aRouterId)\n {\n     Router *rval = NULL;\n \n-    VerifyOrExit(!IsAllocated(aRouterId) && mRouterIdReuseDelay[aRouterId] == 0);\n+    VerifyOrExit(aRouterId <= Mle::kMaxRouterId && !IsAllocated(aRouterId) && mRouterIdReuseDelay[aRouterId] == 0);\n \n     mAllocatedRouterIds[aRouterId / 8] |= 1 << (aRouterId % 8);\n     UpdateAllocation();\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42539882-vul",
+      "digest": "sha256:a98759eb34b9e171f6b6607670f447d126344d736dbbc282d9625bc57bf524c8"
+    },
+    "patched": {
+      "ref": "n132/arvo:42539882-fix",
+      "digest": "sha256:eb5bdac3dd9d46d987d7ac5e04895484dfe33cc698dc4ce0028fa012050c43df"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "crash_site": "/src/openthread/src/core/thread/router_table.cpp:244",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 129,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "site": "/src/openthread/src/core/thread/router_table.cpp:244"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

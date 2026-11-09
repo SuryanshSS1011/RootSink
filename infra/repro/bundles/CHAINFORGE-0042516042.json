@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042516042",
+  "chain": "CWE-20->CWE-787",
+  "project": "ffmpeg",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42516042",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "dd81cc22b3dd5bd6badf012b4fe4c19e062650f4",
+      "fix_commits": [
+        "dd81cc22b3dd5bd6badf012b4fe4c19e062650f4"
+      ],
+      "repo": "https://git.ffmpeg.org/ffmpeg.git"
+    },
+    "patch": "From dd81cc22b3dd5bd6badf012b4fe4c19e062650f4 Mon Sep 17 00:00:00 2001\nFrom: Michael Niedermayer <michael@niedermayer.cc>\nDate: Sun, 18 Sep 2022 23:42:02 +0200\nSubject: [PATCH] avcodec/mjpegdec: Check for unsupported bayer case\n\nFixes: out of array access\nFixes: 51462/clusterfuzz-testcase-minimized-ffmpeg_AV_CODEC_ID_TIFF_fuzzer-662559341582745\n\nFound-by: continuous fuzzing process https://github.com/google/oss-fuzz/tree/master/projects/ffmpeg\nSigned-off-by: Michael Niedermayer <michael@niedermayer.cc>\n---\n libavcodec/mjpegdec.c | 2 ++\n 1 file changed, 2 insertions(+)\n\ndiff --git a/libavcodec/mjpegdec.c b/libavcodec/mjpegdec.c\nindex 5b7a8b1..c594950 100644\n--- a/libavcodec/mjpegdec.c\n+++ b/libavcodec/mjpegdec.c\n@@ -1212,6 +1212,8 @@ static int ljpeg_decode_rgb_scan(MJpegDecodeContext *s, int nb_components, int p\n                 ptr[3*mb_x + 2] = buffer[mb_x][2] + ptr[3*mb_x + 1];\n             }\n         } else if (s->bayer) {\n+            if (s->bits <= 8)\n+                return AVERROR_PATCHWELCOME;\n             if (nb_components == 1) {\n                 /* Leave decoding to the TIFF/DNG decoder (see comment in ff_mjpeg_decode_sof) */\n                 for (mb_x = 0; mb_x < width; mb_x++)\n-- \n2.55.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42516042-vul",
+      "digest": "sha256:768dcd32882d73d81990d5eab6773e2506aa405a3890052410e9340e27d1b7b4"
+    },
+    "patched": {
+      "ref": "n132/arvo:42516042-fix",
+      "digest": "sha256:e119f2409932594eaef9a9fc91848decac1d750e356954dba64f0deff17fc867"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/ffmpeg/libavcodec/mjpegdec.c:1211",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/ffmpeg/libavcodec/mjpegdec.c:1211"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

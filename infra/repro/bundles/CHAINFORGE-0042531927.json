@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042531927",
+  "chain": "CWE-416->CWE-125",
+  "project": "upx",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42531927",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "d615985b8a1b68bbdc0f31e0e6e648f93c434095",
+      "fix_commits": [
+        "d615985b8a1b68bbdc0f31e0e6e648f93c434095"
+      ],
+      "repo": "https://github.com/upx/upx"
+    },
+    "patch": "From d615985b8a1b68bbdc0f31e0e6e648f93c434095 Mon Sep 17 00:00:00 2001\nFrom: John Reiser <jreiser@BitWagon.com>\nDate: Thu, 18 Jan 2024 19:11:12 -0800\nSubject: [PATCH] elf_find_table_size() did not check for empty table\n\nhttps://bugs.chromium.org/p/oss-fuzz/issues/detail?id=65765&q=label%3AProj-upx\nhttps://github.com/upx/upx/issues/771\n\tmodified:   p_lx_elf.cpp\n---\n src/p_lx_elf.cpp | 6 ++++++\n 1 file changed, 6 insertions(+)\n\ndiff --git a/src/p_lx_elf.cpp b/src/p_lx_elf.cpp\nindex 52a84ef..c7541ab 100644\n--- a/src/p_lx_elf.cpp\n+++ b/src/p_lx_elf.cpp\n@@ -2046,6 +2046,9 @@ unsigned PackLinuxElf32::elf_find_table_size(unsigned dt_type, unsigned sh_type)\n     unsigned x_rva;\n     if (dt_type < DT_NUM) {\n         unsigned const x_ndx = dt_table[dt_type];\n+        if (!x_ndx) { // no such entry\n+            return 0;\n+        }\n         x_rva = get_te32(&dynseg[-1+ x_ndx].d_val);\n     }\n     else {\n@@ -7935,6 +7938,9 @@ unsigned PackLinuxElf64::elf_find_table_size(unsigned dt_type, unsigned sh_type)\n     unsigned x_rva;\n     if (dt_type < DT_NUM) {\n         unsigned const x_ndx = dt_table[dt_type];\n+        if (!x_ndx) { // no such entry\n+            return 0;\n+        }\n         x_rva = get_te64(&dynseg[-1+ x_ndx].d_val);\n     }\n     else {\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42531927-vul",
+      "digest": "sha256:9e52eeecd9e20212af9ad27f0e2f94aba0b9eb8747d974947597fdec146bc675"
+    },
+    "patched": {
+      "ref": "n132/arvo:42531927-fix",
+      "digest": "sha256:1beb1dc16dfb2ddf2929c2331e849f6b866ffe097d567846f817367f4ff67037"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/upx/src/util/../bele.h:124",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/upx/src/util/../bele.h:124"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

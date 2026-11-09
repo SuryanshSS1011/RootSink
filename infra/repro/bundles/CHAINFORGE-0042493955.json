@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042493955",
+  "chain": "CWE-1284->CWE-125",
+  "project": "libredwg",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42493955",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "f086e9d99f0ce1551348df57d6db9b904c2812be",
+      "fix_commits": [
+        "f086e9d99f0ce1551348df57d6db9b904c2812be"
+      ],
+      "repo": "https://github.com/LibreDWG/libredwg"
+    },
+    "patch": "diff --git a/src/bits.c b/src/bits.c\nindex c7f2f64e4a..f954c17578 100644\n--- a/src/bits.c\n+++ b/src/bits.c\n@@ -491,12 +491,10 @@ bit_read_RD (Bit_Chain *dat)\n   unsigned char byte[8];\n   double *result;\n \n+  //CHK_OVERFLOW_PLUS (8, __FUNCTION__, bit_nan ())\n   // TODO: big-endian\n   for (i = 0; i < 8; i++)\n-    {\n-      byte[i] = bit_read_RC (dat);\n-      CHK_OVERFLOW(__FUNCTION__, bit_nan ())\n-    }\n+    byte[i] = bit_read_RC (dat);\n \n   result = (double *)byte;\n   return (*result);\ndiff --git a/src/dec_macros.h b/src/dec_macros.h\nindex 90868e550d..dea03a6ddb 100644\n--- a/src/dec_macros.h\n+++ b/src/dec_macros.h\n@@ -1511,7 +1511,7 @@\n     _obj->parent = obj->tio.entity;                                           \\\n     SINCE (R_13) { error = dwg_decode_entity (dat, hdl_dat, str_dat, _ent); } \\\n     else { error = decode_entity_preR13 (dat, obj, _ent); }                   \\\n-    if (error >= DWG_ERR_CRITICAL)                                            \\\n+    if (error >= DWG_ERR_CRITICAL || dat->byte > dat->size)                   \\\n       return error;\n \n // Does size include the CRC?\n@@ -1611,7 +1611,7 @@\n       {                                                                       \\\n         _obj = obj->tio.object->tio.token;                                    \\\n         error = dwg_decode_object (dat, hdl_dat, str_dat, obj->tio.object);   \\\n-        if (error >= DWG_ERR_CRITICAL)                                        \\\n+        if (error >= DWG_ERR_CRITICAL || dat->byte > dat->size)               \\\n           return error;                                                       \\\n       }\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42493955-vul",
+      "digest": "sha256:808e4091ab93e5f37a0f30108897ac5ad5b294ea2cdb936224beeae382359790"
+    },
+    "patched": {
+      "ref": "n132/arvo:42493955-fix",
+      "digest": "sha256:c2438584091c29d99fbbafb3c2ce1717c5a3943845b0b03e75491b634dc520ba"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/libredwg/src/./dwg.spec:719",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/libredwg/src/./dwg.spec:719"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

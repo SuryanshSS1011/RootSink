@@ -1,0 +1,82 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-930862549",
+  "chain": "CWE-1284->CWE-190->CWE-119",
+  "project": "lwan",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42510536",
+    "commit_range": {
+      "introduced": null,
+      "fixed": null,
+      "fix_commits": [
+        "44283f701359c7b0bcf5e0b5466591c7442d081a"
+      ],
+      "repo": "https://github.com/lpereira/lwan"
+    },
+    "patch": "diff --git a/fuzz/regression/clusterfuzz-testcase-minimized-h2_huffman_fuzzer-4703583657918464 b/fuzz/regression/clusterfuzz-testcase-minimized-h2_huffman_fuzzer-4703583657918464\nnew file mode 100644\nindex 000000000..790cc272b\n--- /dev/null\n+++ b/fuzz/regression/clusterfuzz-testcase-minimized-h2_huffman_fuzzer-4703583657918464\n@@ -0,0 +1 @@\n+ \ufffd    \n\\ No newline at end of file\ndiff --git a/src/lib/lwan-h2-huffman.c b/src/lib/lwan-h2-huffman.c\nindex 70cf23d63..c2c33848d 100644\n--- a/src/lib/lwan-h2-huffman.c\n+++ b/src/lib/lwan-h2-huffman.c\n@@ -301,8 +301,14 @@ static inline bool consume(struct bit_reader *reader, int count)\n     assert(count > 0);\n     reader->bitbuf <<= count;\n     reader->bitcount -= count;\n-    return !__builtin_sub_overflow(reader->total_bitcount, count,\n-                                   &reader->total_bitcount);\n+    if (__builtin_sub_overflow(reader->total_bitcount, count,\n+                               &reader->total_bitcount)) {\n+        return false;\n+    }\n+    if (reader->total_bitcount == 0) {\n+        return false;\n+    }\n+    return true;\n }\n \n static inline size_t output_size(size_t input_size)\ndiff --git a/src/scripts/gentables.py b/src/scripts/gentables.py\nindex e957f3673..ad5387a6f 100755\n--- a/src/scripts/gentables.py\n+++ b/src/scripts/gentables.py\n@@ -187,7 +187,11 @@ def generate_level(level, next_table):\n     assert(count > 0);\n     reader->bitbuf <<= count;\n     reader->bitcount -= count;\n-    return !__builtin_sub_overflow(reader->total_bitcount, count, &reader->total_bitcount);\n+    if (__builtin_sub_overflow(reader->total_bitcount, count, &reader->total_bitcount))\n+        return false;\n+    if (reader->total_bitcount == 0)\n+        return false;\n+    return true;\n }\n \"\"\")\n   \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42510536-vul",
+      "digest": "sha256:6f4ebd9ef6a214bf7536c8008b42dfe5adf3d0bc7fd4addd5109d69b981a15e3"
+    },
+    "patched": {
+      "ref": "n132/arvo:42510536-fix",
+      "digest": "sha256:874b3f59adef63d41303bd8c219aae6ae8e20d1d22b699c6d23bcf93895aad9a"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/lwan/src/lib/lwan-h2-huffman.c:43",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 190,
+      "role": "intermediate",
+      "witness": {
+        "method": "ubsan-rebuild",
+        "recipe": "SANITIZER=undefined compile && $ENTRYPOINT",
+        "ubsan_options": "print_stacktrace=1:halt_on_error=0:silence_unsigned_overflow=0:symbolize=1"
+      },
+      "witnessed": false
+    },
+    {
+      "cwe_id": 119,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/lwan/src/lib/lwan-h2-huffman.c:43"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

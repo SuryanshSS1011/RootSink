@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042474728",
+  "chain": "CWE-20->CWE-787",
+  "project": "ffmpeg",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42474728",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "1e42736b95065c69a7481d0cf55247024f54b660",
+      "fix_commits": [
+        "1e42736b95065c69a7481d0cf55247024f54b660"
+      ],
+      "repo": "https://git.ffmpeg.org/ffmpeg.git"
+    },
+    "patch": "From 1e42736b95065c69a7481d0cf55247024f54b660 Mon Sep 17 00:00:00 2001\nFrom: Michael Niedermayer <michael@niedermayer.cc>\nDate: Mon, 8 May 2017 11:46:03 +0200\nSubject: [PATCH] avcodec/cdxl: Check format for BGR24\n\nFixes: out of array access\nFixes: 1427/clusterfuzz-testcase-minimized-5020737339392000\n\nFound-by: continuous fuzzing process https://github.com/google/oss-fuzz/tree/master/targets/ffmpeg\nSigned-off-by: Michael Niedermayer <michael@niedermayer.cc>\n---\n libavcodec/cdxl.c | 2 +-\n 1 file changed, 1 insertion(+), 1 deletion(-)\n\ndiff --git a/libavcodec/cdxl.c b/libavcodec/cdxl.c\nindex 5c0ecb2..78f5d50 100644\n--- a/libavcodec/cdxl.c\n+++ b/libavcodec/cdxl.c\n@@ -279,7 +279,7 @@ static int cdxl_decode_frame(AVCodecContext *avctx, void *data,\n         return AVERROR_INVALIDDATA;\n     if (!encoding && c->palette_size && c->bpp <= 8 && c->format != CHUNKY) {\n         avctx->pix_fmt = AV_PIX_FMT_PAL8;\n-    } else if (encoding == 1 && (c->bpp == 6 || c->bpp == 8)) {\n+    } else if (encoding == 1 && (c->bpp == 6 || c->bpp == 8) && c->format != CHUNKY) {\n         if (c->palette_size != (1 << (c->bpp - 1)))\n             return AVERROR_INVALIDDATA;\n         avctx->pix_fmt = AV_PIX_FMT_BGR24;\n-- \n2.55.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42474728-vul",
+      "digest": "sha256:aa5dbb791dead1a3baf27b6c9a79f5d6bbc1ff37b7b4f2e67435144cebf78c22"
+    },
+    "patched": {
+      "ref": "n132/arvo:42474728-fix",
+      "digest": "sha256:ea43405f2664bab36ae2da50bd63a254ac26e7650ea4538619ef85c61b7aef27"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/ffmpeg/libavcodec/bytestream.h:268",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/ffmpeg/libavcodec/bytestream.h:268"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042495006",
+  "chain": "CWE-20->CWE-125",
+  "project": "lxc",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42495006",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "b8e539f44814cd1760c7dc21c027d7e6c51b72fd",
+      "fix_commits": [
+        "b8e539f44814cd1760c7dc21c027d7e6c51b72fd"
+      ],
+      "repo": "https://github.com/lxc/lxc"
+    },
+    "patch": "diff --git a/src/lxc/confile_utils.c b/src/lxc/confile_utils.c\nindex e7516dc391..fc4f75433a 100644\n--- a/src/lxc/confile_utils.c\n+++ b/src/lxc/confile_utils.c\n@@ -1024,17 +1024,31 @@ static int sig_num(const char *sig)\n \n static int rt_sig_num(const char *signame)\n {\n-\tint rtmax = 0, sig_n = 0;\n+\tbool rtmax;\n+\tint sig_n = 0;\n \n-\tif (strncasecmp(signame, \"max-\", 4) == 0)\n-\t\trtmax = 1;\n+\tif (is_empty_string(signame))\n+\t\treturn ret_errno(EINVAL);\n+\n+\tif (strncasecmp(signame, \"max-\", STRLITERALLEN(\"max-\")) == 0) {\n+\t\trtmax = true;\n+\t\tsigname += STRLITERALLEN(\"max-\");\n+\t} else if (strncasecmp(signame, \"min+\", STRLITERALLEN(\"min+\")) == 0) {\n+\t\trtmax = false;\n+\t\tsigname += STRLITERALLEN(\"min+\");\n+\t} else {\n+\t\treturn ret_errno(EINVAL);\n+\t}\n \n-\tsigname += 4;\n-\tif (!isdigit(*signame))\n+\tif (is_empty_string(signame) || !isdigit(*signame))\n \t\treturn ret_errno(EINVAL);\n \n \tsig_n = sig_num(signame);\n-\tsig_n = rtmax ? SIGRTMAX - sig_n : SIGRTMIN + sig_n;\n+\tif (rtmax)\n+\t\tsig_n = SIGRTMAX - sig_n;\n+\telse\n+\t\tsig_n = SIGRTMIN + sig_n;\n+\n \tif (sig_n > SIGRTMAX || sig_n < SIGRTMIN)\n \t\treturn ret_errno(EINVAL);\n \n@@ -1043,16 +1057,15 @@ static int rt_sig_num(const char *signame)\n \n int sig_parse(const char *signame)\n {\n-\tsize_t n;\n-\n-\tif (isdigit(*signame)) {\n+\tif (isdigit(*signame))\n \t\treturn sig_num(signame);\n-\t} else if (strncasecmp(signame, \"sig\", 3) == 0) {\n-\t\tsigname += 3;\n-\t\tif (strncasecmp(signame, \"rt\", 2) == 0)\n-\t\t\treturn rt_sig_num(signame + 2);\n \n-\t\tfor (n = 0; n < sizeof(signames) / sizeof((signames)[0]); n++)\n+\tif (strncasecmp(signame, \"sig\", STRLITERALLEN(\"sig\")) == 0) {\n+\t\tsigname += STRLITERALLEN(\"sig\");\n+\t\tif (strncasecmp(signame, \"rt\", STRLITERALLEN(\"rt\")) == 0)\n+\t\t\treturn rt_sig_num(signame + STRLITERALLEN(\"rt\"));\n+\n+\t\tfor (size_t n = 0; n < ARRAY_SIZE(signames); n++)\n \t\t\tif (strcasecmp(signames[n].name, signame) == 0)\n \t\t\t\treturn signames[n].num;\n \t}\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42495006-vul",
+      "digest": "sha256:9a40e92b6228cb1e2bc051797c9394f9bbaf524d5a4c8cbb6015fd834ee5777a"
+    },
+    "patched": {
+      "ref": "n132/arvo:42495006-fix",
+      "digest": "sha256:96cd148f7f1afed26fd3f5f2607b7fe061eb8bad41560bbb2b03de693970401a"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/lxc/src/lxc/confile_utils.c:1033",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/lxc/src/lxc/confile_utils.c:1033"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

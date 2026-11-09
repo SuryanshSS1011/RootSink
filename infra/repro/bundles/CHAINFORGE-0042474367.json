@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042474367",
+  "chain": "CWE-20->CWE-125",
+  "project": "radare2",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42474367",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "d271da09ab6cf4817cfabede153e6bd547118cdd",
+      "fix_commits": [
+        "d271da09ab6cf4817cfabede153e6bd547118cdd"
+      ],
+      "repo": "https://github.com/radare/radare2"
+    },
+    "patch": "diff --git a/libr/bin/format/mach0/mach064_is_kernelcache.c b/libr/bin/format/mach0/mach064_is_kernelcache.c\nindex 2add4b240d2de..324dccb1e1f81 100644\n--- a/libr/bin/format/mach0/mach064_is_kernelcache.c\n+++ b/libr/bin/format/mach0/mach064_is_kernelcache.c\n@@ -2,6 +2,10 @@ static bool is_kernelcache(const ut8 *buf, ut64 length) {\n \tif (length < sizeof (struct MACH0_(mach_header))) {\n \t\treturn false;\n \t}\n+\tut32 cputype = r_read_le32 (buf + 4);\n+\tif (cputype != CPU_TYPE_ARM64) {\n+\t\treturn false;\n+\t}\n \n \tconst ut8 *end = buf + length;\n \tconst ut8 *cursor = buf + sizeof (struct MACH0_(mach_header));\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42474367-vul",
+      "digest": "sha256:4032b0eb14c0aa531a7f14ce5350045689801a152ff1b61ad5d1cd5773db6d26"
+    },
+    "patched": {
+      "ref": "n132/arvo:42474367-fix",
+      "digest": "sha256:b19d2a0dcddfb9b15fe613416fc96fa123f9b60b1bedb309e166e79a4b5ef731"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/radare2/libr/include/r_endian.h:176",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/radare2/libr/include/r_endian.h:176"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

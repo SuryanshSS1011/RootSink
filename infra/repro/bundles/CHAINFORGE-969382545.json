@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-969382545",
+  "chain": "CWE-456->CWE-457",
+  "project": "wolfssl",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42513401",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/wolfssl/wolfssl/commit/85fc2bb7fa10ba5fb0a696458dedfc2fe34321aa",
+      "fix_commits": [
+        "85fc2bb7fa10ba5fb0a696458dedfc2fe34321aa"
+      ],
+      "repo": "https://github.com/wolfssl/wolfssl"
+    },
+    "patch": "diff --git a/src/internal.c b/src/internal.c\nindex ff2f0526bb9..2a84b36000a 100644\n--- a/src/internal.c\n+++ b/src/internal.c\n@@ -16058,6 +16058,268 @@ static int SanityCheckCipherText(WOLFSSL* ssl, word32 encryptSz)\n \n \n #ifndef WOLFSSL_AEAD_ONLY\n+#ifdef WOLSSL_OLD_TIMINGPADVERIFY\n+#define COMPRESS_LOWER      64\n+#define COMPRESS_UPPER      55\n+#define COMPRESS_CONSTANT   13\n+\n+#ifndef NO_OLD_TLS\n+\n+static WC_INLINE void Md5Rounds(int rounds, const byte* data, int sz)\n+{\n+    wc_Md5 md5;\n+    int i;\n+\n+    wc_InitMd5(&md5);   /* no error check on purpose, dummy round */\n+\n+    for (i = 0; i < rounds; i++)\n+        wc_Md5Update(&md5, data, sz);\n+    wc_Md5Free(&md5); /* in case needed to release resources */\n+}\n+\n+\n+\n+/* do a dummy sha round */\n+static WC_INLINE void ShaRounds(int rounds, const byte* data, int sz)\n+{\n+    wc_Sha sha;\n+    int i;\n+\n+    wc_InitSha(&sha);  /* no error check on purpose, dummy round */\n+\n+    for (i = 0; i < rounds; i++)\n+        wc_ShaUpdate(&sha, data, sz);\n+    wc_ShaFree(&sha); /* in case needed to release resources */\n+}\n+#endif\n+\n+\n+#ifndef NO_SHA256\n+\n+static WC_INLINE void Sha256Rounds(int rounds, const byte* data, int sz)\n+{\n+    wc_Sha256 sha256;\n+    int i;\n+\n+    wc_InitSha256(&sha256);  /* no error check on purpose, dummy round */\n+\n+    for (i = 0; i < rounds; i++) {\n+        wc_Sha256Update(&sha256, data, sz);\n+        /* no error check on purpose, dummy round */\n+    }\n+    wc_Sha256Free(&sha256); /* in case needed to release resources */\n+}\n+\n+#endif\n+\n+\n+#ifdef WOLFSSL_SHA384\n+\n+static WC_INLINE void Sha384Rounds(int rounds, const byte* data, int sz)\n+{\n+    wc_Sha384 sha384;\n+    int i;\n+\n+    wc_InitSha384(&sha384);  /* no error check on purpose, dummy round */\n+\n+    for (i = 0; i < rounds; i++) {\n+        wc_Sha384Update(&sha384, data, sz);\n+        /* no error check on purpose, dummy round */\n+    }\n+    wc_Sha384Free(&sha384); /* in case needed to release resources */\n+}\n+\n+#endif\n+\n+\n+#ifdef WOLFSSL_SHA512\n+static WC_INLINE void Sha512Rounds(int rounds, const byte* data, int sz)\n+{\n+    wc_Sha512 sha512;\n+    int i;\n+\n+    wc_InitSha512(&sha512);  /* no error check on purpose, dummy round */\n+\n+    for (i = 0; i < rounds; i++) {\n+        wc_Sha512Update(&sha512, data, sz);\n+        /* no error check on purpose, dummy round */\n+    }\n+    wc_Sha512Free(&sha512); /* in case needed to release resources */\n+}\n+\n+#endif\n+\n+\n+#ifdef WOLFSSL_RIPEMD\n+\n+static WC_INLINE void RmdRounds(int rounds, const byte* data, int sz)\n+{\n+    RipeMd ripemd;\n+    int i;\n+\n+    wc_InitRipeMd(&ripemd);\n+\n+    for (i = 0; i < rounds; i++)\n+        wc_RipeMdUpdate(&ripemd, data, sz);\n+}\n+\n+#endif\n+\n+\n+/* Do dummy rounds */\n+static WC_INLINE void DoRounds(int type, int rounds, const byte* data, int sz)\n+{\n+    (void)rounds;\n+    (void)data;\n+    (void)sz;\n+\n+    switch (type) {\n+        case no_mac :\n+            break;\n+\n+#ifndef NO_OLD_TLS\n+#ifndef NO_MD5\n+        case md5_mac :\n+            Md5Rounds(rounds, data, sz);\n+            break;\n+#endif\n+\n+#ifndef NO_SHA\n+        case sha_mac :\n+            ShaRounds(rounds, data, sz);\n+            break;\n+#endif\n+#endif\n+\n+#ifndef NO_SHA256\n+        case sha256_mac :\n+            Sha256Rounds(rounds, data, sz);\n+            break;\n+#endif\n+\n+#ifdef WOLFSSL_SHA384\n+        case sha384_mac :\n+            Sha384Rounds(rounds, data, sz);\n+            break;\n+#endif\n+\n+#ifdef WOLFSSL_SHA512\n+        case sha512_mac :\n+            Sha512Rounds(rounds, data, sz);\n+            break;\n+#endif\n+\n+#ifdef WOLFSSL_RIPEMD\n+        case rmd_mac :\n+            RmdRounds(rounds, data, sz);\n+            break;\n+#endif\n+\n+        default:\n+            WOLFSSL_MSG(\"Bad round type\");\n+            break;\n+    }\n+}\n+\n+\n+/* do number of compression rounds on dummy data */\n+static WC_INLINE void CompressRounds(WOLFSSL* ssl, int rounds, const byte* dummy)\n+{\n+    if (rounds)\n+        DoRounds(ssl->specs.mac_algorithm, rounds, dummy, COMPRESS_LOWER);\n+}\n+\n+\n+/* check all length bytes for the pad value, return 0 on success */\n+static int PadCheck(const byte* a, byte pad, int length)\n+{\n+    int i;\n+    int compareSum = 0;\n+\n+    for (i = 0; i < length; i++) {\n+        compareSum |= a[i] ^ pad;\n+    }\n+\n+    return compareSum;\n+}\n+\n+\n+/* get compression extra rounds */\n+static WC_INLINE int GetRounds(int pLen, int padLen, int t)\n+{\n+    int  roundL1 = 1;  /* round up flags */\n+    int  roundL2 = 1;\n+\n+    int L1 = COMPRESS_CONSTANT + pLen - t;\n+    int L2 = COMPRESS_CONSTANT + pLen - padLen - 1 - t;\n+\n+    L1 -= COMPRESS_UPPER;\n+    L2 -= COMPRESS_UPPER;\n+\n+    if ( (L1 % COMPRESS_LOWER) == 0)\n+        roundL1 = 0;\n+    if ( (L2 % COMPRESS_LOWER) == 0)\n+        roundL2 = 0;\n+\n+    L1 /= COMPRESS_LOWER;\n+    L2 /= COMPRESS_LOWER;\n+\n+    L1 += roundL1;\n+    L2 += roundL2;\n+\n+    return L1 - L2;\n+}\n+\n+\n+/* timing resistant pad/verify check, return 0 on success */\n+ int TimingPadVerify(WOLFSSL* ssl, const byte* input, int padLen, int t,\n+                     int pLen, int content)\n+{\n+    byte verify[WC_MAX_DIGEST_SIZE];\n+    byte dmy[sizeof(WOLFSSL) >= MAX_PAD_SIZE ? 1 : MAX_PAD_SIZE] = {0};\n+    byte* dummy = sizeof(dmy) < MAX_PAD_SIZE ? (byte*) ssl : dmy;\n+    int  ret = 0;\n+\n+    (void)dmy;\n+\n+    if ( (t + padLen + 1) > pLen) {\n+        WOLFSSL_MSG(\"Plain Len not long enough for pad/mac\");\n+        PadCheck(dummy, (byte)padLen, MAX_PAD_SIZE);\n+        /* still compare */\n+        ssl->hmac(ssl, verify, input, pLen - t, -1, content, 1, PEER_ORDER);\n+        ConstantCompare(verify, input + pLen - t, t);\n+\n+        return VERIFY_MAC_ERROR;\n+    }\n+\n+    if (PadCheck(input + pLen - (padLen + 1), (byte)padLen, padLen + 1) != 0) {\n+        WOLFSSL_MSG(\"PadCheck failed\");\n+        PadCheck(dummy, (byte)padLen, MAX_PAD_SIZE - padLen - 1);\n+        /* still compare */\n+        ssl->hmac(ssl, verify, input, pLen - t, -1, content, 1, PEER_ORDER);\n+        ConstantCompare(verify, input + pLen - t, t);\n+\n+        return VERIFY_MAC_ERROR;\n+    }\n+\n+    PadCheck(dummy, (byte)padLen, MAX_PAD_SIZE - padLen - 1);\n+    ret = ssl->hmac(ssl, verify, input, pLen - padLen - 1 - t, -1, content,\n+                                                                 1, PEER_ORDER);\n+\n+    CompressRounds(ssl, GetRounds(pLen, padLen, t), dummy);\n+\n+    if (ConstantCompare(verify, input + (pLen - padLen - 1 - t), t) != 0) {\n+        WOLFSSL_MSG(\"Verify MAC compare failed\");\n+        return VERIFY_MAC_ERROR;\n+    }\n+\n+    /* treat any faulure as verify MAC error */\n+    if (ret != 0)\n+        ret = VERIFY_MAC_ERROR;\n+\n+    return ret;\n+}\n+#else\n /* check all length bytes for the pad value, return 0 on success */\n static int PadCheck(const byte* a, byte pad, int length)\n {\n@@ -16196,6 +16458,7 @@ int TimingPadVerify(WOLFSSL* ssl, const byte* input, int padLen, int macSz,\n     return ret;\n }\n #endif\n+#endif\n \n \n int DoApplicationData(WOLFSSL* ssl, byte* input, word32* inOutIdx, int sniff)\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42513401-vul",
+      "digest": "sha256:4a599aeec7dd6f17b1598e1ffe6ff273d1c2281c3d410f0e5dfdf6bb812076cd"
+    },
+    "patched": {
+      "ref": "n132/arvo:42513401-fix",
+      "digest": "sha256:4966e74813d4a5abe86df11a09d73ff4ac4de01b8e469b6e102ec2fca6fdaef5"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/wolf-ssl-ssh-fuzzers/oss-fuzz/projects/wolf-ssl-ssh/fuzzers/wolfssh/wolfssl/wolfcrypt/src/asn.c:3154",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/wolf-ssl-ssh-fuzzers/oss-fuzz/projects/wolf-ssl-ssh/fuzzers/wolfssh/wolfssl/wolfcrypt/src/asn.c:3154"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0417323384",
+  "chain": "CWE-20->CWE-125",
+  "project": "jq",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "417323384",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "c6e041699d8cd31b97375a2596217aff2cfca85b",
+      "fix_commits": [
+        "c6e041699d8cd31b97375a2596217aff2cfca85b"
+      ],
+      "repo": "https://github.com/jqlang/jq"
+    },
+    "patch": "diff --git a/src/jv.c b/src/jv.c\nindex dfb24fa3e3..e4529a47e2 100644\n--- a/src/jv.c\n+++ b/src/jv.c\n@@ -1148,6 +1148,7 @@ static jv jvp_string_empty_new(uint32_t length) {\n   jvp_string* s = jvp_string_alloc(length);\n   s->length_hashed = 0;\n   memset(s->data, 0, length);\n+  s->data[length] = 0;\n   jv r = {JVP_FLAGS_STRING, 0, 0, 0, {&s->refcnt}};\n   return r;\n }\ndiff --git a/tests/jq.test b/tests/jq.test\nindex 17232418f9..7e04c166d5 100644\n--- a/tests/jq.test\n+++ b/tests/jq.test\n@@ -2362,6 +2362,10 @@ map(try implode catch .)\n [123,[\"a\"],[nan]]\n [\"implode input must be an array\",\"string (\\\"a\\\") can't be imploded, unicode codepoint needs to be numeric\",\"number (null) can't be imploded, unicode codepoint needs to be numeric\"]\n \n+try 0[implode] catch .\n+[]\n+\"Cannot index number with string \\\"\\\"\"\n+\n # walk\n walk(.)\n {\"x\":0}\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:417323384-vul",
+      "digest": "sha256:67970d8d7c546589469140595953f043414daac8a6f7bee8b5b0b41a9776f766"
+    },
+    "patched": {
+      "ref": "n132/arvo:417323384-fix",
+      "digest": "sha256:f7df79ab935a1742e8eb355a8628edab08909cacaa0679a2b9046fdec36160a0"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/jq/src/jv.c:1453",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/jq/src/jv.c:1453"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

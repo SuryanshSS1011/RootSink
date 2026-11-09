@@ -1,0 +1,74 @@
+======================= INFO =========================
+This binary is built for AFL-fuzz.
+To run the target function on individual input(s) execute this:
+  /out/fuzz_parseini < INPUT_FILE
+or
+  /out/fuzz_parseini INPUT_FILE1 [INPUT_FILE2 ... ]
+To fuzz with afl-fuzz execute this:
+  afl-fuzz [afl-flags] /out/fuzz_parseini [-N]
+afl-fuzz will run N iterations before re-spawning the process (default: 1000)
+======================================================
+Reading 10789 bytes from /tmp/poc
+=================================================================
+==2064==ERROR: AddressSanitizer: stack-buffer-overflow on address 0x7f255826c820 at pc 0x00000046f264 bp 0x7fff83441fa0 sp 0x7fff83441738
+WRITE of size 4849 at 0x7f255826c820 thread T0
+SCARINESS: 60 (multi-byte-write-stack-buffer-overflow)
+    #0 0x46f263 in vsprintf /src/llvm-project/compiler-rt/lib/asan/../sanitizer_common/sanitizer_common_interceptors.inc:1670:1
+    #1 0x4702b9 in __sprintf_chk /src/llvm-project/compiler-rt/lib/asan/../sanitizer_common/sanitizer_common_interceptors.inc:1718:1
+    #2 0x5596fd in add_file /src/fio/filesetup.c:1656:2
+    #3 0x58c56a in str_filename_cb /src/fio/options.c:1320:3
+    #4 0x587507 in __handle_option /src/fio/parse.c:792:10
+    #5 0x583947 in handle_option /src/fio/parse.c:1014:11
+    #6 0x583c61 in parse_option /src/fio/parse.c:1184:6
+    #7 0x591109 in fio_options_parse /src/fio/options.c:5199:16
+    #8 0x52aaf0 in __parse_jobs_ini /src/fio/init.c:2076:9
+    #9 0x529ea6 in parse_jobs_ini /src/fio/init.c:2127:9
+    #10 0x4ffbed in LLVMFuzzerTestOneInput /src/fio/t/fuzz/fuzz_parseini.c:38:2
+    #11 0x63eb3e in ExecuteFilesOnyByOne /src/libfuzzer/afl/afl_driver.cpp:207:5
+    #12 0x63eb3e in main /src/libfuzzer/afl/afl_driver.cpp:244:12
+    #13 0x7f25571c383f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2083f)
+    #14 0x450f48 in _start (/out/fuzz_parseini+0x450f48)
+
+DEDUP_TOKEN: vsprintf--__sprintf_chk--add_file
+Address 0x7f255826c820 is located in stack of thread T0 at offset 4128 in frame
+    #0 0x5594ff in add_file /src/fio/filesetup.c:1644
+
+DEDUP_TOKEN: add_file
+  This frame has 1 object(s):
+    [32, 4128) 'file_name' (line 1646) <== Memory access at offset 4128 overflows this variable
+HINT: this may be a false positive if your program uses some custom stack unwind mechanism, swapcontext or vfork
+      (longjmp and C++ exceptions *are* supported)
+SUMMARY: AddressSanitizer: stack-buffer-overflow /src/llvm-project/compiler-rt/lib/asan/../sanitizer_common/sanitizer_common_interceptors.inc:1670:1 in vsprintf
+Shadow bytes around the buggy address:
+  0x0fe52b0458b0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0fe52b0458c0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0fe52b0458d0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0fe52b0458e0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0fe52b0458f0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x0fe52b045900: 00 00 00 00[f3]f3 f3 f3 f3 f3 f3 f3 f3 f3 f3 f3
+  0x0fe52b045910: f3 f3 f3 f3 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0fe52b045920: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0fe52b045930: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0fe52b045940: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0fe52b045950: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+  Shadow gap:              cc
+==2064==ABORTING

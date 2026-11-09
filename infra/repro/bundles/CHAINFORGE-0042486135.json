@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042486135",
+  "chain": "CWE-1284->CWE-125",
+  "project": "rnp",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42486135",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "f07b44cec577a117ad0028c35896804dc8efd548",
+      "fix_commits": [
+        "f07b44cec577a117ad0028c35896804dc8efd548"
+      ],
+      "repo": "https://github.com/rnpgp/rnp"
+    },
+    "patch": "diff --git a/src/librepgp/stream-dump.cpp b/src/librepgp/stream-dump.cpp\nindex 18178bcfa0..33c6508294 100644\n--- a/src/librepgp/stream-dump.cpp\n+++ b/src/librepgp/stream-dump.cpp\n@@ -437,8 +437,9 @@ dst_print_s2k(pgp_dest_t *dst, pgp_s2k_t *s2k)\n     if ((s2k->specifier == PGP_S2KS_EXPERIMENTAL) && s2k->gpg_ext_num) {\n         dst_printf(dst, \"GPG extension num: %d\\n\", (int) s2k->gpg_ext_num);\n         if (s2k->gpg_ext_num == PGP_S2K_GPG_SMARTCARD) {\n-            dst_print_hex(\n-              dst, \"card serial number\", s2k->gpg_serial, s2k->gpg_serial_len, true);\n+            static_assert(sizeof(s2k->gpg_serial) == 16, \"invalid s2k->gpg_serial size\");\n+            size_t slen = s2k->gpg_serial_len > 16 ? 16 : s2k->gpg_serial_len;\n+            dst_print_hex(dst, \"card serial number\", s2k->gpg_serial, slen, true);\n         }\n         return;\n     }\n@@ -1420,10 +1421,11 @@ obj_add_s2k_json(json_object *obj, pgp_s2k_t *s2k)\n               s2k_obj, \"gpg extension\", json_object_new_int(s2k->gpg_ext_num))) {\n             return false;\n         }\n-        if ((s2k->gpg_ext_num == PGP_S2K_GPG_SMARTCARD) &&\n-            !obj_add_hex_json(\n-              s2k_obj, \"card serial number\", s2k->gpg_serial, s2k->gpg_serial_len)) {\n-            return false;\n+        if (s2k->gpg_ext_num == PGP_S2K_GPG_SMARTCARD) {\n+            size_t slen = s2k->gpg_serial_len > 16 ? 16 : s2k->gpg_serial_len;\n+            if (!obj_add_hex_json(s2k_obj, \"card serial number\", s2k->gpg_serial, slen)) {\n+                return false;\n+            }\n         }\n     }\n     if (!obj_add_intstr_json(s2k_obj, \"hash algorithm\", s2k->hash_alg, hash_alg_map)) {\ndiff --git a/src/librepgp/stream-packet.cpp b/src/librepgp/stream-packet.cpp\nindex 02141038da..2879f57151 100644\n--- a/src/librepgp/stream-packet.cpp\n+++ b/src/librepgp/stream-packet.cpp\n@@ -619,7 +619,11 @@ get_packet_body_s2k(pgp_packet_body_t *body, pgp_s2k_t *s2k)\n             RNP_LOG(\"Failed to get GPG serial len\");\n             return false;\n         }\n-        size_t len = s2k->gpg_serial_len > 16 ? 16 : s2k->gpg_serial_len;\n+        size_t len = s2k->gpg_serial_len;\n+        if (s2k->gpg_serial_len > 16) {\n+            RNP_LOG(\"Warning: gpg_serial_len is %d\", (int) len);\n+            len = 16;\n+        }\n         if (!get_packet_body_buf(body, s2k->gpg_serial, len)) {\n             RNP_LOG(\"Failed to get GPG serial\");\n             return false;\ndiff --git a/src/tests/data/test_key_edge_cases/alice-s2k-101-2-card-len.pgp b/src/tests/data/test_key_edge_cases/alice-s2k-101-2-card-len.pgp\nnew file mode 100644\nindex 0000000000..93e7b09061\nBinary files /dev/null and b/src/tests/data/test_key_edge_cases/alice-s2k-101-2-card-len.pgp differ\ndiff --git a/src/tests/ffi.cpp b/src/tests/ffi.cpp\nindex a3d8842319..baecdb46ac 100644\n--- a/src/tests/ffi.cpp\n+++ b/src/tests/ffi.cpp\n@@ -5307,6 +5307,39 @@ TEST_F(rnp_tests, test_ffi_key_dump)\n     rnp_ffi_destroy(ffi);\n }\n \n+TEST_F(rnp_tests, test_ffi_key_dump_edge_cases)\n+{\n+    rnp_ffi_t ffi = NULL;\n+    assert_rnp_success(rnp_ffi_create(&ffi, \"GPG\", \"GPG\"));\n+\n+    /* secret key, stored on gpg card, with too large card serial len */\n+    rnp_input_t input = NULL;\n+    assert_rnp_success(\n+      rnp_input_from_path(&input, \"data/test_key_edge_cases/alice-s2k-101-2-card-len.pgp\"));\n+    rnp_output_t output = NULL;\n+    assert_rnp_success(rnp_output_to_memory(&output, 0));\n+    assert_rnp_success(rnp_dump_packets_to_output(input, output, 0));\n+    rnp_input_destroy(input);\n+    uint8_t *buf = NULL;\n+    size_t   len = 0;\n+    assert_rnp_success(rnp_output_memory_get_buf(output, &buf, &len, false));\n+    buf[len - 1] = '\\0';\n+    assert_non_null(strstr(\n+      (char *) buf, \"card serial number: 0x000102030405060708090a0b0c0d0e0f (16 bytes)\"));\n+    rnp_output_destroy(output);\n+\n+    assert_rnp_success(\n+      rnp_input_from_path(&input, \"data/test_key_edge_cases/alice-s2k-101-2-card-len.pgp\"));\n+    char *json = NULL;\n+    assert_rnp_success(rnp_dump_packets_to_json(input, 0, &json));\n+    rnp_input_destroy(input);\n+    assert_non_null(\n+      strstr(json, \"\\\"card serial number\\\":\\\"000102030405060708090a0b0c0d0e0f\\\"\"));\n+    rnp_buffer_destroy(json);\n+\n+    rnp_ffi_destroy(ffi);\n+}\n+\n TEST_F(rnp_tests, test_ffi_key_userid_dump_has_no_special_chars)\n {\n     rnp_ffi_t    ffi = NULL;\n@@ -9511,6 +9544,23 @@ TEST_F(rnp_tests, test_ffi_key_import_gpg_s2k)\n     assert_int_equal(count, 2);\n     rnp_key_handle_destroy(key);\n \n+    /* load key with too large gpg_serial_len */\n+    assert_rnp_success(rnp_unload_keys(ffi, RNP_KEY_UNLOAD_PUBLIC | RNP_KEY_UNLOAD_SECRET));\n+    assert_rnp_success(\n+      rnp_input_from_path(&input, \"data/test_key_edge_cases/alice-s2k-101-2-card-len.pgp\"));\n+    assert_rnp_success(rnp_import_keys(\n+      ffi, input, RNP_LOAD_SAVE_PUBLIC_KEYS | RNP_LOAD_SAVE_SECRET_KEYS, NULL));\n+    rnp_input_destroy(input);\n+    assert_rnp_success(rnp_locate_key(ffi, \"keyid\", \"0451409669FFDE3C\", &key));\n+    secret = false;\n+    assert_rnp_success(rnp_key_have_secret(key, &secret));\n+    assert_true(secret);\n+    locked = false;\n+    assert_rnp_success(rnp_key_is_locked(key, &locked));\n+    assert_true(locked);\n+    assert_rnp_failure(rnp_key_unlock(key, \"password\"));\n+    rnp_key_handle_destroy(key);\n+\n     rnp_ffi_destroy(ffi);\n }\n \ndiff --git a/src/tests/rnp_tests.h b/src/tests/rnp_tests.h\nindex 37614af3e9..9e3e7b91a4 100644\n--- a/src/tests/rnp_tests.h\n+++ b/src/tests/rnp_tests.h\n@@ -235,6 +235,8 @@ void test_ffi_key_export_customized_enarmor(void **state);\n \n void test_ffi_key_dump(void **state);\n \n+void test_ffi_key_dump_edge_cases(void **state);\n+\n void test_ffi_key_userid_dump_has_no_special_chars(void **state);\n \n void test_ffi_pkt_dump(void **state);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42486135-vul",
+      "digest": "sha256:c115ce3916020bbfa77e9550d700b780006ee49a22e45ad7f904736296050eb7"
+    },
+    "patched": {
+      "ref": "n132/arvo:42486135-fix",
+      "digest": "sha256:befa62456131bfb4d21e95b4c43706a43e504b985a15b617683912a2d44b64bd"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/rnp/src/librepgp/stream-dump.cpp:302",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/rnp/src/librepgp/stream-dump.cpp:302"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

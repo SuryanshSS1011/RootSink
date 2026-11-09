@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042537580",
+  "chain": "CWE-456->CWE-457",
+  "project": "ffmpeg",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42537580",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "5dfc0cc84129758b4eab2acdc3e186c3116deacd",
+      "fix_commits": [
+        "5dfc0cc84129758b4eab2acdc3e186c3116deacd"
+      ],
+      "repo": "https://git.ffmpeg.org/ffmpeg.git"
+    },
+    "patch": "From 5dfc0cc84129758b4eab2acdc3e186c3116deacd Mon Sep 17 00:00:00 2001\nFrom: =?UTF-8?q?Kacper=20Michaj=C5=82ow?= <kasper93@gmail.com>\nDate: Thu, 27 Jun 2024 02:40:35 +0200\nSubject: [PATCH] avcodec/parser: ensure input padding is zeroed\nMIME-Version: 1.0\nContent-Type: text/plain; charset=UTF-8\nContent-Transfer-Encoding: 8bit\n\nFixes use of uninitialized value, reported by MSAN.\n\nFound by OSS-Fuzz.\n\nSigned-off-by: Kacper Michaj\u0142ow <kasper93@gmail.com>\n\nFixes: 70852/clusterfuzz-testcase-minimized-ffmpeg_IO_DEMUXER_fuzzer-5179190066872320\nSigned-off-by: Michael Niedermayer <michael@niedermayer.cc>\n---\n libavcodec/parser.c | 1 +\n 1 file changed, 1 insertion(+)\n\ndiff --git a/libavcodec/parser.c b/libavcodec/parser.c\nindex af17ee9..426cc31 100644\n--- a/libavcodec/parser.c\n+++ b/libavcodec/parser.c\n@@ -236,6 +236,7 @@ int ff_combine_frame(ParseContext *pc, int next,\n         }\n         pc->buffer = new_buffer;\n         memcpy(&pc->buffer[pc->index], *buf, *buf_size);\n+        memset(&pc->buffer[pc->index + *buf_size], 0, AV_INPUT_BUFFER_PADDING_SIZE);\n         pc->index += *buf_size;\n         return -1;\n     }\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42537580-vul",
+      "digest": "sha256:fc286633680eae73291ab99b9abb33eef33dd28a8d50a103fd0f788f003436e9"
+    },
+    "patched": {
+      "ref": "n132/arvo:42537580-fix",
+      "digest": "sha256:5b9c018792e8b7f0bcc02d1aa731b18ad3cb89f856d5bbd470ebb8caebf48c57"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/ffmpeg/libavcodec/jpegxl_parser.c:221",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/ffmpeg/libavcodec/jpegxl_parser.c:221"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

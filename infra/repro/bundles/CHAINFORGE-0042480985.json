@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042480985",
+  "chain": "CWE-20->CWE-787",
+  "project": "mruby",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42480985",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "2124b9b4c95e66e63b1eb26a8dab49753b82fd6c",
+      "fix_commits": [
+        "2124b9b4c95e66e63b1eb26a8dab49753b82fd6c"
+      ],
+      "repo": "https://github.com/mruby/mruby"
+    },
+    "patch": "diff --git a/src/string.c b/src/string.c\nindex e61a85cffc..c7b9db17a9 100644\n--- a/src/string.c\n+++ b/src/string.c\n@@ -10,6 +10,7 @@\n \n #ifndef MRB_WITHOUT_FLOAT\n #include <float.h>\n+#include <math.h>\n #endif\n #include <limits.h>\n #include <stddef.h>\n@@ -2491,16 +2492,18 @@ mrb_str_to_i(mrb_state *mrb, mrb_value self)\n double\n mrb_str_len_to_dbl(mrb_state *mrb, const char *s, size_t len, mrb_bool badcheck)\n {\n-  char buf[DBL_DIG * 4 + 10];\n-  const char *p = s;\n+  char buf[DBL_DIG * 4 + 20];\n+  const char *p = s, *p2;\n   const char *pend = p + len;\n   char *end;\n   char *n;\n   char prev = 0;\n   double d;\n+  mrb_bool dot = FALSE;\n \n   if (!p) return 0.0;\n   while (p<pend && ISSPACE(*p)) p++;\n+  p2 = p;\n \n   if (pend - p > 2 && p[0] == '0' && (p[1] == 'x' || p[1] == 'X')) {\n     mrb_value x;\n@@ -2515,21 +2518,27 @@ mrb_str_len_to_dbl(mrb_state *mrb, const char *s, size_t len, mrb_bool badcheck)\n   }\n   while (p < pend) {\n     if (!*p) {\n-      if (badcheck && p < pend) {\n+      if (badcheck) {\n         mrb_raise(mrb, E_ARGUMENT_ERROR, \"string for Float contains null byte\");\n         /* not reached */\n       }\n       pend = p;\n-      p = s;\n+      p = p2;\n+      goto nocopy;\n+    }\n+    if (!badcheck && *p == ' ') {\n+      pend = p;\n+      p = p2;\n       goto nocopy;\n     }\n     if (*p == '_') break;\n     p++;\n   }\n-  p = s;\n+  p = p2;\n   n = buf;\n   while (p < pend) {\n     char c = *p++;\n+    if (c == '.') dot = TRUE;\n     if (c == '_') {\n       /* remove an underscore between digits */\n       if (n == buf || !ISDIGIT(prev) || p == pend) {\n@@ -2539,6 +2548,11 @@ mrb_str_len_to_dbl(mrb_state *mrb, const char *s, size_t len, mrb_bool badcheck)\n     }\n     else if (badcheck && prev == '_' && !ISDIGIT(c)) goto bad;\n     else {\n+      const char *bend = buf+sizeof(buf)-1;\n+      if (n==bend) {            /* buffer overflow */\n+        if (dot) break;         /* cut off remaining fractions */\n+        return INFINITY;\n+      }\n       *n++ = c;\n     }\n     prev = c;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42480985-vul",
+      "digest": "sha256:8752caa750397f040e2efb528d55a43b2f9972b5a870e9cb82f41ea6d7932027"
+    },
+    "patched": {
+      "ref": "n132/arvo:42480985-fix",
+      "digest": "sha256:90ca3cfaf4838df8a6fb8f5f87b5de2653e3202c1954b88d1efb99262a730bab"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/mruby/src/string.c:2542",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/mruby/src/string.c:2542"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

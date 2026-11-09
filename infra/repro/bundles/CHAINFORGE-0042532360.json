@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042532360",
+  "chain": "CWE-416->CWE-125",
+  "project": "libxml2",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42532360",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "ddda373eb529035db3b6b54433523853368ef05d",
+      "fix_commits": [
+        "ddda373eb529035db3b6b54433523853368ef05d"
+      ],
+      "repo": "https://gitlab.gnome.org/GNOME/libxml2.git"
+    },
+    "patch": "From ddda373eb529035db3b6b54433523853368ef05d Mon Sep 17 00:00:00 2001\nFrom: Nick Wellnhofer <wellnhofer@aevum.de>\nDate: Tue, 6 Feb 2024 12:53:03 +0100\nSubject: [PATCH] xmlreader: Make xmlTextReaderValidateEntity return an error\n code\n\nThis makes sure that xmlTextReaderRead returns -1 if a memory\nallocation fails.\n---\n xmlreader.c | 13 ++++++++-----\n 1 file changed, 8 insertions(+), 5 deletions(-)\n\ndiff --git a/xmlreader.c b/xmlreader.c\nindex 6486c7d..9cd0175 100644\n--- a/xmlreader.c\n+++ b/xmlreader.c\n@@ -1004,7 +1004,7 @@ xmlTextReaderValidatePop(xmlTextReaderPtr reader) {\n  * entity substitution is not activated. As a result the parser interface\n  * must walk through the entity and do the validation calls\n  */\n-static void\n+static int\n xmlTextReaderValidateEntity(xmlTextReaderPtr reader) {\n     xmlNodePtr oldnode = reader->node;\n     xmlNodePtr node = reader->node;\n@@ -1033,7 +1033,7 @@ xmlTextReaderValidateEntity(xmlTextReaderPtr reader) {\n \t} else if (node->type == XML_ELEMENT_NODE) {\n \t    reader->node = node;\n \t    if (xmlTextReaderValidatePush(reader) < 0)\n-                return;\n+                return(-1);\n \t} else if ((node->type == XML_TEXT_NODE) ||\n \t\t   (node->type == XML_CDATA_SECTION_NODE)) {\n             xmlTextReaderValidateCData(reader, node->content,\n@@ -1049,7 +1049,7 @@ xmlTextReaderValidateEntity(xmlTextReaderPtr reader) {\n \t    continue;\n \t} else if (node->type == XML_ELEMENT_NODE) {\n \t    if (xmlTextReaderValidatePop(reader) < 0)\n-                return;\n+                return(-1);\n \t}\n skip_children:\n \tif (node->next != NULL) {\n@@ -1071,7 +1071,7 @@ skip_children:\n \t\t}\n \t\treader->node = node;\n \t\tif (xmlTextReaderValidatePop(reader) < 0)\n-                    return;\n+                    return(-1);\n \t    }\n \t    if ((node->type == XML_ENTITY_DECL) &&\n \t\t(reader->ent != NULL) && (reader->ent->children == node)) {\n@@ -1086,6 +1086,8 @@ skip_children:\n \t} while ((node != NULL) && (node != oldnode));\n     } while ((node != NULL) && (node != oldnode));\n     reader->node = oldnode;\n+\n+    return(0);\n }\n #endif /* LIBXML_REGEXP_ENABLED */\n \n@@ -1486,7 +1488,8 @@ node_found:\n     } else if ((reader->node != NULL) &&\n \t       (reader->node->type == XML_ENTITY_REF_NODE) &&\n \t       (reader->ctxt != NULL) && (reader->validate)) {\n-\txmlTextReaderValidateEntity(reader);\n+\tif (xmlTextReaderValidateEntity(reader) < 0)\n+            return(-1);\n #endif /* LIBXML_REGEXP_ENABLED */\n     }\n     if ((reader->node != NULL) &&\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42532360-vul",
+      "digest": "sha256:b3a9eab30cf7a3a92f7c905b7093151657eb6b28a5921c4e115bbd0b1ffe8429"
+    },
+    "patched": {
+      "ref": "n132/arvo:42532360-fix",
+      "digest": "sha256:b266894b431386acdd86be20fec7d6a18e6d10c18eca8d3251eacbea2256bf55"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/libxml2/valid.c:5937",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/libxml2/valid.c:5937"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

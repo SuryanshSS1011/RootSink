@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042517687",
+  "chain": "CWE-1284->CWE-125",
+  "project": "librawspeed",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42517687",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "e29d15cda20e6e7c7e1122c30bff7805a2e59fbc",
+      "fix_commits": [
+        "e29d15cda20e6e7c7e1122c30bff7805a2e59fbc"
+      ],
+      "repo": "https://github.com/darktable-org/rawspeed"
+    },
+    "patch": "diff --git a/src/librawspeed/common/DngOpcodes.cpp b/src/librawspeed/common/DngOpcodes.cpp\nindex 59da0cfaf..5d08abf52 100644\n--- a/src/librawspeed/common/DngOpcodes.cpp\n+++ b/src/librawspeed/common/DngOpcodes.cpp\n@@ -328,11 +328,13 @@ class DngOpcodes::PixelOpcode : public ROIOpcode {\n     const CroppedArray2DRef<T> img = getDataAsCroppedArray2DRef<T>(ri);\n     int cpp = ri->getCpp();\n     const iRectangle2D& ROI = getRoi();\n-    for (auto y = 0; y < ROI.getHeight(); y += rowPitch) {\n-      for (auto x = 0; x < ROI.getWidth(); x += colPitch) {\n+    const iPoint2D numAffected(roundUpDivision(getRoi().dim.x, colPitch),\n+                               roundUpDivision(getRoi().dim.y, rowPitch));\n+    for (int y = 0; y < numAffected.y; ++y) {\n+      for (int x = 0; x < numAffected.x; ++x) {\n         for (auto p = 0U; p < planes; ++p) {\n-          T& pixel =\n-              img(ROI.getTop() + y, firstPlane + (ROI.getLeft() + x) * cpp + p);\n+          T& pixel = img(ROI.getTop() + rowPitch * y,\n+                         firstPlane + (ROI.getLeft() + colPitch * x) * cpp + p);\n           pixel = op(x, y, pixel);\n         }\n       }\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42517687-vul",
+      "digest": "sha256:4058e04c1e4595e6ba068e8a2d8db4b6c6acc80ddba126bdc64f031e8034cb41"
+    },
+    "patched": {
+      "ref": "n132/arvo:42517687-fix",
+      "digest": "sha256:0364f5c9cde07bd0cd512dbf11ac66c795898a1d776c9d711ec9044c318aeb39"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/librawspeed/src/librawspeed/common/DngOpcodes.cpp:508",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/librawspeed/src/librawspeed/common/DngOpcodes.cpp:508"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

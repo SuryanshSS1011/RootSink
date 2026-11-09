@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042487875",
+  "chain": "CWE-1284->CWE-787",
+  "project": "opensc",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42487875",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "0b40d3b999d1e9feddbd9ebd144cf7b11ab81020",
+      "fix_commits": [
+        "0b40d3b999d1e9feddbd9ebd144cf7b11ab81020"
+      ],
+      "repo": "https://github.com/OpenSC/OpenSC"
+    },
+    "patch": "diff --git a/src/libopensc/card-idprime.c b/src/libopensc/card-idprime.c\nindex 70d18112e6..6ebd718966 100644\n--- a/src/libopensc/card-idprime.c\n+++ b/src/libopensc/card-idprime.c\n@@ -539,7 +539,7 @@ static int idprime_read_binary(sc_card_t *card, unsigned int offset,\n \n \t\t// this function is called to read and uncompress the certificate\n \t\tu8 buffer[SC_MAX_EXT_APDU_BUFFER_SIZE];\n-\t\tif (sizeof(buffer) < count) {\n+\t\tif (sizeof(buffer) < count || sizeof(buffer) < priv->file_size) {\n \t\t\tLOG_FUNC_RETURN(card->ctx, SC_ERROR_INTERNAL);\n \t\t}\n \t\twhile (left > 0) {\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42487875-vul",
+      "digest": "sha256:66a56b9baab83a269f6cddcfa6fa5f4d78af32a8994a17067fa5d74de6d97b5e"
+    },
+    "patched": {
+      "ref": "n132/arvo:42487875-fix",
+      "digest": "sha256:398a820806ddad138ca78ff9ae29a64a974034796f6335cc755e3b151622a2bb"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/opensc/src/tests/fuzzing/fuzz_pkcs15_reader.c:140",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/opensc/src/tests/fuzzing/fuzz_pkcs15_reader.c:140"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

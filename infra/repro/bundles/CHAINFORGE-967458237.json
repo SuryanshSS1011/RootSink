@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-967458237",
+  "chain": "CWE-456->CWE-457",
+  "project": "libxml2",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42528949",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://gitlab.gnome.org/GNOME/libxml2/-/commit/4fc5340ec55a12cd6819395030d5d132a219984a",
+      "fix_commits": [
+        "4fc5340ec55a12cd6819395030d5d132a219984a"
+      ],
+      "repo": "https://gitlab.gnome.org/GNOME/libxml2"
+    },
+    "patch": "diff --git a/parser.c b/parser.c\nindex cd89fdb6a8ee83edb17d322ea771b87e89d6e4f9..19f2e61567d54ed9273a6a89cd9e61c2ca78d665 100644\n--- a/parser.c\n+++ b/parser.c\n@@ -5084,37 +5084,33 @@ get_more:\n \t * save current set of data\n \t */\n \tif (nbchar > 0) {\n-\t    if ((ctxt->sax != NULL) &&\n-                (ctxt->disableSAX == 0) &&\n-\t\t(ctxt->sax->comment != NULL)) {\n-\t\tif (buf == NULL) {\n-\t\t    if ((*in == '-') && (in[1] == '-'))\n-\t\t        size = nbchar + 1;\n-\t\t    else\n-\t\t        size = XML_PARSER_BUFFER_SIZE + nbchar;\n-\t\t    buf = (xmlChar *) xmlMallocAtomic(size);\n-\t\t    if (buf == NULL) {\n-\t\t        xmlErrMemory(ctxt, NULL);\n-\t\t\tctxt->instate = state;\n-\t\t\treturn;\n-\t\t    }\n-\t\t    len = 0;\n-\t\t} else if (len + nbchar + 1 >= size) {\n-\t\t    xmlChar *new_buf;\n-\t\t    size  += len + nbchar + XML_PARSER_BUFFER_SIZE;\n-\t\t    new_buf = (xmlChar *) xmlRealloc(buf, size);\n-\t\t    if (new_buf == NULL) {\n-\t\t        xmlFree (buf);\n-\t\t\txmlErrMemory(ctxt, NULL);\n-\t\t\tctxt->instate = state;\n-\t\t\treturn;\n-\t\t    }\n-\t\t    buf = new_buf;\n-\t\t}\n-\t\tmemcpy(&buf[len], ctxt->input->cur, nbchar);\n-\t\tlen += nbchar;\n-\t\tbuf[len] = 0;\n-\t    }\n+            if (buf == NULL) {\n+                if ((*in == '-') && (in[1] == '-'))\n+                    size = nbchar + 1;\n+                else\n+                    size = XML_PARSER_BUFFER_SIZE + nbchar;\n+                buf = (xmlChar *) xmlMallocAtomic(size);\n+                if (buf == NULL) {\n+                    xmlErrMemory(ctxt, NULL);\n+                    ctxt->instate = state;\n+                    return;\n+                }\n+                len = 0;\n+            } else if (len + nbchar + 1 >= size) {\n+                xmlChar *new_buf;\n+                size  += len + nbchar + XML_PARSER_BUFFER_SIZE;\n+                new_buf = (xmlChar *) xmlRealloc(buf, size);\n+                if (new_buf == NULL) {\n+                    xmlFree (buf);\n+                    xmlErrMemory(ctxt, NULL);\n+                    ctxt->instate = state;\n+                    return;\n+                }\n+                buf = new_buf;\n+            }\n+            memcpy(&buf[len], ctxt->input->cur, nbchar);\n+            len += nbchar;\n+            buf[len] = 0;\n \t}\n         if (len > maxLength) {\n             xmlFatalErrMsgStr(ctxt, XML_ERR_COMMENT_NOT_FINISHED,\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42528949-vul",
+      "digest": "sha256:f31230f98d8aa147584dd7e923f108dc0f54257c4645864f9de1ad8849ba8b13"
+    },
+    "patched": {
+      "ref": "n132/arvo:42528949-fix",
+      "digest": "sha256:2d92bebdcfecc9961ec13193f46255f69b2a09408677f964d8e5bdcf844eabf0"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/libxml2/xmlstring.c:73",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/libxml2/xmlstring.c:73"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042516841",
+  "chain": "CWE-20->CWE-125",
+  "project": "msquic",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42516841",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "2dfbdcbceb6c17abb6a0b5ac5ba86e955db6f2f8",
+      "fix_commits": [
+        "2dfbdcbceb6c17abb6a0b5ac5ba86e955db6f2f8"
+      ],
+      "repo": "https://github.com/microsoft/msquic"
+    },
+    "patch": "diff --git a/src/fuzzing/fuzz.cc b/src/fuzzing/fuzz.cc\nindex 656d9540d0..cfdf5407e8 100644\n--- a/src/fuzzing/fuzz.cc\n+++ b/src/fuzzing/fuzz.cc\n@@ -9,6 +9,7 @@\n \n --*/\n \n+#define QUIC_API_ENABLE_PREVIEW_FEATURES 1\n #define CX_PLATFORM_LINUX 1\n #define QUIC_TEST_APIS 1\n \n@@ -19,7 +20,6 @@\n #include \"msquic.hpp\"\n #include \"quic_platform.h\"\n \n-\n extern \"C\" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)\n {\n \tconst MsQuicApi* MsQuic = new(std::nothrow) MsQuicApi();\n@@ -27,11 +27,13 @@ extern \"C\" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)\n \tfor (uint32_t Param = QUIC_PARAM_GLOBAL_RETRY_MEMORY_PERCENT;\n \t\tParam <= QUIC_PARAM_GLOBAL_TLS_PROVIDER;\n \t\tParam++) {\n-\t\tMsQuic->SetParam(\n-\t\t\tnullptr,\n-\t\t\tParam,\n-\t\t\tsize,\n-\t\t\t&data);\n+        if (Param != QUIC_PARAM_GLOBAL_VERSION_SETTINGS) {\n+            MsQuic->SetParam(\n+                nullptr,\n+                Param,\n+                size,\n+                data);\n+        }\n \t}\n \n \tdelete MsQuic;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42516841-vul",
+      "digest": "sha256:8ae168915e39f0d342b46f1e1bddeec0f45c4e4818d1cd8099a1c549c30309c0"
+    },
+    "patched": {
+      "ref": "n132/arvo:42516841-fix",
+      "digest": "sha256:d5e6dcb6c59faf389824eb2ef4424b6cfa8407787dd82c62164712d22b6410a5"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/msquic/src/core/settings.c:1354",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/msquic/src/core/settings.c:1354"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

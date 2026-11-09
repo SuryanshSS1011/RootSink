@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-968949774",
+  "chain": "CWE-456->CWE-457",
+  "project": "libjxl",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42499046",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/libjxl/libjxl/commit/98231abe99b322fe286ea80ab2c066528540a4c5",
+      "fix_commits": [
+        "98231abe99b322fe286ea80ab2c066528540a4c5"
+      ],
+      "repo": "https://github.com/libjxl/libjxl"
+    },
+    "patch": "diff --git a/lib/jxl/dec_noise.cc b/lib/jxl/dec_noise.cc\nindex 08ddc0332d7..240b8aff215 100644\n--- a/lib/jxl/dec_noise.cc\n+++ b/lib/jxl/dec_noise.cc\n@@ -22,6 +22,7 @@\n #include \"lib/jxl/chroma_from_luma.h\"\n #include \"lib/jxl/image_ops.h\"\n #include \"lib/jxl/opsin_params.h\"\n+#include \"lib/jxl/sanitizers.h\"\n #include \"lib/jxl/xorshift128plus-inl.h\"\n HWY_BEFORE_NAMESPACE();\n namespace jxl {\n@@ -215,6 +216,8 @@ void AddNoise(const NoiseParams& noise_params, const Rect& noise_rect,\n   float ytox = cmap.YtoXRatio(0);\n   float ytob = cmap.YtoBRatio(0);\n \n+  const size_t xsize_v = RoundUpTo(xsize, Lanes(d));\n+\n   for (size_t y = 0; y < ysize; ++y) {\n     float* JXL_RESTRICT row_x = opsin_rect.PlaneRow(opsin, 0, y);\n     float* JXL_RESTRICT row_y = opsin_rect.PlaneRow(opsin, 1, y);\n@@ -222,6 +225,10 @@ void AddNoise(const NoiseParams& noise_params, const Rect& noise_rect,\n     const float* JXL_RESTRICT row_rnd_r = noise_rect.ConstPlaneRow(noise, 0, y);\n     const float* JXL_RESTRICT row_rnd_g = noise_rect.ConstPlaneRow(noise, 1, y);\n     const float* JXL_RESTRICT row_rnd_c = noise_rect.ConstPlaneRow(noise, 2, y);\n+    // Needed by the calls to Floor() in StrengthEvalLut. Only arithmetic and\n+    // shuffles are otherwise done on the data, so this is safe.\n+    msan::UnpoisonMemory(row_x + xsize, (xsize_v - xsize) * sizeof(float));\n+    msan::UnpoisonMemory(row_y + xsize, (xsize_v - xsize) * sizeof(float));\n     for (size_t x = 0; x < xsize; x += Lanes(d)) {\n       const auto vx = Load(d, row_x + x);\n       const auto vy = Load(d, row_y + x);\n@@ -238,6 +245,9 @@ void AddNoise(const NoiseParams& noise_params, const Rect& noise_rect,\n                     noise_strength_r, ytox, ytob, row_x + x, row_y + x,\n                     row_b + x);\n     }\n+    msan::PoisonMemory(row_x + xsize, (xsize_v - xsize) * sizeof(float));\n+    msan::PoisonMemory(row_y + xsize, (xsize_v - xsize) * sizeof(float));\n+    msan::PoisonMemory(row_b + xsize, (xsize_v - xsize) * sizeof(float));\n   }\n }\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42499046-vul",
+      "digest": "sha256:679069bf0eca80db3cc14a4e895cd504e12158a1d387a3a0b2f817a710f336d6"
+    },
+    "patched": {
+      "ref": "n132/arvo:42499046-fix",
+      "digest": "sha256:db4c1b7341348fe163c8b10eea067465cae751cf81cbbd1633ab0510209a31b6"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/libjxl/third_party/highway/hwy/ops/x86_256-inl.h:1313",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/libjxl/third_party/highway/hwy/ops/x86_256-inl.h:1313"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

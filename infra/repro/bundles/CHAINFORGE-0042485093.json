@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042485093",
+  "chain": "CWE-416->CWE-787",
+  "project": "gdal",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42485093",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "c58fe8a01a0ad00760746936b6f4220923411466",
+      "fix_commits": [
+        "c58fe8a01a0ad00760746936b6f4220923411466"
+      ],
+      "repo": "https://github.com/OSGeo/gdal"
+    },
+    "patch": "From c58fe8a01a0ad00760746936b6f4220923411466 Mon Sep 17 00:00:00 2001\nFrom: Even Rouault <even.rouault@mines-paris.org>\nDate: Fri, 23 Jun 2017 18:48:08 +0000\nSubject: [PATCH] /vsicurl/: avoid use after free. Fixes\n https://bugs.chromium.org/p/oss-fuzz/issues/detail?id=2360. Credit to OSS\n Fuzz. trunk only\n\ngit-svn-id: https://svn.osgeo.org/gdal/trunk@39249 f0d54148-0727-0410-94bb-9a71ac55c965\n---\n gdal/port/cpl_http.cpp | 11 ++++++++++-\n 1 file changed, 10 insertions(+), 1 deletion(-)\n\ndiff --git a/gdal/port/cpl_http.cpp b/gdal/port/cpl_http.cpp\nindex 723679e..0c4e7fa 100644\n--- a/gdal/port/cpl_http.cpp\n+++ b/gdal/port/cpl_http.cpp\n@@ -877,7 +877,16 @@ void* CPLHTTPSetOptions(void *pcurl, const char * const* papszOptions)\n         pszHeaderFile = CPLGetConfigOption( \"GDAL_HTTP_HEADER_FILE\", NULL );\n     if( pszHeaderFile != NULL )\n     {\n-        VSILFILE *fp = VSIFOpenL( pszHeaderFile, \"rb\" );\n+        VSILFILE *fp = NULL;\n+        // Do not allow /vsicurl/ access from /vsicurl because of GetCurlHandleFor()\n+        // e.g. \"/vsicurl/,HEADER_FILE=/vsicurl/,url= \" would cause use of\n+        // memory after free\n+        if( strstr(pszHeaderFile, \"/vsicurl/\") == NULL &&\n+            strstr(pszHeaderFile, \"/vsis3/\") == NULL &&\n+            strstr(pszHeaderFile, \"/vsigs/\") == NULL )\n+        {\n+            fp = VSIFOpenL( pszHeaderFile, \"rb\" );\n+        }\n         if( fp == NULL )\n         {\n             CPLError(CE_Failure, CPLE_FileIO,\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42485093-vul",
+      "digest": "sha256:5949161b08c6d3e732ca49edafe2d2e57d8075e9030abb09749793d2575704ac"
+    },
+    "patched": {
+      "ref": "n132/arvo:42485093-fix",
+      "digest": "sha256:73e198c47dee306a9f08f5899a61b573c938644210f9a5560da05ae0a7aeb258"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "WRITE",
+        "crash_site": "/src/gdal/curl/lib/url.c:901",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "WRITE",
+        "site": "/src/gdal/curl/lib/url.c:901"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

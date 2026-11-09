@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042516543",
+  "chain": "CWE-456->CWE-457",
+  "project": "skia",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42516543",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "652b26b1ab54dcb78f04c4b11c1f82b638031f1f",
+      "fix_commits": [
+        "652b26b1ab54dcb78f04c4b11c1f82b638031f1f"
+      ],
+      "repo": "https://skia.googlesource.com/skia.git"
+    },
+    "patch": "diff --git a/src/core/SkTDArray.cpp b/src/core/SkTDArray.cpp\nindex 675ed2e..a6e759e 100644\n--- a/src/core/SkTDArray.cpp\n+++ b/src/core/SkTDArray.cpp\n@@ -45,14 +45,10 @@\n \n void SkTDStorage::assign(const void* src, int count, size_t sizeOfT) {\n     SkASSERT(count >= 0);\n-    if (count > 0) {\n-        fCount = count;\n-        size_t byteSize = this->size_bytes(sizeOfT);\n-        if (fCount > fReserve) {\n-            fStorage = static_cast<std::byte*>(sk_realloc_throw(fStorage, byteSize));\n-            fReserve = fCount;\n-        }\n-        memcpy(fStorage, src, byteSize);\n+    fCount = count;\n+    this->shrinkToFit(sizeOfT);\n+    if (count > 0 && src != nullptr) {\n+        memcpy(fStorage, src, this->size_bytes(sizeOfT));\n     }\n }\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42516543-vul",
+      "digest": "sha256:2e3758b79bcf7d7aca5b17ceefc0a790e936ef5c2c1f1a06b87641b891b178b5"
+    },
+    "patched": {
+      "ref": "n132/arvo:42516543-fix",
+      "digest": "sha256:9c6c6739054ea6d6450301e84d01d24e3bce1ff551763ef54cd820cc85b37cdd"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/skia/out/Fuzz/../../src/core/SkRect.cpp:87",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/skia/out/Fuzz/../../src/core/SkRect.cpp:87"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

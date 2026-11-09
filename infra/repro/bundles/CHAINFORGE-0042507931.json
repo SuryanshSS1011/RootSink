@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042507931",
+  "chain": "CWE-20->CWE-787",
+  "project": "ghostpdl",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42507931",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "76c27d4f4dceeba02840a29c6e3ba45989a7daca",
+      "fix_commits": [
+        "76c27d4f4dceeba02840a29c6e3ba45989a7daca"
+      ],
+      "repo": "https://cgit.ghostscript.com/ghostpdl.git"
+    },
+    "patch": "From 76c27d4f4dceeba02840a29c6e3ba45989a7daca Mon Sep 17 00:00:00 2001\nFrom: Chris Liddell <chris.liddell@artifex.com>\nDate: Sat, 29 Jan 2022 09:27:00 +0000\nSubject: [PATCH] oss-fuzz 44160: Check available buffer space reading xref\n offsets\n\nThe code works out how much buffer it has left to safely use, but it was\npossible for a malformed file to cause that calculation to run into negative\nvalues, then used as an unsigned in parameter, meaning we potentially overflow\nthe buffer.\n\nChange it so the parameter is a signed int, and check the value is positive\nbefore carrying on - error if it is not.\n---\n pdf/pdf_xref.c | 9 ++++++++-\n 1 file changed, 8 insertions(+), 1 deletion(-)\n\ndiff --git a/pdf/pdf_xref.c b/pdf/pdf_xref.c\nindex 192cb3c..1d33164 100644\n--- a/pdf/pdf_xref.c\n+++ b/pdf/pdf_xref.c\n@@ -546,10 +546,17 @@ static int skip_to_digit(pdf_context *ctx, pdf_c_stream *s, unsigned int limit)\n     return read;\n }\n \n-static int read_digits(pdf_context *ctx, pdf_c_stream *s, byte *Buffer, unsigned int limit)\n+static int read_digits(pdf_context *ctx, pdf_c_stream *s, byte *Buffer, int limit)\n {\n     int bytes, read = 0;\n \n+    /* Since the \"limit\" is a value calculate by the caller,\n+       it's easier to check it in one place (here) than before\n+       every call.\n+     */\n+    if (limit <= 0)\n+        return_error(gs_error_syntaxerror);\n+\n     do {\n         bytes = pdfi_read_bytes(ctx, &Buffer[read], 1, 1, s);\n         if (bytes == 0)\n-- \n2.55.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42507931-vul",
+      "digest": "sha256:590e30353b8de9898b28a9afec75a68e6de605676afc6078e5a234ba868f45c3"
+    },
+    "patched": {
+      "ref": "n132/arvo:42507931-fix",
+      "digest": "sha256:de79b7cf04b35ba3b300af0bd87c4cdd444ed7a444391b5eeccdea68d969f87e"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/ghostpdl/./base/stream.c:999",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/ghostpdl/./base/stream.c:999"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042496771",
+  "chain": "CWE-456->CWE-457",
+  "project": "librawspeed",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42496771",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "748d8fef3bfec6171286a79a8a960f6752b413ee",
+      "fix_commits": [
+        "748d8fef3bfec6171286a79a8a960f6752b413ee"
+      ],
+      "repo": "https://github.com/darktable-org/rawspeed"
+    },
+    "patch": "From 748d8fef3bfec6171286a79a8a960f6752b413ee Mon Sep 17 00:00:00 2001\nFrom: Roman Lebedev <lebedev.ri@gmail.com>\nDate: Sun, 17 Sep 2017 16:50:53 +0300\nSubject: [PATCH] ThreefrDecoder::decodeRawInternal(): don't catch IOException\n\n---\n src/librawspeed/decoders/ThreefrDecoder.cpp | 9 ++-------\n 1 file changed, 2 insertions(+), 7 deletions(-)\n\ndiff --git a/src/librawspeed/decoders/ThreefrDecoder.cpp b/src/librawspeed/decoders/ThreefrDecoder.cpp\nindex 7aaf33f..7b46d3b 100644\n--- a/src/librawspeed/decoders/ThreefrDecoder.cpp\n+++ b/src/librawspeed/decoders/ThreefrDecoder.cpp\n@@ -66,14 +66,9 @@ RawImage ThreefrDecoder::decodeRawInternal() {\n   mRaw->createData();\n \n   HasselbladDecompressor l(bs, mRaw);\n-  int pixelBaseOffset = hints.get(\"pixelBaseOffset\", 0);\n \n-  try {\n-    l.decode(pixelBaseOffset);\n-  } catch (IOException &e) {\n-    mRaw->setError(e.what());\n-    // Let's ignore it, it may have delivered somewhat useful data.\n-  }\n+  int pixelBaseOffset = hints.get(\"pixelBaseOffset\", 0);\n+  l.decode(pixelBaseOffset);\n \n   return mRaw;\n }\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42496771-vul",
+      "digest": "sha256:b78ff25725fd33264149834a2f15103515f11b1630e018ad5f54460ae7e25cff"
+    },
+    "patched": {
+      "ref": "n132/arvo:42496771-fix",
+      "digest": "sha256:69d7c3d97964e99a8f0e5da56bd827b3869811f7cc984918a2c99dcba73a03b7"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/librawspeed/src/librawspeed/common/RawImage.cpp:168",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/librawspeed/src/librawspeed/common/RawImage.cpp:168"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

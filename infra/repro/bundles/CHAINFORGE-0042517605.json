@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042517605",
+  "chain": "CWE-1285->CWE-125",
+  "project": "ghostpdl",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42517605",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "fa394e79b7e2228aacc4c8366cd41c3b2d6b05f5",
+      "fix_commits": [
+        "fa394e79b7e2228aacc4c8366cd41c3b2d6b05f5"
+      ],
+      "repo": "https://cgit.ghostscript.com/ghostpdl.git"
+    },
+    "patch": "From fa394e79b7e2228aacc4c8366cd41c3b2d6b05f5 Mon Sep 17 00:00:00 2001\nFrom: Ken Sharp <ken.sharp@artifex.com>\nDate: Mon, 31 Oct 2022 11:31:29 +0000\nSubject: [PATCH] OSS-fuzz 52879 \"Global-buffer-overflow in get_unpack_proc\"\n\nThe PDF spec allows (more craziness) a JPX image in a PDF file to have\na different colour space to the declared space in the PDF file, and the\nJPX should take precedence.\n\nIn this case the JPX image has been fuzzed leading to it declaring that\nthe image has 48 bits per component, which is outside the legal values\nfor PDF. Although the PDF interpreter does check the BPC, it does it for\nthe image data in the PDF file, which has been overridden by the data\nin the JPX image.\n\nSo here we check the BPC value after potential overrides. We also add\na check in get_unpack_proc to make sure we don't over or under run the\narray of procedures and finally we add a check in the XPS image writing\ncode to check the returned decode procedure and if it is NULL to exit\nwith an error (the only other place that uses this, the clist, already\nexits cleanly if the returned proc is NULL)\n---\n base/gximdecode.c        | 6 +++++-\n devices/vector/gdevxps.c | 4 ++++\n pdf/pdf_image.c          | 5 +++++\n 3 files changed, 14 insertions(+), 1 deletion(-)\n\ndiff --git a/base/gximdecode.c b/base/gximdecode.c\nindex e24c6c0..2454fa3 100644\n--- a/base/gximdecode.c\n+++ b/base/gximdecode.c\n@@ -1,4 +1,4 @@\n-/* Copyright (C) 2014-2021 Artifex Software, Inc.\n+/* Copyright (C) 2014-2022 Artifex Software, Inc.\n All Rights Reserved.\n \n This software is provided AS-IS with no warranty, either express or\n@@ -40,6 +40,10 @@ get_unpack_proc(gx_image_enum_common_t *pie, image_decode_t *imd,\n     int index_bps = (imd->bps < 8 ? imd->bps >> 1 : (imd->bps >> 2) + 1);\n     int log2_xbytes = (imd->bps <= 8 ? 0 : arch_log2_sizeof_frac);\n \n+    imd->unpack = NULL;\n+    if (index_bps < 0 || index_bps > 5)\n+        return;\n+\n     switch (format) {\n     case gs_image_format_chunky:\n         imd->spread = 1 << log2_xbytes;\ndiff --git a/devices/vector/gdevxps.c b/devices/vector/gdevxps.c\nindex cb2ab4e..d0f02f5 100644\n--- a/devices/vector/gdevxps.c\n+++ b/devices/vector/gdevxps.c\n@@ -2108,6 +2108,10 @@ xps_begin_typed_image(gx_device               *dev,\n     pie->decode_st.unpack = NULL;\n     get_unpack_proc((gx_image_enum_common_t*)pie, &(pie->decode_st), pim->format,\n         pim->Decode);\n+    if (pie->decode_st.unpack == NULL){\n+        gs_free_object(mem, pie, \"xps_begin_image\");\n+        return_error(gs_rethrow_code(gs_error_rangecheck));\n+    }\n \n     /* The decode mapping for index colors needs an adjustment */\n     if (csindex == gs_color_space_index_Indexed) {\ndiff --git a/pdf/pdf_image.c b/pdf/pdf_image.c\nindex a268fd5..c7c66f6 100644\n--- a/pdf/pdf_image.c\n+++ b/pdf/pdf_image.c\n@@ -1775,6 +1775,11 @@ pdfi_do_image(pdf_context *ctx, pdf_dict *page_dict, pdf_dict *stream_dict, pdf_\n     if (code < 0)\n         goto cleanupExit;\n \n+    if (image_info.BPC != 1 && image_info.BPC != 2 && image_info.BPC != 4 && image_info.BPC != 8 && image_info.BPC != 16) {\n+        code = gs_note_error(gs_error_rangecheck);\n+        goto cleanupExit;\n+    }\n+\n     /* Set the colorspace */\n     if (pcs) {\n         gs_color_space  *pcs1 = pcs;\n-- \n2.55.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42517605-vul",
+      "digest": "sha256:c6624d50e2a23793b360e810b6e8e1c36ef9be2eddd32da3e20770175afdb1e9"
+    },
+    "patched": {
+      "ref": "n132/arvo:42517605-fix",
+      "digest": "sha256:7053a6e3be13dc8330e890f5363b4b61baff0b864fd7ac0b2be3f7eec8260dd5"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "global-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/ghostpdl/./base/gximdecode.c:68",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "global-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/ghostpdl/./base/gximdecode.c:68"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

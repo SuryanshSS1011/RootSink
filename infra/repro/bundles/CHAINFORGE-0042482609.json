@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042482609",
+  "chain": "CWE-456->CWE-457",
+  "project": "ndpi",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42482609",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "9483c842b572a887c59d715d21b4737475ffd092",
+      "fix_commits": [
+        "9483c842b572a887c59d715d21b4737475ffd092"
+      ],
+      "repo": "https://github.com/ntop/nDPI"
+    },
+    "patch": "From 9483c842b572a887c59d715d21b4737475ffd092 Mon Sep 17 00:00:00 2001\nFrom: Philippe Antoine <contact@catenacyber.fr>\nDate: Wed, 15 Apr 2020 16:24:03 +0200\nSubject: [PATCH] TLS initializes version_str\n\n---\n src/lib/protocols/tls.c | 2 +-\n 1 file changed, 1 insertion(+), 1 deletion(-)\n\ndiff --git a/src/lib/protocols/tls.c b/src/lib/protocols/tls.c\nindex ef2c0a8..560e483 100644\n--- a/src/lib/protocols/tls.c\n+++ b/src/lib/protocols/tls.c\n@@ -1105,7 +1105,7 @@ int processClientServerHello(struct ndpi_detection_module_struct *ndpi_struct,\n \t\tu_int8_t version_len = packet->payload[s_offset];\n \t\tchar version_str[256];\n \t\tu_int8_t version_str_len = 0;\n-\t\t\n+\t\tversion_str[0] = 0;\n #ifdef DEBUG_TLS\n \t\tprintf(\"Client SSL [TLS version len: %u]\\n\", version_len);\n #endif\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42482609-vul",
+      "digest": "sha256:cd6c90bfb420101e64150350f1c1c0f440236fd0fad552aa02bd60977e9c441a"
+    },
+    "patched": {
+      "ref": "n132/arvo:42482609-fix",
+      "digest": "sha256:e9566f6d9a222262f560ae8bd401663c37b504c975b224d150c6551ea72e8ebe"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/ndpi/src/lib/ndpi_main.c:139",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/ndpi/src/lib/ndpi_main.c:139"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

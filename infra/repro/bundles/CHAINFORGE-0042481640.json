@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042481640",
+  "chain": "CWE-416->CWE-125",
+  "project": "openh264",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42481640",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "989067645537fc54d547126adc5567b5fdc0fae2",
+      "fix_commits": [
+        "989067645537fc54d547126adc5567b5fdc0fae2"
+      ],
+      "repo": "https://github.com/cisco/openh264"
+    },
+    "patch": "From 989067645537fc54d547126adc5567b5fdc0fae2 Mon Sep 17 00:00:00 2001\nFrom: xiaotiansf <xiaotianshimail@gmail.com>\nDate: Sat, 6 Jun 2020 21:58:49 -0700\nSubject: [PATCH] Fix oss-fuzz reported issue 20491.\n\n---\n codec/decoder/core/src/manage_dec_ref.cpp | 5 ++++-\n 1 file changed, 4 insertions(+), 1 deletion(-)\n\ndiff --git a/codec/decoder/core/src/manage_dec_ref.cpp b/codec/decoder/core/src/manage_dec_ref.cpp\nindex 05aa40e..571ce41 100644\n--- a/codec/decoder/core/src/manage_dec_ref.cpp\n+++ b/codec/decoder/core/src/manage_dec_ref.cpp\n@@ -394,7 +394,10 @@ int32_t WelsReorderRefList (PWelsDecoderContext pCtx) {\n   for (int32_t listIdx = 0; listIdx < ListCount; ++listIdx) {\n     PPicture pPic = NULL;\n     PPicture* ppRefList = pCtx->sRefPic.pRefList[listIdx];\n-    int32_t iMaxRefIdx = pCtx->iPicQueueNumber;\n+    int32_t  iMaxRefIdx = pCtx->iPicQueueNumber;\n+    if (iMaxRefIdx >= MAX_REF_PIC_COUNT) {\n+      iMaxRefIdx = MAX_REF_PIC_COUNT - 1;\n+    }\n     int32_t iRefCount = pSliceHeader->uiRefCount[listIdx];\n     int32_t iPredFrameNum = pSliceHeader->iFrameNum;\n     int32_t iMaxPicNum = 1 << pSliceHeader->pSps->uiLog2MaxFrameNum;\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42481640-vul",
+      "digest": "sha256:f1d4d03bd335346642db306416fa776d5a73369828b34de2472d45aebd971a53"
+    },
+    "patched": {
+      "ref": "n132/arvo:42481640-fix",
+      "digest": "sha256:95c1f775571804ed2e65e51b6d6544ed6ba943a2ad9fd5cb04c358e2b360b2dd"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/openh264/codec/decoder/core/src/manage_dec_ref.cpp:426",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/openh264/codec/decoder/core/src/manage_dec_ref.cpp:426"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

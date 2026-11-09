@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042520835",
+  "chain": "CWE-20->CWE-125",
+  "project": "wolfssl",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42520835",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "5b8fda1ac68f7fb79394aaed5ff3ebc828beca71",
+      "fix_commits": [
+        "5b8fda1ac68f7fb79394aaed5ff3ebc828beca71"
+      ],
+      "repo": "https://github.com/wolfssl/wolfssl"
+    },
+    "patch": "diff --git a/wolfcrypt/src/tfm.c b/wolfcrypt/src/tfm.c\nindex 542da61d5b2..9efcd822e07 100644\n--- a/wolfcrypt/src/tfm.c\n+++ b/wolfcrypt/src/tfm.c\n@@ -3834,7 +3834,10 @@ int fp_to_unsigned_bin_len(fp_int *a, unsigned char *b, int c)\n   for (; x >= 0; x--) {\n      b[x] = 0;\n   }\n-  if ((i < a->used - 1) || ((a->dp[i] >> j) != 0)) {\n+  if (i < a->used - 1) {\n+      return FP_VAL;\n+  }\n+  if ((i == a->used - 1) && ((a->dp[i] >> j) != 0)) {\n       return FP_VAL;\n   }\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42520835-vul",
+      "digest": "sha256:bc6d176227bfbe449ba90b4f576e5d65528540f45b353f2ab36ca794ce1d1416"
+    },
+    "patched": {
+      "ref": "n132/arvo:42520835-fix",
+      "digest": "sha256:4641a9eaf69ad58c22990e75db38c63352085eb6e2411d874d75115a0c85671d"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/wolfssl-fastmath/wolfcrypt/src/tfm.c:3837",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/wolfssl-fastmath/wolfcrypt/src/tfm.c:3837"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,71 @@
+======================= INFO =========================
+This binary is built for AFL-fuzz.
+To run the target function on individual input(s) execute this:
+  /out/cli-uart-received-fuzzer < INPUT_FILE
+or
+  /out/cli-uart-received-fuzzer INPUT_FILE1 [INPUT_FILE2 ... ]
+To fuzz with afl-fuzz execute this:
+  afl-fuzz [afl-flags] /out/cli-uart-received-fuzzer [-N]
+afl-fuzz will run N iterations before re-spawning the process (default: 1000)
+======================================================
+Reading 270 bytes from /tmp/poc
+=================================================================
+==2165054==ERROR: AddressSanitizer: stack-buffer-overflow on address 0x14e19b882e24 at pc 0x0000004ee395 bp 0x7ffc6ec16290 sp 0x7ffc6ec15a40
+WRITE of size 253 at 0x14e19b882e24 thread T0
+SCARINESS: 60 (multi-byte-write-stack-buffer-overflow)
+    #0 0x4ee394 in __asan_memcpy /src/llvm/projects/compiler-rt/lib/asan/asan_interceptors_memintrinsics.cc:23
+    #1 0x546fc7 in ot::Cli::Interpreter::ProcessService(int, char**) /src/openthread/src/cli/cli.cpp:1642:9
+    #2 0x550702 in ot::Cli::Interpreter::ProcessLine(char*, unsigned short, ot::Cli::Server&) /src/openthread/src/cli/cli.cpp:3775:13
+    #3 0x536318 in ot::Cli::Uart::ProcessCommand() /src/openthread/src/cli/cli_uart.cpp:259:22
+    #4 0x535f8b in ot::Cli::Uart::ReceiveTask(unsigned char const*, unsigned short) /src/openthread/src/cli/cli_uart.cpp:178:17
+    #5 0x534e90 in LLVMFuzzerTestOneInput /src/openthread/tests/fuzz/cli_uart_received.cpp:66:5
+    #6 0x67d75a in ExecuteFilesOnyByOne(int, char**) /src/libfuzzer/afl/afl_driver.cpp:300:5
+    #7 0x67dcbe in main /src/libfuzzer/afl/afl_driver.cpp:338:12
+    #8 0x14e19a80c82f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+    #9 0x41ce78 in _start (/out/cli-uart-received-fuzzer+0x41ce78)
+
+DEDUP_TOKEN: __asan_memcpy--ot::Cli::Interpreter::ProcessService(int, char**)--ot::Cli::Interpreter::ProcessLine(char*, unsigned short, ot::Cli::Server&)
+Address 0x14e19b882e24 is located in stack of thread T0 at offset 548 in frame
+    #0 0x546c0f in ot::Cli::Interpreter::ProcessService(int, char**) /src/openthread/src/cli/cli.cpp:1623
+
+DEDUP_TOKEN: ot::Cli::Interpreter::ProcessService(int, char**)
+  This frame has 3 object(s):
+    [32, 548) 'cfg' (line 1630)
+    [688, 696) 'enterpriseNumber' (line 1631) <== Memory access at offset 548 partially underflows this variable
+    [720, 728) 'enterpriseNumber46' (line 1648) <== Memory access at offset 548 partially underflows this variable
+HINT: this may be a false positive if your program uses some custom stack unwind mechanism, swapcontext or vfork
+      (longjmp and C++ exceptions *are* supported)
+SUMMARY: AddressSanitizer: stack-buffer-overflow /src/llvm/projects/compiler-rt/lib/asan/asan_interceptors_memintrinsics.cc:23 in __asan_memcpy
+Shadow bytes around the buggy address:
+  0x029cb3708570: f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5
+  0x029cb3708580: f1 f1 f1 f1 00 00 00 00 00 00 00 00 00 00 00 00
+  0x029cb3708590: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x029cb37085a0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x029cb37085b0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x029cb37085c0: 00 00 00 00[04]f2 f2 f2 f2 f2 f2 f2 f2 f2 f2 f2
+  0x029cb37085d0: f2 f2 f2 f2 f2 f2 00 f2 f2 f2 f8 f3 f3 f3 f3 f3
+  0x029cb37085e0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x029cb37085f0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x029cb3708600: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x029cb3708610: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+  Shadow gap:              cc
+==2165054==ABORTING

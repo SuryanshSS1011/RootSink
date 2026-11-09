@@ -1,0 +1,63 @@
+Accepting input from '/tmp/poc'
+Usage for fuzzing: honggfuzz -P [flags] -- /out/fuzz_pkcs15_reader
+=================================================================
+==3363914==ERROR: AddressSanitizer: stack-buffer-overflow on address 0x14835d1797b5 at pc 0x0000004a07ac bp 0x7ffe16adaa50 sp 0x7ffe16ada220
+WRITE of size 262 at 0x14835d1797b5 thread T0
+SCARINESS: 60 (multi-byte-write-stack-buffer-overflow)
+    #0 0x4a07ab in __asan_memcpy /src/llvm-project/compiler-rt/lib/asan/asan_interceptors_memintrinsics.cpp:22:3
+    #1 0x4df563 in fuzz_reader_transmit /src/opensc/src/tests/fuzzing/fuzzer_reader.c:129:13
+    #2 0xb59a87 in sc_single_transmit /src/opensc/src/libopensc/apdu.c:379:7
+    #3 0xb56df5 in sc_transmit /src/opensc/src/libopensc/apdu.c:517:6
+    #4 0xb565c7 in sc_transmit_apdu /src/opensc/src/libopensc/apdu.c:628:7
+    #5 0x680578 in auth_compute_signature /src/opensc/src/libopensc/card-oberthur.c:1122:7
+    #6 0xb2a0cd in sc_compute_signature /src/opensc/src/libopensc/sec.c:65:6
+    #7 0x579ac7 in use_key /src/opensc/src/libopensc/pkcs15-sec.c:154:8
+    #8 0x58283b in sc_pkcs15_compute_signature /src/opensc/src/libopensc/pkcs15-sec.c:769:6
+    #9 0x4dda74 in LLVMFuzzerTestOneInput /src/opensc/src/tests/fuzzing/fuzz_pkcs15_reader.c:113:17
+    #10 0x4e059b in main (/out/fuzz_pkcs15_reader+0x4e059b)
+    #11 0x14835d6d9082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 1878e6b475720c7c51969e69ab2d276fae6d1dee)
+    #12 0x41ff2d in _start (/out/fuzz_pkcs15_reader+0x41ff2d)
+
+DEDUP_TOKEN: __asan_memcpy--fuzz_reader_transmit--sc_single_transmit
+Address 0x14835d1797b5 is located in stack of thread T0 at offset 437 in frame
+    #0 0x67fd0f in auth_compute_signature /src/opensc/src/libopensc/card-oberthur.c:1094
+
+DEDUP_TOKEN: auth_compute_signature
+  This frame has 2 object(s):
+    [32, 136) 'apdu' (line 1095)
+    [176, 437) 'resp' (line 1096) <== Memory access at offset 437 overflows this variable
+HINT: this may be a false positive if your program uses some custom stack unwind mechanism, swapcontext or vfork
+      (longjmp and C++ exceptions *are* supported)
+SUMMARY: AddressSanitizer: stack-buffer-overflow /src/llvm-project/compiler-rt/lib/asan/asan_interceptors_memintrinsics.cpp:22:3 in __asan_memcpy
+Shadow bytes around the buggy address:
+  0x0290eba272a0: f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5
+  0x0290eba272b0: f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5
+  0x0290eba272c0: f1 f1 f1 f1 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0290eba272d0: 00 f2 f2 f2 f2 f2 00 00 00 00 00 00 00 00 00 00
+  0x0290eba272e0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x0290eba272f0: 00 00 00 00 00 00[05]f3 f3 f3 f3 f3 f3 f3 f3 f3
+  0x0290eba27300: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0290eba27310: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0290eba27320: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0290eba27330: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0290eba27340: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+==3363914==ABORTING

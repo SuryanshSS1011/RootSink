@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042523066",
+  "chain": "CWE-416->CWE-125",
+  "project": "MapServer",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42523066",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "fd70c993309172750d729cbe6e64418b6198dab5",
+      "fix_commits": [
+        "fd70c993309172750d729cbe6e64418b6198dab5"
+      ],
+      "repo": "https://github.com/MapServer/MapServer"
+    },
+    "patch": "From fd70c993309172750d729cbe6e64418b6198dab5 Mon Sep 17 00:00:00 2001\nFrom: Even Rouault <even.rouault@spatialys.com>\nDate: Sat, 8 Apr 2023 13:18:50 +0200\nSubject: [PATCH] mapfile parser: fix double-free when included file doesn't\n exist\n\nFixes https://bugs.chromium.org/p/oss-fuzz/issues/detail?id=57788\n---\n maplexer.c | 8 ++++----\n maplexer.l | 8 ++++----\n 2 files changed, 8 insertions(+), 8 deletions(-)\n\ndiff --git a/maplexer.c b/maplexer.c\nindex b128d98..5148de7 100644\n--- a/maplexer.c\n+++ b/maplexer.c\n@@ -4418,10 +4418,6 @@ YY_RULE_SETUP\n                                                    return(-1);\n                                                  }\n \n-                                                 include_stack[include_stack_ptr] = YY_CURRENT_BUFFER; /* save state */\n-                                                 include_lineno[include_stack_ptr] = msyylineno;\n-                                                 include_stack_ptr++;\n-\n                                                  msyyin = fopen(msBuildPath(path, msyybasepath, msyytext), \"r\");\n                                                  if(!msyyin) {\n                                                    msSetError(MS_IOERR, \"Error opening included file \\\"%s\\\".\", \"msyylex()\", msyytext);\n@@ -4429,6 +4425,10 @@ YY_RULE_SETUP\n                                                    return(-1);\n                                                  }\n \n+                                                 include_stack[include_stack_ptr] = YY_CURRENT_BUFFER; /* save state */\n+                                                 include_lineno[include_stack_ptr] = msyylineno;\n+                                                 include_stack_ptr++;\n+\n                                                  msyy_switch_to_buffer( msyy_create_buffer(msyyin, YY_BUF_SIZE) );\n                                                  msyylineno = 1;\n \ndiff --git a/maplexer.l b/maplexer.l\nindex 7a67479..bc37858 100644\n--- a/maplexer.l\n+++ b/maplexer.l\n@@ -655,10 +655,6 @@ char path[MS_MAXPATHLEN];\n                                                    return(-1);\n                                                  }\n \n-                                                 include_stack[include_stack_ptr] = YY_CURRENT_BUFFER; /* save state */\n-                                                 include_lineno[include_stack_ptr] = msyylineno;\n-                                                 include_stack_ptr++;\n-\n                                                  msyyin = fopen(msBuildPath(path, msyybasepath, msyytext), \"r\");\n                                                  if(!msyyin) {\n                                                    msSetError(MS_IOERR, \"Error opening included file \\\"%s\\\".\", \"msyylex()\", msyytext);\n@@ -666,6 +662,10 @@ char path[MS_MAXPATHLEN];\n                                                    return(-1);\n                                                  }\n \n+                                                 include_stack[include_stack_ptr] = YY_CURRENT_BUFFER; /* save state */\n+                                                 include_lineno[include_stack_ptr] = msyylineno;\n+                                                 include_stack_ptr++;\n+\n                                                  msyy_switch_to_buffer( msyy_create_buffer(msyyin, YY_BUF_SIZE) );\n                                                  msyylineno = 1;\n \n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42523066-vul",
+      "digest": "sha256:0831b5dca6cdc924063dbf9fc766025cb0271882fb9c079e3263b172defbf5ba"
+    },
+    "patched": {
+      "ref": "n132/arvo:42523066-fix",
+      "digest": "sha256:da371b4a34cb85f046a70c265cd154d6b216f37d950d04085d015dee8050de56"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/MapServer/build/maplexer.l:746",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/MapServer/build/maplexer.l:746"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

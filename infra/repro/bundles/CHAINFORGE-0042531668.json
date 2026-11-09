@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042531668",
+  "chain": "CWE-1284->CWE-125",
+  "project": "upx",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42531668",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "d549c2b5c9a2880ba03b6522e055bbe673fa7753",
+      "fix_commits": [
+        "d549c2b5c9a2880ba03b6522e055bbe673fa7753"
+      ],
+      "repo": "https://github.com/upx/upx"
+    },
+    "patch": "diff --git a/src/p_lx_elf.cpp b/src/p_lx_elf.cpp\nindex f0a7bf7290..08b16e5a7c 100644\n--- a/src/p_lx_elf.cpp\n+++ b/src/p_lx_elf.cpp\n@@ -7405,7 +7405,8 @@ void PackLinuxElf64::unpack(OutputFile *fo)\n                         }\n                     }\n                     int boff = find_le32(peek_arr, sizeof(peek_arr), size);\n-                    if (boff < 0) {\n+                    if (boff < 0\n+                    || sizeof(peek_arr) < (boff + sizeof(b_info))) {\n                         throwCantUnpack(\"b_info corrupted\");\n                     }\n                     bp = (b_info *)(void *)&peek_arr[boff];\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42531668-vul",
+      "digest": "sha256:db2c7d8e77026a2f5bb0173aa3ecef4473fd1bdddd2edb55051ccf1fdfbb6d6f"
+    },
+    "patched": {
+      "ref": "n132/arvo:42531668-fix",
+      "digest": "sha256:b8bc2a8c564ebd1226d7d515db2e800e940045fddfa61ceb989ec270fff24284"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/upx/src/bele.h:117",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/upx/src/bele.h:117"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

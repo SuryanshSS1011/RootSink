@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042488652",
+  "chain": "CWE-20->CWE-787",
+  "project": "libsndfile",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42488652",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "deb669ee8be55a94565f6f8a6b60890c2e7c6f32",
+      "fix_commits": [
+        "deb669ee8be55a94565f6f8a6b60890c2e7c6f32"
+      ],
+      "repo": "https://github.com/libsndfile/libsndfile"
+    },
+    "patch": "diff --git a/src/ms_adpcm.c b/src/ms_adpcm.c\nindex 5e8f1a316..a21cb9941 100644\n--- a/src/ms_adpcm.c\n+++ b/src/ms_adpcm.c\n@@ -128,8 +128,14 @@ wavlike_msadpcm_init\t(SF_PRIVATE *psf, int blockalign, int samplesperblock)\n \tif (psf->file.mode == SFM_WRITE)\n \t\tsamplesperblock = 2 + 2 * (blockalign - 7 * psf->sf.channels) / psf->sf.channels ;\n \n-\tif (blockalign < 7 * psf->sf.channels)\n-\t{\tpsf_log_printf (psf, \"*** Error blockalign (%d) should be > %d.\\n\", blockalign, 7 * psf->sf.channels) ;\n+\t/* There's 7 samples per channel in the preamble of each block */\n+\tif (samplesperblock < 7 * psf->sf.channels)\n+\t{\tpsf_log_printf (psf, \"*** Error samplesperblock (%d) should be >= %d.\\n\", samplesperblock, 7 * psf->sf.channels) ;\n+\t\treturn SFE_INTERNAL ;\n+\t\t} ;\n+\n+\tif (2 * blockalign < samplesperblock * psf->sf.channels)\n+\t{\tpsf_log_printf (psf, \"*** Error blockalign (%d) should be >= %d.\\n\", blockalign, samplesperblock * psf->sf.channels / 2) ;\n \t\treturn SFE_INTERNAL ;\n \t\t} ;\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42488652-vul",
+      "digest": "sha256:c99689fcf9041af389da8e212ee2e47faf30f19324e20ee56eca4702a8fc6c96"
+    },
+    "patched": {
+      "ref": "n132/arvo:42488652-fix",
+      "digest": "sha256:1c877df0956d1cb3fad66a518c5ed602b03f268dd6a93f724204d8c46f05dfb3"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/libsndfile/src/ms_adpcm.c:279",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/libsndfile/src/ms_adpcm.c:279"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

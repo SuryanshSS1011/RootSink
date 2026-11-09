@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042531502",
+  "chain": "CWE-456->CWE-457",
+  "project": "wolfssl",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42531502",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "461cf9ea71235d41a38501aebdf678c4a569562b",
+      "fix_commits": [
+        "461cf9ea71235d41a38501aebdf678c4a569562b"
+      ],
+      "repo": "https://github.com/wolfssl/wolfssl"
+    },
+    "patch": "diff --git a/examples/pem/pem.c b/examples/pem/pem.c\nindex 61d7e1aee85..e69b1199c72 100644\n--- a/examples/pem/pem.c\n+++ b/examples/pem/pem.c\n@@ -294,8 +294,8 @@ static int FindPem(char* data, word32 offset, word32 len, word32* start,\n     word32* end, int* type)\n {\n     int ret = 0;\n-    word32 i;\n-    word32 type_off;\n+    word32 i = 0;\n+    word32 type_off = 0;\n     char str[PEM_TYPE_MAX_LEN];\n \n     /* Find header. */\ndiff --git a/src/ssl.c b/src/ssl.c\nindex 16be5dda720..f79329f0a26 100644\n--- a/src/ssl.c\n+++ b/src/ssl.c\n@@ -5610,7 +5610,8 @@ Signer* GetCAByName(void* vp, byte* hash)\n /* add a trusted peer cert to linked list */\n int AddTrustedPeer(WOLFSSL_CERT_MANAGER* cm, DerBuffer** pDer, int verify)\n {\n-    int ret, row;\n+    int ret = 0;\n+    int row = 0;\n     TrustedPeerCert* peerCert;\n     DecodedCert* cert;\n     DerBuffer*   der = *pDer;\n@@ -9948,7 +9949,7 @@ static WOLFSSL_EVP_PKEY* _d2i_PublicKey(int type, WOLFSSL_EVP_PKEY** out,\n     word32 idx = 0, algId;\n     word16 pkcs8HeaderSz = 0;\n     WOLFSSL_EVP_PKEY* local;\n-    int opt;\n+    int opt = 0;\n \n     (void)opt;\n \n@@ -10281,7 +10282,7 @@ int wolfSSL_use_RSAPrivateKey_ASN1(WOLFSSL* ssl, unsigned char* der, long derSz)\n \n int wolfSSL_use_certificate(WOLFSSL* ssl, WOLFSSL_X509* x509)\n {\n-    long idx;\n+    long idx = 0;\n \n     WOLFSSL_ENTER(\"wolfSSL_use_certificate\");\n     if (x509 != NULL && ssl != NULL && x509->derCert != NULL) {\n@@ -10527,7 +10528,7 @@ WOLFSSL_API int wolfSSL_get_negotiated_server_cert_type(WOLFSSL* ssl, int* tp)\n int wolfSSL_use_certificate_ASN1(WOLFSSL* ssl, const unsigned char* der,\n                                  int derSz)\n {\n-    long idx;\n+    long idx = 0;\n \n     WOLFSSL_ENTER(\"wolfSSL_use_certificate_ASN1\");\n     if (der != NULL && ssl != NULL) {\n@@ -11736,9 +11737,14 @@ static int wolfSSL_parse_cipher_list(WOLFSSL_CTX* ctx, Suites* suites,\n     if (suites->suiteSz > 0) {\n         suitesCpy = (byte*)XMALLOC(suites->suiteSz, NULL,\n                 DYNAMIC_TYPE_TMP_BUFFER);\n-        if (suitesCpy == NULL)\n+        if (suitesCpy == NULL) {\n             return WOLFSSL_FAILURE;\n+        }\n+\n+        XMEMSET(suitesCpy, 0, suites->suiteSz);\n     }\n+#else\n+        XMEMSET(suitesCpy, 0, sizeof(suitesCpy));\n #endif\n \n     if (suites->suiteSz > 0)\n@@ -23151,7 +23157,7 @@ WOLFSSL_SESSION* wolfSSL_d2i_SSL_SESSION(WOLFSSL_SESSION** sess,\n     WOLFSSL_SESSION* s = NULL;\n     int ret = 0;\n #if defined(HAVE_EXT_CACHE)\n-    int idx;\n+    int idx = 0;\n     byte* data;\n #ifdef SESSION_CERTS\n     int j;\n@@ -24529,7 +24535,7 @@ static int populate_groups(int* groups, int max_count, char *list)\n int wolfSSL_CTX_set1_groups_list(WOLFSSL_CTX *ctx, char *list)\n {\n     int groups[WOLFSSL_MAX_GROUP_COUNT];\n-    int count;\n+    int count = 0;\n \n     if (!ctx || !list) {\n         return WOLFSSL_FAILURE;\n@@ -24546,7 +24552,7 @@ int wolfSSL_CTX_set1_groups_list(WOLFSSL_CTX *ctx, char *list)\n int wolfSSL_set1_groups_list(WOLFSSL *ssl, char *list)\n {\n     int groups[WOLFSSL_MAX_GROUP_COUNT];\n-    int count;\n+    int count = 0;\n \n     if (!ssl || !list) {\n         return WOLFSSL_FAILURE;\n@@ -24770,7 +24776,7 @@ byte* wolfSSL_get_chain_cert(WOLFSSL_X509_CHAIN* chain, int idx)\n /* Get peer's wolfSSL X509 certificate at index (idx) */\n WOLFSSL_X509* wolfSSL_get_chain_X509(WOLFSSL_X509_CHAIN* chain, int idx)\n {\n-    int          ret;\n+    int          ret = 0;\n     WOLFSSL_X509* x509 = NULL;\n #ifdef WOLFSSL_SMALL_STACK\n     DecodedCert* cert = NULL;\n@@ -28310,6 +28316,7 @@ static int wolfSSL_SESSION_print_ticket(WOLFSSL_BIO* bio,\n \n     for (i = 0; i < sz;) {\n         char asc[16];\n+        XMEMSET(asc, 0, sizeof(asc));\n \n         if (sz - i < 16) {\n             if (wolfSSL_BIO_printf(bio, \"%s%04X -\", tab, tag + (sz - i)) <= 0)\ndiff --git a/src/wolfio.c b/src/wolfio.c\nindex 4fee958352c..6b0449ef3a1 100644\n--- a/src/wolfio.c\n+++ b/src/wolfio.c\n@@ -1409,6 +1409,9 @@ int wolfIO_DecodeUrl(const char* url, int urlSz, char* outName, char* outPath,\n             word32 bigPort = 0;\n             i = 0;\n             cur++;\n+\n+            XMEMSET(port, 0, sizeof(port));\n+\n             while (i < 6 && cur < urlSz && url[cur] != 0 && url[cur] != '/') {\n                 port[i] = url[cur];\n                 i++; cur++;\ndiff --git a/tests/api.c b/tests/api.c\nindex 4ded25ef38d..e964ae7e313 100644\n--- a/tests/api.c\n+++ b/tests/api.c\n@@ -4705,7 +4705,7 @@ static int test_wolfSSL_EVP_PKEY_print_public(void)\n     WOLFSSL_EVP_PKEY* pkey = NULL;\n     char line[256] = { 0 };\n     char line1[256] = { 0 };\n-    int i;\n+    int i = 0;\n \n     /* test error cases */\n     ExpectIntEQ( EVP_PKEY_print_public(NULL,NULL,0,NULL),0L);\n@@ -25739,7 +25739,7 @@ static int test_ToTraditional(void)\n      defined(OPENSSL_EXTRA_X509_SMALL)) && !defined(NO_FILESYSTEM)\n     XFILE  f = XBADFILE;\n     byte   input[TWOK_BUF];\n-    word32 sz;\n+    word32 sz = 0;\n \n     ExpectTrue((f = XFOPEN(\"./certs/server-keyPkcs8.der\", \"rb\")) != XBADFILE);\n     ExpectTrue((sz = (word32)XFREAD(input, 1, sizeof(input), f)) > 0);\n@@ -28151,10 +28151,10 @@ static int test_wc_PKCS7_EncodeEncryptedData(void)\n     byte        decoded[TWOK_BUF];\n     word32      tmpWrd32 = 0;\n     int         tmpInt = 0;\n-    int         decodedSz;\n+    int         decodedSz = 0;\n     int         encryptedSz = 0;\n-    int         testSz;\n-    int         i;\n+    int         testSz = 0;\n+    int         i = 0;\n     const byte data[] = { /* Hello World */\n         0x48,0x65,0x6c,0x6c,0x6f,0x20,0x57,0x6f,\n         0x72,0x6c,0x64\n@@ -28766,7 +28766,7 @@ static int test_wc_PKCS7_signed_enveloped(void)\n         word32 idx = 0;\n         byte digest[MAX_SEQ_SZ + MAX_ALGO_SZ + MAX_OCTET_STR_SZ +\n             WC_MAX_DIGEST_SIZE];\n-        int  digestSz;\n+        int  digestSz = 0;\n \n         ExpectIntEQ(wc_InitRsaKey(&rKey, HEAP_HINT), 0);\n         ExpectIntEQ(wc_RsaPrivateKeyDecode(key, &idx, &rKey, keySz), 0);\n@@ -29680,7 +29680,7 @@ static int test_wolfSSL_d2i_ASN1_INTEGER(void)\n     const byte* p = NULL;\n     byte* p2 = NULL;\n     byte* reEncoded = NULL;\n-    int reEncodedSz;\n+    int reEncodedSz = 0;\n \n     static const byte zeroDer[] = {\n         0x02, 0x01, 0x00\n@@ -31026,8 +31026,8 @@ static int test_wolfSSL_ASN1_TIME_diff_compare(void)\n     ASN1_TIME* closeToTime = NULL;\n     ASN1_TIME* toTime = NULL;\n     ASN1_TIME* invalidTime = NULL;\n-    int daysDiff;\n-    int secsDiff;\n+    int daysDiff = 0;\n+    int secsDiff = 0;\n \n     ExpectNotNull((fromTime = ASN1_TIME_new()));\n     /* Feb 22, 2003, 21:15:15 */\n@@ -31219,6 +31219,8 @@ static int test_wolfSSL_ASN1_TIME_to_tm(void)\n     struct tm tm;\n     time_t testTime = 1683926567; /* Fri May 12 09:22:47 PM UTC 2023 */\n \n+    XMEMSET(&tm, 0, sizeof(struct tm));\n+\n     XMEMSET(&asnTime, 0, sizeof(ASN1_TIME));\n     ExpectIntEQ(ASN1_TIME_set_string(&asnTime, \"000222211515Z\"), 1);\n     ExpectIntEQ(ASN1_TIME_to_tm(&asnTime, NULL), 1);\n@@ -31626,7 +31628,7 @@ static int test_wolfSSL_IMPLEMENT_ASN1_FUNCTIONS(void)\n #if !defined(HAVE_FIPS) || (defined(HAVE_FIPS_VERSION) && (HAVE_FIPS_VERSION>2))\n     EC_KEY *eckey = NULL;\n     EVP_PKEY *key = NULL;\n-    size_t len;\n+    size_t len = 0;\n     unsigned char *der = NULL;\n     DPP_BOOTSTRAPPING_KEY *bootstrap = NULL;\n     const unsigned char *in = ecc_clikey_der_256;\n@@ -31950,7 +31952,7 @@ static int test_wolfSSL_X509_NAME_print_ex(void)\n      defined(HAVE_LIGHTY) || defined(WOLFSSL_HAPROXY) || \\\n      defined(WOLFSSL_OPENSSH) || defined(HAVE_SBLIM_SFCB)))) && \\\n     !defined(NO_BIO) && !defined(NO_RSA)\n-    int memSz;\n+    int memSz = 0;\n     byte* mem = NULL;\n     BIO* bio = NULL;\n     BIO* membio = NULL;\n@@ -32113,7 +32115,7 @@ static int test_wolfSSL_X509_INFO_multiple_info(void)\n      * to group objects together. */\n     ExpectNotNull(concatBIO = BIO_new(BIO_s_mem()));\n     for (curFile = files; EXPECT_SUCCESS() && *curFile != NULL; curFile++) {\n-        int fileLen;\n+        int fileLen = 0;\n         ExpectNotNull(fileBIO = BIO_new_file(*curFile, \"rb\"));\n         ExpectIntGT(fileLen = wolfSSL_BIO_get_len(fileBIO), 0);\n         if (EXPECT_SUCCESS()) {\n@@ -32459,7 +32461,7 @@ static int test_wc_KeyPemToDer(void)\n {\n     EXPECT_DECLS;\n #if defined(WOLFSSL_PEM_TO_DER) && !defined(NO_FILESYSTEM) && !defined(NO_RSA)\n-    int ret;\n+    int ret = 0;\n     const byte cert_buf[] = \\\n     \"-----BEGIN PRIVATE KEY-----\\n\"\n     \"MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDMG5KgWxP002pA\\n\"\n@@ -32830,7 +32832,7 @@ static int test_wolfSSL_certs(void)\n     ASN1_STRING* asn1_str = NULL;\n     AUTHORITY_KEYID* akey = NULL;\n     BASIC_CONSTRAINTS* bc = NULL;\n-    int crit;\n+    int crit = 0;\n \n #ifndef NO_WOLFSSL_SERVER\n     ExpectNotNull(ctx = SSL_CTX_new(SSLv23_server_method()));\n@@ -33342,7 +33344,7 @@ static int test_wolfSSL_PEM_read_PrivateKey(void)\n     RSA* rsa = NULL;\n     WOLFSSL_EVP_PKEY_CTX* ctx = NULL;\n     unsigned char* sig = NULL;\n-    size_t sigLen;\n+    size_t sigLen = 0;\n     const unsigned char tbs[] = {0, 1, 2, 3, 4, 5, 6, 7};\n     size_t tbsLen = sizeof(tbs);\n \n@@ -33417,7 +33419,7 @@ static int test_wolfSSL_PEM_PrivateKey(void)\n         const char* fname = \"./certs/server-key.pem\";\n         const char* fname_rsa_p8 = \"./certs/server-keyPkcs8.pem\";\n \n-        size_t sz;\n+        size_t sz = 0;\n         byte* buf = NULL;\n         EVP_PKEY* pkey2 = NULL;\n         EVP_PKEY* pkey3 = NULL;\n@@ -62375,7 +62377,7 @@ static THREAD_RETURN WOLFSSL_THREAD SSL_read_test_server_thread(void* args)\n     char msg[] = \"I hear you fa shizzle!\";\n     int  len   = (int) XSTRLEN(msg);\n     char input[1024];\n-    int  ret;\n+    int  ret = 0;\n     int  err = 0;\n \n     if (!args)\ndiff --git a/wolfcrypt/src/asn.c b/wolfcrypt/src/asn.c\nindex f339173ef31..efdc7bb617c 100644\n--- a/wolfcrypt/src/asn.c\n+++ b/wolfcrypt/src/asn.c\n@@ -12947,7 +12947,7 @@ static const byte rdnChoice[] = {\n static int GenerateDNSEntryIPString(DNS_entry* entry, void* heap)\n {\n     int ret = 0;\n-    size_t nameSz;\n+    size_t nameSz = 0;\n     char tmpName[WOLFSSL_MAX_IPSTR] = {0};\n     unsigned char* ip;\n \n@@ -26980,8 +26980,8 @@ static int EncodeName(EncodedName* name, const char* nameStr,\n     int ret = 0;\n     int sz = 0;\n     const byte* oid;\n-    word32 oidSz;\n-    word32 nameSz;\n+    word32 oidSz = 0;\n+    word32 nameSz = 0;\n \n     /* Validate input parameters. */\n     if ((name == NULL) || (nameStr == NULL)) {\n@@ -27758,7 +27758,7 @@ static int EncodeExtensions(Cert* cert, byte* output, word32 maxSz,\n                             int forRequest)\n {\n     DECL_ASNSETDATA(dataASN, certExtsASN_Length);\n-    int sz;\n+    int sz = 0;\n     int ret = 0;\n     int i = 0;\n     static const byte bcOID[]   = { 0x55, 0x1d, 0x13 };\n@@ -35073,7 +35073,8 @@ static int DecodeResponseData(byte* source, word32* ioIndex,\n     DECL_ASNGETDATA(dataASN, ocspRespDataASN_Length);\n     int ret = 0;\n     byte version;\n-    word32 dateSz, idx = *ioIndex;\n+    word32 dateSz = 0;\n+    word32 idx = *ioIndex;\n     OcspEntry* single = NULL;\n \n     WOLFSSL_ENTER(\"DecodeResponseData\");\ndiff --git a/wolfcrypt/src/pkcs7.c b/wolfcrypt/src/pkcs7.c\nindex 507d9eeeb74..04173be70ab 100644\n--- a/wolfcrypt/src/pkcs7.c\n+++ b/wolfcrypt/src/pkcs7.c\n@@ -4280,8 +4280,8 @@ static int wc_PKCS7_ParseSignerInfo(PKCS7* pkcs7, byte* in, word32 inSz,\n         word32* idxIn, int degenerate, byte** signedAttrib, int* signedAttribSz)\n {\n     int ret = 0;\n-    int length;\n-    int version;\n+    int length = 0;\n+    int version = 0;\n     word32 sigOID = 0, hashOID = 0;\n     word32 idx = *idxIn, localIdx;\n     byte tag;\ndiff --git a/wolfcrypt/test/test.c b/wolfcrypt/test/test.c\nindex f8bab002bdf..36f3e39d84a 100644\n--- a/wolfcrypt/test/test.c\n+++ b/wolfcrypt/test/test.c\n@@ -33006,7 +33006,7 @@ WOLFSSL_TEST_SUBROUTINE wc_test_ret_t curve448_test(void)\n #ifdef HAVE_CURVE448_KEY_EXPORT\n     byte    exportBuf[CURVE448_KEY_SIZE];\n #endif\n-    word32  x;\n+    word32  x = 0;\n     curve448_key userA, userB, pubKey;\n \n #if defined(HAVE_CURVE448_SHARED_SECRET) && \\\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42531502-vul",
+      "digest": "sha256:f4c3cdb3a658245f52e26eec6778ee48d5020ce20126e7bb9efcdba2858f0fe1"
+    },
+    "patched": {
+      "ref": "n132/arvo:42531502-fix",
+      "digest": "sha256:80a22e613c9c6614d573cdb11d513c3e34ea3b66d3e2c1f7c51bb74c1ac00af8"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/wolfssl/wolfcrypt/src/asn.c:22941",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/wolfssl/wolfcrypt/src/asn.c:22941"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

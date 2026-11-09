@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042539983",
+  "chain": "CWE-416->CWE-787",
+  "project": "imagemagick",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42539983",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "2254b1d5389718067e72fd130db652ee9e2fcb30",
+      "fix_commits": [
+        "2254b1d5389718067e72fd130db652ee9e2fcb30"
+      ],
+      "repo": "https://github.com/imagemagick/imagemagick"
+    },
+    "patch": "From 2254b1d5389718067e72fd130db652ee9e2fcb30 Mon Sep 17 00:00:00 2001\nFrom: Cristy <urban-warrior@imagemagick.org>\nDate: Fri, 1 Jun 2018 20:37:25 -0400\nSubject: [PATCH] https://bugs.chromium.org/p/oss-fuzz/issues/detail?id=8682\n\n---\n MagickCore/draw.c | 19 ++++++++-----------\n 1 file changed, 8 insertions(+), 11 deletions(-)\n\ndiff --git a/MagickCore/draw.c b/MagickCore/draw.c\nindex 3e3267a..1ed0b40 100644\n--- a/MagickCore/draw.c\n+++ b/MagickCore/draw.c\n@@ -2359,6 +2359,7 @@ MagickExport MagickBooleanType DrawImage(Image *image,const DrawInfo *draw_info,\n \n   double\n     angle,\n+    coordinates,\n     factor,\n     primitive_extent;\n \n@@ -2368,9 +2369,6 @@ MagickExport MagickBooleanType DrawImage(Image *image,const DrawInfo *draw_info,\n   MagickBooleanType\n     proceed;\n \n-  MagickSizeType\n-    coordinates;\n-\n   MagickStatusType\n     status;\n \n@@ -3850,7 +3848,7 @@ MagickExport MagickBooleanType DrawImage(Image *image,const DrawInfo *draw_info,\n     /*\n       Speculate how many points our primitive might consume.\n     */\n-    coordinates=primitive_info[j].coordinates;\n+    coordinates=(double) primitive_info[j].coordinates;\n     switch (primitive_type)\n     {\n       case RectanglePrimitive:\n@@ -3882,7 +3880,7 @@ MagickExport MagickBooleanType DrawImage(Image *image,const DrawInfo *draw_info,\n             status=MagickFalse;\n             break;\n           }\n-        coordinates=(BezierQuantum*primitive_info[j].coordinates);\n+        coordinates=(double) (BezierQuantum*primitive_info[j].coordinates);\n         break;\n       }\n       case PathPrimitive:\n@@ -3925,8 +3923,7 @@ MagickExport MagickBooleanType DrawImage(Image *image,const DrawInfo *draw_info,\n         alpha=bounds.x2-bounds.x1;\n         beta=bounds.y2-bounds.y1;\n         radius=hypot(alpha,beta);\n-        coordinates=(MagickSizeType) (2*(ceil(MagickPI*radius))+6*\n-          BezierQuantum+360);\n+        coordinates=2.0*(ceil(MagickPI*radius))+6*BezierQuantum+360.0;\n         break;\n       }\n       default:\n@@ -3934,8 +3931,8 @@ MagickExport MagickBooleanType DrawImage(Image *image,const DrawInfo *draw_info,\n     }\n     if (coordinates > MaxBezierCoordinates)\n       {\n-        (void) ThrowMagickException(exception,GetMagickModule(),DrawError,\n-          \"TooManyBezierCoordinates\",\"`%s'\",token);\n+        (void) ThrowMagickException(exception,GetMagickModule(),\n+          ResourceLimitError,\"MemoryAllocationFailed\",\"`%s'\",token);\n         status=MagickFalse;\n       }\n     if (status == MagickFalse)\n@@ -4102,8 +4099,8 @@ MagickExport MagickBooleanType DrawImage(Image *image,const DrawInfo *draw_info,\n       }\n       case PathPrimitive:\n       {\n-        coordinates=TracePath(&mvg_info,token,exception);\n-        if (coordinates == 0)\n+        coordinates=(double) TracePath(&mvg_info,token,exception);\n+        if (coordinates == 0.0)\n           {\n             status=MagickFalse;\n             break;\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42539983-vul",
+      "digest": "sha256:7f76c906b3ee0b4eaab4a97e026c5e9d34605cb0a33ef1a6b6df84a15fe06ada"
+    },
+    "patched": {
+      "ref": "n132/arvo:42539983-fix",
+      "digest": "sha256:55a996c9331f5522409bd6d241e76dbc2a79ddefb9d0e8fbeda692b0ec76e1cd"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "WRITE",
+        "crash_site": "/src/imagemagick/MagickCore/draw.c:2332",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "WRITE",
+        "site": "/src/imagemagick/MagickCore/draw.c:2332"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

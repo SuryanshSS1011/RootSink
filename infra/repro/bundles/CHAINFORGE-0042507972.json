@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042507972",
+  "chain": "CWE-416->CWE-125",
+  "project": "harfbuzz",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42507972",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "4e2f409bce77b97de2d098365977beeeb4447b1e",
+      "fix_commits": [
+        "4e2f409bce77b97de2d098365977beeeb4447b1e"
+      ],
+      "repo": "https://github.com/harfbuzz/harfbuzz"
+    },
+    "patch": "From 4e2f409bce77b97de2d098365977beeeb4447b1e Mon Sep 17 00:00:00 2001\nFrom: Garret Rieger <grieger@google.com>\nDate: Mon, 31 Jan 2022 12:20:32 -0800\nSubject: [PATCH] [subset] Don't hold references to members of the\n active_glyph_stack.\n\nThese references may get invalidated after the vector for the stack is resized. Fixes: https://oss-fuzz.com/testcase-detail/5422577634377728\n---\n src/hb-ot-layout-gsubgpos.hh                  |  54 +++++++++++-------\n ...inimized-hb-subset-fuzzer-5422577634377728 | Bin 0 -> 1700 bytes\n 2 files changed, 34 insertions(+), 20 deletions(-)\n create mode 100644 test/fuzzing/fonts/clusterfuzz-testcase-minimized-hb-subset-fuzzer-5422577634377728\n\ndiff --git a/src/hb-ot-layout-gsubgpos.hh b/src/hb-ot-layout-gsubgpos.hh\nindex 51daf2c..65de131 100644\n--- a/src/hb-ot-layout-gsubgpos.hh\n+++ b/src/hb-ot-layout-gsubgpos.hh\n@@ -132,6 +132,13 @@ struct hb_closure_context_t :\n     return false;\n   }\n \n+  const hb_set_t& previous_parent_active_glyphs () {\n+    if (active_glyphs_stack.length <= 1)\n+      return *glyphs;\n+\n+    return active_glyphs_stack[active_glyphs_stack.length - 2];\n+  }\n+\n   const hb_set_t& parent_active_glyphs ()\n   {\n     if (!active_glyphs_stack)\n@@ -1864,9 +1871,9 @@ struct ContextFormat1\n \n   void closure (hb_closure_context_t *c) const\n   {\n-    const hb_set_t* parent_active_glyphs = &c->parent_active_glyphs ();\n-    get_coverage ().intersected_coverage_glyphs (parent_active_glyphs,\n-                                                 &c->push_cur_active_glyphs ());\n+    hb_set_t* cur_active_glyphs = &c->push_cur_active_glyphs ();\n+    get_coverage ().intersected_coverage_glyphs (&c->previous_parent_active_glyphs (),\n+                                                 cur_active_glyphs);\n \n     struct ContextClosureLookupContext lookup_context = {\n       {intersects_glyph, intersected_glyph},\n@@ -1875,7 +1882,9 @@ struct ContextFormat1\n     };\n \n     + hb_zip (this+coverage, hb_range ((unsigned) ruleSet.len))\n-    | hb_filter (parent_active_glyphs, hb_first)\n+    | hb_filter ([&] (hb_codepoint_t _) {\n+      return c->previous_parent_active_glyphs ().has (_);\n+    }, hb_first)\n     | hb_map ([&](const hb_pair_t<hb_codepoint_t, unsigned> _) { return hb_pair_t<unsigned, const RuleSet&> (_.first, this+ruleSet[_.second]); })\n     | hb_apply ([&] (const hb_pair_t<unsigned, const RuleSet&>& _) { _.second.closure (c, _.first, lookup_context); })\n     ;\n@@ -2028,9 +2037,9 @@ struct ContextFormat2\n     if (!(this+coverage).intersects (c->glyphs))\n       return;\n \n-    const hb_set_t* parent_active_glyphs = &c->parent_active_glyphs ();\n-    get_coverage ().intersected_coverage_glyphs (parent_active_glyphs,\n-                                                 &c->push_cur_active_glyphs ());\n+    hb_set_t* cur_active_glyphs = &c->push_cur_active_glyphs ();\n+    get_coverage ().intersected_coverage_glyphs (&c->previous_parent_active_glyphs (),\n+                                                 cur_active_glyphs);\n \n     const ClassDef &class_def = this+classDef;\n \n@@ -2224,9 +2233,10 @@ struct ContextFormat3\n     if (!(this+coverageZ[0]).intersects (c->glyphs))\n       return;\n \n-    const hb_set_t* parent_active_glyphs = &c->parent_active_glyphs ();\n-    get_coverage ().intersected_coverage_glyphs (parent_active_glyphs,\n-                                                 &c->push_cur_active_glyphs ());\n+    hb_set_t* cur_active_glyphs = &c->push_cur_active_glyphs ();\n+    get_coverage ().intersected_coverage_glyphs (&c->previous_parent_active_glyphs (),\n+                                                 cur_active_glyphs);\n+\n \n     const LookupRecord *lookupRecord = &StructAfter<LookupRecord> (coverageZ.as_array (glyphCount));\n     struct ContextClosureLookupContext lookup_context = {\n@@ -2859,9 +2869,9 @@ struct ChainContextFormat1\n \n   void closure (hb_closure_context_t *c) const\n   {\n-    const hb_set_t* parent_active_glyphs = &c->parent_active_glyphs ();\n-    get_coverage ().intersected_coverage_glyphs (parent_active_glyphs,\n-                                                 &c->push_cur_active_glyphs ());\n+    hb_set_t* cur_active_glyphs = &c->push_cur_active_glyphs ();\n+    get_coverage ().intersected_coverage_glyphs (&c->previous_parent_active_glyphs (),\n+                                                 cur_active_glyphs);\n \n     struct ChainContextClosureLookupContext lookup_context = {\n       {intersects_glyph, intersected_glyph},\n@@ -2870,7 +2880,9 @@ struct ChainContextFormat1\n     };\n \n     + hb_zip (this+coverage, hb_range ((unsigned) ruleSet.len))\n-    | hb_filter (parent_active_glyphs, hb_first)\n+    | hb_filter ([&] (hb_codepoint_t _) {\n+      return c->previous_parent_active_glyphs ().has (_);\n+    }, hb_first)\n     | hb_map ([&](const hb_pair_t<hb_codepoint_t, unsigned> _) { return hb_pair_t<unsigned, const ChainRuleSet&> (_.first, this+ruleSet[_.second]); })\n     | hb_apply ([&] (const hb_pair_t<unsigned, const ChainRuleSet&>& _) { _.second.closure (c, _.first, lookup_context); })\n     ;\n@@ -3024,9 +3036,10 @@ struct ChainContextFormat2\n     if (!(this+coverage).intersects (c->glyphs))\n       return;\n \n-    const hb_set_t* parent_active_glyphs = &c->parent_active_glyphs ();\n-    get_coverage ().intersected_coverage_glyphs (parent_active_glyphs,\n-                                                 &c->push_cur_active_glyphs ());\n+    hb_set_t* cur_active_glyphs = &c->push_cur_active_glyphs ();\n+    get_coverage ().intersected_coverage_glyphs (&c->previous_parent_active_glyphs (),\n+                                                 cur_active_glyphs);\n+\n \n     const ClassDef &backtrack_class_def = this+backtrackClassDef;\n     const ClassDef &input_class_def = this+inputClassDef;\n@@ -3278,9 +3291,10 @@ struct ChainContextFormat3\n     if (!(this+input[0]).intersects (c->glyphs))\n       return;\n \n-    const hb_set_t* parent_active_glyphs = &c->parent_active_glyphs ();\n-    get_coverage ().intersected_coverage_glyphs (parent_active_glyphs,\n-                                                 &c->push_cur_active_glyphs ());\n+    hb_set_t* cur_active_glyphs = &c->push_cur_active_glyphs ();\n+    get_coverage ().intersected_coverage_glyphs (&c->previous_parent_active_glyphs (),\n+                                                 cur_active_glyphs);\n+\n \n     const Array16OfOffset16To<Coverage> &lookahead = StructAfter<Array16OfOffset16To<Coverage>> (input);\n     const Array16Of<LookupRecord> &lookup = StructAfter<Array16Of<LookupRecord>> (lookahead);\ndiff --git a/test/fuzzing/fonts/clusterfuzz-testcase-minimized-hb-subset-fuzzer-5422577634377728 b/test/fuzzing/fonts/clusterfuzz-testcase-minimized-hb-subset-fuzzer-5422577634377728\nnew file mode 100644\nindex 0000000000000000000000000000000000000000..aba40f13a23da14269e308e39a22ba012324fa2f\nGIT binary patch\nliteral 1700\nzcmc&!J4ypl6g@8)O&BBw2`Ev*LHsl#Hg3Si#xA&k5DS}N5DT%guy7SF!_Ex|F2w~{\nzjrY8HkC`!}5Q%um-23K!&i%Y0Z~!`44n}10P|>Hu^Ai~W2kBp<o_=n+$>?^fB%m>O\nzZcMOIfD{89z<I7VdH|XE9^uC0$rNqUWgzxJXFdT<bS*c569HtRB)oJ+mM9~<2XAg!\nzQIvzCe~r=x$GqkP-|Yr_*}4(F(F&As6wX&(Uz9wWvV8G3C0{;2`4Vipcr4qqt?top\nzO8R*cd9;a!?J>b7`q)9pQk(H?el}7J%@P{Syf34VN>UEQ>1@{_Wslmd{VGrFjC|rN\nztMG|75}F~$*z|FT!={z+@SGMCamY10qOE#@X@Ne@Om^<wS>ZEI<n566rmHAo6(7GK\nz@{%JSv&BaX$L<!NrCVKo)b@!D^@&xBS;~1VylC8Bgs-*qJ}<t@DcNW0{!n8k7EXQY\nzCIoo-UqUmL=E~cs-M?JLC_XPvQ2LXJd{O6w3ztPB3#ayXlg>?xx{N<<(+Yk9pP%$v\n\nliteral 0\nHcmV?d00001\n\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42507972-vul",
+      "digest": "sha256:36462665c7abc1805730a1616ec27a0ef3d33feab6a2c7a7a07e6d8610cd1cf6"
+    },
+    "patched": {
+      "ref": "n132/arvo:42507972-fix",
+      "digest": "sha256:50a534957b00b3a174c708465653dd7fb9ee92bc9902ab0a7a4e42e1691f76b5"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": null,
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": null
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

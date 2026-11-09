@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042501937",
+  "chain": "CWE-1285->CWE-125",
+  "project": "libarchive",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42501937",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "9ad5f077491b9536f01dadca1724385c39cd7613",
+      "fix_commits": [
+        "9ad5f077491b9536f01dadca1724385c39cd7613"
+      ],
+      "repo": "https://github.com/libarchive/libarchive"
+    },
+    "patch": "diff --git a/libarchive/archive_read_support_format_iso9660.c b/libarchive/archive_read_support_format_iso9660.c\nindex db14d41dff..cd7f92f464 100644\n--- a/libarchive/archive_read_support_format_iso9660.c\n+++ b/libarchive/archive_read_support_format_iso9660.c\n@@ -1007,7 +1007,8 @@ read_children(struct archive_read *a, struct file_info *parent)\n \t\tp = b;\n \t\tb += iso9660->logical_block_size;\n \t\tstep -= iso9660->logical_block_size;\n-\t\tfor (; *p != 0 && p < b && p + *p <= b; p += *p) {\n+\t\tfor (; *p != 0 && p + DR_name_offset < b && p + *p <= b;\n+\t\t\tp += *p) {\n \t\t\tstruct file_info *child;\n \n \t\t\t/* N.B.: these special directory identifiers\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42501937-vul",
+      "digest": "sha256:f86afb1915e945ff8ca5b1dca29aec23b9c0fe4ad8f3bdaac6845d9e975d780a"
+    },
+    "patched": {
+      "ref": "n132/arvo:42501937-fix",
+      "digest": "sha256:18525203f1c8261e65ae11c781fa28ba48f81bdd9d333f562d01ca84e82a8dcd"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/libarchive/libarchive/archive_read_support_format_iso9660.c:1020",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/libarchive/libarchive/archive_read_support_format_iso9660.c:1020"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

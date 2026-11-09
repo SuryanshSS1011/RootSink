@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042527319",
+  "chain": "CWE-1285->CWE-125",
+  "project": "gpsd",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42527319",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "964806dd6dac70232ef1e39f31034b12e4517013",
+      "fix_commits": [
+        "964806dd6dac70232ef1e39f31034b12e4517013"
+      ],
+      "repo": "https://gitlab.com/gpsd/gpsd"
+    },
+    "patch": "diff --git a/gpsd/packet.c b/gpsd/packet.c\nindex 7c364da36242a46323725489521264f60d8dbf36..c416aec5d8d1a252771126d4463626c499251a6e 100644\n--- a/gpsd/packet.c\n+++ b/gpsd/packet.c\n@@ -2358,10 +2358,14 @@ void packet_parse(struct gps_lexer_t *lexer)\n                     break;\n                 }\n             }\n+            if (2048 < idx) {\n+                idx = 0;        // can't happen, but pacify fuzzer.\n+            }\n             // we assume xd3 must be in there!\n             // yes, the top 6 bits should be zero, total 10 bits of length\n             data_len = (lexer->inbuffer[idx + 1] << 8) |\n                        lexer->inbuffer[idx + 2];\n+            data_len &= 0x03ff;   // truncate below 1024, so pacify fuzzer\n             if (LOG_IO <= lexer->errout.debug) {\n                 char outbuf[BUFSIZ];\n                 // 12 bits of message type\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42527319-vul",
+      "digest": "sha256:e5e3c4c7b53a549a35ea29caa145b4c7850f4547a8ab9eaecf97d3e446cf4622"
+    },
+    "patched": {
+      "ref": "n132/arvo:42527319-fix",
+      "digest": "sha256:4b7a4db582a099339c13de1094a1b0c583f2024be78a8c261bdea15bf2847363"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/gpsd/gpsd-3.25.1~dev/gpsd/crc24q.c:157",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/gpsd/gpsd-3.25.1~dev/gpsd/crc24q.c:157"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

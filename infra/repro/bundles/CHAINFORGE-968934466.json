@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-968934466",
+  "chain": "CWE-456->CWE-457",
+  "project": "leptonica",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42482918",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/DanBloomberg/leptonica/commit/948e52d7004f2fe536adf5322ed64d54686f663a",
+      "fix_commits": [
+        "948e52d7004f2fe536adf5322ed64d54686f663a"
+      ],
+      "repo": "https://github.com/DanBloomberg/leptonica"
+    },
+    "patch": "diff --git a/src/tiffio.c b/src/tiffio.c\nindex 8bd92b209..124597c77 100644\n--- a/src/tiffio.c\n+++ b/src/tiffio.c\n@@ -511,6 +511,19 @@ PIXCMAP   *cmap;\n         return NULL;\n     }\n \n+        /* Old style jpeg is not supported.  We tried supporting 8 bpp.\n+         * TIFFReadScanline() fails on this format, so we used RGBA\n+         * reading, which generates a 4 spp image, and pulled out the\n+         * red component.  However, there were problems with double-frees\n+         * in cleanup.  For RGB, tiffbpl is exactly half the size that\n+         * you would expect for the raster data in a scanline, which\n+         * is 3 * w.  */\n+    TIFFGetFieldDefaulted(tif, TIFFTAG_COMPRESSION, &tiffcomp);\n+    if (tiffcomp == COMPRESSION_OJPEG) {\n+        L_ERROR(\"old style jpeg format is not supported\\n\", procName);\n+        return NULL;\n+    }\n+\n         /* Use default fields for bps and spp */\n     TIFFGetFieldDefaulted(tif, TIFFTAG_BITSPERSAMPLE, &bps);\n     TIFFGetFieldDefaulted(tif, TIFFTAG_SAMPLESPERPIXEL, &spp);\n@@ -548,11 +561,6 @@ PIXCMAP   *cmap;\n         return NULL;\n     }\n \n-    TIFFGetFieldDefaulted(tif, TIFFTAG_COMPRESSION, &tiffcomp);\n-    if (tiffcomp == COMPRESSION_OJPEG && d != 8) {\n-        return (PIX *)ERROR_PTR(\"invalid ojpeg file\", procName, NULL);\n-    }\n-\n     if ((pix = pixCreate(w, h, d)) == NULL)\n         return (PIX *)ERROR_PTR(\"pix not made\", procName, NULL);\n     pixSetInputFormat(pix, IFF_TIFF);\n@@ -560,12 +568,7 @@ PIXCMAP   *cmap;\n     wpl = pixGetWpl(pix);\n     bpl = 4 * wpl;\n \n-        /* Thanks to Jeff Breidenbach, we now support reading 8 bpp\n-         * images encoded in the long-deprecated old jpeg format,\n-         * COMPRESSION_OJPEG.  TIFFReadScanline() fails on this format,\n-         * so we use RGBA reading, which generates a 4 spp image, and\n-         * pull out the red component. */\n-    if (spp == 1 && tiffcomp != COMPRESSION_OJPEG) {\n+    if (spp == 1) {\n         linebuf = (l_uint8 *)LEPT_CALLOC(tiffbpl + 1, sizeof(l_uint8));\n         for (i = 0; i < h; i++) {\n             if (TIFFReadScanline(tif, linebuf, i, 0) < 0) {\n@@ -604,7 +607,7 @@ PIXCMAP   *cmap;\n             }\n         }\n         LEPT_FREE(linebuf);\n-    } else {  /* rgb, rgba, or old jpeg */\n+    } else {  /* rgb and rgba */\n         if ((tiffdata = (l_uint32 *)LEPT_CALLOC((size_t)w * h,\n                                                  sizeof(l_uint32))) == NULL) {\n             pixDestroy(&pix);\n@@ -620,34 +623,22 @@ PIXCMAP   *cmap;\n             read_oriented = 1;\n         }\n \n-        if (spp == 1) {  /* 8 bpp, old jpeg format */\n-            pixdata = pixGetData(pix);\n-            for (i = 0; i < h; i++) {\n-                line = pixdata + i * wpl;\n-                for (j = 0; j < w; j++) {\n-                    tiffword = tiffdata[i * w + j];\n-                    rval = TIFFGetR(tiffword);\n-                    SET_DATA_BYTE(line, j, rval);\n-                }\n-            }\n-        } else {  /* rgb or rgba */\n-            if (spp == 4) pixSetSpp(pix, 4);\n-            line = pixGetData(pix);\n-            for (i = 0; i < h; i++, line += wpl) {\n-                for (j = 0, ppixel = line; j < w; j++) {\n-                        /* TIFFGet* are macros */\n-                    tiffword = tiffdata[i * w + j];\n-                    rval = TIFFGetR(tiffword);\n-                    gval = TIFFGetG(tiffword);\n-                    bval = TIFFGetB(tiffword);\n-                    if (spp == 3) {\n-                        composeRGBPixel(rval, gval, bval, ppixel);\n-                    } else {  /* spp == 4 */\n-                        aval = TIFFGetA(tiffword);\n-                        composeRGBAPixel(rval, gval, bval, aval, ppixel);\n-                    }\n-                    ppixel++;\n+        if (spp == 4) pixSetSpp(pix, 4);\n+        line = pixGetData(pix);\n+        for (i = 0; i < h; i++, line += wpl) {\n+            for (j = 0, ppixel = line; j < w; j++) {\n+                    /* TIFFGet* are macros */\n+                tiffword = tiffdata[i * w + j];\n+                rval = TIFFGetR(tiffword);\n+                gval = TIFFGetG(tiffword);\n+                bval = TIFFGetB(tiffword);\n+                if (spp == 3) {\n+                    composeRGBPixel(rval, gval, bval, ppixel);\n+                } else {  /* spp == 4 */\n+                    aval = TIFFGetA(tiffword);\n+                    composeRGBAPixel(rval, gval, bval, aval, ppixel);\n                 }\n+                ppixel++;\n             }\n         }\n         LEPT_FREE(tiffdata);\n@@ -659,7 +650,6 @@ PIXCMAP   *cmap;\n     }\n \n         /* Find and save the compression type */\n-    TIFFGetFieldDefaulted(tif, TIFFTAG_COMPRESSION, &tiffcomp);\n     comptype = getTiffCompressedFormat(tiffcomp);\n     pixSetInputFormat(pix, comptype);\n \n@@ -728,7 +718,6 @@ PIXCMAP   *cmap;\n }\n \n \n-\n /*--------------------------------------------------------------*\n  *                       Writing to file                        *\n  *--------------------------------------------------------------*/\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42482918-vul",
+      "digest": "sha256:d50f7696913ce7778af1e034c29e398dd20db71cd3dc8333af9467d302ddf3a7"
+    },
+    "patched": {
+      "ref": "n132/arvo:42482918-fix",
+      "digest": "sha256:7f188b0bb0c9e7ac9380ce580b0f4ef64e49352e97cd4ffe95639921b1aacee4"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/libtiff/libtiff/tif_getimage.c:1313",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/libtiff/libtiff/tif_getimage.c:1313"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

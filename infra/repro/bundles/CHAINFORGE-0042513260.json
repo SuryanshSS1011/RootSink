@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042513260",
+  "chain": "CWE-1284->CWE-125",
+  "project": "libwebsockets",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42513260",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "608688b3088bb10186700a38b459443d649d6325",
+      "fix_commits": [
+        "608688b3088bb10186700a38b459443d649d6325"
+      ],
+      "repo": "https://github.com/warmcat/libwebsockets"
+    },
+    "patch": "diff --git a/lib/misc/upng-gzip.c b/lib/misc/upng-gzip.c\nindex 722fa3a06a..a59998a57d 100644\n--- a/lib/misc/upng-gzip.c\n+++ b/lib/misc/upng-gzip.c\n@@ -242,19 +242,32 @@ huffman_tree_init(htree_t *tree, huff_t *buffer, uint16_t numcodes,\n static lws_stateful_ret_t\n huffman_tree_create_lengths(htree_t *tree, const unsigned *bitlen)\n {\n-\tunsigned int tree1d[MAX_SYMBOLS], blcount[MAX_BIT_LENGTH],\n-\t\t     nextcode[MAX_BIT_LENGTH + 1];\n-\tunsigned int bits, n, i, nodefilled = 0, treepos = 0;\n+\tunsigned int tree1d[NUM_DEFLATE_CODE_SYMBOLS], /* sized to worst */\n+\t\t     blcount[NUM_DEFLATE_CODE_SYMBOLS], /* sized to worst */\n+\t\t     nextcode[MAX_BIT_LENGTH + 1], bits, n, i,\n+\t\t     nodefilled = 0, treepos = 0;\n \n \tmemset(blcount, 0, sizeof(blcount));\n \tmemset(nextcode, 0, sizeof(nextcode));\n \n-\tfor (bits = 0; bits < tree->numcodes; bits++)\n+\tassert(tree->numcodes <= LWS_ARRAY_SIZE(blcount));\n+\n+\tfor (bits = 0; bits < tree->numcodes; bits++) {\n+\t\t/* any counts exceeding our private buffer length are fatal */\n+\t\tif (bitlen[bits] >= LWS_ARRAY_SIZE(blcount))\n+\t\t\treturn LWS_SRET_FATAL + 1;\n+\n \t\tblcount[bitlen[bits]]++;\n+\t}\n+\n+\tassert(tree->maxbitlen && tree->maxbitlen - 1u <= LWS_ARRAY_SIZE(blcount));\n+\tassert(tree->maxbitlen - 1u <= LWS_ARRAY_SIZE(nextcode));\n \n \tfor (bits = 1; bits <= (unsigned int)tree->maxbitlen; bits++)\n \t\tnextcode[bits] = (nextcode[bits - 1] + blcount[bits - 1]) << 1;\n \n+\tassert(tree->numcodes <= LWS_ARRAY_SIZE(tree1d));\n+\n \tfor (n = 0; n < tree->numcodes; n++)\n \t\tif (bitlen[n])\n \t\t\ttree1d[n] = nextcode[bitlen[n]]++;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42513260-vul",
+      "digest": "sha256:11a6dc2a511078a3cfb89a21ec4d6307fc8fae595e4e56847947565ec8769cfa"
+    },
+    "patched": {
+      "ref": "n132/arvo:42513260-fix",
+      "digest": "sha256:39b008c6dad7fba41c494dd32d85511bdd68283ae3460f7fd30c1cde84ce0c74"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/libwebsockets/lib/misc/upng-gzip.c:253",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/libwebsockets/lib/misc/upng-gzip.c:253"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

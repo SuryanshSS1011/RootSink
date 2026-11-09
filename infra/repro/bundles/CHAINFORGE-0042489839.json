@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042489839",
+  "chain": "CWE-1284->CWE-787",
+  "project": "ffmpeg",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42489839",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "f975cf7cc061b814bc029bb2fc86f656494c4d5c",
+      "fix_commits": [
+        "f975cf7cc061b814bc029bb2fc86f656494c4d5c"
+      ],
+      "repo": "https://git.ffmpeg.org/ffmpeg.git"
+    },
+    "patch": "From f975cf7cc061b814bc029bb2fc86f656494c4d5c Mon Sep 17 00:00:00 2001\nFrom: Paul B Mahol <onemda@gmail.com>\nDate: Wed, 23 Dec 2020 11:59:51 +0100\nSubject: [PATCH] avcodec/cfhd: only increase s->level if transform is\n supported\n\n---\n libavcodec/cfhd.c | 2 +-\n 1 file changed, 1 insertion(+), 1 deletion(-)\n\ndiff --git a/libavcodec/cfhd.c b/libavcodec/cfhd.c\nindex 17ddcdd..aae6bd7 100644\n--- a/libavcodec/cfhd.c\n+++ b/libavcodec/cfhd.c\n@@ -436,7 +436,7 @@ static int cfhd_decode(AVCodecContext *avctx, void *data, int *got_frame,\n             }\n             init_plane_defaults(s);\n         } else if (tag == SubbandNumber) {\n-            if (s->subband_num != 0 && data == 1)  // hack\n+            if (s->subband_num != 0 && data == 1 && (s->transform_type == 0 || s->transform_type == 2))  // hack\n                 s->level++;\n             av_log(avctx, AV_LOG_DEBUG, \"Subband number %\"PRIu16\"\\n\", data);\n             s->subband_num = data;\n-- \n2.55.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42489839-vul",
+      "digest": "sha256:b95cbc64d6baf7cd046a18a18c5a8a047146beff2c25b3dd35bf6ccf35a9b5eb"
+    },
+    "patched": {
+      "ref": "n132/arvo:42489839-fix",
+      "digest": "sha256:9ac99a6dab703f3c0046f5eca99967c2a169dad7dc71224fa8f147ae7164353e"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/ffmpeg/libavcodec/cfhd.c:535",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/ffmpeg/libavcodec/cfhd.c:535"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

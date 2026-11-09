@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042501289",
+  "chain": "CWE-456->CWE-457",
+  "project": "librawspeed",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42501289",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "eca4047c7f90d6893ac190126c426e40458f7bbf",
+      "fix_commits": [
+        "eca4047c7f90d6893ac190126c426e40458f7bbf"
+      ],
+      "repo": "https://github.com/darktable-org/rawspeed"
+    },
+    "patch": "From eca4047c7f90d6893ac190126c426e40458f7bbf Mon Sep 17 00:00:00 2001\nFrom: Roman Lebedev <lebedev.ri@gmail.com>\nDate: Tue, 14 Nov 2017 23:01:15 +0300\nSubject: [PATCH] ArwDecoder::decodeRawInternal(): ARWv1 requires height in\n multiples of two.\n\n---\n src/librawspeed/decoders/ArwDecoder.cpp | 8 +++++---\n 1 file changed, 5 insertions(+), 3 deletions(-)\n\ndiff --git a/src/librawspeed/decoders/ArwDecoder.cpp b/src/librawspeed/decoders/ArwDecoder.cpp\nindex f0e3590..f8995c4 100644\n--- a/src/librawspeed/decoders/ArwDecoder.cpp\n+++ b/src/librawspeed/decoders/ArwDecoder.cpp\n@@ -179,7 +179,8 @@ RawImage ArwDecoder::decodeRawInternal() {\n   if (arw1)\n     height += 8;\n \n-  if (width == 0 || height == 0 || width > 8000 || height > 5320)\n+  if (width == 0 || height == 0 || height % 2 != 0 || width > 8000 ||\n+      height > 5320)\n     ThrowRDE(\"Unexpected image dimensions found: (%u; %u)\", width, height);\n \n   mRaw->dim = iPoint2D(width, height);\n@@ -247,8 +248,9 @@ void ArwDecoder::DecodeUncompressed(const TiffIFD* raw) {\n }\n \n void ArwDecoder::DecodeARW(const ByteStream& input, uint32 w, uint32 h) {\n-  if (0 == w)\n-    return;\n+  assert(w > 0);\n+  assert(h > 0);\n+  assert(h % 2 == 0);\n \n   BitPumpMSB bits(input);\n   uchar8* data = mRaw->getData();\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42501289-vul",
+      "digest": "sha256:355cf32f8e4e22e88ee15e0d99a7c9d419849324f2610899900a5974457b1a5b"
+    },
+    "patched": {
+      "ref": "n132/arvo:42501289-fix",
+      "digest": "sha256:51b058918dc84b7b67f8f18db8a1faf65f5beeb7cefe1ab6a9dd8c6d672d98d4"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/librawspeed/src/librawspeed/common/RawImage.cpp:168",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/librawspeed/src/librawspeed/common/RawImage.cpp:168"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

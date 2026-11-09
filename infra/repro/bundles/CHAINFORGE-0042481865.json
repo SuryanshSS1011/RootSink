@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042481865",
+  "chain": "CWE-1285->CWE-125",
+  "project": "htslib",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42481865",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "d6f15361ee63ff13dfb57f3eac119e3d50e65c56",
+      "fix_commits": [
+        "d6f15361ee63ff13dfb57f3eac119e3d50e65c56"
+      ],
+      "repo": "https://github.com/samtools/htslib"
+    },
+    "patch": "diff --git a/cram/cram_decode.c b/cram/cram_decode.c\nindex 4638fac4b..8cf3403b6 100644\n--- a/cram/cram_decode.c\n+++ b/cram/cram_decode.c\n@@ -987,6 +987,12 @@ cram_block_slice_hdr *cram_decode_slice_header(cram_fd *fd, cram_block *b) {\n         cp += safe_itf8_get((char *)cp,  (char *)cp_end, &i32);\n         hdr->ref_seq_span = i32;\n #endif\n+        if (hdr->ref_seq_start < 0 || hdr->ref_seq_span < 0) {\n+            free(hdr);\n+            hts_log_error(\"Negative values not permitted for header \"\n+                          \"sequence start or span fields\");\n+            return NULL;\n+        }\n     }\n     cp += safe_itf8_get((char *)cp,  (char *)cp_end, &hdr->num_records);\n     hdr->record_counter = 0;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42481865-vul",
+      "digest": "sha256:d6277cb80df6717f176c7b3a165e7971c9b4f71a38bc80a31353065e0a500490"
+    },
+    "patched": {
+      "ref": "n132/arvo:42481865-fix",
+      "digest": "sha256:6a42373bfc2aae35add8787c86430b93be77b149f9a7c406d96037544f47c0f5"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/htslib/cram/cram_decode.c:3147",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/htslib/cram/cram_decode.c:3147"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

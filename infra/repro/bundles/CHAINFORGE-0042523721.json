@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042523721",
+  "chain": "CWE-416->CWE-125",
+  "project": "binutils-gdb",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42523721",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "143a12bd5a5402231bde748cbbdc22bb3984a522",
+      "fix_commits": [
+        "143a12bd5a5402231bde748cbbdc22bb3984a522"
+      ],
+      "repo": "git://sourceware.org/git/binutils-gdb.git"
+    },
+    "patch": "diff --git a/bfd/coff-rs6000.c b/bfd/coff-rs6000.c\nindex 3b451912df7..421dc8f7ee5 100644\n--- a/bfd/coff-rs6000.c\n+++ b/bfd/coff-rs6000.c\n@@ -1294,7 +1294,7 @@ _bfd_xcoff_reloc_name_lookup (bfd *abfd ATTRIBUTE_UNUSED,\n    take a maximum length as an additional parameter.  Also - just to save space,\n    we omit the endptr return parameter, since we know that it is never used.  */\n \n-static long\n+static unsigned long\n _bfd_strntol (const char * nptr, int base, unsigned int maxlen)\n {\n   char buf[24]; /* Should be enough.  */\n@@ -1306,7 +1306,7 @@ _bfd_strntol (const char * nptr, int base, unsigned int maxlen)\n   return strtol (buf, NULL, base);\n }\n \n-static long long\n+static unsigned long long\n _bfd_strntoll (const char * nptr, int base, unsigned int maxlen)\n {\n   char buf[32]; /* Should be enough.  */\n@@ -1338,7 +1338,7 @@ _bfd_strntoll (const char * nptr, int base, unsigned int maxlen)\n bool\n _bfd_xcoff_slurp_armap (bfd *abfd)\n {\n-  file_ptr off;\n+  ufile_ptr off;\n   size_t namlen;\n   bfd_size_type sz;\n   bfd_byte *contents, *cend;\n@@ -1636,7 +1636,8 @@ add_range (bfd *abfd, ufile_ptr start, ufile_ptr end)\n     /* Overlap with another element.  */\n     goto err;\n \n-  unsigned min_elt = x_artdata (abfd)->min_elt;\n+  /* A zero size element with a one char name is this big.  */\n+  unsigned min_elt = x_artdata (abfd)->ar_hdr_size + 2 + SXCOFFARFMAG;\n   if (start - lo->end < min_elt)\n     {\n       /* Merge into an existing range.  */\n@@ -1757,7 +1758,7 @@ _bfd_xcoff_read_ar_hdr (bfd *abfd)\n bfd *\n _bfd_xcoff_openr_next_archived_file (bfd *archive, bfd *last_file)\n {\n-  file_ptr filestart;\n+  ufile_ptr filestart;\n \n   if (x_artdata (archive) == NULL)\n     {\n@@ -1770,10 +1771,10 @@ _bfd_xcoff_openr_next_archived_file (bfd *archive, bfd *last_file)\n       if (last_file == NULL)\n \t{\n \t  filestart = bfd_ardata (archive)->first_file_filepos;\n-\t  if (x_artdata (archive)->min_elt == 0)\n+\t  if (x_artdata (archive)->ar_hdr_size == 0)\n \t    {\n \t      x_artdata (archive)->ranges.end = SIZEOF_AR_FILE_HDR;\n-\t      x_artdata (archive)->min_elt = SIZEOF_AR_HDR + SXCOFFARFMAG + 2;\n+\t      x_artdata (archive)->ar_hdr_size = SIZEOF_AR_HDR;\n \t    }\n \t}\n       else\n@@ -1794,10 +1795,10 @@ _bfd_xcoff_openr_next_archived_file (bfd *archive, bfd *last_file)\n       if (last_file == NULL)\n \t{\n \t  filestart = bfd_ardata (archive)->first_file_filepos;\n-\t  if (x_artdata (archive)->min_elt == 0)\n+\t  if (x_artdata (archive)->ar_hdr_size == 0)\n \t    {\n \t      x_artdata (archive)->ranges.end = SIZEOF_AR_FILE_HDR_BIG;\n-\t      x_artdata (archive)->min_elt = SIZEOF_AR_HDR_BIG + SXCOFFARFMAG + 2;\n+\t      x_artdata (archive)->ar_hdr_size = SIZEOF_AR_HDR_BIG;\n \t    }\n \t}\n       else\n@@ -1814,6 +1815,22 @@ _bfd_xcoff_openr_next_archived_file (bfd *archive, bfd *last_file)\n \t}\n     }\n \n+  /* Check that we aren't pointing back at the last element.  This is\n+     necessary depite the add_range checking in _bfd_xcoff_read_ar_hdr\n+     because archive.c leaves the last element open and thus in the\n+     archive element cache until the next element is opened.  */\n+  if (last_file != NULL)\n+    {\n+      ufile_ptr laststart = last_file->proxy_origin;\n+      laststart -= x_artdata (archive)->ar_hdr_size;\n+      laststart -= arch_eltdata (last_file)->extra_size;\n+      if (filestart == laststart)\n+\t{\n+\t  bfd_set_error (bfd_error_malformed_archive);\n+\t  return NULL;\n+\t}\n+    }\n+\n   return _bfd_get_elt_at_filepos (archive, filestart, NULL);\n }\n \ndiff --git a/bfd/libbfd-in.h b/bfd/libbfd-in.h\nindex 68b5343fd2e..4305b8416ea 100644\n--- a/bfd/libbfd-in.h\n+++ b/bfd/libbfd-in.h\n@@ -72,7 +72,7 @@ extern unsigned int _bfd_section_id ATTRIBUTE_HIDDEN;\n \n struct artdata\n {\n-  file_ptr first_file_filepos;\n+  ufile_ptr first_file_filepos;\n   /* Speed up searching the armap */\n   htab_t cache;\n   carsym *symdefs;\t\t/* The symdef entries.  */\ndiff --git a/bfd/libbfd.h b/bfd/libbfd.h\nindex bb7f2f1efcf..aceec4ab9c0 100644\n--- a/bfd/libbfd.h\n+++ b/bfd/libbfd.h\n@@ -78,7 +78,7 @@ extern unsigned int _bfd_section_id ATTRIBUTE_HIDDEN;\n \n struct artdata\n {\n-  file_ptr first_file_filepos;\n+  ufile_ptr first_file_filepos;\n   /* Speed up searching the armap */\n   htab_t cache;\n   carsym *symdefs;\t\t/* The symdef entries.  */\ndiff --git a/include/coff/xcoff.h b/include/coff/xcoff.h\nindex 08afc000bf0..7e86cc37d5c 100644\n--- a/include/coff/xcoff.h\n+++ b/include/coff/xcoff.h\n@@ -653,7 +653,7 @@ struct xcoff_artdata\n   } u;\n   struct ar_ranges ranges;\n   /* Anything less than this size can't hold an archive element.  */\n-  unsigned int min_elt;\n+  unsigned int ar_hdr_size;\n };\n \n #define x_artdata(abfd) ((struct xcoff_artdata *) bfd_ardata (abfd)->tdata)\n@@ -663,13 +663,13 @@ struct xcoff_artdata\n #ifndef SMALL_ARCHIVE\n /* Creates big archives by default */\n #define xcoff_big_format_p(abfd) \\\n-  (bfd_ardata (abfd) != NULL\t\t\t\t\\\n-   && (x_artdata (abfd) == NULL\t\t\t\\\n-       || x_artdata (abfd)->u.hdr.magic[1] == 'b'))\n+  (bfd_ardata (abfd) == NULL\t\t\t\\\n+   || x_artdata (abfd) == NULL\t\t\t\\\n+   || x_artdata (abfd)->u.hdr.magic[1] != 'a')\n #else\n /* Creates small archives by default. */\n #define xcoff_big_format_p(abfd) \\\n-  (bfd_ardata (abfd) != NULL\t\t\t\t\\\n+  (bfd_ardata (abfd) != NULL\t\t\t\\\n    && x_artdata (abfd) != NULL\t\t\t\\\n    && x_artdata (abfd)->u.hdr.magic[1] == 'b')\n #endif\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42523721-vul",
+      "digest": "sha256:e96c15a30b8d4d834df649858c8f304070532953dfaa26d363f115df842b12e8"
+    },
+    "patched": {
+      "ref": "n132/arvo:42523721-fix",
+      "digest": "sha256:5143fd591effd2224f6504f7ff62e0b9b84068bf850ce66e45156b0e83bc954f"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/binutils-gdb/binutils/../bfd/bfd.h:6818",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/binutils-gdb/binutils/../bfd/bfd.h:6818"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,59 @@
+diff --git a/lib/jxl/decode.cc b/lib/jxl/decode.cc
+index ce59161755d..228e5ae749c 100644
+--- a/lib/jxl/decode.cc
++++ b/lib/jxl/decode.cc
+@@ -1888,12 +1889,13 @@ JXL_EXPORT JxlDecoderStatus JxlDecoderImageOutBufferSize(
+   if (status != JXL_DEC_SUCCESS) return status;
+ 
+   size_t row_size =
+-      jxl::DivCeil(dec->metadata.size.xsize() * format->num_channels * bits,
++      jxl::DivCeil(dec->metadata.oriented_xsize(dec->keep_orientation) *
++                       format->num_channels * bits,
+                    jxl::kBitsPerByte);
+   if (format->align > 1) {
+     row_size = jxl::DivCeil(row_size, format->align) * format->align;
+   }
+-  *size = row_size * dec->metadata.size.ysize();
++  *size = row_size * dec->metadata.oriented_ysize(dec->keep_orientation);
+ 
+   return JXL_DEC_SUCCESS;
+ }
+diff --git a/lib/jxl/image_metadata.h b/lib/jxl/image_metadata.h
+index 10531b9e955..53a1d8fc2f4 100644
+--- a/lib/jxl/image_metadata.h
++++ b/lib/jxl/image_metadata.h
+@@ -377,6 +377,34 @@ struct CodecMetadata {
+ 
+   size_t xsize() const { return size.xsize(); }
+   size_t ysize() const { return size.ysize(); }
++  size_t oriented_xsize(bool keep_orientation) const {
++    if (static_cast<uint32_t>(m.GetOrientation()) > 4 && !keep_orientation) {
++      return ysize();
++    } else {
++      return xsize();
++    }
++  }
++  size_t oriented_preview_xsize(bool keep_orientation) const {
++    if (static_cast<uint32_t>(m.GetOrientation()) > 4 && !keep_orientation) {
++      return m.preview_size.ysize();
++    } else {
++      return m.preview_size.xsize();
++    }
++  }
++  size_t oriented_ysize(bool keep_orientation) const {
++    if (static_cast<uint32_t>(m.GetOrientation()) > 4 && !keep_orientation) {
++      return xsize();
++    } else {
++      return ysize();
++    }
++  }
++  size_t oriented_preview_ysize(bool keep_orientation) const {
++    if (static_cast<uint32_t>(m.GetOrientation()) > 4 && !keep_orientation) {
++      return m.preview_size.xsize();
++    } else {
++      return m.preview_size.ysize();
++    }
++  }
+ };
+ 
+ }  // namespace jxl

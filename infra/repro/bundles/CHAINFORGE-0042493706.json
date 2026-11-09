@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042493706",
+  "chain": "CWE-20->CWE-125",
+  "project": "serenity",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42493706",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "42133a196a0bea83705b5947921d5c7e5b9f201d",
+      "fix_commits": [
+        "42133a196a0bea83705b5947921d5c7e5b9f201d"
+      ],
+      "repo": "https://github.com/SerenityOS/serenity"
+    },
+    "patch": "diff --git a/AK/StringView.h b/AK/StringView.h\nindex 1237e147b69133..0a5edf6904b373 100644\n--- a/AK/StringView.h\n+++ b/AK/StringView.h\n@@ -147,6 +147,8 @@ class StringView {\n         // NOTE: `m_characters` is not guaranteed to be null-terminated, but `cstring` is.\n         const char* cp = cstring;\n         for (size_t i = 0; i < m_length; ++i) {\n+            if (!*cp)\n+                return false;\n             if (m_characters[i] != *(cp++))\n                 return false;\n         }\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42493706-vul",
+      "digest": "sha256:f36015b452656db1a76df3c43d8b4683d441405752a4fd5a047ea1611ca50b78"
+    },
+    "patched": {
+      "ref": "n132/arvo:42493706-fix",
+      "digest": "sha256:cb1b566f4f21694eacc5be3e1af60aa0ecb185bc79848c7513de476635f26869"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "global-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/serenity/Meta/Lagom/build/../../../AK/StringView.h:153",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "global-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/serenity/Meta/Lagom/build/../../../AK/StringView.h:153"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

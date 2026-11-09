@@ -1,0 +1,82 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-935117227",
+  "chain": "CWE-1284->CWE-190->CWE-119",
+  "project": "htslib",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42485645",
+    "commit_range": {
+      "introduced": null,
+      "fixed": null,
+      "fix_commits": [
+        "dcd4b7304941a8832fba2d0fc4c1e716e7a4e72c"
+      ],
+      "repo": "https://github.com/samtools/htslib"
+    },
+    "patch": "diff --git a/vcf.c b/vcf.c\nindex 80376ab20..c96eba1a5 100644\n--- a/vcf.c\n+++ b/vcf.c\n@@ -2354,16 +2354,17 @@ static int vcf_parse_format(kstring_t *s, const bcf_hdr_t *h, bcf1_t *v, char *p\n             v->errcode |= BCF_ERR_LIMITS;\n             return -1;\n         }\n-        f->offset = mem->l;\n \n         // Limit the total memory to ~2Gb per VCF row.  This should mean\n         // malformed VCF data is less likely to take excessive memory and/or\n         // time.\n-        if (v->n_sample * (uint64_t)f->size > INT_MAX) {\n+        if ((uint64_t) mem->l + v->n_sample * (uint64_t)f->size > INT_MAX) {\n             hts_log_error(\"Excessive memory required by FORMAT fields at %s:%\"PRIhts_pos, bcf_seqname_safe(h,v), v->pos+1);\n             v->errcode |= BCF_ERR_LIMITS;\n             return -1;\n         }\n+\n+        f->offset = mem->l;\n         if (ks_resize(mem, mem->l + v->n_sample * (size_t)f->size) < 0) {\n             hts_log_error(\"Memory allocation failure at %s:%\"PRIhts_pos, bcf_seqname_safe(h,v), v->pos+1);\n             v->errcode |= BCF_ERR_LIMITS;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42485645-vul",
+      "digest": "sha256:9ff6a3f79f115a0a0c76992646f86e522c48b0eb199a8b38930be5c6774b6896"
+    },
+    "patched": {
+      "ref": "n132/arvo:42485645-fix",
+      "digest": "sha256:aaff510414b523dae01696bd30b3912ccb94e8938e33accd17265b07d373aec8"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "undefined",
+        "bug_class": "SEGV",
+        "direction": "WRITE",
+        "crash_site": "/src/htslib/vcf.c:2517",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 190,
+      "role": "intermediate",
+      "witness": {
+        "method": "ubsan-rebuild",
+        "recipe": "SANITIZER=undefined compile && $ENTRYPOINT",
+        "ubsan_options": "print_stacktrace=1:halt_on_error=0:silence_unsigned_overflow=0:symbolize=1"
+      },
+      "witnessed": false
+    },
+    {
+      "cwe_id": 119,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "undefined",
+        "bug_class": "SEGV",
+        "direction": "WRITE",
+        "site": "/src/htslib/vcf.c:2517"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

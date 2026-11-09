@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-967626801",
+  "chain": "CWE-456->CWE-457",
+  "project": "libical",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42536107",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/libical/libical/commit/8df37e343eed47db25af1c8b0727b8270d2bb94b",
+      "fix_commits": [
+        "8df37e343eed47db25af1c8b0727b8270d2bb94b"
+      ],
+      "repo": "https://github.com/libical/libical"
+    },
+    "patch": "diff --git a/src/libical/icalparser.c b/src/libical/icalparser.c\nindex 0d223deae..75779ea9e 100644\n--- a/src/libical/icalparser.c\n+++ b/src/libical/icalparser.c\n@@ -966,6 +966,8 @@ icalcomponent *icalparser_add_line(icalparser *parser, char *line)\n                     }\n                     if (pvalue_heap) {\n                         icalmemory_free_buffer(pvalue_heap);\n+                        /* coverirty */\n+                        pvalue_heap = 0;\n                     }\n                     continue;\n                 }\n@@ -1031,6 +1033,8 @@ icalcomponent *icalparser_add_line(icalparser *parser, char *line)\n                                                  pvalue_stack, sizeof(pvalue_stack))) {\n                     if (pvalue_heap) {\n                         icalmemory_free_buffer(pvalue_heap);\n+                        /* coverity[uninit_use] */\n+                        pvalue_heap = 0;\n                     }\n                     if (name_heap) {\n                         icalmemory_free_buffer(name_heap);\n@@ -1071,6 +1075,7 @@ icalcomponent *icalparser_add_line(icalparser *parser, char *line)\n                 }\n                 if (pvalue_heap) {\n                     icalmemory_free_buffer(pvalue_heap);\n+                    /* coverity[uninit_use] */\n                     pvalue_heap = 0;\n                 }\n                 icalmemory_free_buffer(str);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42536107-vul",
+      "digest": "sha256:5e074d09b18510df83fe2d2e04c3f733a8b70a14ee599f33e26fa159807cd538"
+    },
+    "patched": {
+      "ref": "n132/arvo:42536107-fix",
+      "digest": "sha256:442b3b07c3c61674555ac08fa6a9146b3f575e234b5471dcd8358ad5b540a7a7"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/libical/src/libical/icalmemory.c:257",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/libical/src/libical/icalmemory.c:257"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

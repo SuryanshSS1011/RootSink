@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042532037",
+  "chain": "CWE-1285->CWE-125",
+  "project": "upx",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42532037",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "2767ec54e11ac516e4a2233f183c61843d9789f0",
+      "fix_commits": [
+        "2767ec54e11ac516e4a2233f183c61843d9789f0"
+      ],
+      "repo": "https://github.com/upx/upx"
+    },
+    "patch": "diff --git a/src/p_unix.cpp b/src/p_unix.cpp\nindex bbc30b0bd2..ee08e751c9 100644\n--- a/src/p_unix.cpp\n+++ b/src/p_unix.cpp\n@@ -619,9 +619,14 @@ void PackUnix::unpack(OutputFile *fo)\n         fi->readx(&hbuf, sizeof(hbuf));\n         orig_file_size = get_te32(&hbuf.p_filesize);\n         blocksize = get_te32(&hbuf.p_blocksize);\n+        off_t max_inflated = file_size * 273;  // zlib limit (256 + 16 + 1)\n \n-        if (file_size > (off_t)orig_file_size || blocksize > orig_file_size)\n+        if (max_inflated < orig_file_size\n+        ||  max_inflated < blocksize\n+        ||  file_size > (off_t)orig_file_size\n+        ||  blocksize > orig_file_size) {\n             throwCantUnpack(\"file header corrupted\");\n+        }\n     }\n     else\n     {\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42532037-vul",
+      "digest": "sha256:b7503f95c1a2a91627b93a59142b7da70bd130d511229dbaa2546ea5d564ed36"
+    },
+    "patched": {
+      "ref": "n132/arvo:42532037-fix",
+      "digest": "sha256:d9826ac834cf4a7adea15987912f6f3aaa12071a8bf861cf6c134b12143a4e81"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/upx/vendor/ucl/src/n2e_d.c:80",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/upx/vendor/ucl/src/n2e_d.c:80"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

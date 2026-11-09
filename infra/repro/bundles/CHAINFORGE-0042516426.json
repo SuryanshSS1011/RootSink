@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042516426",
+  "chain": "CWE-456->CWE-457",
+  "project": "lcms",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42516426",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "1ead12acd5a7decb31ab3623da53eebfd88ddc15",
+      "fix_commits": [
+        "1ead12acd5a7decb31ab3623da53eebfd88ddc15"
+      ],
+      "repo": "https://github.com/mm2/Little-CMS"
+    },
+    "patch": "From 1ead12acd5a7decb31ab3623da53eebfd88ddc15 Mon Sep 17 00:00:00 2001\nFrom: Marti Maria <marti.maria@littlecms.com>\nDate: Tue, 3 Jan 2023 17:52:02 +0100\nSubject: [PATCH] Add more checking on multilocalized unicode tags\n\nDon't allow odd numbers as offsets on utf16 tables.\nMaybe some arcane profiles would use odd addresses and then define an utf16 table with a spare byte in the beginning, but I have checked my +10,000 ICC profiles zoo and none of the legal ones does that. It is likely someone is trying an exploit or a fuzzer is involved. Kill'em all\n---\n src/cmsnamed.c |  2 ++\n src/cmstypes.c | 14 ++++++++++++--\n 2 files changed, 14 insertions(+), 2 deletions(-)\n\ndiff --git a/src/cmsnamed.c b/src/cmsnamed.c\nindex 87f3936..bc580aa 100644\n--- a/src/cmsnamed.c\n+++ b/src/cmsnamed.c\n@@ -370,6 +370,8 @@ const wchar_t* _cmsMLUgetWide(const cmsMLU* mlu,\n \n     if (len != NULL) *len   = v ->Len;\n \n+    if (v->StrW + v->Len > mlu->PoolSize) return NULL;\n+\n     return(wchar_t*) ((cmsUInt8Number*) mlu ->MemPool + v ->StrW);\n }\n \ndiff --git a/src/cmstypes.c b/src/cmstypes.c\nindex 1144d98..48c0b4b 100644\n--- a/src/cmstypes.c\n+++ b/src/cmstypes.c\n@@ -1520,6 +1520,12 @@ void *Type_MLU_Read(struct _cms_typehandler_struct* self, cmsIOHANDLER* io, cmsU\n         if (!_cmsReadUInt32Number(io, &Len)) goto Error;\n         if (!_cmsReadUInt32Number(io, &Offset)) goto Error;\n \n+        // Offset MUST be even because it indexes a block of utf16 chars. \n+        // Tricky profiles that uses odd positions will not work anyway\n+        // because the whole utf16 block is previously converted to wchar_t \n+        // and sizeof this type may be of 4 bytes. On Linux systems, for example.\n+        if (Offset & 1) goto Error;\n+\n         // Check for overflow\n         if (Offset < (SizeOfHeader + 8)) goto Error;        \n         if (((Offset + Len) < Len) || ((Offset + Len) > SizeOfTag + 8)) goto Error;\n@@ -1547,9 +1553,13 @@ void *Type_MLU_Read(struct _cms_typehandler_struct* self, cmsIOHANDLER* io, cmsU\n     }\n     else\n     {\n-        Block = (wchar_t*) _cmsMalloc(self ->ContextID, SizeOfTag);\n+        // Make sure this is an even utf16 size.\n+        if (SizeOfTag & 1) goto Error;\n+\n+        Block = (wchar_t*) _cmsCalloc(self ->ContextID, 1, SizeOfTag);\n         if (Block == NULL) goto Error;\n-        NumOfWchar = SizeOfTag / sizeof(wchar_t);\n+       \n+        NumOfWchar = SizeOfTag / sizeof(cmsUInt16Number);\n         if (!_cmsReadWCharArray(io, NumOfWchar, Block)) {\n             _cmsFree(self->ContextID, Block);\n             goto Error;\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42516426-vul",
+      "digest": "sha256:ee03c08de3bddea9ed7bd6ad6fc83a308155417763668af011fef938fa0bbe27"
+    },
+    "patched": {
+      "ref": "n132/arvo:42516426-fix",
+      "digest": "sha256:105f54da4baacf690a7cabd4656fb1f62837711d2cb5dd899b3d53ef6fc0e33c"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/lcms/src/cmsio0.c:360",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/lcms/src/cmsio0.c:360"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

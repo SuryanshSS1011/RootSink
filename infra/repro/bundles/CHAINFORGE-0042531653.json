@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042531653",
+  "chain": "CWE-20->CWE-125",
+  "project": "upx",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42531653",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "6dde9f7dc03f94648ce65e203eb1ca382a63016a",
+      "fix_commits": [
+        "6dde9f7dc03f94648ce65e203eb1ca382a63016a"
+      ],
+      "repo": "https://github.com/upx/upx"
+    },
+    "patch": "diff --git a/src/p_unix.cpp b/src/p_unix.cpp\nindex 4032126807..bb472cdc5b 100644\n--- a/src/p_unix.cpp\n+++ b/src/p_unix.cpp\n@@ -581,7 +581,7 @@ int PackUnix::find_overlay_offset(MemBuffer const &buf)\n         return false;\n \n     int l = ph.buf_offset + ph.getPackHeaderSize();\n-    if (l < 0 || l + 4 > bufsize)\n+    if (l < 0 || i + l + 4 > bufsize)\n         throwCantUnpack(\"file corrupted\");\n     overlay_offset = get_te32(buf + i + l);\n     if ((off_t)overlay_offset >= file_size)\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42531653-vul",
+      "digest": "sha256:b555c40d1d3a573114c5e54093ea15fd769fa08c62b82c70faf83b2096bacd14"
+    },
+    "patched": {
+      "ref": "n132/arvo:42531653-fix",
+      "digest": "sha256:0f3bce2664842c44185b3a759b162403464362ebde6d17d090e729fdc368494f"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/upx/src/util/../bele.h:117",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/upx/src/util/../bele.h:117"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

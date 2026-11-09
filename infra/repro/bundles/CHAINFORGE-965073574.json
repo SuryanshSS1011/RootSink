@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-965073574",
+  "chain": "CWE-456->CWE-457",
+  "project": "mruby",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42502115",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/mruby/mruby/commit/f85c50543b4ec93f327b9b064ea193493b046766",
+      "fix_commits": [
+        "f85c50543b4ec93f327b9b064ea193493b046766"
+      ],
+      "repo": "https://github.com/mruby/mruby"
+    },
+    "patch": "diff --git a/mrbgems/mruby-compiler/core/codegen.c b/mrbgems/mruby-compiler/core/codegen.c\nindex 48543bd7ea..380cd93171 100644\n--- a/mrbgems/mruby-compiler/core/codegen.c\n+++ b/mrbgems/mruby-compiler/core/codegen.c\n@@ -467,6 +467,10 @@ mrb_prev_pc(codegen_scope *s, const mrb_code *pc)\n static struct mrb_insn_data\n mrb_last_insn(codegen_scope *s)\n {\n+  if (s->pc == 0) {\n+    struct mrb_insn_data data = { OP_NOP, 0 };\n+    return data;\n+  }\n   return mrb_decode_insn(&s->iseq[s->lastpc]);\n }\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42502115-vul",
+      "digest": "sha256:e4e8067221d2f1bc4a9c15b939fc7f9c1d0a95535b3f371a1025c5cad4451afb"
+    },
+    "patched": {
+      "ref": "n132/arvo:42502115-fix",
+      "digest": "sha256:dacab8b6eb520986c9c82f0c2b335cb3dd2a55ce18b0f7338c5a9dced71cfcb6"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/mruby/mrbgems/mruby-compiler/core/codegen.c:336",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/mruby/mrbgems/mruby-compiler/core/codegen.c:336"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

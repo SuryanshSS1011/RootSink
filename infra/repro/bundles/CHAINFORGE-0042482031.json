@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042482031",
+  "chain": "CWE-416->CWE-125",
+  "project": "libvips",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42482031",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "175408733fcffed7aa0618c6d5ad5390ed5c4f88",
+      "fix_commits": [
+        "175408733fcffed7aa0618c6d5ad5390ed5c4f88"
+      ],
+      "repo": "https://github.com/libvips/libvips"
+    },
+    "patch": "From 175408733fcffed7aa0618c6d5ad5390ed5c4f88 Mon Sep 17 00:00:00 2001\nFrom: John Cupitt <jcupitt@gmail.com>\nDate: Sun, 23 Feb 2020 11:09:44 +0000\nSubject: [PATCH] fix use-after-free\n\nsee https://oss-fuzz.com/testcase-detail/5663684670259200\n---\n libvips/foreign/matrixload.c | 2 +-\n 1 file changed, 1 insertion(+), 1 deletion(-)\n\ndiff --git a/libvips/foreign/matrixload.c b/libvips/foreign/matrixload.c\nindex 305c177..d9606b8 100644\n--- a/libvips/foreign/matrixload.c\n+++ b/libvips/foreign/matrixload.c\n@@ -236,9 +236,9 @@ vips_foreign_load_matrix_load( VipsForeignLoad *load )\n \t\t\t\tx < load->out->Xsize;\n \t\t\tx++, p = q )\n \t\t\tif( vips_strtod( p, &matrix->linebuf[x] ) ) {\n-\t\t\t\tg_free( line );\n \t\t\t\tvips_error( class->nickname, \n \t\t\t\t\t_( \"bad number \\\"%s\\\"\" ), p );\n+\t\t\t\tg_free( line );\n \t\t\t\treturn( -1 );\n \t\t\t}\n \n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42482031-vul",
+      "digest": "sha256:3794cbaee54783b5b84cf4b9f3ae7f55c053c32e4e7aa729a5bb6a2c9b359e8d"
+    },
+    "patched": {
+      "ref": "n132/arvo:42482031-fix",
+      "digest": "sha256:13cf619a56d96602b0807e4fd6a3756d2ebf6160cef8654494460052baefc503"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/libvips/libvips/iofuncs/buf.c:418",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/libvips/libvips/iofuncs/buf.c:418"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

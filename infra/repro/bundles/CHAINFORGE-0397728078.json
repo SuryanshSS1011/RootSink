@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0397728078",
+  "chain": "CWE-1284->CWE-125",
+  "project": "upx",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "397728078",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "e52a3ceb483f3a8a22d0dffc367e6c825d2b60cc",
+      "fix_commits": [
+        "e52a3ceb483f3a8a22d0dffc367e6c825d2b60cc"
+      ],
+      "repo": "https://github.com/upx/upx"
+    },
+    "patch": "diff --git a/src/p_lx_elf.cpp b/src/p_lx_elf.cpp\nindex e8f855abe0..f5f749340b 100644\n--- a/src/p_lx_elf.cpp\n+++ b/src/p_lx_elf.cpp\n@@ -7674,6 +7674,8 @@ void PackLinuxElf64::unpack(OutputFile *fo)\n                 fi->readx(ibuf, ph.c_len);\n             }\n         }\n+        if (ph.u_len < sizeof(*ehdr))\n+            throwCantUnpack(\"ElfXX_Ehdr corrupted\");\n         decompress(ibuf, (upx_byte *)ehdr, false);\n         if (ehdr->e_type   !=ehdri.e_type\n         ||  ehdr->e_machine!=ehdri.e_machine\n@@ -8885,6 +8887,8 @@ void PackLinuxElf32::unpack(OutputFile *fo)\n         if (ibuf.getSize() < ph.c_len)\n             throwCompressedDataViolation();\n         fi->readx(ibuf, ph.c_len);\n+        if (ph.u_len < sizeof(*ehdr))\n+            throwCantUnpack(\"ElfXX_Ehdr corrupted\");\n         decompress(ibuf, (upx_byte *)ehdr, false);\n         if (ehdr->e_type   !=ehdri.e_type\n         ||  ehdr->e_machine!=ehdri.e_machine\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:397728078-vul",
+      "digest": "sha256:18374c01d07a49131b31be021f06692d6a64b84215903890f1b84dba183176db"
+    },
+    "patched": {
+      "ref": "n132/arvo:397728078-fix",
+      "digest": "sha256:f9b5f67c3eae2d440556fe7c4a8f888bfed327832e1eddff62dbc84938835ba7"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/upx/src/util/xspan_fwd.h:96",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/upx/src/util/xspan_fwd.h:96"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

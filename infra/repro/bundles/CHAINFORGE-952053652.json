@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-952053652",
+  "chain": "CWE-362->CWE-415",
+  "project": "radare2",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42473258",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/radare/radare2/commit/149cb3587e4cd3928f8f56553ecfeaac15452585",
+      "fix_commits": [
+        "149cb3587e4cd3928f8f56553ecfeaac15452585"
+      ],
+      "repo": "https://github.com/radare/radare2"
+    },
+    "patch": "diff --git a/libr/bin/format/pe/pe.c b/libr/bin/format/pe/pe.c\nindex bf7848580cd1d..c8564404ee65f 100644\n--- a/libr/bin/format/pe/pe.c\n+++ b/libr/bin/format/pe/pe.c\n@@ -1213,7 +1213,7 @@ static int bin_pe_init_exports(struct PE_(r_bin_pe_obj_t)* bin) {\n \treturn true;\n }\n \n-static void _free_resources(r_pe_resource *rs) {\n+static void _free_resource(r_pe_resource *rs) {\n \tif (rs) {\n \t\tfree (rs->name);\n \t\tfree (rs->timestr);\n@@ -1232,7 +1232,7 @@ static int bin_pe_init_resource(struct PE_(r_bin_pe_obj_t)* bin) {\n \t\treturn false;\n \t}\n \n-\tbin->resources = r_list_newf ((RListFree)_free_resources);\n+\tbin->resources = r_list_newf ((RListFree)_free_resource);\n \tif (!bin->resources) {\n \t\treturn false;\n \t}\n@@ -2242,6 +2242,7 @@ static char* _resource_type_str(int type) {\n }\n \n static void _parse_resource_directory(struct PE_(r_bin_pe_obj_t) *bin, Pe_image_resource_directory *dir, ut64 offDir, int type, int id, HtUU *dirs, char *resource_name) {\n+\tut8 *resourceEntryName = NULL;\n \tint index = 0;\n \tut32 totalRes = dir->NumberOfNamedEntries + dir->NumberOfIdEntries;\n \tut64 rsrc_base = bin->resource_directory_offset;\n@@ -2263,15 +2264,22 @@ static void _parse_resource_directory(struct PE_(r_bin_pe_obj_t) *bin, Pe_image_\n \t\t\teprintf (\"Warning: read resource entry\\n\");\n \t\t\tbreak;\n \t\t}\n-\t\tut8 *resourceEntryName = NULL;\n \t\tif (entry.u1.s.NameIsString) {\n \t\t\tint i;\n-\t\t\tut16 resourceEntryNameLength;\n-\t\t\tr_buf_read_at (bin->b, bin->resource_directory_offset + entry.u1.s.NameOffset, (ut8*)&resourceEntryNameLength, sizeof (ut16));\n-\n+\t\t\tut16 buf, resourceEntryNameLength;\n+\t\t\tr_buf_read_at (bin->b, bin->resource_directory_offset + entry.u1.s.NameOffset, (ut8*)&buf, sizeof (ut16));\n+\t\t\tresourceEntryNameLength = r_read_le16 (&buf);\n \t\t\tresourceEntryName = calloc (resourceEntryNameLength + 1, sizeof (ut8));\n-\t\t\tfor(i = 0; i < 2 * resourceEntryNameLength; i += 2) { /* Convert Unicode to ASCII */\n-\t\t\t\tr_buf_read_at (bin->b, bin->resource_directory_offset + entry.u1.s.NameOffset + 2 + i, resourceEntryName + (i/2), sizeof (ut8));\n+\t\t\tif (resourceEntryName) {\n+\t\t\t\tfor (i = 0; i < resourceEntryNameLength; i++) { /* Convert Unicode to ASCII */\n+\t\t\t\t\tut8 byte;\n+\t\t\t\t\tint r = r_buf_read_at (bin->b, bin->resource_directory_offset + entry.u1.s.NameOffset + 2 + (i*2), &byte, sizeof (ut8));\n+\t\t\t\t\tif (r < 1 || !byte) {\n+\t\t\t\t\t\tR_FREE (resourceEntryName);\n+\t\t\t\t\t\tbreak;\n+\t\t\t\t\t}\n+\t\t\t\t\tresourceEntryName[i] = byte;\n+\t\t\t\t}\n \t\t\t}\n \t\t}\n \t\tif (entry.u2.s.DataIsDirectory) {\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42473258-vul",
+      "digest": "sha256:f1780f1a1073b788e278c5c704124077d039f1f21002a2130ffdb68292b55eeb"
+    },
+    "patched": {
+      "ref": "n132/arvo:42473258-fix",
+      "digest": "sha256:9ee3f9775fe8f50839eae720137c82cac65b444ad059422544c28d0c65210c92"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "attempting",
+        "direction": null,
+        "crash_site": "/src/radare2/libr/../libr/bin/p/../format/pe/pe.c:1218",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 362,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 415,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "attempting",
+        "direction": null,
+        "site": "/src/radare2/libr/../libr/bin/p/../format/pe/pe.c:1218"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

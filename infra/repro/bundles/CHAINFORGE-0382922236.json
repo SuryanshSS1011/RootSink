@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0382922236",
+  "chain": "CWE-416->CWE-125",
+  "project": "php-src",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "382922236",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "483f265e61002d19ba237491ad3dd38a5d6222da",
+      "fix_commits": [
+        "483f265e61002d19ba237491ad3dd38a5d6222da"
+      ],
+      "repo": "https://github.com/php/php-src"
+    },
+    "patch": "From b0b39cdc3e5cf791ccd7f358b32ff1340a652d78 Mon Sep 17 00:00:00 2001\nFrom: Dmitry Stogov <dmitry@zend.com>\nDate: Tue, 19 Nov 2024 18:03:54 +0300\nSubject: [PATCH] Backport JIT fix: set valid EX(opline) before calling\n gc_possible_root() (#16858)\n\nThis will finally make the COMMUNTIY build of the PHP 8.1 build green.\n\nSee https://github.com/php/php-src/pull/16858#issuecomment-2509010556\nCloses GH-17091\n---\n ext/opcache/jit/zend_jit_arm64.dasc | 12 ++++++++++++\n ext/opcache/jit/zend_jit_x86.dasc   | 12 ++++++++++++\n 2 files changed, 24 insertions(+)\n\ndiff --git a/ext/opcache/jit/zend_jit_arm64.dasc b/ext/opcache/jit/zend_jit_arm64.dasc\nindex 1583706855d4..b9a4fbc82e12 100644\n--- a/ext/opcache/jit/zend_jit_arm64.dasc\n+++ b/ext/opcache/jit/zend_jit_arm64.dasc\n@@ -1533,6 +1533,9 @@ static bool logical_immediate_p(uint64_t value, uint32_t reg_size)\n ||\t\t\t}\n |\t\t\tIF_GC_MAY_NOT_LEAK FCARG1x, >4, Rw(tmp_reg1), Rw(tmp_reg2)\n |\t\t\t// gc_possible_root(Z_COUNTED_P(z))\n+||\t\t\tif (opline) {\n+|\t\t\t\tSET_EX_OPLINE opline, TMP1\n+||\t\t\t}\n |\t\t\tEXT_CALL gc_possible_root, Rx(tmp_reg1)\n ||\t\t}\n ||\t\tif (cold && ((op_info) & ((MAY_BE_ANY|MAY_BE_UNDEF|MAY_BE_INDIRECT|MAY_BE_GUARD)-(MAY_BE_OBJECT|MAY_BE_RESOURCE))) != 0) {\n@@ -5972,6 +5975,9 @@ static int zend_jit_assign_to_variable(dasm_State    **Dst,\n \t\t\tif (RC_MAY_BE_N(var_info) && (var_info & (MAY_BE_ARRAY|MAY_BE_OBJECT)) != 0) {\n \t\t\t\t|4:\n \t\t\t\t|\tIF_GC_MAY_NOT_LEAK FCARG1x, >8, TMP1w, TMP2w\n+\t\t\t\tif (opline) {\n+\t\t\t\t\t|\tSET_EX_OPLINE opline, REG0\n+\t\t\t\t}\n \t\t\t\t|\tEXT_CALL gc_possible_root, REG0\n \t\t\t\tif (in_cold) {\n \t\t\t\t\t|\tb >8\n@@ -5999,6 +6005,9 @@ static int zend_jit_assign_to_variable(dasm_State    **Dst,\n \t\t\t\t|\tGET_ZVAL_PTR FCARG1x, var_use_addr, TMP1\n \t\t\t\t|\tGC_DELREF FCARG1x, TMP1w\n \t\t\t\t|\tIF_GC_MAY_NOT_LEAK FCARG1x, >5, TMP1w, TMP2w\n+\t\t\t\tif (opline) {\n+\t\t\t\t\t|\tSET_EX_OPLINE opline, TMP1\n+\t\t\t\t}\n \t\t\t\t|\tEXT_CALL gc_possible_root, TMP1\n \t\t\t\tif (Z_REG(var_use_addr) != ZREG_FP) {\n \t\t\t\t\t|\tldr Rx(Z_REG(var_use_addr)), T1 // restore\n@@ -11980,6 +11989,9 @@ static int zend_jit_bind_global(dasm_State **Dst, const zend_op *opline, uint32_\n \t\t\t|3:\n \t\t\t|\t// GC_ZVAL_CHECK_POSSIBLE_ROOT(variable_ptr)\n \t\t\t|\tIF_GC_MAY_NOT_LEAK FCARG1x, >5, TMP1w, TMP2w\n+\t\t\tif (opline) {\n+\t\t\t\t|\tSET_EX_OPLINE opline, REG0\n+\t\t\t}\n \t\t\t|\tEXT_CALL gc_possible_root, REG0\n \t\t\t|\tb >5\n \t\t}\ndiff --git a/ext/opcache/jit/zend_jit_x86.dasc b/ext/opcache/jit/zend_jit_x86.dasc\nindex b3989a4ae254..a1d0a8e098a2 100644\n--- a/ext/opcache/jit/zend_jit_x86.dasc\n+++ b/ext/opcache/jit/zend_jit_x86.dasc\n@@ -1443,6 +1443,9 @@ static size_t tsrm_tls_offset;\n |1:\n ||\t\t\t}\n |\t\t\tIF_GC_MAY_NOT_LEAK FCARG1a, >4\n+||\t\t\tif (opline) {\n+|\t\t\t\tSET_EX_OPLINE opline, r0\n+||\t\t\t}\n |\t\t\t// gc_possible_root(Z_COUNTED_P(z))\n |\t\t\tEXT_CALL gc_possible_root, r0\n ||\t\t}\n@@ -6526,6 +6529,9 @@ static int zend_jit_assign_to_variable(dasm_State    **Dst,\n \t\t\tif (RC_MAY_BE_N(var_info) && (var_info & (MAY_BE_ARRAY|MAY_BE_OBJECT)) != 0) {\n \t\t\t\t|4:\n \t\t\t\t|\tIF_GC_MAY_NOT_LEAK FCARG1a, >8\n+\t\t\t\tif (opline) {\n+\t\t\t\t\t|\tSET_EX_OPLINE opline, r0\n+\t\t\t\t}\n \t\t\t\t|\tEXT_CALL gc_possible_root, r0\n \t\t\t\tif (in_cold) {\n \t\t\t\t\t|\tjmp >8\n@@ -6553,6 +6559,9 @@ static int zend_jit_assign_to_variable(dasm_State    **Dst,\n \t\t\t\t|\tGET_ZVAL_PTR FCARG1a, var_use_addr\n \t\t\t\t|\tGC_DELREF FCARG1a\n \t\t\t\t|\tIF_GC_MAY_NOT_LEAK FCARG1a, >5\n+\t\t\t\tif (opline) {\n+\t\t\t\t\t|\tSET_EX_OPLINE opline, r0\n+\t\t\t\t}\n \t\t\t\t|\tEXT_CALL gc_possible_root, r0\n \t\t\t\tif (Z_REG(var_use_addr) != ZREG_FP) {\n \t\t\t\t\t|\tmov Ra(Z_REG(var_use_addr)), T1 // restore\n@@ -12742,6 +12751,9 @@ static int zend_jit_bind_global(dasm_State **Dst, const zend_op *opline, uint32_\n \t\t\t|3:\n \t\t\t|\t// GC_ZVAL_CHECK_POSSIBLE_ROOT(variable_ptr)\n \t\t\t|\tIF_GC_MAY_NOT_LEAK FCARG1a, >5\n+\t\t\tif (opline) {\n+\t\t\t\t|\tSET_EX_OPLINE opline, r0\n+\t\t\t}\n \t\t\t|\tEXT_CALL gc_possible_root, r1\n \t\t\t|\tjmp >5\n \t\t}\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:382922236-vul",
+      "digest": "sha256:72f73a7c63eccf66e192dd8741b537820b3a08f800bb1997fdd5a49913f95bda"
+    },
+    "patched": {
+      "ref": "n132/arvo:382922236-fix",
+      "digest": "sha256:d02c3bd44506817e4b4c054e21c9518e9a5af0f4a23a0ff6a74cacdb3926d6a9"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/php-src/Zend/zend_types.h:1346",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/php-src/Zend/zend_types.h:1346"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

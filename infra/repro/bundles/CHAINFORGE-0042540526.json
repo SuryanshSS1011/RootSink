@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042540526",
+  "chain": "CWE-1285->CWE-125",
+  "project": "skia",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42540526",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "587f5a9a309feebee7bf069f762f5702baf4699e",
+      "fix_commits": [
+        "587f5a9a309feebee7bf069f762f5702baf4699e"
+      ],
+      "repo": "https://skia.googlesource.com/skia.git"
+    },
+    "patch": "diff --git a/modules/skjson/src/SkJSON.cpp b/modules/skjson/src/SkJSON.cpp\nindex 7f082d7..d423715 100644\n--- a/modules/skjson/src/SkJSON.cpp\n+++ b/modules/skjson/src/SkJSON.cpp\n@@ -355,6 +355,10 @@\n                 : this->error(NullValue(), p + 1, \"trailing root garbage\");\n         }\n \n+        if (p == p_stop) {\n+            return this->error(NullValue(), p, \"unexpected end-of-input\");\n+        }\n+\n         ++p;\n \n         goto match_post_value;\ndiff --git a/modules/skjson/src/SkJSONTest.cpp b/modules/skjson/src/SkJSONTest.cpp\nindex 91ae497..1aaa278 100644\n--- a/modules/skjson/src/SkJSONTest.cpp\n+++ b/modules/skjson/src/SkJSONTest.cpp\n@@ -49,6 +49,7 @@\n         { \"[ \\\"foo\"       , nullptr },\n         { \"[ \\\"fo\\0o\\\" ]\" , nullptr },\n \n+        { \"{\\\"\\\":{}\"                  , nullptr },\n         { \"{ null }\"                  , nullptr },\n         { \"{ \\\"k\\\" : }\"               , nullptr },\n         { \"{ : null }\"                , nullptr },\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42540526-vul",
+      "digest": "sha256:991f7eb0dd87f8c42466f36d2bf7fe25ab0634103f3496fb5c48ef7ebd51357a"
+    },
+    "patched": {
+      "ref": "n132/arvo:42540526-fix",
+      "digest": "sha256:6b4a4ff136e7bceae18268f8014d6628d2ba6eb6a72dd8b939d780249a5edf62"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/skia/out/Fuzz/../../modules/skjson/src/SkJSON.cpp:204",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/skia/out/Fuzz/../../modules/skjson/src/SkJSON.cpp:204"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

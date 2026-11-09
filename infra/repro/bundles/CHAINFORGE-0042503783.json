@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042503783",
+  "chain": "CWE-456->CWE-457",
+  "project": "leptonica",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42503783",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "f201a12680befcf6f49877f3cd1aba2c18c00301",
+      "fix_commits": [
+        "f201a12680befcf6f49877f3cd1aba2c18c00301"
+      ],
+      "repo": "https://github.com/DanBloomberg/leptonica"
+    },
+    "patch": "From f201a12680befcf6f49877f3cd1aba2c18c00301 Mon Sep 17 00:00:00 2001\nFrom: danblooomberg <dan.bloomberg@gmail.com>\nDate: Thu, 9 Dec 2021 12:10:20 -0800\nSubject: [PATCH] Attempt to fix oss-fuzz issue 42151 * Also remove\n preprocessor conditionals in prog/cleanpdf.c\n\n---\n prog/cleanpdf.c                         | 17 ++++-------------\n prog/fuzzing/pix_rotate_shear_fuzzer.cc |  3 ++-\n 2 files changed, 6 insertions(+), 14 deletions(-)\n\ndiff --git a/prog/cleanpdf.c b/prog/cleanpdf.c\nindex 0ed2e5e..ba8e8e5 100644\n--- a/prog/cleanpdf.c\n+++ b/prog/cleanpdf.c\n@@ -99,7 +99,7 @@\n # endif  /* _MSC_VER || __MINGW32__ */\n #endif  /* _WIN32 */\n \n-    /* Set to 1 to use pdftoppm; 0 for pdfimages */\n+    /* Set to 1 to use pdftoppm (recommended); 0 for pdfimages */\n #define   USE_PDFTOPPM     1\n \n #include \"string.h\"\n@@ -153,13 +153,11 @@ static char  mainName[] = \"cleanpdf\";\n     }\n     setLeptDebugOK(1);\n \n-#if 1\n         /* Get the names of the pdf files */\n     if ((sa = getSortedPathnamesInDirectory(basedir, \"pdf\", 0, 0)) == NULL)\n         return ERROR_INT(\"files not found\", mainName, 1);\n     sarrayWriteStderr(sa);\n     n = sarrayGetCount(sa);\n-#endif\n \n         /* Rasterize: use either\n          *     pdftoppm -r 300 fname outroot  (-r 300 renders output at 300 ppi)\n@@ -177,12 +175,11 @@ static char  mainName[] = \"cleanpdf\";\n          *    In some cases, it scrambles the order of the output pages\n          *    and inserts extra images. */\n     imagedir = stringJoin(basedir, \"/image\");\n-#if 1\n-#ifndef _WIN32\n+  #ifndef _WIN32\n     mkdir(imagedir, 0777);\n-#else\n+  #else\n     _mkdir(imagedir);\n-#endif  /* _WIN32 */\n+  #endif  /* _WIN32 */\n     for (i = 0; i < n; i++) {\n         fname = sarrayGetString(sa, i, L_NOCOPY);\n         splitPathAtDirectory(fname, NULL, &tail);\n@@ -200,9 +197,7 @@ static char  mainName[] = \"cleanpdf\";\n         ret = system(buf);   /* pdfimages or pdftoppm */\n     }\n     sarrayDestroy(&sa);\n-#endif\n \n-#if 1\n         /* Clean, deskew and compress */\n     sa = getSortedPathnamesInDirectory(imagedir, NULL, 0, 0);\n     sarrayWriteStderr(sa);\n@@ -240,9 +235,7 @@ static char  mainName[] = \"cleanpdf\";\n         lept_free(basename);\n     }\n     sarrayDestroy(&sa);\n-#endif\n \n-#if 1\n         /* Generate the pdf.  Compute the actual input resolution from\n          * the pixel dimensions of the first image.  This will cause each\n          * page to be printed to cover an 8.5 x 11 inch sheet of paper. */\n@@ -255,8 +248,6 @@ static char  mainName[] = \"cleanpdf\";\n         title = NULL;\n     convertFilesToPdf(imagedir, \"tif\", res, 1.0, L_G4_ENCODE,\n                       0, title, outfile);\n-#endif\n-\n     return 0;\n }\n \ndiff --git a/prog/fuzzing/pix_rotate_shear_fuzzer.cc b/prog/fuzzing/pix_rotate_shear_fuzzer.cc\nindex 9ae2569..e58443b 100644\n--- a/prog/fuzzing/pix_rotate_shear_fuzzer.cc\n+++ b/prog/fuzzing/pix_rotate_shear_fuzzer.cc\n@@ -42,7 +42,8 @@ extern \"C\" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {\n   if (size < 12) return EXIT_SUCCESS;\n   int format;\n   findFileFormatBuffer(data, &format);\n-  if (format == IFF_PNM || format == IFF_JFIF_JPEG) return EXIT_SUCCESS;\n+  if (format == IFF_PNM || format == IFF_JFIF_JPEG ||\n+      format == IFF_TIFF) return EXIT_SUCCESS;\n \n   Pix* pix = pixReadMem(reinterpret_cast<const unsigned char*>(data), size);\n   if (pix == nullptr) {\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42503783-vul",
+      "digest": "sha256:17fb7ac2048660140aad9c579691151cdac322f2c939add82da5fe9771f3cbf0"
+    },
+    "patched": {
+      "ref": "n132/arvo:42503783-fix",
+      "digest": "sha256:e062378fa9e17f13371f6f62bd309e17f37523517f42dbfb75b59677c577eed9"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/libtiff/libtiff/tif_getimage.c:1394",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/libtiff/libtiff/tif_getimage.c:1394"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

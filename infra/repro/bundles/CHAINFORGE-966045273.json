@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-966045273",
+  "chain": "CWE-456->CWE-457",
+  "project": "mupdf",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42529251",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/ArtifexSoftware/mupdf/commit/a5dca1a30b1beda46cff7334b2d68c82b0bbbe59",
+      "fix_commits": [
+        "a5dca1a30b1beda46cff7334b2d68c82b0bbbe59"
+      ],
+      "repo": "https://github.com/ArtifexSoftware/mupdf"
+    },
+    "patch": "diff --git a/source/fitz/unzip.c b/source/fitz/unzip.c\nindex 1fe4e289f4..a11d5b5c7c 100644\n--- a/source/fitz/unzip.c\n+++ b/source/fitz/unzip.c\n@@ -546,15 +546,15 @@ static fz_buffer *read_zip_entry(fz_context *ctx, fz_archive *arch, const char *\n \t\t{\n \t\t\tcbuf = fz_malloc(ctx, ent->csize);\n \n-\t\t\tfz_read(ctx, file, cbuf, ent->csize);\n-\n \t\t\tz.zalloc = fz_zlib_alloc;\n \t\t\tz.zfree = fz_zlib_free;\n \t\t\tz.opaque = ctx;\n-\t\t\tz.next_in = cbuf;\n-\t\t\tz.avail_in = ent->csize;\n \t\t\tz.next_out = ubuf->data;\n \t\t\tz.avail_out = ent->usize;\n+\t\t\tz.next_in = cbuf;\n+\t\t\tz.avail_in = fz_read(ctx, file, cbuf, ent->csize);\n+\t\t\tif (z.avail_in < ent->csize)\n+\t\t\t\tfz_warn(ctx, \"premature end of compressed data for compressed archive entry\");\n \n \t\t\tcode = inflateInit2(&z, -15);\n \t\t\tif (code != Z_OK)\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42529251-vul",
+      "digest": "sha256:0d876e926fb9299efd64a06ad8439955f12fc68561dc26ac17e2a26068ff77ca"
+    },
+    "patched": {
+      "ref": "n132/arvo:42529251-fix",
+      "digest": "sha256:7974d50841ba9760f8267b5621e6e2eabfaa01aa39b5a8bc1202d77a217d0c47"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/mupdf/thirdparty/zlib/inflate.c:874",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/mupdf/thirdparty/zlib/inflate.c:874"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

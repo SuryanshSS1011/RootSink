@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042537670",
+  "chain": "CWE-1284->CWE-787",
+  "project": "opensc",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42537670",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "02e847458369c08421fd2d5e9a16a5f272c2de9e",
+      "fix_commits": [
+        "02e847458369c08421fd2d5e9a16a5f272c2de9e"
+      ],
+      "repo": "https://github.com/OpenSC/OpenSC"
+    },
+    "patch": "diff --git a/src/libopensc/card-openpgp.c b/src/libopensc/card-openpgp.c\nindex 2c92ee597a..0012496a30 100644\n--- a/src/libopensc/card-openpgp.c\n+++ b/src/libopensc/card-openpgp.c\n@@ -2781,14 +2781,21 @@ pgp_calculate_and_store_fingerprint(sc_card_t *card, time_t ctime,\n \t/* update the blob containing fingerprints (00C5) */\n \tsc_log(card->ctx, \"Updating fingerprint blob 00C5.\");\n \tfpseq_blob = pgp_find_blob(card, 0x00C5);\n-\tif (fpseq_blob == NULL)\n-\t\tLOG_TEST_GOTO_ERR(card->ctx, SC_ERROR_OUT_OF_MEMORY, \"Cannot find blob 00C5\");\n+\tif (fpseq_blob == NULL) {\n+\t\tr = SC_ERROR_OUT_OF_MEMORY;\n+\t\tLOG_TEST_GOTO_ERR(card->ctx, r, \"Cannot find blob 00C5\");\n+\t}\n+\tif (20 * key_info->key_id > fpseq_blob->len) {\n+\t\tr = SC_ERROR_OBJECT_NOT_VALID;\n+\t\tLOG_TEST_GOTO_ERR(card->ctx, r, \"The 00C5 blob is not large enough\");\n+\t}\n \n \t/* save the fingerprints sequence */\n \tnewdata = malloc(fpseq_blob->len);\n-\tif (newdata == NULL)\n-\t\tLOG_TEST_GOTO_ERR(card->ctx, SC_ERROR_OUT_OF_MEMORY,\n-\t\t\t\"Not enough memory to update fingerprint blob 00C5\");\n+\tif (newdata == NULL) {\n+\t\tr = SC_ERROR_OUT_OF_MEMORY;\n+\t\tLOG_TEST_GOTO_ERR(card->ctx, r, \"Not enough memory to update fingerprint blob 00C5\");\n+\t}\n \n \tmemcpy(newdata, fpseq_blob->data, fpseq_blob->len);\n \t/* move p to the portion holding the fingerprint of the current key */\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42537670-vul",
+      "digest": "sha256:63adccab28c8e77f2e164eb009fd7849174a1eed852cda58df0594dafe5afcae"
+    },
+    "patched": {
+      "ref": "n132/arvo:42537670-fix",
+      "digest": "sha256:b47a52775d590335ed73db4960ce96d7cef76325bfde201153ad81d510f5c507"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/opensc/src/libopensc/card-openpgp.c:2786",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/opensc/src/libopensc/card-openpgp.c:2786"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042482491",
+  "chain": "CWE-1285->CWE-125",
+  "project": "ndpi",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42482491",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "c6acf97bfbe5ad26db3c2f5dd4d379ac674d6fb3",
+      "fix_commits": [
+        "c6acf97bfbe5ad26db3c2f5dd4d379ac674d6fb3"
+      ],
+      "repo": "https://github.com/ntop/nDPI"
+    },
+    "patch": "diff --git a/src/lib/protocols/dns.c b/src/lib/protocols/dns.c\nindex 8290ca9dc8c..460117c9680 100644\n--- a/src/lib/protocols/dns.c\n+++ b/src/lib/protocols/dns.c\n@@ -141,7 +141,7 @@ static int search_valid_dns(struct ndpi_detection_module_struct *ndpi_struct,\n       /* Leave the statement below commented necessary in case of call to ndpi_get_partial_detection() */\n       x++;\n \n-      if(flow->packet.payload[x] != '\\0') {\n+      if(x < flow->packet.payload_packet_len && flow->packet.payload[x] != '\\0') {\n \twhile((x < flow->packet.payload_packet_len)\n \t      && (flow->packet.payload[x] != '\\0')) {\n \t  x++;\ndiff --git a/src/lib/protocols/fix.c b/src/lib/protocols/fix.c\nindex c1f4d27005c..35cb1529b28 100644\n--- a/src/lib/protocols/fix.c\n+++ b/src/lib/protocols/fix.c\n@@ -33,7 +33,7 @@ void ndpi_search_fix(struct ndpi_detection_module_struct *ndpi_struct, struct nd\n   struct ndpi_packet_struct *packet = &flow->packet;\n \n   NDPI_LOG_DBG(ndpi_struct, \"search FIX\\n\");\n-  if(packet->tcp) {\n+  if(packet->tcp && packet->payload_packet_len > 5) {\n     // 8=\n     if(packet->payload[0] == 0x38 && packet->payload[1] == 0x3d) {\n       // FIX.\ndiff --git a/src/lib/protocols/ssh.c b/src/lib/protocols/ssh.c\nindex f3b50b609ac..959b9c090d3 100644\n--- a/src/lib/protocols/ssh.c\n+++ b/src/lib/protocols/ssh.c\n@@ -96,6 +96,8 @@ static void ndpi_int_ssh_add_connection(struct ndpi_detection_module_struct\n static u_int16_t concat_hash_string(struct ndpi_packet_struct *packet,\n \t\t\t\t   char *buf, u_int8_t client_hash) {\n   u_int16_t offset = 22, buf_out_len = 0;\n+  if(offset+sizeof(u_int32_t) >= packet->payload_packet_len)\n+    goto invalid_payload;\n   u_int32_t len = ntohl(*(u_int32_t*)&packet->payload[offset]);\n   offset += 4;\n \ndiff --git a/src/lib/protocols/yahoo.c b/src/lib/protocols/yahoo.c\nindex bd7f3ef6661..d80e9caee8c 100644\n--- a/src/lib/protocols/yahoo.c\n+++ b/src/lib/protocols/yahoo.c\n@@ -76,6 +76,9 @@ u_int8_t check_ymsg(const u_int8_t * payload, u_int16_t payload_packet_len)\n     if(ylen >= payload_packet_len || yahoo_len_parsed >= payload_packet_len)\n       break;\n \n+    if (payload_packet_len < yahoo_len_parsed + sizeof(struct ndpi_yahoo_header)) {\n+      return 0;\n+    }\n     yahoo = (struct ndpi_yahoo_header *) (payload + yahoo_len_parsed);\n   }\n   while(memcmp(yahoo->YMSG_str, \"YMSG\", 4) == 0);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42482491-vul",
+      "digest": "sha256:650185290773ef6aabaa72d1d3cd7ef124287e11e7d222ef0d8b175fb5629a8b"
+    },
+    "patched": {
+      "ref": "n132/arvo:42482491-fix",
+      "digest": "sha256:36ffb490638df03ab224b0d5cd278a3e26fc3a069878dc599515e1619e1fcaf3"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/ndpi/src/lib/protocols/ssh.c:99",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/ndpi/src/lib/protocols/ssh.c:99"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-965354781",
+  "chain": "CWE-456->CWE-457",
+  "project": "c-blosc2",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42488211",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/Blosc/c-blosc2/commit/f00715216733649e4ba1bcf29bc6f90f974558a2",
+      "fix_commits": [
+        "f00715216733649e4ba1bcf29bc6f90f974558a2"
+      ],
+      "repo": "https://github.com/Blosc/c-blosc2"
+    },
+    "patch": "diff --git a/internal-complibs/miniz-2.0.8/miniz.c b/internal-complibs/miniz-2.0.8/miniz.c\nindex 428ae51e9..ab0c7378f 100644\n--- a/internal-complibs/miniz-2.0.8/miniz.c\n+++ b/internal-complibs/miniz-2.0.8/miniz.c\n@@ -2663,7 +2663,7 @@ tinfl_status tinfl_decompress(tinfl_decompressor *r, const mz_uint8 *pIn_buf_nex\n                 }\n \n                 dist_from_out_buf_start = pOut_buf_cur - pOut_buf_start;\n-                if ((dist > dist_from_out_buf_start) && (decomp_flags & TINFL_FLAG_USING_NON_WRAPPING_OUTPUT_BUF))\n+                if ((dist > dist_from_out_buf_start || dist_from_out_buf_start == 0) && (decomp_flags & TINFL_FLAG_USING_NON_WRAPPING_OUTPUT_BUF))\n                 {\n                     TINFL_CR_RETURN_FOREVER(37, TINFL_STATUS_FAILED);\n                 }\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42488211-vul",
+      "digest": "sha256:6157ee3ba76314dd292e9b96a53e3dd8a2cdd3bdd9e138d964576d7c0c43c0bc"
+    },
+    "patched": {
+      "ref": "n132/arvo:42488211-fix",
+      "digest": "sha256:2104817e3f0dad9f4ee00aed88a487ae194aadae16c20dda43f7c6c7655fde50"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/c-blosc2/internal-complibs/miniz-2.0.8/miniz.c:2801",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/c-blosc2/internal-complibs/miniz-2.0.8/miniz.c:2801"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

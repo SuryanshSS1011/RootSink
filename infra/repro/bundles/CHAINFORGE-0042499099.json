@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042499099",
+  "chain": "CWE-416->CWE-125",
+  "project": "php-src",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42499099",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "53aed48e5de2493787738f2945653110c30d694f",
+      "fix_commits": [
+        "53aed48e5de2493787738f2945653110c30d694f"
+      ],
+      "repo": "https://github.com/php/php-src"
+    },
+    "patch": "From 53aed48e5de2493787738f2945653110c30d694f Mon Sep 17 00:00:00 2001\nFrom: Nikita Popov <nikita.ppv@gmail.com>\nDate: Mon, 14 Jun 2021 12:23:24 +0200\nSubject: [PATCH] Allow objects in define()\n\nThis was separately discussed in https://externals.io/message/114863,\nbut also necessary for consistency now that\nhttps://wiki.php.net/rfc/new_in_initializers has landed.\n\nCloses GH-7149.\n---\n UPGRADING                       |  2 +-\n Zend/tests/008.phpt             |  7 +----\n Zend/tests/bug37811.phpt        | 22 ++++++-------\n Zend/tests/constant_arrays.phpt | 15 ++++-----\n Zend/tests/constants_002.phpt   | 25 +++++----------\n Zend/zend_builtin_functions.c   | 56 +++++++++------------------------\n 6 files changed, 43 insertions(+), 84 deletions(-)\n\ndiff --git a/UPGRADING b/UPGRADING\nindex e16bddb0..b9cc1e2b 100644\n--- a/UPGRADING\n+++ b/UPGRADING\n@@ -195,7 +195,7 @@ PHP 8.1 UPGRADE NOTES\n     RFC: https://wiki.php.net/rfc/fibers\n   . It is now possible to use \"new ClassName()\" expressions as parameter\n     default values, static variable and global constant initializers, as well\n-    as attribute arguments.\n+    as attribute arguments. Objects can also be passed to `define()` now.\n     RFC: https://wiki.php.net/rfc/new_in_initializers\n   . Closures for callables can now be created using the syntax `myFunc(...)`,\n     which is the same as `Closure::fromCallable('myFunc')`. Yes, the `...` is\ndiff --git a/Zend/tests/008.phpt b/Zend/tests/008.phpt\nindex 1057c82b..f690cee8 100644\n--- a/Zend/tests/008.phpt\n+++ b/Zend/tests/008.phpt\n@@ -16,12 +16,7 @@ var_dump(define(\"test const\", 3));\n var_dump(define(\"test const\", 3));\n var_dump(define(\"test\", array(1)));\n var_dump(define(\"test1\", fopen(__FILE__, 'r')));\n-\n-try {\n var_dump(define(\"test2\", new stdclass));\n-} catch (TypeError $exception) {\n-    echo $exception->getMessage() . \"\\n\";\n-}\n \n var_dump(constant(\" \"));\n var_dump(constant(\"[[[\"));\n@@ -42,7 +37,7 @@ Warning: Constant test const already defined in %s on line %d\n bool(false)\n bool(true)\n bool(true)\n-define(): Argument #2 ($value) cannot be an object, stdClass given\n+bool(true)\n int(1)\n int(2)\n int(3)\ndiff --git a/Zend/tests/bug37811.phpt b/Zend/tests/bug37811.phpt\nindex 3e433a0d..b066ecd7 100644\n--- a/Zend/tests/bug37811.phpt\n+++ b/Zend/tests/bug37811.phpt\n@@ -13,21 +13,21 @@ class TestClass\n \n define(\"Bar\", new TestClass);\n var_dump(Bar);\n+var_dump((string) Bar);\n \n+define(\"Baz\", new stdClass);\n+var_dump(Baz);\n try {\n-    define(\"Baz\", new stdClass);\n-} catch (TypeError $exception) {\n-    echo $exception->getMessage() . \"\\n\";\n-}\n-\n-try {\n-    var_dump(Baz);\n-} catch (Error $exception) {\n-    echo $exception->getMessage() . \"\\n\";\n+    var_dump((string) Baz);\n+} catch (Error $e) {\n+    echo $e->getMessage(), \"\\n\";\n }\n \n ?>\n --EXPECT--\n+object(TestClass)#1 (0) {\n+}\n string(3) \"Foo\"\n-define(): Argument #2 ($value) cannot be an object, stdClass given\n-Undefined constant \"Baz\"\n+object(stdClass)#2 (0) {\n+}\n+Object of class stdClass could not be converted to string\ndiff --git a/Zend/tests/constant_arrays.phpt b/Zend/tests/constant_arrays.phpt\nindex c7e6089c..eecc7684 100644\n--- a/Zend/tests/constant_arrays.phpt\n+++ b/Zend/tests/constant_arrays.phpt\n@@ -23,12 +23,9 @@ define('QUX', $y);\n $y[0] = 3;\n var_dump($x, $y, QUX);\n \n-// ensure objects not allowed in arrays\n-try {\n-    define('ELEPHPANT', [new StdClass]);\n-} catch (TypeError $exception) {\n-    echo $exception->getMessage() . \"\\n\";\n-}\n+// objects are allowed in arrays\n+define('ELEPHPANT', [new StdClass]);\n+var_dump(ELEPHPANT);\n \n // ensure recursion doesn't crash\n $recursive = [];\n@@ -102,5 +99,9 @@ array(1) {\n   [0]=>\n   int(7)\n }\n-define(): Argument #2 ($value) cannot be an object, stdClass given\n+array(1) {\n+  [0]=>\n+  object(stdClass)#1 (0) {\n+  }\n+}\n define(): Argument #2 ($value) cannot be a recursive array\ndiff --git a/Zend/tests/constants_002.phpt b/Zend/tests/constants_002.phpt\nindex 309b9c7f..cfbfb69c 100644\n--- a/Zend/tests/constants_002.phpt\n+++ b/Zend/tests/constants_002.phpt\n@@ -3,23 +3,14 @@ Defining constants with non-scalar values\n --FILE--\n <?php\n \n-try {\n-    define('foo', new stdClass);\n-} catch (TypeError $exception) {\n-    echo $exception->getMessage() . \"\\n\";\n-}\n-\n-try {\n-    var_dump(foo);\n-} catch (Error $e) {\n-    echo $e->getMessage(), \"\\n\";\n-}\n-\n-define('foo', fopen(__FILE__, 'r'));\n+define('foo', new stdClass);\n var_dump(foo);\n \n+define('bar', fopen(__FILE__, 'r'));\n+var_dump(bar);\n+\n ?>\n---EXPECT--\n-define(): Argument #2 ($value) cannot be an object, stdClass given\n-Undefined constant \"foo\"\n-resource(5) of type (stream)\n+--EXPECTF--\n+object(stdClass)#1 (0) {\n+}\n+resource(%d) of type (stream)\ndiff --git a/Zend/zend_builtin_functions.c b/Zend/zend_builtin_functions.c\nindex c9f77b1c..c273857d 100644\n--- a/Zend/zend_builtin_functions.c\n+++ b/Zend/zend_builtin_functions.c\n@@ -420,20 +420,12 @@ static bool validate_constant_array_argument(HashTable *ht, int argument_number)\n \tGC_PROTECT_RECURSION(ht);\n \tZEND_HASH_FOREACH_VAL(ht, val) {\n \t\tZVAL_DEREF(val);\n-\t\tif (Z_REFCOUNTED_P(val)) {\n-\t\t\tif (Z_TYPE_P(val) == IS_ARRAY) {\n-\t\t\t\tif (Z_REFCOUNTED_P(val)) {\n-\t\t\t\t\tif (Z_IS_RECURSIVE_P(val)) {\n-\t\t\t\t\t\tzend_argument_value_error(argument_number, \"cannot be a recursive array\");\n-\t\t\t\t\t\tret = 0;\n-\t\t\t\t\t\tbreak;\n-\t\t\t\t\t} else if (!validate_constant_array_argument(Z_ARRVAL_P(val), argument_number)) {\n-\t\t\t\t\t\tret = 0;\n-\t\t\t\t\t\tbreak;\n-\t\t\t\t\t}\n-\t\t\t\t}\n-\t\t\t} else if (Z_TYPE_P(val) != IS_STRING && Z_TYPE_P(val) != IS_RESOURCE) {\n-\t\t\t\tzend_argument_type_error(argument_number, \"cannot be an object, %s given\", zend_zval_type_name(val));\n+\t\tif (Z_TYPE_P(val) == IS_ARRAY && Z_REFCOUNTED_P(val)) {\n+\t\t\tif (Z_IS_RECURSIVE_P(val)) {\n+\t\t\t\tzend_argument_value_error(argument_number, \"cannot be a recursive array\");\n+\t\t\t\tret = 0;\n+\t\t\t\tbreak;\n+\t\t\t} else if (!validate_constant_array_argument(Z_ARRVAL_P(val), argument_number)) {\n \t\t\t\tret = 0;\n \t\t\t\tbreak;\n \t\t\t}\n@@ -496,35 +488,15 @@ ZEND_FUNCTION(define)\n \n \tZVAL_UNDEF(&val_free);\n \n-\tswitch (Z_TYPE_P(val)) {\n-\t\tcase IS_LONG:\n-\t\tcase IS_DOUBLE:\n-\t\tcase IS_STRING:\n-\t\tcase IS_FALSE:\n-\t\tcase IS_TRUE:\n-\t\tcase IS_NULL:\n-\t\tcase IS_RESOURCE:\n-\t\t\tbreak;\n-\t\tcase IS_ARRAY:\n-\t\t\tif (Z_REFCOUNTED_P(val)) {\n-\t\t\t\tif (!validate_constant_array_argument(Z_ARRVAL_P(val), 2)) {\n-\t\t\t\t\tRETURN_THROWS();\n-\t\t\t\t} else {\n-\t\t\t\t\tcopy_constant_array(&c.value, val);\n-\t\t\t\t\tgoto register_constant;\n-\t\t\t\t}\n-\t\t\t}\n-\t\t\tbreak;\n-\t\tcase IS_OBJECT:\n-\t\t\tif (Z_OBJ_HT_P(val)->cast_object(Z_OBJ_P(val), &val_free, IS_STRING) == SUCCESS) {\n-\t\t\t\tval = &val_free;\n-\t\t\t\tbreak;\n+\tif (Z_TYPE_P(val) == IS_ARRAY) {\n+\t\tif (Z_REFCOUNTED_P(val)) {\n+\t\t\tif (!validate_constant_array_argument(Z_ARRVAL_P(val), 2)) {\n+\t\t\t\tRETURN_THROWS();\n+\t\t\t} else {\n+\t\t\t\tcopy_constant_array(&c.value, val);\n+\t\t\t\tgoto register_constant;\n \t\t\t}\n-\t\t\tZEND_FALLTHROUGH;\n-\t\tdefault:\n-\t\t\tzval_ptr_dtor(&val_free);\n-\t\t\tzend_argument_type_error(2, \"cannot be an object, %s given\", zend_zval_type_name(val));\n-\t\t\tRETURN_THROWS();\n+\t\t}\n \t}\n \n \tZVAL_COPY(&c.value, val);\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42499099-vul",
+      "digest": "sha256:7dfc2c92ac7608d309cf623c0b8addc3ce4d571032b4ac7396955b0d09a4f652"
+    },
+    "patched": {
+      "ref": "n132/arvo:42499099-fix",
+      "digest": "sha256:795e5c31a08e7deb675dcafdce4248c1f6798b5be677c27bda824748859e8881"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/php-src/ext/standard/var.c:149",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/php-src/ext/standard/var.c:149"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042484819",
+  "chain": "CWE-20->CWE-125",
+  "project": "rdkit",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42484819",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "a9010da8a4af17479c706f2cf4e8c6acdc1585ce",
+      "fix_commits": [
+        "a9010da8a4af17479c706f2cf4e8c6acdc1585ce"
+      ],
+      "repo": "https://github.com/rdkit/rdkit"
+    },
+    "patch": "diff --git a/Code/GraphMol/FileParsers/FileParserUtils.h b/Code/GraphMol/FileParsers/FileParserUtils.h\nindex 3d172662309..c99a1235cf5 100644\n--- a/Code/GraphMol/FileParsers/FileParserUtils.h\n+++ b/Code/GraphMol/FileParsers/FileParserUtils.h\n@@ -34,7 +34,7 @@ T stripSpacesAndCast(const std::string &input, bool acceptSpaces = false) {\n   }\n }\n RDKIT_FILEPARSERS_EXPORT int toInt(const std::string &input,\n-                                   bool acceptSpaces = false);\n+                                   bool acceptSpaces = true);\n RDKIT_FILEPARSERS_EXPORT double toDouble(const std::string &input,\n                                          bool acceptSpaces = true);\n \ndiff --git a/Code/GraphMol/FileParsers/MolFileParser.cpp b/Code/GraphMol/FileParsers/MolFileParser.cpp\nindex 667ea393e71..8c995bbbc2d 100644\n--- a/Code/GraphMol/FileParsers/MolFileParser.cpp\n+++ b/Code/GraphMol/FileParsers/MolFileParser.cpp\n@@ -59,24 +59,34 @@ int toInt(const std::string &input, bool acceptSpaces) {\n   int res = 0;\n   // don't need to worry about locale stuff here because\n   // we're not going to have delimiters\n-  res = strtol(input.c_str(), nullptr, 10);\n-  if (!res && !acceptSpaces && input[0] == ' ') {\n-    std::string trimmed = boost::trim_copy(input);\n-    if (trimmed.length() == 0) {\n+\n+  // sanity check on the input since strtol doesn't do it for us:\n+  const char *txt = input.c_str();\n+  while (*txt != '\\x00') {\n+    if ((*txt >= '0' && *txt <= '9') || (acceptSpaces && *txt == ' ') ||\n+        *txt == '+' || *txt == '-') {\n+      ++txt;\n+    } else {\n       throw boost::bad_lexical_cast();\n     }\n   }\n+  res = strtol(input.c_str(), nullptr, 10);\n   return res;\n }\n \n double toDouble(const std::string &input, bool acceptSpaces) {\n-  double res = atof(input.c_str());\n-  if (res == 0.0 && !acceptSpaces && input[0] == ' ') {\n-    std::string trimmed = boost::trim_copy(input);\n-    if (trimmed.length() == 0) {\n+  // sanity check on the input since strtol doesn't do it for us:\n+  const char *txt = input.c_str();\n+  // check for ',' and '.' because locale\n+  while (*txt != '\\x00') {\n+    if ((*txt >= '0' && *txt <= '9') || (acceptSpaces && *txt == ' ') ||\n+        *txt == '+' || *txt == '-' || *txt == ',' || *txt == '.') {\n+      ++txt;\n+    } else {\n       throw boost::bad_lexical_cast();\n     }\n   }\n+  double res = atof(input.c_str());\n   return res;\n }\n \n@@ -826,7 +836,7 @@ void ParseMarvinSmartsLine(RWMol *mol, const std::string &text,\n   // M  MRV SMA   1 [*;A]\n   // 01234567890123456789\n   //           1111111111\n-  if (text.substr(SMA, 3) != \"SMA\") {\n+  if (text.substr(0, 10) != \"M  MRV SMA\") {\n     return;\n   }\n \ndiff --git a/Code/GraphMol/FindRings.cpp b/Code/GraphMol/FindRings.cpp\nindex 98aab4600c4..1bc83c2f188 100644\n--- a/Code/GraphMol/FindRings.cpp\n+++ b/Code/GraphMol/FindRings.cpp\n@@ -170,6 +170,7 @@ void findSSSRforDupCands(const ROMol &mol, VECT_INT_VECT &res,\n         boost::dynamic_bitset<> activeBondsCopy = activeBonds;\n         INT_SET changed;\n         auto dmci = dupMap.find(dupCand);\n+        CHECK_INVARIANT(dmci != dupMap.end(), \"duplicate could not be found\");\n         for (int dni : dmci->second) {\n           trimBonds(dni, mol, changed, atomDegreesCopy, activeBondsCopy);\n         }\ndiff --git a/Code/GraphMol/QueryOps.cpp b/Code/GraphMol/QueryOps.cpp\nindex 468358233a5..23212f5f215 100644\n--- a/Code/GraphMol/QueryOps.cpp\n+++ b/Code/GraphMol/QueryOps.cpp\n@@ -365,8 +365,8 @@ ATOM_EQUALS_QUERY *makeAAtomQuery() {\n   res->setTypeLabel(\"A\");\n   return res;\n }\n-ATOM_EQUALS_QUERY *makeAHAtomQuery() {\n-  auto *res = rdcast<ATOM_EQUALS_QUERY *>(makeAtomNullQuery());\n+ATOM_NULL_QUERY *makeAHAtomQuery() {\n+  auto *res = makeAtomNullQuery();\n   res->setTypeLabel(\"AH\");\n   return res;\n }\ndiff --git a/Code/GraphMol/QueryOps.h b/Code/GraphMol/QueryOps.h\nindex a7d79e2631a..b19cc13c06a 100644\n--- a/Code/GraphMol/QueryOps.h\n+++ b/Code/GraphMol/QueryOps.h\n@@ -561,7 +561,7 @@ RDKIT_GRAPHMOL_EXPORT ATOM_EQUALS_QUERY *makeAtomRingBondCountQuery(int what);\n //! returns a Query for matching generic A atoms (heavy atoms)\n RDKIT_GRAPHMOL_EXPORT ATOM_EQUALS_QUERY *makeAAtomQuery();\n //! returns a Query for matching generic AH atoms (any atom)\n-RDKIT_GRAPHMOL_EXPORT ATOM_EQUALS_QUERY *makeAHAtomQuery();\n+RDKIT_GRAPHMOL_EXPORT ATOM_NULL_QUERY *makeAHAtomQuery();\n //! returns a Query for matching generic Q atoms (heteroatoms)\n RDKIT_GRAPHMOL_EXPORT ATOM_OR_QUERY *makeQAtomQuery();\n //! returns a Query for matching generic QH atoms (heteroatom or H)\ndiff --git a/Code/GraphMol/ROMol.cpp b/Code/GraphMol/ROMol.cpp\nindex 3a9240f5018..1c84fca988f 100644\n--- a/Code/GraphMol/ROMol.cpp\n+++ b/Code/GraphMol/ROMol.cpp\n@@ -204,7 +204,6 @@ Atom *ROMol::getAtomWithBookmark(int mark) {\n   PRECONDITION(d_atomBookmarks.count(mark) != 0, \"atom bookmark not found\");\n   PRECONDITION(d_atomBookmarks[mark].begin() != d_atomBookmarks[mark].end(),\n                \"atom bookmark not found\");\n-\n   return *(d_atomBookmarks[mark].begin());\n };\n \ndiff --git a/Code/GraphMol/SubstanceGroup.cpp b/Code/GraphMol/SubstanceGroup.cpp\nindex 2209f04c9ce..a4f26690ae0 100644\n--- a/Code/GraphMol/SubstanceGroup.cpp\n+++ b/Code/GraphMol/SubstanceGroup.cpp\n@@ -59,6 +59,7 @@ void SubstanceGroup::addAtomWithIdx(unsigned int idx) {\n void SubstanceGroup::addAtomWithBookmark(int mark) {\n   PRECONDITION(dp_mol, \"bad mol\");\n   Atom *atom = dp_mol->getUniqueAtomWithBookmark(mark);\n+  PRECONDITION(atom, \"atom not found\");\n   d_atoms.push_back(atom->getIdx());\n }\n \ndiff --git a/Code/RDGeneral/StreamOps.h b/Code/RDGeneral/StreamOps.h\nindex cb53ccbf123..e26bb0e64ec 100644\n--- a/Code/RDGeneral/StreamOps.h\n+++ b/Code/RDGeneral/StreamOps.h\n@@ -145,28 +145,56 @@ inline boost::uint32_t readPackedIntFromStream(std::stringstream &ss) {\n   int shift, offset;\n   char tmp;\n   ss.read(&tmp, sizeof(tmp));\n+  if (ss.fail()) {\n+    throw std::runtime_error(\"failed to read from stream\");\n+  }\n+\n   val = UCHAR(tmp);\n   offset = 0;\n   if ((val & 1) == 0) {\n     shift = 1;\n   } else if ((val & 3) == 1) {\n     ss.read((char *)&tmp, sizeof(tmp));\n+    if (ss.fail()) {\n+      throw std::runtime_error(\"failed to read from stream\");\n+    }\n+\n     val |= (UCHAR(tmp) << 8);\n     shift = 2;\n     offset = (1 << 7);\n   } else if ((val & 7) == 3) {\n     ss.read((char *)&tmp, sizeof(tmp));\n+    if (ss.fail()) {\n+      throw std::runtime_error(\"failed to read from stream\");\n+    }\n+\n     val |= (UCHAR(tmp) << 8);\n     ss.read((char *)&tmp, sizeof(tmp));\n+    if (ss.fail()) {\n+      throw std::runtime_error(\"failed to read from stream\");\n+    }\n+\n     val |= (UCHAR(tmp) << 16);\n     shift = 3;\n     offset = (1 << 7) + (1 << 14);\n   } else {\n     ss.read((char *)&tmp, sizeof(tmp));\n+    if (ss.fail()) {\n+      throw std::runtime_error(\"failed to read from stream\");\n+    }\n+\n     val |= (UCHAR(tmp) << 8);\n     ss.read((char *)&tmp, sizeof(tmp));\n+    if (ss.fail()) {\n+      throw std::runtime_error(\"failed to read from stream\");\n+    }\n+\n     val |= (UCHAR(tmp) << 16);\n     ss.read((char *)&tmp, sizeof(tmp));\n+    if (ss.fail()) {\n+      throw std::runtime_error(\"failed to read from stream\");\n+    }\n+\n     val |= (UCHAR(tmp) << 24);\n     shift = 3;\n     offset = (1 << 7) + (1 << 14) + (1 << 21);\n@@ -246,6 +274,9 @@ template <typename T>\n void streamRead(std::istream &ss, T &loc) {\n   T tloc;\n   ss.read((char *)&tloc, sizeof(T));\n+  if (ss.fail()) {\n+    throw std::runtime_error(\"failed to read from stream\");\n+  }\n   loc = EndianSwapBytes<LITTLE_ENDIAN_ORDER, HOST_ENDIAN_ORDER>(tloc);\n }\n \n@@ -260,8 +291,14 @@ inline void streamRead(std::istream &ss, std::string &what, int version) {\n   RDUNUSED_PARAM(version);\n   unsigned int l;\n   ss.read((char *)&l, sizeof(l));\n+  if (ss.fail()) {\n+    throw std::runtime_error(\"failed to read from stream\");\n+  }\n   char *buff = new char[l];\n   ss.read(buff, sizeof(char) * l);\n+  if (ss.fail()) {\n+    throw std::runtime_error(\"failed to read from stream\");\n+  }\n   what = std::string(buff, l);\n   delete[] buff;\n };\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42484819-vul",
+      "digest": "sha256:c5b0715bf19a02bf65da8c1c60fa5c84d5b3326e029ccce27df7c87b3bd80225"
+    },
+    "patched": {
+      "ref": "n132/arvo:42484819-fix",
+      "digest": "sha256:79c79e7e626edda0044c400a8ecc6df6d2353425c3dba2d7bc2f902d30e92015"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/rdkit/Code/GraphMol/FileParsers/MolFileParser.cpp:264",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/rdkit/Code/GraphMol/FileParsers/MolFileParser.cpp:264"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

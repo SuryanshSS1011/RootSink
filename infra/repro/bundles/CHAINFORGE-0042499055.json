@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042499055",
+  "chain": "CWE-20->CWE-787",
+  "project": "fmt",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42499055",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "2038bf61831eb8faede0883965364a974d1350fe",
+      "fix_commits": [
+        "2038bf61831eb8faede0883965364a974d1350fe"
+      ],
+      "repo": "https://github.com/fmtlib/fmt"
+    },
+    "patch": "diff --git a/test/fuzzing/chrono-duration.cc b/test/fuzzing/chrono-duration.cc\nindex fdad9894b6d8..11a0505a0285 100644\n--- a/test/fuzzing/chrono-duration.cc\n+++ b/test/fuzzing/chrono-duration.cc\n@@ -13,8 +13,8 @@ void invoke_inner(fmt::string_view format_str, Rep rep) {\n #if FMT_FUZZ_FORMAT_TO_STRING\n     std::string message = fmt::format(format_str, value);\n #else\n-    fmt::memory_buffer buf;\n-    fmt::format_to(buf, format_str, value);\n+    auto buf = fmt::memory_buffer();\n+    fmt::format_to(std::back_inserter(buf), format_str, value);\n #endif\n   } catch (std::exception&) {\n   }\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42499055-vul",
+      "digest": "sha256:9d2f4a1ce0f6b8be18745eb3c5a954bd676f36b58ecbdcf09314e6734df783e1"
+    },
+    "patched": {
+      "ref": "n132/arvo:42499055-fix",
+      "digest": "sha256:76663256ab69a869af8a5d3eb639b001ec96e0bdeea0478fa33f40d93ecae4e2"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "dynamic-stack-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/fmt/build/../include/fmt/core.h:680",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "dynamic-stack-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/fmt/build/../include/fmt/core.h:680"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

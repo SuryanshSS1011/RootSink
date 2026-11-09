@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042480429",
+  "chain": "CWE-416->CWE-125",
+  "project": "gdal",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42480429",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "2b10cb8700f8f187452f517bc82438d67714d4dd",
+      "fix_commits": [
+        "2b10cb8700f8f187452f517bc82438d67714d4dd"
+      ],
+      "repo": "https://github.com/OSGeo/gdal"
+    },
+    "patch": "From 2b10cb8700f8f187452f517bc82438d67714d4dd Mon Sep 17 00:00:00 2001\nFrom: Even Rouault <even.rouault@spatialys.com>\nDate: Thu, 12 Dec 2019 22:58:55 +0100\nSubject: [PATCH] PDF: fix use-after-free on some corrupted PDF files. Fixes\n https://bugs.chromium.org/p/oss-fuzz/issues/detail?id=19400\n\n---\n gdal/frmts/pdf/gdal_pdf.h     |  1 +\n gdal/frmts/pdf/pdfdataset.cpp | 32 ++++++++++++++++++++++++--------\n gdal/frmts/pdf/pdfio.cpp      |  2 --\n 3 files changed, 25 insertions(+), 10 deletions(-)\n\ndiff --git a/gdal/frmts/pdf/gdal_pdf.h b/gdal/frmts/pdf/gdal_pdf.h\nindex 9fd1cfb..0849631 100644\n--- a/gdal/frmts/pdf/gdal_pdf.h\n+++ b/gdal/frmts/pdf/gdal_pdf.h\n@@ -189,6 +189,7 @@ class PDFDataset final: public GDALPamDataset\n     friend class PDFRasterBand;\n     friend class PDFImageRasterBand;\n \n+    VSILFILE    *m_fp = nullptr;\n     PDFDataset*  poParentDS;\n \n     CPLString    osFilename;\ndiff --git a/gdal/frmts/pdf/pdfdataset.cpp b/gdal/frmts/pdf/pdfdataset.cpp\nindex 967dd8f..7cdeddf 100644\n--- a/gdal/frmts/pdf/pdfdataset.cpp\n+++ b/gdal/frmts/pdf/pdfdataset.cpp\n@@ -2629,6 +2629,10 @@ PDFDataset::~PDFDataset()\n     for(int i=0;i<nLayers;i++)\n         delete papoLayers[i];\n     CPLFree( papoLayers );\n+\n+    // Do that only after having destroyed Poppler objects\n+    if( m_fp )\n+        VSIFCloseL(m_fp);\n }\n \n /************************************************************************/\n@@ -4255,6 +4259,17 @@ PDFDataset *PDFDataset::Open( GDALOpenInfo * poOpenInfo )\n #endif\n     int nPages = 0;\n \n+    struct FilePointerKeeper\n+    {\n+        VSILFILE* m_fp;\n+\n+        FilePointerKeeper(VSILFILE* fp = nullptr): m_fp(fp) {}\n+        ~FilePointerKeeper() { if( m_fp ) VSIFCloseL(m_fp); }\n+        void reset(VSILFILE* fp) { if( m_fp ) VSIFCloseL(m_fp); m_fp = fp; }\n+        VSILFILE* release() { VSILFILE* ret = m_fp; m_fp = nullptr; return ret; }\n+    };\n+    FilePointerKeeper fpKeeper;\n+\n #ifdef HAVE_POPPLER\n   if(bUseLib.test(PDFLIB_POPPLER))\n   {\n@@ -4279,14 +4294,16 @@ PDFDataset *PDFDataset::Open( GDALOpenInfo * poOpenInfo )\n             CPLGetConfigOption(\"GDAL_PDF_PRINT_COMMANDS\", \"FALSE\")));\n     }\n \n-    while( true )\n-    {\n-        VSILFILE* fp = VSIFOpenL(pszFilename, \"rb\");\n-        if (fp == nullptr)\n-            return nullptr;\n+    VSILFILE* fp = VSIFOpenL(pszFilename, \"rb\");\n+    if (fp == nullptr)\n+        return nullptr;\n \n-        fp = (VSILFILE*)VSICreateBufferedReaderHandle((VSIVirtualHandle*)fp);\n+    fp = (VSILFILE*)VSICreateBufferedReaderHandle((VSIVirtualHandle*)fp);\n+    fpKeeper.reset(fp);\n \n+    while( true )\n+    {\n+        VSIFSeekL(fp, 0, SEEK_SET);\n         if (pszUserPwd)\n             poUserPwd = new GooString(pszUserPwd);\n \n@@ -4337,7 +4354,6 @@ PDFDataset *PDFDataset::Open( GDALOpenInfo * poOpenInfo )\n             }\n \n             PDFFreeDoc(poDocPoppler);\n-\n             return nullptr;\n         }\n         else if( poDocPoppler->isLinearized() &&\n@@ -4352,7 +4368,6 @@ PDFDataset *PDFDataset::Open( GDALOpenInfo * poOpenInfo )\n             CPLError(CE_Failure, CPLE_AppDefined, \"Invalid PDF\");\n \n             PDFFreeDoc(poDocPoppler);\n-\n             return nullptr;\n         }\n         else\n@@ -4589,6 +4604,7 @@ PDFDataset *PDFDataset::Open( GDALOpenInfo * poOpenInfo )\n     }\n \n     PDFDataset* poDS = new PDFDataset();\n+    poDS->m_fp = fpKeeper.release();\n     poDS->papszOpenOptions = CSLDuplicate(poOpenInfo->papszOpenOptions);\n     poDS->bUseLib = bUseLib;\n     poDS->osFilename = pszFilename;\ndiff --git a/gdal/frmts/pdf/pdfio.cpp b/gdal/frmts/pdf/pdfio.cpp\nindex df6edd5..49068b8 100644\n--- a/gdal/frmts/pdf/pdfio.cpp\n+++ b/gdal/frmts/pdf/pdfio.cpp\n@@ -107,8 +107,6 @@ VSIPDFFileStream::~VSIPDFFileStream()\n     if (poParent == nullptr)\n     {\n         delete poFilename;\n-        if (f)\n-            VSIFCloseL(f);\n     }\n }\n \n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42480429-vul",
+      "digest": "sha256:19b08266a1fde8526f98067446ab134521d981368d95c6d8fdc9c020fbcb2002"
+    },
+    "patched": {
+      "ref": "n132/arvo:42480429-fix",
+      "digest": "sha256:1ddafb2267234d53e46a6ca261fe0cf69793dbba98a0d62d9f669e705c2fec84"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/gdal/gdal/port/cpl_vsil.cpp:1538",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/gdal/gdal/port/cpl_vsil.cpp:1538"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

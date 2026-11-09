@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042524493",
+  "chain": "CWE-416->CWE-125",
+  "project": "php-src",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42524493",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "7790ee8736a316f037c18c436d7d2d7a1118abaf",
+      "fix_commits": [
+        "7790ee8736a316f037c18c436d7d2d7a1118abaf"
+      ],
+      "repo": "https://github.com/php/php-src"
+    },
+    "patch": "From 7790ee8736a316f037c18c436d7d2d7a1118abaf Mon Sep 17 00:00:00 2001\nFrom: Ilija Tovilo <ilija.tovilo@me.com>\nDate: Mon, 22 May 2023 22:02:27 +0200\nSubject: [PATCH] Fix concat_function use-after-free on out-of-memory error\n (#11297)\n\nIntroduced by GH-10049\n---\n Zend/tests/bug79836_4.phpt | 18 ++++++++++++++++++\n Zend/zend_operators.c      |  7 +++++--\n 2 files changed, 23 insertions(+), 2 deletions(-)\n create mode 100644 Zend/tests/bug79836_4.phpt\n\ndiff --git a/Zend/tests/bug79836_4.phpt b/Zend/tests/bug79836_4.phpt\nnew file mode 100644\nindex 00000000..2d6b862f\n--- /dev/null\n+++ b/Zend/tests/bug79836_4.phpt\n@@ -0,0 +1,18 @@\n+--TEST--\n+Bug #79836 (use-after-free in concat_function)\n+--INI--\n+memory_limit=10M\n+--FILE--\n+<?php\n+class Foo {\n+    public function __toString() {\n+        return str_repeat('a', 10);\n+    }\n+}\n+\n+$i = str_repeat('a', 5 * 1024 * 1024);\n+$e = new Foo();\n+$e .= $i;\n+?>\n+--EXPECTF--\n+Fatal error: Allowed memory size of %d bytes exhausted%s(tried to allocate %d bytes) in %s on line %d\ndiff --git a/Zend/zend_operators.c b/Zend/zend_operators.c\nindex 7e5e5ff3..0b7902d4 100644\n--- a/Zend/zend_operators.c\n+++ b/Zend/zend_operators.c\n@@ -2048,13 +2048,16 @@ has_op2_string:;\n \t\t}\n \n \t\tif (result == op1) {\n+\t\t\t/* special case, perform operations on result */\n+\t\t\tresult_str = zend_string_extend(op1_string, result_len, 0);\n+\t\t\t/* Free result after zend_string_extend(), as it may throw an out-of-memory error. If we\n+\t\t\t * free it before we would leave the released variable on the stack with shutdown trying\n+\t\t\t * to free it again. */\n \t\t\tif (free_op1_string) {\n \t\t\t\t/* op1_string will be used as the result, so we should not free it */\n \t\t\t\ti_zval_ptr_dtor(result);\n \t\t\t\tfree_op1_string = false;\n \t\t\t}\n-\t\t\t/* special case, perform operations on result */\n-\t\t\tresult_str = zend_string_extend(op1_string, result_len, 0);\n \t\t\t/* account for the case where result_str == op1_string == op2_string and the realloc is done */\n \t\t\tif (op1_string == op2_string) {\n \t\t\t\tif (free_op2_string) {\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42524493-vul",
+      "digest": "sha256:23292570356ad7961d01a6845283c0f369846a5e97bf876d8bfc2f5d9f2d7a38"
+    },
+    "patched": {
+      "ref": "n132/arvo:42524493-fix",
+      "digest": "sha256:e1db67d1ee9a72b29edc4dadb4becc780362b9e43a39c4c6176bfcb14f51dd97"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/php-src/Zend/zend_types.h:1252",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/php-src/Zend/zend_types.h:1252"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

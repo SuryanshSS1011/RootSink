@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0429645379",
+  "chain": "CWE-1284->CWE-125",
+  "project": "opencv",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "429645379",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "09309523da92614f13fcdd5b48401ed50e541827",
+      "fix_commits": [
+        "09309523da92614f13fcdd5b48401ed50e541827"
+      ],
+      "repo": "https://github.com/opencv/opencv"
+    },
+    "patch": "diff --git a/modules/imgcodecs/src/grfmt_png.cpp b/modules/imgcodecs/src/grfmt_png.cpp\nindex f0f656bd2561..c78c0efc5505 100644\n--- a/modules/imgcodecs/src/grfmt_png.cpp\n+++ b/modules/imgcodecs/src/grfmt_png.cpp\n@@ -455,6 +455,9 @@ bool  PngDecoder::readData( Mat& img )\n                         if (dop == 2)\n                             memcpy(frameNext.getPixels(), frameCur.getPixels(), imagesize);\n \n+                        if (x0 + w0 > frameCur.getWidth() || y0 + h0 > frameCur.getHeight())\n+                           return false;\n+\n                         compose_frame(frameCur.getRows(), frameRaw.getRows(), bop, x0, y0, w0, h0, mat_cur);\n                         if (!delay_den)\n                             delay_den = 100;\n@@ -849,6 +852,8 @@ void PngDecoder::row_fn(png_structp png_ptr, png_bytep new_row, png_uint_32 row_\n {\n     CV_UNUSED(pass);\n     APNGFrame* frame = (APNGFrame*)png_get_progressive_ptr(png_ptr);\n+    if(row_num >= frame->getHeight())\n+        return;\n     png_progressive_combine_row(png_ptr, frame->getRows()[row_num], new_row);\n }\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:429645379-vul",
+      "digest": "sha256:4bd817c95350ef3a7dcb2fc4852498a7d156bb77dbb065ec83ad140eaa7a8633"
+    },
+    "patched": {
+      "ref": "n132/arvo:429645379-fix",
+      "digest": "sha256:0d18f820c350b96ff99dc8f990e21deb600fd97a107b948362ffde804db18f58"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/opencv/modules/imgcodecs/src/grfmt_png.cpp:852",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/opencv/modules/imgcodecs/src/grfmt_png.cpp:852"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

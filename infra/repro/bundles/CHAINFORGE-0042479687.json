@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042479687",
+  "chain": "CWE-1285->CWE-125",
+  "project": "ndpi",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42479687",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "226a9abf2235fd9e87353ffe727babad71fb7274",
+      "fix_commits": [
+        "226a9abf2235fd9e87353ffe727babad71fb7274"
+      ],
+      "repo": "https://github.com/ntop/nDPI"
+    },
+    "patch": "diff --git a/src/lib/ndpi_main.c b/src/lib/ndpi_main.c\nindex 40bf9ae20f7..18173d55571 100644\n--- a/src/lib/ndpi_main.c\n+++ b/src/lib/ndpi_main.c\n@@ -4252,6 +4252,8 @@ ndpi_protocol ndpi_detection_giveup(struct ndpi_detection_module_struct *ndpi_st\n \tif(flow->host_server_name[0] != '\\0') {\n \t  ndpi_protocol_match_result ret_match;\n \n+\t  memset(&ret_match, 0, sizeof(ret_match));\n+\n \t  ndpi_match_host_subprotocol(ndpi_str, flow,\n \t\t\t\t      (char *)flow->host_server_name,\n \t\t\t\t      strlen((const char*)flow->host_server_name),\n@@ -5096,7 +5098,7 @@ void ndpi_parse_packet_line_info(struct ndpi_detection_module_struct *ndpi_str,\n \n   for(a = 0; (a < packet->payload_packet_len)\n \t&& (packet->parsed_lines < NDPI_MAX_PARSE_LINES_PER_PACKET); a++) {\n-    if((a + 1) == packet->payload_packet_len)\n+    if((a + 1) >= packet->payload_packet_len)\n       return; /* Return if only one byte remains (prevent invalid reads past end-of-buffer) */\n \n     if(get_u_int16_t(packet->payload, a) == ntohs(0x0d0a)) { /* If end of line char sequence CR+NL \"\\r\\n\", process line */\ndiff --git a/src/lib/protocols/irc.c b/src/lib/protocols/irc.c\nindex 5ae0e34f708..37cfbe1edc7 100644\n--- a/src/lib/protocols/irc.c\n+++ b/src/lib/protocols/irc.c\n@@ -495,7 +495,7 @@ void ndpi_search_irc_tcp(struct ndpi_detection_module_struct *ndpi_struct, struc\n \t  packet->parsed_lines = 0;\n \t}\n \tfor (i = 0; i < packet->parsed_lines; i++) {\n-\t  if (packet->line[i].ptr[0] == ':') {\n+\t  if ((packet->line[i].len > 0) && packet->line[i].ptr[0] == ':') {\n \t    flow->l4.tcp.irc_3a_counter++;\n \t    if (flow->l4.tcp.irc_3a_counter == 7) {\t/* ':' == 0x3a */\n \t      NDPI_LOG_INFO(ndpi_struct, \"found irc. 0x3a. seven times.\");\ndiff --git a/src/lib/protocols/tls.c b/src/lib/protocols/tls.c\nindex 2f4959b8175..ed92814d9ad 100644\n--- a/src/lib/protocols/tls.c\n+++ b/src/lib/protocols/tls.c\n@@ -874,7 +874,7 @@ int getSSCertificateFingerprint(struct ndpi_detection_module_struct *ndpi_struct\n       return(0); /* That's all */\n   } else if(flow->l4.tcp.tls_seen_certificate)\n     return(0); /* That's all */  \n-  else if(packet->payload_packet_len > flow->l4.tcp.tls_record_offset+7) {\n+  else if(packet->payload_packet_len > flow->l4.tcp.tls_record_offset+7+1/* +1 because we are going to read 2 bytes */) {\n     /* This is a handshake but not a certificate record */\n     u_int16_t len = ntohs(*(u_int16_t*)&packet->payload[flow->l4.tcp.tls_record_offset+7]);\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42479687-vul",
+      "digest": "sha256:736d9664b67e844abb2a3e65cb7ac607ba2c58d9dbfbf7ad7020d5cc83835401"
+    },
+    "patched": {
+      "ref": "n132/arvo:42479687-fix",
+      "digest": "sha256:5b44b1d81897a0089b58409b330af079e3edab6323766023afc869daa02f95f1"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/ndpi/src/lib/protocols/tls.c:875",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/ndpi/src/lib/protocols/tls.c:875"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

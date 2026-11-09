@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042522638",
+  "chain": "CWE-456->CWE-457",
+  "project": "libhevc",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42522638",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "a7874ebcf88499106deec0f87ebc18672fd55ea8",
+      "fix_commits": [
+        "a7874ebcf88499106deec0f87ebc18672fd55ea8"
+      ],
+      "repo": "https://github.com/ittiam-systems/libhevc"
+    },
+    "patch": "From a7874ebcf88499106deec0f87ebc18672fd55ea8 Mon Sep 17 00:00:00 2001\nFrom: Srujan Vandrangi <srujan.vandrangi@ittiam.com>\nDate: Thu, 1 Jun 2023 17:48:43 +0000\nSubject: [PATCH] encoder: hevc encoder expects allocation returns zeroed\n memory\n\nearlier, hevc encoder memory allocation wrappers were not clearing the memory.it requires explicit calling of memset functions wherever required for memory management.\n\nthis has been resolved since the memory reset happens with in the function call and returns the zeroed memory whenever it is called and does memory management efficiently.\n\nBug: 275059745\nBug: 275060007\nBug: 275802472\nBug: oss-fuzz:57397, oss-fuzz:57398, oss-fuzz:57401\nTest: hevc_enc_fuzzer\n(cherry picked from https://partner-android-review.googlesource.com/q/commit:545fd7bfd22d2894057caac2baa835a082f515fd)\n(cherry picked from https://googleplex-android-review.googlesource.com/q/commit:a0b217f1c0b58547e6732e77cff6306e9b8c7e81)\nMerged-In: I76fa9371aac6ef5fca3923435e0010cf2f13db6f\nChange-Id: I76fa9371aac6ef5fca3923435e0010cf2f13db6f\n---\n encoder/ihevce_memory_init.c |  2 --\n encoder/ihevce_plugin.c      | 17 ++++++++++++++---\n 2 files changed, 14 insertions(+), 5 deletions(-)\n\ndiff --git a/encoder/ihevce_memory_init.c b/encoder/ihevce_memory_init.c\nindex 479ab3b..b6f3b87 100644\n--- a/encoder/ihevce_memory_init.c\n+++ b/encoder/ihevce_memory_init.c\n@@ -1515,8 +1515,6 @@ void ihevce_mem_manager_init(enc_ctxt_t *ps_enc_ctxt, ihevce_hle_ctxt_t *ps_intr\n             ps_intrf_ctxt->i4_error_code = IHEVCE_CANNOT_ALLOCATE_MEMORY;\n             return;\n         }\n-\n-        memset(pu1_mem, 0, ps_memtab[ctr].i4_mem_size);\n     }\n \n     /* --------------------------------------------------------------------- */\ndiff --git a/encoder/ihevce_plugin.c b/encoder/ihevce_plugin.c\nindex 00637fa..26f3ba4 100644\n--- a/encoder/ihevce_plugin.c\n+++ b/encoder/ihevce_plugin.c\n@@ -112,6 +112,8 @@\n *\n * \\brief\n *    Memory manager specific alloc function\n+*    it expects to reset the allocated memory and provide the zero initialised\n+*    memory whenever this function getting called\n *\n * \\param[in] pv_handle : handle to memory manager\n *                        (currently not required can be set to null)\n@@ -158,6 +160,10 @@ void mem_mngr_alloc(void *pv_handle, ihevce_sys_api_t *ps_sys_api, iv_mem_rec_t\n             ps_sys_api->pv_cb_handle, \"IHEVCE ERROR: Unable to allocate memory\\n\");\n         ASSERT(0);\n     }\n+    else\n+    {\n+        memset(ps_memtab->pv_base, 0, ps_memtab->i4_mem_size);\n+    }\n     return;\n }\n \n@@ -167,6 +173,8 @@ void mem_mngr_alloc(void *pv_handle, ihevce_sys_api_t *ps_sys_api, iv_mem_rec_t\n *\n * \\brief\n *    common memory allocate function should be used across all threads\n+*    it expects to reset the allocated memory and return the zero initialised\n+*    memory pointer whenever this function getting called\n *\n * \\param[in] pv_handle : handle to memory manager\n *                        (currently not required can be set to null)\n@@ -183,7 +191,12 @@ void mem_mngr_alloc(void *pv_handle, ihevce_sys_api_t *ps_sys_api, iv_mem_rec_t\n void *memory_alloc(void *pv_handle, UWORD32 u4_size)\n {\n     (void)pv_handle;\n-    return (malloc(u4_size));\n+    void *pv_buf = malloc(u4_size);\n+    if(pv_buf)\n+    {\n+        memset(pv_buf, 0, u4_size);\n+    }\n+    return (pv_buf);\n }\n \n /*!\n@@ -629,7 +642,6 @@ IHEVCE_PLUGIN_STATUS_T ihevce_init(ihevce_static_cfg_params_t *ps_params, void *\n             ps_sys_api->pv_cb_handle, \"IHEVCE ERROR: Error in Plugin initialization\\n\");\n         return (IHEVCE_EFAIL);\n     }\n-    memset(ps_ctxt, 0, sizeof(plugin_ctxt_t));\n \n     /* initialise memory call backs */\n     ps_ctxt->ihevce_mem_alloc = memory_alloc;\n@@ -754,7 +766,6 @@ IHEVCE_PLUGIN_STATUS_T ihevce_init(ihevce_static_cfg_params_t *ps_params, void *\n                 \"IHEVCE ERROR: Error in Plugin HLE memory initialization\\n\");\n             return (IHEVCE_EFAIL);\n         }\n-        memset(ps_interface_ctxt, 0, sizeof(ihevce_hle_ctxt_t));\n         ps_interface_ctxt->i4_size = sizeof(ihevce_hle_ctxt_t);\n \n         ps_ctxt->pv_hle_interface_ctxt = ps_interface_ctxt;\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42522638-vul",
+      "digest": "sha256:fcab5a870a537f400d0001a0a4caaab6b09c7335c469ad15ba3e9a2ea012f10f"
+    },
+    "patched": {
+      "ref": "n132/arvo:42522638-fix",
+      "digest": "sha256:555474bb0c4c978b3f21fc4241a40f2b1260db22d00e80d85ba24beadeb953cf"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/libhevc/encoder/ihevce_plugin.c:523",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/libhevc/encoder/ihevce_plugin.c:523"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042515771",
+  "chain": "CWE-456->CWE-457",
+  "project": "hunspell",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42515771",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "018bf1c05542c30d954a8cfc0bd40f20e0a0ade4",
+      "fix_commits": [
+        "018bf1c05542c30d954a8cfc0bd40f20e0a0ade4"
+      ],
+      "repo": "https://github.com/hunspell/hunspell"
+    },
+    "patch": "From 018bf1c05542c30d954a8cfc0bd40f20e0a0ade4 Mon Sep 17 00:00:00 2001\nFrom: =?UTF-8?q?Caol=C3=A1n=20McNamara?= <caolanm@redhat.com>\nDate: Fri, 9 Sep 2022 09:48:37 +0100\nSubject: [PATCH] ofz#51147 Use-of-uninitialized-value with bad .aff\n\n---\n src/hunspell/hashmgr.cxx | 3 ++-\n 1 file changed, 2 insertions(+), 1 deletion(-)\n\ndiff --git a/src/hunspell/hashmgr.cxx b/src/hunspell/hashmgr.cxx\nindex 4e43d83..3983bc8 100644\n--- a/src/hunspell/hashmgr.cxx\n+++ b/src/hunspell/hashmgr.cxx\n@@ -228,7 +228,8 @@ int HashMgr::add_word(const std::string& in_word,\n   }\n \n   char* hpw = hp->word;\n-  strcpy(hpw, word->c_str());\n+  memcpy(hpw, word->data(), word->size());\n+  hpw[word->size()] = 0;\n \n   int i = hash(hpw);\n \n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42515771-vul",
+      "digest": "sha256:9dc51ae9cf626535d497548c2dc5c600989652868f8dc0a5d122fd330b84cc5b"
+    },
+    "patched": {
+      "ref": "n132/arvo:42515771-fix",
+      "digest": "sha256:497f4379d87845475c6b37257424e18972ef3cc2f650ea1e95249647af15dbf7"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/hunspell/src/hunspell/affentry.cxx:560",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/hunspell/src/hunspell/affentry.cxx:560"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

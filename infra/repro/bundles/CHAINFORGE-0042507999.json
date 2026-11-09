@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042507999",
+  "chain": "CWE-20->CWE-787",
+  "project": "gpac",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42507999",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "3dbe11b37d65c8472faf0654410068e5500b3adb",
+      "fix_commits": [
+        "3dbe11b37d65c8472faf0654410068e5500b3adb"
+      ],
+      "repo": "https://github.com/gpac/gpac"
+    },
+    "patch": "diff --git a/src/isomedia/box_code_3gpp.c b/src/isomedia/box_code_3gpp.c\nindex 3f9ff05692..928a5575f2 100644\n--- a/src/isomedia/box_code_3gpp.c\n+++ b/src/isomedia/box_code_3gpp.c\n@@ -1128,20 +1128,12 @@ void diST_box_del(GF_Box *s)\n \n GF_Err diST_box_read(GF_Box *s, GF_BitStream *bs)\n {\n-\tu32 i;\n-\tchar str[1024];\n \tGF_DIMSScriptTypesBox *p = (GF_DIMSScriptTypesBox *)s;\n \n-\ti=0;\n-\tstr[0]=0;\n-\twhile (1) {\n-\t\tstr[i] = gf_bs_read_u8(bs);\n-\t\tif (!str[i]) break;\n-\t\ti++;\n-\t}\n-\tISOM_DECREASE_SIZE(p, i);\n-\n-\tp->content_script_types = gf_strdup(str);\n+\tp->content_script_types = gf_malloc(sizeof(char) * (s->size+1));\n+\tif (!p->content_script_types) return GF_OUT_OF_MEM;\n+\tgf_bs_read_data(bs, p->content_script_types, s->size);\n+\tp->content_script_types[s->size] = 0;\n \treturn GF_OK;\n }\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42507999-vul",
+      "digest": "sha256:1328aceddcab2d5691f1088bb964e45f13a46000d91db684acf818aa586aa832"
+    },
+    "patched": {
+      "ref": "n132/arvo:42507999-fix",
+      "digest": "sha256:271d87e74339f87a31620c68cc59a588b9038b64c431d6d6bc54cb0752f28394"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/gpac/src/isomedia/box_code_3gpp.c:1116",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/gpac/src/isomedia/box_code_3gpp.c:1116"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

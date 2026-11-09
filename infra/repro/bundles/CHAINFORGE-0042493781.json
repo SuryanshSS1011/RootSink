@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042493781",
+  "chain": "CWE-20->CWE-125",
+  "project": "libredwg",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42493781",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "df82e56d5561e05529dff3369106f08a647b8a8a",
+      "fix_commits": [
+        "df82e56d5561e05529dff3369106f08a647b8a8a"
+      ],
+      "repo": "https://github.com/LibreDWG/libredwg"
+    },
+    "patch": "diff --git a/examples/llvmfuzz.c b/examples/llvmfuzz.c\nindex 9a391d8270..878cdcad58 100644\n--- a/examples/llvmfuzz.c\n+++ b/examples/llvmfuzz.c\n@@ -47,8 +47,8 @@ static int enforce_null_termination(Bit_Chain *dat, bool enforce)\n     if (!dat->size)\n       return 0;\n     c = dat->chain[dat->size - 1];\n-    // Allow \\n termination\n-    if (!enforce && (c == '\\0' || c == '\\n'))\n+    // Allow \\n termination without \\0 in DXF? No, still crashes\n+    if (!enforce && ((c == '\\n' && c+1 == '\\0') || c == '\\0'))\n       return 0;\n #ifdef STANDALONE\n     fprintf (stderr, \"llvmfuzz_standalone: enforce libfuzzer buffer NULL termination\\n\");\ndiff --git a/src/in_dxf.c b/src/in_dxf.c\nindex e45b82fbff..6660307350 100644\n--- a/src/in_dxf.c\n+++ b/src/in_dxf.c\n@@ -253,8 +253,8 @@ dxf_skip_ws (Bit_Chain *dat)\n       dat->byte = dat->size;                                                  \\\n       return (rettype)ret;                                                    \\\n     }                                                                         \\\n-  else                                                                        \\\n-    num = strtol ((char *)&dat->chain[dat->byte], &endptr, 10);               \\\n+  errno = 0;                                                                  \\\n+  num = strtol ((char *)&dat->chain[dat->byte], &endptr, 10);                 \\\n   if (endptr)                                                                 \\\n     {                                                                         \\\n       if (endptr == (char *)&dat->chain[dat->byte])                           \\\n@@ -12681,6 +12681,12 @@ dwg_read_dxf (Bit_Chain *restrict dat, Dwg_Data *restrict dwg)\n       LOG_ERROR (\"This is a DWG, not a DXF\\n\");\n       return DWG_ERR_INVALIDDWG;\n     }\n+  /* Fuzzers like to skip zero-termination. And fail loudly on strtol */\n+  if (!memchr (&dat->chain[dat->size], '\\0', 2))\n+    {\n+      LOG_ERROR (\"This buffer is not zero-terminated\\n\");\n+      return DWG_ERR_INVALIDDWG;\n+    }\n \n   dat->opts |= DWG_OPTS_INDXF;\n   dwg->opts |= DWG_OPTS_INDXF;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42493781-vul",
+      "digest": "sha256:2e14580503a968d66671bda41f3616d2da17e60ad68afe94c52e1f5a624dffc3"
+    },
+    "patched": {
+      "ref": "n132/arvo:42493781-fix",
+      "digest": "sha256:66052a1b77cab9d9425e934adfd7d2270f72238ba4c0d082fe8d2a5088510007"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/libredwg/src/in_dxf.c:308",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/libredwg/src/in_dxf.c:308"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

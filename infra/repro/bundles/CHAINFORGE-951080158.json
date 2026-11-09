@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-951080158",
+  "chain": "CWE-843->CWE-119",
+  "project": "arrow",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "422504831",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/apache/arrow/commit/19fb7bbfae61a52faa21934516310fedc8aaefd2",
+      "fix_commits": [
+        "19fb7bbfae61a52faa21934516310fedc8aaefd2"
+      ],
+      "repo": "https://github.com/apache/arrow"
+    },
+    "patch": "diff --git a/cpp/src/parquet/metadata.cc b/cpp/src/parquet/metadata.cc\nindex 81567ba75b5c..97e502f46be7 100644\n--- a/cpp/src/parquet/metadata.cc\n+++ b/cpp/src/parquet/metadata.cc\n@@ -122,7 +122,13 @@ static std::shared_ptr<geospatial::GeoStatistics> MakeColumnGeometryStats(\n \n std::shared_ptr<Statistics> MakeColumnStats(const format::ColumnMetaData& meta_data,\n                                             const ColumnDescriptor* descr) {\n-  switch (static_cast<Type::type>(meta_data.type)) {\n+  auto metadata_type = LoadEnumSafe(&meta_data.type);\n+  if (descr->physical_type() != metadata_type) {\n+    throw ParquetException(\n+        \"ColumnMetaData type does not match ColumnDescriptor physical type: \" +\n+        TypeToString(metadata_type) + \" vs. \" + TypeToString(descr->physical_type()));\n+  }\n+  switch (metadata_type) {\n     case Type::BOOLEAN:\n       return MakeTypedColumnStats<BooleanType>(meta_data, descr);\n     case Type::INT32:\n@@ -1541,7 +1547,7 @@ bool ApplicationVersion::VersionEq(const ApplicationVersion& other_version) cons\n // parquet-mr/parquet-column/src/main/java/org/apache/parquet/CorruptStatistics.java\n // PARQUET-686 has more discussion on statistics\n bool ApplicationVersion::HasCorrectStatistics(Type::type col_type,\n-                                              EncodedStatistics& statistics,\n+                                              const EncodedStatistics& statistics,\n                                               SortOrder::type sort_order) const {\n   // parquet-cpp version 1.3.0 and parquet-mr 1.10.0 onwards stats are computed\n   // correctly for all types\ndiff --git a/cpp/src/parquet/metadata.h b/cpp/src/parquet/metadata.h\nindex f7b7bf9aac92..3380adbf56aa 100644\n--- a/cpp/src/parquet/metadata.h\n+++ b/cpp/src/parquet/metadata.h\n@@ -72,7 +72,7 @@ class PARQUET_EXPORT ApplicationVersion {\n   bool VersionEq(const ApplicationVersion& other_version) const;\n \n   // Checks if the Version has the correct statistics for a given column\n-  bool HasCorrectStatistics(Type::type primitive, EncodedStatistics& statistics,\n+  bool HasCorrectStatistics(Type::type primitive, const EncodedStatistics& statistics,\n                             SortOrder::type sort_order = SortOrder::SIGNED) const;\n };\n \ndiff --git a/testing b/testing\nindex d2a137123034..ab28408180af 160000\n--- a/testing\n+++ b/testing\n@@ -1 +1 @@\n-Subproject commit d2a13712303498963395318a4eb42872e66aead7\n+Subproject commit ab28408180afb1e46621732dc6cbf0f1c44ed444\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:422504831-vul",
+      "digest": "sha256:fa498b8d469fcf52db2ae102b1b58ff7e346b3474c7a894bb1a5adbd45cc08d5"
+    },
+    "patched": {
+      "ref": "n132/arvo:422504831-fix",
+      "digest": "sha256:2515bc2c8880202657bd72a04ca29c5e3feea4bff5e6939a7fc5a198669baabd"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "crash_site": "/src/arrow/cpp/src/parquet/statistics.h:377",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 843,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 119,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "site": "/src/arrow/cpp/src/parquet/statistics.h:377"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

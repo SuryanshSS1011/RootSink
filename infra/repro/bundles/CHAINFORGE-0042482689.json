@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042482689",
+  "chain": "CWE-1285->CWE-787",
+  "project": "leptonica",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42482689",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "06b279a676ce5928f86e61329c27d22b957c1374",
+      "fix_commits": [
+        "06b279a676ce5928f86e61329c27d22b957c1374"
+      ],
+      "repo": "https://github.com/DanBloomberg/leptonica"
+    },
+    "patch": "diff --git a/src/tiffio.c b/src/tiffio.c\nindex 1d3e1e8b9..82975a5f9 100644\n--- a/src/tiffio.c\n+++ b/src/tiffio.c\n@@ -618,6 +618,11 @@ PIXCMAP   *cmap;\n         }\n \n         if (spp == 1) {  /* 8 bpp, old jpeg format */\n+            if (pixGetDepth(pix) != 8) {\n+                LEPT_FREE(tiffdata);\n+                pixDestroy(&pix);\n+                return (PIX *)ERROR_PTR(\"invalid ojpeg file\", procName, NULL);\n+            }\n             pixdata = pixGetData(pix);\n             for (i = 0; i < h; i++) {\n                 line = pixdata + i * wpl;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42482689-vul",
+      "digest": "sha256:901a0847df99c22544caa976ce1d48fc1352e2ac6de45360ee0e374d240968a3"
+    },
+    "patched": {
+      "ref": "n132/arvo:42482689-fix",
+      "digest": "sha256:7dd3a6561f1d3e72fcee14095984b2846fc2fdc189b008d540895053405bf07f"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/leptonica/src/tiffio.c:627",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/leptonica/src/tiffio.c:627"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

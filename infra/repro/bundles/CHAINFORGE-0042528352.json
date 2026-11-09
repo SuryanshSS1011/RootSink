@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042528352",
+  "chain": "CWE-416->CWE-125",
+  "project": "libdwarf",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42528352",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "cd741379bd0203a0875b413542d5f982606ae637",
+      "fix_commits": [
+        "cd741379bd0203a0875b413542d5f982606ae637"
+      ],
+      "repo": "https://github.com/davea42/libdwarf-code"
+    },
+    "patch": "From cd741379bd0203a0875b413542d5f982606ae637 Mon Sep 17 00:00:00 2001\nFrom: David Anderson <davea42@linuxmail.org>\nDate: Sat, 23 Sep 2023 09:39:12 -0700\nSubject: [PATCH] Fixing DW202309-001 ossfuzz 62547, a bug which has been in\n the code for many years.\n\nThe symptom was use-after-free in calling\ndwarf_finish(), but provoked by code\nin dwarf_get_fde_for_die().\n    modified:   src/lib/libdwarf/dwarf_alloc.c\n\tmodified:   src/lib/libdwarf/dwarf_frame.c\n\tmodified:   src/lib/libdwarf/dwarf_frame2.c\n\tmodified:   src/lib/libdwarf/dwarf_opaque.h\n---\n src/lib/libdwarf/dwarf_alloc.c  |  2 ++\n src/lib/libdwarf/dwarf_frame.c  | 17 +++++++++++++----\n src/lib/libdwarf/dwarf_frame2.c | 21 ++++++++++++++++-----\n src/lib/libdwarf/dwarf_opaque.h |  1 +\n 4 files changed, 32 insertions(+), 9 deletions(-)\n\ndiff --git a/src/lib/libdwarf/dwarf_alloc.c b/src/lib/libdwarf/dwarf_alloc.c\nindex 6bb4c1e..cb5642f 100644\n--- a/src/lib/libdwarf/dwarf_alloc.c\n+++ b/src/lib/libdwarf/dwarf_alloc.c\n@@ -1140,7 +1140,9 @@ _dwarf_free_all_of_one_debug(Dwarf_Debug dbg)\n     /*  de_alloc_tree might be NULL if\n         global_de_alloc_tree_on is zero. */\n     if (dbg->de_alloc_tree) {\n+        dbg->de_in_tdestroy = TRUE;\n         dwarf_tdestroy(dbg->de_alloc_tree,tdestroy_free_node);\n+        dbg->de_in_tdestroy = FALSE;\n         dbg->de_alloc_tree = 0;\n     }\n     _dwarf_free_static_errlist();\ndiff --git a/src/lib/libdwarf/dwarf_frame.c b/src/lib/libdwarf/dwarf_frame.c\nindex 0cf00cd..5d5311c 100644\n--- a/src/lib/libdwarf/dwarf_frame.c\n+++ b/src/lib/libdwarf/dwarf_frame.c\n@@ -2160,7 +2160,9 @@ dwarf_get_fde_for_die(Dwarf_Debug dbg,\n     }\n     /* DW_DLV_OK */\n \n-    /*  This is the only situation this is set. */\n+    /*  This is the only situation this is set. \n+        and is really dangerous. as fde and cie\n+        are set for dealloc by dwarf_finish(). */\n     new_fde->fd_fde_owns_cie = TRUE;\n     /*  Now read the cie corresponding to the fde,\n         _dwarf_read_cie_fde_prefix checks\n@@ -3416,14 +3418,21 @@ _dwarf_frame_destructor(void *frame)\n     struct Dwarf_Frame_s *fp = frame;\n     _dwarf_free_fde_table(fp);\n }\n+\n void\n _dwarf_fde_destructor(void *f)\n {\n     struct Dwarf_Fde_s *fde = f;\n+\n     if (fde->fd_fde_owns_cie) {\n-        /*  This is just for dwarf_get_fde_for_die() */\n-        dwarf_dealloc(fde->fd_dbg,fde->fd_cie,DW_DLA_CIE);\n-        fde->fd_cie = 0;\n+        Dwarf_Debug dbg = fde->fd_dbg;\n+\n+        if (!dbg->de_in_tdestroy) {\n+            /*  This is just for dwarf_get_fde_for_die() and\n+                must not be applied in alloc tree destruction. */\n+            dwarf_dealloc(fde->fd_dbg,fde->fd_cie,DW_DLA_CIE);\n+            fde->fd_cie = 0;\n+        }\n     }\n     if (fde->fd_have_fde_tab) {\n         _dwarf_free_fde_table(&fde->fd_fde_table);\ndiff --git a/src/lib/libdwarf/dwarf_frame2.c b/src/lib/libdwarf/dwarf_frame2.c\nindex 97cc955..83342ec 100644\n--- a/src/lib/libdwarf/dwarf_frame2.c\n+++ b/src/lib/libdwarf/dwarf_frame2.c\n@@ -975,10 +975,12 @@ _dwarf_create_cie_from_after_start(Dwarf_Debug dbg,\n             &gnu_personality_handler_addr,\n             error);\n         if (resz != DW_DLV_OK) {\n-            _dwarf_error_string(dbg, error,\n-                DW_DLE_FRAME_AUGMENTATION_UNKNOWN,\n-                \"DW_DLE_FRAME_AUGMENTATION_UNKNOWN \"\n-                \" Reading gnu aug encodings failed\");\n+            if (resz == DW_DLV_ERROR) {\n+                _dwarf_error_string(dbg, error,\n+                    DW_DLE_FRAME_AUGMENTATION_UNKNOWN,\n+                    \"DW_DLE_FRAME_AUGMENTATION_UNKNOWN \"\n+                    \" Reading gnu aug encodings failed\");\n+            } /* DW_DLV_NO_ENTRY seems impossible. */\n             return resz;\n         }\n         frame_ptr += adlen;\n@@ -1119,7 +1121,7 @@ _dwarf_create_fde_from_after_start(Dwarf_Debug dbg,\n             address_range in the FDE are read according to the CIE\n             augmentation string instructions.  */\n \n-        {\n+        if (cieptr) {\n             Dwarf_Small *fp_updated = 0;\n             int res = _dwarf_read_encoded_ptr(dbg,\n                 section_pointer,\n@@ -1150,6 +1152,15 @@ _dwarf_create_fde_from_after_start(Dwarf_Debug dbg,\n                 return res;\n             }\n             frame_ptr = fp_updated;\n+        } else {\n+            _dwarf_error_string(dbg, error,\n+                    DW_DLE_AUG_DATA_LENGTH_BAD,\n+                    \"DW_DLE_AUG_DATA_LENGTH_BAD: The \"\n+                    \"gcc augmentation cannot be read, \"\n+                    \"as no cie pointer is available \"\n+                    \"to get critical data, \"\n+                    \"Corrupt DWARF\");\n+            return DW_DLV_ERROR;\n         }\n         {\n             Dwarf_Unsigned adlen = 0;\ndiff --git a/src/lib/libdwarf/dwarf_opaque.h b/src/lib/libdwarf/dwarf_opaque.h\nindex 9e6dc06..721cb98 100644\n--- a/src/lib/libdwarf/dwarf_opaque.h\n+++ b/src/lib/libdwarf/dwarf_opaque.h\n@@ -594,6 +594,7 @@ struct Dwarf_Debug_s {\n         under de_obj_file. */\n     int  de_fd;\n     char de_owns_fd;\n+    char de_in_tdestroy; /* for de_alloc_tree  DW202309-001 */\n     /* DW_PATHSOURCE_BASIC or MACOS or DEBUGLINK */\n     unsigned char de_path_source;\n     /*  de_path is only set automatically if dwarf_init_path()\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42528352-vul",
+      "digest": "sha256:2ee1af3b631e1f1d51c1533cf516936250ba3cf28011f58164cdc87bf4637939"
+    },
+    "patched": {
+      "ref": "n132/arvo:42528352-fix",
+      "digest": "sha256:15a82ecceaecc878eee6a1c987d150f04de7b9605a411f178eca029348af48d5"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/libdwarf/src/lib/libdwarf/dwarf_alloc.c:872",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/libdwarf/src/lib/libdwarf/dwarf_alloc.c:872"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

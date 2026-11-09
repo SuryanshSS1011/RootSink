@@ -1,0 +1,77 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042479018",
+  "chain": "CWE-190->CWE-787",
+  "project": "imagemagick",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42479018",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "3758ba36d7ba381ce28920715a6099c2a06775ba",
+      "fix_commits": [
+        "3758ba36d7ba381ce28920715a6099c2a06775ba"
+      ],
+      "repo": "https://github.com/imagemagick/imagemagick"
+    },
+    "patch": "diff --git a/MagickCore/draw.c b/MagickCore/draw.c\nindex 8ff77fc4903..76e07026766 100644\n--- a/MagickCore/draw.c\n+++ b/MagickCore/draw.c\n@@ -5030,10 +5030,10 @@ RestoreMSCWarning\n \n static inline double ConstrainCoordinate(double x)\n {\n-  if (x < (double) -SSIZE_MAX)\n-    return((double) -SSIZE_MAX);\n-  if (x > (double) SSIZE_MAX)\n-    return((double) SSIZE_MAX);\n+  if (x < (double) -(SSIZE_MAX-512))\n+    return((double) -(SSIZE_MAX-512));\n+  if (x > (double) (SSIZE_MAX-512))\n+    return((double) (SSIZE_MAX-512));\n   return(x);\n }\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42479018-vul",
+      "digest": "sha256:8dfc60664fb761e29fa5b3e06e3e06276e67e66eb6afcce786787b03e42276dc"
+    },
+    "patched": {
+      "ref": "n132/arvo:42479018-fix",
+      "digest": "sha256:cc58fd32de43af332c703fd12bdd2b0f7f7e3af33d6c392e2064dde5e8fd836f"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/imagemagick/MagickCore/cache.c:3044",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 190,
+      "role": "source",
+      "witness": {
+        "method": "ubsan-rebuild",
+        "recipe": "SANITIZER=undefined compile && $ENTRYPOINT",
+        "ubsan_options": "print_stacktrace=1:halt_on_error=0:silence_unsigned_overflow=0:symbolize=1"
+      },
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/imagemagick/MagickCore/cache.c:3044"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042508731",
+  "chain": "CWE-456->CWE-457",
+  "project": "systemd",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42508731",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "ff58f2ae2a981bf106ed438887f989b1edd08174",
+      "fix_commits": [
+        "ff58f2ae2a981bf106ed438887f989b1edd08174"
+      ],
+      "repo": "https://github.com/systemd/systemd"
+    },
+    "patch": "From ff58f2ae2a981bf106ed438887f989b1edd08174 Mon Sep 17 00:00:00 2001\nFrom: Yu Watanabe <watanabe.yu+github@gmail.com>\nDate: Sun, 17 Apr 2022 13:07:38 +0900\nSubject: [PATCH] sd-device: verify new syspath on renaming\n\n---\n src/libsystemd/sd-device/device-private.c | 20 ++++++++++++++------\n 1 file changed, 14 insertions(+), 6 deletions(-)\n\ndiff --git a/src/libsystemd/sd-device/device-private.c b/src/libsystemd/sd-device/device-private.c\nindex de12ad7..90dcd3a 100644\n--- a/src/libsystemd/sd-device/device-private.c\n+++ b/src/libsystemd/sd-device/device-private.c\n@@ -747,20 +747,28 @@ int device_new_from_watch_handle_at(sd_device **ret, int dirfd, int wd) {\n }\n \n int device_rename(sd_device *device, const char *name) {\n-        _cleanup_free_ char *dirname = NULL;\n-        const char *new_syspath, *interface;\n+        _cleanup_free_ char *new_syspath = NULL;\n+        const char *interface;\n         int r;\n \n         assert(device);\n         assert(name);\n \n-        dirname = dirname_malloc(device->syspath);\n-        if (!dirname)\n+        if (!filename_is_valid(name))\n+                return -EINVAL;\n+\n+        r = path_extract_directory(device->syspath, &new_syspath);\n+        if (r < 0)\n+                return r;\n+\n+        if (!path_extend(&new_syspath, name))\n                 return -ENOMEM;\n \n-        new_syspath = prefix_roota(dirname, name);\n+        if (!path_is_safe(new_syspath))\n+                return -EINVAL;\n \n-        /* the user must trust that the new name is correct */\n+        /* At the time this is called, the renamed device may not exist yet. Hence, we cannot validate\n+         * the new syspath. */\n         r = device_set_syspath(device, new_syspath, false);\n         if (r < 0)\n                 return r;\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42508731-vul",
+      "digest": "sha256:1264463e0b466b202a121f3cef16ff3bc406357d11ec9747cca0efcd8b738160"
+    },
+    "patched": {
+      "ref": "n132/arvo:42508731-fix",
+      "digest": "sha256:8e56991d1adcf1636be4d0f6e3e12b97324be14d7060d550d1cf72c30f0aec9b"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": null,
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": null
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042494623",
+  "chain": "CWE-416->CWE-125",
+  "project": "selinux",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42494623",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "c49a8ea09501ad66e799ea41b8154b6770fec2c8",
+      "fix_commits": [
+        "c49a8ea09501ad66e799ea41b8154b6770fec2c8"
+      ],
+      "repo": "https://github.com/SELinuxProject/selinux"
+    },
+    "patch": "From c49a8ea09501ad66e799ea41b8154b6770fec2c8 Mon Sep 17 00:00:00 2001\nFrom: James Carter <jwcart2@gmail.com>\nDate: Thu, 8 Apr 2021 13:32:06 -0400\nSubject: [PATCH] libsepol/cil: cil_reset_classperms_set() should not reset\n classpermission\n\nIn struct cil_classperms_set, the set field is a pointer to a\nstruct cil_classpermission which is looked up in the symbol table.\nSince the cil_classperms_set does not create the cil_classpermission,\nit should not reset it.\n\nSet the set field to NULL instead of resetting the classpermission\nthat it points to.\n\nSigned-off-by: James Carter <jwcart2@gmail.com>\n---\n libsepol/cil/src/cil_reset_ast.c | 6 +++++-\n 1 file changed, 5 insertions(+), 1 deletion(-)\n\ndiff --git a/libsepol/cil/src/cil_reset_ast.c b/libsepol/cil/src/cil_reset_ast.c\nindex 89f91e5..1d9ca70 100644\n--- a/libsepol/cil/src/cil_reset_ast.c\n+++ b/libsepol/cil/src/cil_reset_ast.c\n@@ -59,7 +59,11 @@ static void cil_reset_classpermission(struct cil_classpermission *cp)\n \n static void cil_reset_classperms_set(struct cil_classperms_set *cp_set)\n {\n-\tcil_reset_classpermission(cp_set->set);\n+\tif (cp_set == NULL) {\n+\t\treturn;\n+\t}\n+\n+\tcp_set->set = NULL;\n }\n \n static inline void cil_reset_classperms_list(struct cil_list *cp_list)\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42494623-vul",
+      "digest": "sha256:6e6d3ac995aa36c23f1122395260109c7363a597a9131bbafc4b77f5046a6528"
+    },
+    "patched": {
+      "ref": "n132/arvo:42494623-fix",
+      "digest": "sha256:ac685ee6bfe9ef8bf86d83e07c019a32ddd653080e24cbe3cba19e7b8bda845e"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/selinux/libsepol/src/../cil/src/cil_reset_ast.c:57",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/selinux/libsepol/src/../cil/src/cil_reset_ast.c:57"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

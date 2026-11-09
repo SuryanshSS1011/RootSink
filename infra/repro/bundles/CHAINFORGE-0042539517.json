@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042539517",
+  "chain": "CWE-456->CWE-457",
+  "project": "imagemagick",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42539517",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "278785e14573a2d86eea270c74e6b37de68bd976",
+      "fix_commits": [
+        "278785e14573a2d86eea270c74e6b37de68bd976"
+      ],
+      "repo": "https://github.com/imagemagick/imagemagick"
+    },
+    "patch": "From 278785e14573a2d86eea270c74e6b37de68bd976 Mon Sep 17 00:00:00 2001\nFrom: Dirk Lemstra <dirk@lemstra.org>\nDate: Sat, 24 Nov 2018 07:40:22 +0100\nSubject: [PATCH] Removed incorrect detection of the alpha channel for the\n merged image.\n\n---\n coders/psd.c | 7 -------\n 1 file changed, 7 deletions(-)\n\ndiff --git a/coders/psd.c b/coders/psd.c\nindex 5df18a9..8148281 100644\n--- a/coders/psd.c\n+++ b/coders/psd.c\n@@ -2172,8 +2172,6 @@ static Image *ReadPSDImage(const ImageInfo *image_info,ExceptionInfo *exception)\n     {\n       psd_info.min_channels=4;\n       (void) SetImageColorspace(image,CMYKColorspace,exception);\n-      if (psd_info.channels > 4)\n-        (void) SetImageAlphaChannel(image,ActivateAlphaChannel,exception);\n     }\n   else if ((psd_info.mode == BitmapMode) || (psd_info.mode == GrayscaleMode) ||\n            (psd_info.mode == DuotoneMode))\n@@ -2190,12 +2188,7 @@ static Image *ReadPSDImage(const ImageInfo *image_info,ExceptionInfo *exception)\n         }\n       psd_info.min_channels=1;\n       (void) SetImageColorspace(image,GRAYColorspace,exception);\n-      if (psd_info.channels > 1)\n-        (void) SetImageAlphaChannel(image,ActivateAlphaChannel,exception);\n     }\n-  else\n-    if (psd_info.channels > 3)\n-      (void) SetImageAlphaChannel(image,ActivateAlphaChannel,exception);\n   if (psd_info.channels < psd_info.min_channels)\n     ThrowReaderException(CorruptImageError,\"ImproperImageHeader\");\n   /*\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42539517-vul",
+      "digest": "sha256:59d0bc23e68638082fcc4d54f3eb99ba6dab8a73d47ed7cfb7294ff0d388aa2f"
+    },
+    "patched": {
+      "ref": "n132/arvo:42539517-fix",
+      "digest": "sha256:a626ff85c26276a9ac03667efc2a332683c0f65b7ec7969271ea8011f40bac8b"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/imagemagick/./MagickCore/quantum-private.h:504",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/imagemagick/./MagickCore/quantum-private.h:504"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

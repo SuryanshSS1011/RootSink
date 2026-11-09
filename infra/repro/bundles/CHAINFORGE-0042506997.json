@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042506997",
+  "chain": "CWE-20->CWE-787",
+  "project": "imagemagick",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42506997",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "2d8441efcd538ac0bc20925656883647cb95afaf",
+      "fix_commits": [
+        "2d8441efcd538ac0bc20925656883647cb95afaf"
+      ],
+      "repo": "https://github.com/imagemagick/imagemagick"
+    },
+    "patch": "diff --git a/coders/qoi.c b/coders/qoi.c\nindex f50adbcc264..cf53dd036d6 100644\n--- a/coders/qoi.c\n+++ b/coders/qoi.c\n@@ -60,7 +60,7 @@\n #include \"MagickCore/module.h\"\n \f\n /*\n-  Define declaractions.\n+  Define declarations.\n */\n #define QOI_SRGB   0\n #define QOI_LINEAR 1\n@@ -77,7 +77,7 @@\n #define QOI_COLOR_HASH(C) (C.rgba.r*3 + C.rgba.g*5 + C.rgba.b*7 + C.rgba.a*11)\n \f\n /*\n-  Typedef declaractions.\n+  Typedef declarations.\n */\n typedef union\n {\n@@ -157,9 +157,6 @@ static Image *ReadQOIImage(const ImageInfo *image_info,\n   Image\n     *image;\n \n-  QuantumInfo\n-    *quantum_info;\n-\n   Quantum\n     *q;\n \n@@ -216,6 +213,10 @@ static Image *ReadQOIImage(const ImageInfo *image_info,\n   image->alpha_trait=BlendPixelTrait;\n   if (image->columns == 0 || image->rows == 0)\n     ThrowReaderException(CorruptImageError,\"NegativeOrZeroImageSize\");\n+  if (image->ping != MagickFalse) {\n+    (void) CloseBlob(image);\n+    return(GetFirstImageInList(image));\n+  }\n \n   channels=ReadBlobByte(image);\n   if (channels == 3)\n@@ -234,12 +235,6 @@ static Image *ReadQOIImage(const ImageInfo *image_info,\n     ThrowReaderException(CorruptImageError,\"ImproperImageHeader\");\n \n   status=SetImageExtent(image,image->columns,image->rows,exception);\n-  if (status == MagickFalse)\n-    return(DestroyImageList(image));\n-  quantum_info=AcquireQuantumInfo(image_info,image);\n-  if (quantum_info == (QuantumInfo *) NULL)\n-    ThrowReaderException(ResourceLimitError,\"MemoryAllocationFailed\");\n-  status=SetQuantumFormat(image,quantum_info,UnsignedQuantumFormat);\n   if (status == MagickFalse)\n     return(DestroyImageList(image));\n \n@@ -329,8 +324,7 @@ static Image *ReadQOIImage(const ImageInfo *image_info,\n       \"UnexpectedEndOfFile\",image->filename);\n   if (status != MagickFalse) {\n     status=SyncAuthenticPixels(image,exception);\n-    if (image->ping == MagickFalse)\n-      SyncImage(image,exception);\n+    SyncImage(image,exception);\n   }\n   (void) CloseBlob(image);\n   if (status == MagickFalse)\n@@ -429,9 +423,6 @@ ModuleExport void UnregisterQOIImage(void)\n static MagickBooleanType WriteQOIImage(const ImageInfo *image_info,Image *image,\n   ExceptionInfo *exception)\n {\n-  QuantumInfo\n-    *quantum_info;\n-\n   QuantumType\n     quantum_type;\n \n@@ -471,24 +462,20 @@ static MagickBooleanType WriteQOIImage(const ImageInfo *image_info,Image *image,\n   image->endian=MSBEndian;\n   image->depth=8;\n \n-  quantum_info=AcquireQuantumInfo(image_info,image);\n-  if (quantum_info == (QuantumInfo *) NULL)\n-    ThrowWriterException(ImageError,\"MemoryAllocationFailed\");\n-\n   quantum_type=GetQuantumType(image,exception);\n   if (quantum_type == RGBQuantum)\n     channels=3;\n   else if (quantum_type == RGBAQuantum)\n     channels=4;\n   else\n-    ThrowWriterException(ImageError,\"MemoryAllocationFailed\");\n+    ThrowWriterException(CoderError,\"ImageTypeNotSupported\");\n \n   if (IssRGBCompatibleColorspace(image->colorspace) == MagickFalse)\n-   (void) TransformImageColorspace(image,sRGBColorspace,exception);\n+    (void) TransformImageColorspace(image,sRGBColorspace,exception);\n   if (IsRGBColorspace(image->colorspace))\n-     colorspace=QOI_LINEAR;\n+    colorspace=QOI_LINEAR;\n   else\n-     colorspace=QOI_SRGB;\n+    colorspace=QOI_SRGB;\n   /*\n     Write QOI header.\n   */\n@@ -508,11 +495,11 @@ static MagickBooleanType WriteQOIImage(const ImageInfo *image_info,Image *image,\n   run=0;\n   p=GetVirtualPixels(image,0,0,image->columns,image->rows,exception);\n   if (p == (const Quantum *) NULL)\n-    return(MagickFalse);\n+    ThrowWriterException(ResourceLimitError,\"MemoryAllocationFailed\");\n   /*\n     Do the actual encoding.\n   */\n-  end = image->rows * image->columns;\n+  end=image->rows * image->columns;\n   for (i=0; i < end; i++) {\n     pp=px;\n     px.rgba.r=ScaleQuantumToChar(GetPixelRed(image,p));\n@@ -548,22 +535,29 @@ static MagickBooleanType WriteQOIImage(const ImageInfo *image_info,Image *image,\n         vb,\n         vg_r,\n         vg_b;\n-      vr=px.rgba.r - pp.rgba.r;\n-      vg=px.rgba.g - pp.rgba.g;\n-      vb=px.rgba.b - pp.rgba.b;\n-      vg_r=vr - vg;\n-      vg_b=vb - vg;\n+\n+      unsigned char\n+        diff,\n+        luma;\n+\n+      vr=(signed char) (px.rgba.r - pp.rgba.r);\n+      vg=(signed char) (px.rgba.g - pp.rgba.g);\n+      vb=(signed char) (px.rgba.b - pp.rgba.b);\n+      vg_r=(signed char) (vr - vg);\n+      vg_b=(signed char) (vb - vg);\n \n       if (vr > -3 && vr < 2 &&\n           vg > -3 && vg < 2 &&\n           vb > -3 && vb < 2) {\n-        (void) WriteBlobByte(image,QOI_OP_DIFF\n-                 | (vr + 2) << 4 | (vg + 2) << 2 | (vb + 2));\n+          diff=(unsigned char) ((vr + 2) << 4 | (vg + 2) << 2 | (vb + 2));\n+          (void) WriteBlobByte(image,QOI_OP_DIFF | diff);\n       } else if (vg_r >  -9 && vg_r < 8 &&\n                  vg   > -33 && vg   < 32 &&\n-                 vg_b >  -9 && vg_b < 2) {\n-        (void) WriteBlobByte(image,QOI_OP_LUMA | (vg + 32));\n-        (void) WriteBlobByte(image,(vg_r + 8) << 4 | (vg_b +  8));\n+                 vg_b >  -9 && vg_b < 8) {\n+        luma=(unsigned char) (vg + 32);\n+        (void) WriteBlobByte(image,QOI_OP_LUMA | luma);\n+        luma=(unsigned char) ((vg_r + 8) << 4 | (vg_b +  8));\n+        (void) WriteBlobByte(image,luma);\n       } else {\n         (void) WriteBlobByte(image,QOI_OP_RGB);\n         (void) WriteBlobByte(image,px.rgba.r);\n@@ -578,5 +572,15 @@ static MagickBooleanType WriteQOIImage(const ImageInfo *image_info,Image *image,\n       (void) WriteBlobByte(image,px.rgba.a);\n     }\n   }\n+  if (run > 0)\n+      (void) WriteBlobByte(image,QOI_OP_RUN | (const unsigned char) (run - 1));\n+  /*\n+    Write the QOI end marker: seven 0x00 bytes followed by 0x01.\n+  */\n+  for (i=0; i < 7; i++)\n+    (void) WriteBlobByte(image,0x00);\n+  (void) WriteBlobByte(image,0x01);\n+\n+  (void) CloseBlob(image);\n   return(MagickTrue);\n }\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42506997-vul",
+      "digest": "sha256:638771902ff1caaa9242d21f41e27ac4635f869d485e4fa508b7dbe4f8950db2"
+    },
+    "patched": {
+      "ref": "n132/arvo:42506997-fix",
+      "digest": "sha256:f2905c602eeafaf6d3c88a910988e5ee925b77bb9efdac5f0c2135dc286da4bc"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/imagemagick/./MagickCore/pixel-accessor.h:863",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/imagemagick/./MagickCore/pixel-accessor.h:863"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

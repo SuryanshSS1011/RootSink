@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042516080",
+  "chain": "CWE-456->CWE-457",
+  "project": "imagemagick",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42516080",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "9a630bdc9f9f6e5ecd9776e9ef42184dbcf0f786",
+      "fix_commits": [
+        "9a630bdc9f9f6e5ecd9776e9ef42184dbcf0f786"
+      ],
+      "repo": "https://github.com/imagemagick/imagemagick"
+    },
+    "patch": "From 9a630bdc9f9f6e5ecd9776e9ef42184dbcf0f786 Mon Sep 17 00:00:00 2001\nFrom: Cristy <urban-warrior@imagemagick.org>\nDate: Sun, 18 Sep 2022 08:03:51 -0400\nSubject: [PATCH] earlier check for maximum channels\n\n---\n coders/tiff.c | 5 +++--\n 1 file changed, 3 insertions(+), 2 deletions(-)\n\ndiff --git a/coders/tiff.c b/coders/tiff.c\nindex b69e0c6..0328114 100644\n--- a/coders/tiff.c\n+++ b/coders/tiff.c\n@@ -1348,7 +1348,9 @@ static Image *ReadTIFFImage(const ImageInfo *image_info,\n         TIFFClose(tiff);\n         ThrowReaderException(CorruptImageError,\"UnsupportedBitsPerPixel\");\n       }\n-    if (samples_per_pixel > MaxPixelChannels)\n+    tiff_status=TIFFGetFieldDefaulted(tiff,TIFFTAG_EXTRASAMPLES,&extra_samples,\n+      &sample_info,sans);\n+    if ((samples_per_pixel+extra_samples) > MaxPixelChannels)\n       {\n         TIFFClose(tiff);\n         ThrowReaderException(CorruptImageError,\"MaximumChannelsExceeded\");\n@@ -1683,7 +1685,6 @@ static Image *ReadTIFFImage(const ImageInfo *image_info,\n       default:\n         break;\n     }\n-    extra_samples=0;\n     tiff_status=TIFFGetFieldDefaulted(tiff,TIFFTAG_EXTRASAMPLES,&extra_samples,\n       &sample_info,sans);\n     if (tiff_status == 1)\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42516080-vul",
+      "digest": "sha256:8fa4eea757ebdb3262c1745bffe7c3b5b97d70cd3b121ffd23261a4c3181963d"
+    },
+    "patched": {
+      "ref": "n132/arvo:42516080-fix",
+      "digest": "sha256:0a0d79d3ad8c35dd70dbdc81edeabeac9d0c203e8201ef5846d1baf94790e205"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/imagemagick/MagickCore/cache.c:3573",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/imagemagick/MagickCore/cache.c:3573"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

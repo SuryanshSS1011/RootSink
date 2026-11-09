@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042471240",
+  "chain": "CWE-456->CWE-457",
+  "project": "mupdf",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42471240",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "632bada9f1e04ff4c1391445c90d0eeed6fd3170",
+      "fix_commits": [
+        "632bada9f1e04ff4c1391445c90d0eeed6fd3170"
+      ],
+      "repo": "git://git.ghostscript.com/jbig2dec.git"
+    },
+    "patch": "From 632bada9f1e04ff4c1391445c90d0eeed6fd3170 Mon Sep 17 00:00:00 2001\nFrom: Sebastian Rasmussen <sebras@gmail.com>\nDate: Fri, 7 Dec 2018 18:12:23 +0100\nSubject: [PATCH] Bug 700384: Indicate error upon error, do not just warn.\n\nBuilding a Huffman table failed, this was correctly detected,\nbut success was indicated to the caller causing a reference\ntemplate to be left uninitialized, which later on caused the\ngeneric refinement region decoder attempt to use this\nuninitialized data. This was reported by MSAN.\n\nThanks to oss-fuzz for reporting.\n---\n jbig2_text.c | 4 ++--\n 1 file changed, 2 insertions(+), 2 deletions(-)\n\ndiff --git a/jbig2_text.c b/jbig2_text.c\nindex 910ad98..e080777 100644\n--- a/jbig2_text.c\n+++ b/jbig2_text.c\n@@ -219,9 +219,9 @@ cleanup1:\n         jbig2_release_huffman_table(ctx, runcodes);\n \n         if (SBSYMCODES == NULL) {\n-            jbig2_error(ctx, JBIG2_SEVERITY_WARNING, segment->number, \"failed to construct symbol ID huffman table\");\n+            code = jbig2_error(ctx, JBIG2_SEVERITY_WARNING, segment->number, \"failed to construct symbol ID huffman table\");\n             jbig2_huffman_free(ctx, hs);\n-            return ((code != 0) ? code : -1);\n+            return code;\n         }\n     }\n \n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42471240-vul",
+      "digest": "sha256:5ff31d54a0af916fec2fdcb745b807c4d86b2bddc86d98e0d0367dfddf798282"
+    },
+    "patched": {
+      "ref": "n132/arvo:42471240-fix",
+      "digest": "sha256:a621f33d2f2a556c8beadd6ca1d8f49090e5af8cafdbac4955403e310c1c4aec"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/mupdf/thirdparty/jbig2dec/jbig2_arith.c:264",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/mupdf/thirdparty/jbig2dec/jbig2_arith.c:264"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

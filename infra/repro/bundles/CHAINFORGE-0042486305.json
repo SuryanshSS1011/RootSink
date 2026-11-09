@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042486305",
+  "chain": "CWE-416->CWE-125",
+  "project": "skia",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42486305",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "7954d6c77c1864018e4f81bf079c7efd74a97cff",
+      "fix_commits": [
+        "7954d6c77c1864018e4f81bf079c7efd74a97cff"
+      ],
+      "repo": "https://skia.googlesource.com/skia.git"
+    },
+    "patch": "diff --git a/src/sksl/SkSLCompiler.cpp b/src/sksl/SkSLCompiler.cpp\nindex e41a187..64988a2 100644\n--- a/src/sksl/SkSLCompiler.cpp\n+++ b/src/sksl/SkSLCompiler.cpp\n@@ -1641,25 +1641,32 @@\n         program.fIsOptimized = true;\n         fIRGenerator->fKind = program.fKind;\n         fIRGenerator->fSettings = &program.fSettings;\n-        for (auto& element : program) {\n+\n+        // Build the control-flow graph for each function.\n+        for (ProgramElement& element : program) {\n             if (element.fKind == ProgramElement::kFunction_Kind) {\n                 this->scanCFG(element.as<FunctionDefinition>());\n             }\n         }\n-        // we wait until after analysis to remove dead functions so that we still report errors\n-        // even in unused code\n+\n+        // Remove dead functions. We wait until after analysis so that we still report errors, even\n+        // in unused code.\n         if (program.fSettings.fRemoveDeadFunctions) {\n-            for (auto iter = program.fElements.begin(); iter != program.fElements.end(); ) {\n-                if ((*iter)->fKind == ProgramElement::kFunction_Kind) {\n-                    const FunctionDefinition& f = (*iter)->as<FunctionDefinition>();\n-                    if (!f.fDeclaration.fCallCount && f.fDeclaration.fName != \"main\") {\n-                        iter = program.fElements.erase(iter);\n-                        continue;\n-                    }\n-                }\n-                ++iter;\n-            }\n+            program.fElements.erase(\n+                    std::remove_if(program.fElements.begin(),\n+                                   program.fElements.end(),\n+                                   [](const std::unique_ptr<ProgramElement>& pe) {\n+                                       if (pe->fKind != ProgramElement::kFunction_Kind) {\n+                                           return false;\n+                                       }\n+                                       const FunctionDefinition& fn = pe->as<FunctionDefinition>();\n+                                       return fn.fDeclaration.fCallCount == 0 &&\n+                                              fn.fDeclaration.fName != \"main\";\n+                                   }),\n+                    program.fElements.end());\n         }\n+\n+        // Remove dead variables.\n         if (program.fKind != Program::kFragmentProcessor_Kind) {\n             for (auto iter = program.fElements.begin(); iter != program.fElements.end();) {\n                 if ((*iter)->fKind == ProgramElement::kVar_Kind) {\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42486305-vul",
+      "digest": "sha256:7b5f08c4a452dee0d8773d95aaffba16eba0f1f18ad01e6a628a9b62b9439aa9"
+    },
+    "patched": {
+      "ref": "n132/arvo:42486305-fix",
+      "digest": "sha256:4588b5c00c4f04f14f163e9dd172c28e5d338ed495b7fbaa4fd41bb9a0ce159b"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/skia/out/Fuzz/../../src/sksl/ir/SkSLVariableReference.cpp:34",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/skia/out/Fuzz/../../src/sksl/ir/SkSLVariableReference.cpp:34"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

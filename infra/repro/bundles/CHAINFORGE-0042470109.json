@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042470109",
+  "chain": "CWE-416->CWE-787",
+  "project": "graphicsmagick",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42470109",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "f9154aa8139f5761d61b8108a2252c55187b0602",
+      "fix_commits": [
+        "f9154aa8139f5761d61b8108a2252c55187b0602"
+      ],
+      "repo": "https://foss.heptapod.net/graphicsmagick/graphicsmagick"
+    },
+    "patch": "diff --git a/ChangeLog b/ChangeLog\nindex 646fe034e39dc1c971abb531a30c414e6c98923c_Q2hhbmdlTG9n..f9154aa8139f5761d61b8108a2252c55187b0602_Q2hhbmdlTG9n 100644\n--- a/ChangeLog\n+++ b/ChangeLog\n@@ -1,3 +1,10 @@\n+2018-08-29  Bob Friesenhahn  <bfriesen@simple.dallas.tx.us>\n+\n+\t* magick/render.c (ConvertPrimitiveToPath): Second attempt to\n+\tprevent heap write overflow of PathInfo array.  Fixes oss-fuzz\n+\t10096 \"Heap-buffer-overflow in ConvertPrimitiveToPath\". (Credit to\n+\tOSS-Fuzz)\n+\n 2018-08-25  Bob Friesenhahn  <bfriesen@simple.dallas.tx.us>\n \n \t* coders/tiff.c (\"QuantumTransferMode\"): CIE Log images with an\ndiff --git a/VisualMagick/installer/inc/version.isx b/VisualMagick/installer/inc/version.isx\nindex 646fe034e39dc1c971abb531a30c414e6c98923c_VmlzdWFsTWFnaWNrL2luc3RhbGxlci9pbmMvdmVyc2lvbi5pc3g=..f9154aa8139f5761d61b8108a2252c55187b0602_VmlzdWFsTWFnaWNrL2luc3RhbGxlci9pbmMvdmVyc2lvbi5pc3g= 100644\n--- a/VisualMagick/installer/inc/version.isx\n+++ b/VisualMagick/installer/inc/version.isx\n@@ -10,5 +10,5 @@\n \n #define public MagickPackageName \"GraphicsMagick\"\n #define public MagickPackageVersion \"1.4\"\n-#define public MagickPackageVersionAddendum \".020180825\"\n-#define public MagickPackageReleaseDate \"snapshot-20180825\"\n+#define public MagickPackageVersionAddendum \".020180829\"\n+#define public MagickPackageReleaseDate \"snapshot-20180829\"\ndiff --git a/config/delegates.mgk.in b/config/delegates.mgk.in\nindex 646fe034e39dc1c971abb531a30c414e6c98923c_Y29uZmlnL2RlbGVnYXRlcy5tZ2suaW4=..f9154aa8139f5761d61b8108a2252c55187b0602_Y29uZmlnL2RlbGVnYXRlcy5tZ2suaW4= 100644\n--- a/config/delegates.mgk.in\n+++ b/config/delegates.mgk.in\n@@ -98,6 +98,15 @@\n   <!-- Read CMYK Postscript, EPS, and PDF  -->\n   <delegate decode=\"gs-cmyk\" stealth=\"True\" command='\"@PSDelegate@\" -q -dBATCH -dSAFER -dMaxBitmap=50000000 -dNOPAUSE -sDEVICE=@GSCMYKDevice@ -dTextAlphaBits=%u -dGraphicsAlphaBits=%u -r%s %s \"-sOutputFile=%s\" -- \"%s\" -c quit' />\n \n+  <!-- Read monochrome PDF using Poppler's pdftoppm -->\n+  <delegate decode=\"poppler-mono\" stealth=\"True\" command='\"pdftoppm\" \"-mono\" \"-freetype\" \"yes\" \"-aa\" \"yes\" \"-aaVector\" \"yes\" \"-rx\" \"72\" \"-ry\" \"72\" \"%s\" \">\" \"%s\"' />\n+\n+  <!-- Read grayscale PDF using Poppler's pdftoppm -->\n+  <delegate decode=\"poppler-grey\" stealth=\"True\" command='\"pdftoppm\" \"-gray\" \"-freetype\" \"yes\" \"-aa\" \"yes\" \"-aaVector\" \"yes\" \"-rx\" \"72\" \"-ry\" \"72\" \"%s\" \">\" \"%s\"' />\n+\n+  <!-- Read color PDF using Poppler's pdftoppm -->\n+  <delegate decode=\"poppler-color\" stealth=\"True\" command='\"pdftoppm\" \"-freetype\" \"yes\" \"-rx\" \"-aa\" \"yes\" \"-aaVector\" \"yes\" \"72\" \"-ry\" \"72\" \"%s\" \">\" \"%s\"' />\n+\n   <delegate decode=\"hpg\" command='\"@HPGLDecodeDelegate@\" -q -m eps -f `basename \"%o\"` \"%i\" && @MVDelegate@ -f `basename \"%o\"` \"%o\"' />\n   <delegate decode=\"hpgl\" command='\"@HPGLDecodeDelegate@\" -q -m eps -f `basename \"%o\"` \"%i\" && @MVDelegate@ -f `basename \"%o\"` \"%o\"' />\n   <!-- Read HTML file  -->\ndiff --git a/magick/render.c b/magick/render.c\nindex 646fe034e39dc1c971abb531a30c414e6c98923c_bWFnaWNrL3JlbmRlci5j..f9154aa8139f5761d61b8108a2252c55187b0602_bWFnaWNrL3JlbmRlci5j 100644\n--- a/magick/render.c\n+++ b/magick/render.c\n@@ -856,7 +856,7 @@\n     p,  /* first point in subpath (i.e., just did a \"moveto\" to this point) */\n     q;  /* previous point in subpath */\n \n-  register long\n+  register size_t\n     i,\n     n;\n \n@@ -860,7 +860,7 @@\n     i,\n     n;\n \n-  long\n-    coordinates,  /* number of points in subpath */\n+  size_t\n+    path_info_elem, /* Number of elements in path_info */\n     start;        /* index to start of subpath in path_info */\n \n@@ -865,5 +865,8 @@\n     start;        /* index to start of subpath in path_info */\n \n+  ssize_t\n+    coordinates;  /* number of points in subpath */\n+\n   MagickBool\n     IsClosedSubPath;\n \n@@ -884,7 +887,8 @@\n       break;\n   }\n   for (i=0; primitive_info[i].primitive != UndefinedPrimitive; i++);\n-  path_info=MagickAllocateArray(PathInfo *,(2*i+5),sizeof(PathInfo));\n+  path_info_elem=(2*i+6);\n+  path_info=MagickAllocateArray(PathInfo *,path_info_elem,sizeof(PathInfo));\n   if (path_info == (PathInfo *) NULL)\n     return((PathInfo *) NULL);\n   coordinates=0;\n@@ -927,6 +931,8 @@\n         path_info[n].point=primitive_info[i].point;\n         q=primitive_info[i].point;  /* will be \"previous point\" for next iteration */\n         n++;\n+        if (n == path_info_elem - 1)\n+          break;\n       }\n     if (coordinates > 0)\n       continue;   /* go process next point in current subpath */\n@@ -944,6 +950,8 @@\n       more points (repeat of current point + subpath start point) to \"virtually\"\n       close it (this is a \"ghost line\").\n     */\n+    if ((start >= path_info_elem - 3) || (n >= path_info_elem - 3))\n+      break;\n     path_info[start].code=OpenCode;\n     path_info[n].code=GhostlineCode;\n     path_info[n].point=primitive_info[i].point;\n@@ -2306,6 +2314,6 @@\n     {\n       const size_t have_memory=MagickArraySize(*p_PIMgr->p_AllocCount,sizeof(PrimitiveInfo));\n       const size_t needed_memory=MagickArraySize(NeedAllocCount,sizeof(PrimitiveInfo));\n-      const size_t added_memory=needed_memory-have_memory;\n+      const magick_uint64_t added_memory=needed_memory-have_memory;\n \n       /* Need to realloc */\n@@ -2310,6 +2318,8 @@\n \n       /* Need to realloc */\n-      if ((status=AcquireMagickResource(MemoryResource,added_memory)) == MagickFail)\n+      if (((*p_PIMgr->p_AllocCount > 0) && (have_memory == 0)) ||\n+          ((NeedAllocCount > 0) && (needed_memory == 0)) ||\n+          (status=AcquireMagickResource(MemoryResource,added_memory)) == MagickFail)\n         {\n           ThrowException3(p_PIMgr->p_Exception,ResourceLimitError,MemoryAllocationFailed,UnableToDrawOnImage);\n           status = MagickFail;\ndiff --git a/magick/version.h b/magick/version.h\nindex 646fe034e39dc1c971abb531a30c414e6c98923c_bWFnaWNrL3ZlcnNpb24uaA==..f9154aa8139f5761d61b8108a2252c55187b0602_bWFnaWNrL3ZlcnNpb24uaA== 100644\n--- a/magick/version.h\n+++ b/magick/version.h\n@@ -38,8 +38,8 @@\n #define MagickLibVersion  0x211801\n #define MagickLibVersionText  \"1.4\"\n #define MagickLibVersionNumber 21,18,1\n-#define MagickChangeDate   \"20180825\"\n-#define MagickReleaseDate  \"snapshot-20180825\"\n+#define MagickChangeDate   \"20180829\"\n+#define MagickReleaseDate  \"snapshot-20180829\"\n \t\n /*\n   The MagickLibInterfaceNewest and MagickLibInterfaceOldest defines\ndiff --git a/www/Changelog.html b/www/Changelog.html\nindex 646fe034e39dc1c971abb531a30c414e6c98923c_d3d3L0NoYW5nZWxvZy5odG1s..f9154aa8139f5761d61b8108a2252c55187b0602_d3d3L0NoYW5nZWxvZy5odG1s 100644\n--- a/www/Changelog.html\n+++ b/www/Changelog.html\n@@ -35,6 +35,15 @@\n <div class=\"document\">\n \n \n+<p>2018-08-29  Bob Friesenhahn  &lt;<a class=\"reference external\" href=\"mailto:bfriesen&#37;&#52;&#48;simple&#46;dallas&#46;tx&#46;us\">bfriesen<span>&#64;</span>simple<span>&#46;</span>dallas<span>&#46;</span>tx<span>&#46;</span>us</a>&gt;</p>\n+<blockquote>\n+<ul class=\"simple\">\n+<li>magick/render.c (ConvertPrimitiveToPath): Second attempt to\n+prevent heap write overflow of PathInfo array.  Fixes oss-fuzz\n+10096 &quot;Heap-buffer-overflow in ConvertPrimitiveToPath&quot;. (Credit to\n+OSS-Fuzz)</li>\n+</ul>\n+</blockquote>\n <p>2018-08-25  Bob Friesenhahn  &lt;<a class=\"reference external\" href=\"mailto:bfriesen&#37;&#52;&#48;simple&#46;dallas&#46;tx&#46;us\">bfriesen<span>&#64;</span>simple<span>&#46;</span>dallas<span>&#46;</span>tx<span>&#46;</span>us</a>&gt;</p>\n <blockquote>\n <ul class=\"simple\">\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42470109-vul",
+      "digest": "sha256:8c3e8339a9bf1562f6a09a4597aa34e04b86762eb7c11e06b8e849452704549c"
+    },
+    "patched": {
+      "ref": "n132/arvo:42470109-fix",
+      "digest": "sha256:1e822878abcbf33686047c6aa8d1b7360e2252e003fe2f22226b776c1a58e099"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/graphicsmagick/magick/render.c:942",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/graphicsmagick/magick/render.c:942"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

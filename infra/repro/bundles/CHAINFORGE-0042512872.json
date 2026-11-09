@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042512872",
+  "chain": "CWE-1284->CWE-787",
+  "project": "libvpx",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42512872",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "933b6b90a583b593efd8acb644603ab189226309",
+      "fix_commits": [
+        "933b6b90a583b593efd8acb644603ab189226309"
+      ],
+      "repo": "https://chromium.googlesource.com/webm/libvpx"
+    },
+    "patch": "diff --git a/test/resize_test.cc b/test/resize_test.cc\nindex 1e5e166..212ff46 100644\n--- a/test/resize_test.cc\n+++ b/test/resize_test.cc\n@@ -101,8 +101,11 @@\n       *h = initial_h;\n       return;\n     }\n-    *w = initial_w * 7 / 10;\n-    *h = initial_h * 16 / 10;\n+    if (frame < 100) {\n+      *w = initial_w * 7 / 10;\n+      *h = initial_h * 16 / 10;\n+      return;\n+    }\n     return;\n   }\n   if (frame < 10) {\n@@ -575,7 +578,9 @@\n   }\n }\n \n-TEST_P(ResizeRealtimeTest, TestExternalResizeSmallerWidthBiggerSize) {\n+// TODO(https://crbug.com/webm/1642): This causes a segfault in\n+// init_encode_frame_mb_context().\n+TEST_P(ResizeRealtimeTest, DISABLED_TestExternalResizeSmallerWidthBiggerSize) {\n   ResizingVideoSource video;\n   video.flag_codec_ = true;\n   video.smaller_width_larger_size_ = true;\ndiff --git a/vp9/common/vp9_alloccommon.c b/vp9/common/vp9_alloccommon.c\nindex c27fe64..faad657 100644\n--- a/vp9/common/vp9_alloccommon.c\n+++ b/vp9/common/vp9_alloccommon.c\n@@ -132,6 +132,15 @@\n   if (cm->mi_alloc_size < new_mi_size) {\n     cm->free_mi(cm);\n     if (cm->alloc_mi(cm, new_mi_size)) goto fail;\n+  }\n+\n+  if (cm->seg_map_alloc_size < cm->mi_rows * cm->mi_cols) {\n+    // Create the segmentation map structure and set to 0.\n+    free_seg_map(cm);\n+    if (alloc_seg_map(cm, cm->mi_rows * cm->mi_cols)) goto fail;\n+  }\n+\n+  if (cm->above_context_alloc_cols < cm->mi_cols) {\n     vpx_free(cm->above_context);\n     cm->above_context = (ENTROPY_CONTEXT *)vpx_calloc(\n         2 * mi_cols_aligned_to_sb(cm->mi_cols) * MAX_MB_PLANE,\n@@ -145,12 +154,6 @@\n     cm->above_context_alloc_cols = cm->mi_cols;\n   }\n \n-  if (cm->seg_map_alloc_size < cm->mi_rows * cm->mi_cols) {\n-    // Create the segmentation map structure and set to 0.\n-    free_seg_map(cm);\n-    if (alloc_seg_map(cm, cm->mi_rows * cm->mi_cols)) goto fail;\n-  }\n-\n   if (vp9_alloc_loop_filter(cm)) goto fail;\n \n   return 0;\ndiff --git a/vp9/encoder/vp9_encoder.c b/vp9/encoder/vp9_encoder.c\nindex d58e8a3..371779e 100644\n--- a/vp9/encoder/vp9_encoder.c\n+++ b/vp9/encoder/vp9_encoder.c\n@@ -1972,17 +1972,6 @@\n   }\n }\n \n-static void free_copy_partition_data(VP9_COMP *cpi) {\n-  vpx_free(cpi->prev_partition);\n-  cpi->prev_partition = NULL;\n-  vpx_free(cpi->prev_segment_id);\n-  cpi->prev_segment_id = NULL;\n-  vpx_free(cpi->prev_variance_low);\n-  cpi->prev_variance_low = NULL;\n-  vpx_free(cpi->copied_frame_cnt);\n-  cpi->copied_frame_cnt = NULL;\n-}\n-\n void vp9_change_config(struct VP9_COMP *cpi, const VP9EncoderConfig *oxcf) {\n   VP9_COMMON *const cm = &cpi->common;\n   RATE_CONTROL *const rc = &cpi->rc;\n@@ -2062,8 +2051,6 @@\n     new_mi_size = cm->mi_stride * calc_mi_size(cm->mi_rows);\n     if (cm->mi_alloc_size < new_mi_size) {\n       vp9_free_context_buffers(cm);\n-      vp9_free_pc_tree(&cpi->td);\n-      vpx_free(cpi->mbmi_ext_base);\n       alloc_compressor_data(cpi);\n       realloc_segmentation_maps(cpi);\n       cpi->initial_width = cpi->initial_height = 0;\n@@ -2082,18 +2069,8 @@\n     update_frame_size(cpi);\n \n   if (last_w != cpi->oxcf.width || last_h != cpi->oxcf.height) {\n-    vpx_free(cpi->consec_zero_mv);\n-    CHECK_MEM_ERROR(\n-        cm, cpi->consec_zero_mv,\n-        vpx_calloc(cm->mi_rows * cm->mi_cols, sizeof(*cpi->consec_zero_mv)));\n-\n-    vpx_free(cpi->skin_map);\n-    CHECK_MEM_ERROR(\n-        cm, cpi->skin_map,\n-        vpx_calloc(cm->mi_rows * cm->mi_cols, sizeof(cpi->skin_map[0])));\n-\n-    free_copy_partition_data(cpi);\n-    alloc_copy_partition_data(cpi);\n+    memset(cpi->consec_zero_mv, 0,\n+           cm->mi_rows * cm->mi_cols * sizeof(*cpi->consec_zero_mv));\n     if (cpi->oxcf.aq_mode == CYCLIC_REFRESH_AQ)\n       vp9_cyclic_refresh_reset_resize(cpi);\n     rc->rc_1_frame = 0;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42512872-vul",
+      "digest": "sha256:c593d7b9cd47a17014022669f2fe9e5d657aae656a9e0497138b6b7de59eaa45"
+    },
+    "patched": {
+      "ref": "n132/arvo:42512872-fix",
+      "digest": "sha256:8edf8fe22be80173f83963d742376caee3742625aef4358cc683f486554ab3b9"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/libvpx/vp9/decoder/vp9_decodeframe.c:2311",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/libvpx/vp9/decoder/vp9_decodeframe.c:2311"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

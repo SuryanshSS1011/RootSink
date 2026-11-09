@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-967151916",
+  "chain": "CWE-456->CWE-457",
+  "project": "unicorn",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42524665",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/unicorn-engine/unicorn/commit/85b289d074a1ae6289228b3d4e3649e42f91df04",
+      "fix_commits": [
+        "85b289d074a1ae6289228b3d4e3649e42f91df04"
+      ],
+      "repo": "https://github.com/unicorn-engine/unicorn"
+    },
+    "patch": "diff --git a/bindings/python/unicorn/unicorn_py3/unicorn.py b/bindings/python/unicorn/unicorn_py3/unicorn.py\nindex 4363039df8..88d9d6c599 100644\n--- a/bindings/python/unicorn/unicorn_py3/unicorn.py\n+++ b/bindings/python/unicorn/unicorn_py3/unicorn.py\n@@ -97,7 +97,7 @@ def _load_lib(path: Path, lib_name: str):\n     lib_locations = [\n         os.getenv('LIBUNICORN_PATH'),\n         pkg_resources.resource_filename(__name__, 'lib'),\n-        PurePath(inspect.getfile(__load_uc_lib)).parent / 'lib',\n+        PurePath(inspect.getfile(__load_uc_lib)).parent.parent / 'lib',\n         '',\n         \"/usr/local/lib/\" if sys.platform == 'darwin' else '/usr/lib64',\n     ] + [PurePath(p) / 'unicorn' / 'lib' for p in sys.path] # lazymio: ??? why PATH ??\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42524665-vul",
+      "digest": "sha256:5da7f4701bcbd83c8eeaa31a1526ad437379976b4f422ab48087a97551674dde"
+    },
+    "patched": {
+      "ref": "n132/arvo:42524665-fix",
+      "digest": "sha256:6a2b0aa6c51303bce33de3ba6410c96304d8cc4b3f381a96fbbf2d873b221388"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/unicorn/qemu/target/s390x/cc_helper.c:151",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/unicorn/qemu/target/s390x/cc_helper.c:151"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

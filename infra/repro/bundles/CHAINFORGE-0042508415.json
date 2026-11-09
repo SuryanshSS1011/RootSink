@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042508415",
+  "chain": "CWE-20->CWE-125",
+  "project": "lua",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42508415",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "1f3c6f4534c6411313361697d98d1145a1f030fa",
+      "fix_commits": [
+        "1f3c6f4534c6411313361697d98d1145a1f030fa"
+      ],
+      "repo": "https://github.com/lua/lua"
+    },
+    "patch": "diff --git a/lparser.c b/lparser.c\nindex 3abe3d7518..a5cd552578 100644\n--- a/lparser.c\n+++ b/lparser.c\n@@ -468,6 +468,7 @@ static void singlevar (LexState *ls, expdesc *var) {\n     expdesc key;\n     singlevaraux(fs, ls->envn, var, 1);  /* get environment variable */\n     lua_assert(var->k != VVOID);  /* this one must exist */\n+    luaK_exp2anyregup(fs, var);  /* but could be a constant */\n     codestring(&key, varname);  /* key is variable name */\n     luaK_indexed(fs, var, &key);  /* env[varname] */\n   }\ndiff --git a/testes/attrib.lua b/testes/attrib.lua\nindex b1076c768a..83821c069a 100644\n--- a/testes/attrib.lua\n+++ b/testes/attrib.lua\n@@ -434,6 +434,16 @@ a.aVeryLongName012345678901234567890123456789012345678901234567890123456789 ==\n 10)\n \n \n+do\n+  -- _ENV constant\n+  local function foo ()\n+    local _ENV <const> = 11\n+    X = \"hi\"\n+  end\n+  local st, msg = pcall(foo)\n+  assert(not st and string.find(msg, \"number\"))\n+end\n+\n \n -- test of large float/integer indices \n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42508415-vul",
+      "digest": "sha256:8433e8c396e1b9fb85949a75368c0b4bed7e79c49d97a876e6f4f6079685dd56"
+    },
+    "patched": {
+      "ref": "n132/arvo:42508415-fix",
+      "digest": "sha256:221d60436b9bf3d3f2a223ef0b50e86ce6c66e90cfac5747707c89679b323026"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/lua/ltable.c:650",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/lua/ltable.c:650"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

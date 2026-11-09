@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042535318",
+  "chain": "CWE-20->CWE-125",
+  "project": "mpv",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42535318",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "49cb039b8c04e788295ec273c83f462fa2f3a786",
+      "fix_commits": [
+        "49cb039b8c04e788295ec273c83f462fa2f3a786"
+      ],
+      "repo": "https://github.com/mpv-player/mpv"
+    },
+    "patch": "diff --git a/fuzzers/fuzzer_set_property.c b/fuzzers/fuzzer_set_property.c\nindex a11573825de03..421c8ac40c4b1 100644\n--- a/fuzzers/fuzzer_set_property.c\n+++ b/fuzzers/fuzzer_set_property.c\n@@ -68,8 +68,11 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)\n     check_error(mpv_initialize(ctx));\n #endif\n \n-    const void *value = data;\n-    mpv_set_property(ctx, name, MPV_FORMAT, &value);\n+if (MPV_FORMAT == MPV_FORMAT_STRING) {\n+    mpv_set_property_string(ctx, name, (void *)data);\n+} else {\n+    mpv_set_property(ctx, name, MPV_FORMAT, (void *)data);\n+}\n \n #if MPV_RUN\n     check_error(mpv_set_option_string(ctx, \"audio-files\", \"av://lavfi:sine=d=0.1\"));\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42535318-vul",
+      "digest": "sha256:acaada68a96d3129a3d9b35783ad5cde7995334c379469201e9299e0dbe4820c"
+    },
+    "patched": {
+      "ref": "n132/arvo:42535318-fix",
+      "digest": "sha256:5e332e8f5b219a932ffe2cecdb16c1c378fe3a114d7c029a55938173c950030d"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/mpv/build/../player/client.c:1032",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/mpv/build/../player/client.c:1032"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

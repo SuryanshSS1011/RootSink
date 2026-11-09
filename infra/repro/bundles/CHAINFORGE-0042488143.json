@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042488143",
+  "chain": "CWE-416->CWE-125",
+  "project": "fluent-bit",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42488143",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "61164218298f9dbee5bac6648b5b4f5e97759bba",
+      "fix_commits": [
+        "61164218298f9dbee5bac6648b5b4f5e97759bba"
+      ],
+      "repo": "https://github.com/fluent/fluent-bit"
+    },
+    "patch": "From 61164218298f9dbee5bac6648b5b4f5e97759bba Mon Sep 17 00:00:00 2001\nFrom: DavidKorczynski <david@adalogics.com>\nDate: Fri, 13 Nov 2020 20:14:44 +0000\nSubject: [PATCH] parser: fix inconsistent memory allocation in parser creation\n (#2760)\n\n* parser: fix inconsistent memory allocation in parser creation (oss-fuzz\n26345)\n\nThis commit fixes https://github.com/fluent/fluent-bit/issues/2686 by\navoiding any free of memory provided by the caller in flb_parser_create.\n\nSigned-off-by: davkor <david@adalogics.com>\n---\n src/flb_parser.c | 38 +++++++++++++++++++++++++++++++++++---\n 1 file changed, 35 insertions(+), 3 deletions(-)\n\ndiff --git a/src/flb_parser.c b/src/flb_parser.c\nindex cd1a870..d43dbef 100644\n--- a/src/flb_parser.c\n+++ b/src/flb_parser.c\n@@ -105,6 +105,38 @@ int flb_parser_logfmt_do(struct flb_parser *parser,\n                          void **out_buf, size_t *out_size,\n                          struct flb_time *out_time);\n \n+/*\n+ * This function is used to free all aspects of a parser\n+ * which is provided by the caller of flb_create_parser.\n+ * Specifically, this function frees all but parser.types and\n+ * parser.decoders from a parser.\n+ *\n+ * This function is only to be used in parser creation routines.\n+ */\n+static void flb_interim_parser_destroy(struct flb_parser *parser)\n+{\n+    int i = 0;\n+    if (parser->type == FLB_PARSER_REGEX) {\n+        flb_regex_destroy(parser->regex);\n+        flb_free(parser->p_regex);\n+    }\n+\n+    flb_free(parser->name);\n+    if (parser->time_fmt) {\n+        flb_free(parser->time_fmt);\n+        flb_free(parser->time_fmt_full);\n+    }\n+    if (parser->time_fmt_year) {\n+        flb_free(parser->time_fmt_year);\n+    }\n+    if (parser->time_key) {\n+        flb_free(parser->time_key);\n+    }\n+\n+    mk_list_del(&parser->_head);\n+    flb_free(parser);\n+}\n+\n struct flb_parser *flb_parser_create(const char *name, const char *format,\n                                      const char *p_regex,\n                                      const char *time_fmt, const char *time_key,\n@@ -201,7 +233,7 @@ struct flb_parser *flb_parser_create(const char *name, const char *format,\n             p->time_fmt_year = flb_malloc(size + 4);\n             if (!p->time_fmt_year) {\n                 flb_errno();\n-                flb_parser_destroy(p);\n+                flb_interim_parser_destroy(p);\n                 return NULL;\n             }\n \n@@ -224,7 +256,7 @@ struct flb_parser *flb_parser_create(const char *name, const char *format,\n #else\n             flb_error(\"[parser] timezone offset not supported\");\n             flb_error(\"[parser] you cannot use %%z/%%Z on this platform\");\n-            flb_parser_destroy(p);\n+            flb_interim_parser_destroy(p);\n             return NULL;\n #endif\n         }\n@@ -261,7 +293,7 @@ struct flb_parser *flb_parser_create(const char *name, const char *format,\n             len = strlen(time_offset);\n             ret = flb_parser_tzone_offset(time_offset, len, &diff);\n             if (ret == -1) {\n-                flb_parser_destroy(p);\n+                flb_interim_parser_destroy(p);\n                 return NULL;\n             }\n             p->time_offset = diff;\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42488143-vul",
+      "digest": "sha256:65a8089484f0d160880c7084d094fab170a7eca8b5efc6685a8ffec3fdb7747e"
+    },
+    "patched": {
+      "ref": "n132/arvo:42488143-fix",
+      "digest": "sha256:1bdeae0a31a703f78d15d4d90e2e11724708c9726843bd91358b53d478d67c15"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/fluent-bit/src/flb_parser_decoder.c:743",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/fluent-bit/src/flb_parser_decoder.c:743"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

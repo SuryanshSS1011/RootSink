@@ -1,0 +1,76 @@
+======================= INFO =========================
+This binary is built for AFL-fuzz.
+To run the target function on individual input(s) execute this:
+  /out/fuzzer < INPUT_FILE
+or
+  /out/fuzzer INPUT_FILE1 [INPUT_FILE2 ... ]
+To fuzz with afl-fuzz execute this:
+  afl-fuzz [afl-flags] /out/fuzzer [-N]
+afl-fuzz will run N iterations before re-spawning the process (default: 1000)
+======================================================
+Reading 12 bytes from /tmp/poc
+=================================================================
+==3795==ERROR: AddressSanitizer: stack-buffer-overflow on address 0x7f871c6a3384 at pc 0x00000054544d bp 0x7ffe27c0ec30 sp 0x7ffe27c0ec28
+WRITE of size 4 at 0x7f871c6a3384 thread T0
+SCARINESS: 51 (4-byte-write-stack-buffer-overflow)
+    #0 0x54544c in onigenc_unicode_get_case_fold_codes_by_str /src/oniguruma/src/unicode.c:434:29
+    #1 0x549b84 in utf16be_get_case_fold_codes_by_str /src/oniguruma/src/utf16_be.c:250:10
+    #2 0x50584e in unravel_case_fold_string /src/oniguruma/src/regcomp.c:5081:9
+    #3 0x4fd7d4 in tune_tree /src/oniguruma/src/regcomp.c:5798:11
+    #4 0x4f99e9 in onig_compile /src/oniguruma/src/regcomp.c:7297:7
+    #5 0x50114d in onig_new /src/oniguruma/src/regcomp.c:7521:7
+    #6 0x4c8c23 in exec /src/oniguruma/harnesses/base.c:216:7
+    #7 0x4c8a42 in alloc_exec /src/oniguruma/harnesses/base.c:284:7
+    #8 0x4c87fe in LLVMFuzzerTestOneInput /src/oniguruma/harnesses/base.c:474:7
+    #9 0x4c935e in ExecuteFilesOnyByOne /src/libfuzzer/afl/afl_driver.cpp:217:5
+    #10 0x4c935e in main /src/libfuzzer/afl/afl_driver.cpp:254:12
+    #11 0x7f871b63a82f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+    #12 0x41de58 in _start (/out/fuzzer+0x41de58)
+
+DEDUP_TOKEN: onigenc_unicode_get_case_fold_codes_by_str--utf16be_get_case_fold_codes_by_str--unravel_case_fold_string
+Address 0x7f871c6a3384 is located in stack of thread T0 at offset 388 in frame
+    #0 0x50557f in unravel_case_fold_string /src/oniguruma/src/regcomp.c:5058
+
+DEDUP_TOKEN: unravel_case_fold_string
+  This frame has 5 object(s):
+    [32, 36) 'min_len' (line 5060)
+    [48, 52) 'max_len' (line 5060)
+    [64, 72) 'sn' (line 5063)
+    [96, 104) 'list' (line 5063)
+    [128, 388) 'items' (line 5065) <== Memory access at offset 388 overflows this variable
+HINT: this may be a false positive if your program uses some custom stack unwind mechanism, swapcontext or vfork
+      (longjmp and C++ exceptions *are* supported)
+SUMMARY: AddressSanitizer: stack-buffer-overflow /src/oniguruma/src/unicode.c:434:29 in onigenc_unicode_get_case_fold_codes_by_str
+Shadow bytes around the buggy address:
+  0x0ff1638cc620: f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5
+  0x0ff1638cc630: f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5
+  0x0ff1638cc640: f1 f1 f1 f1 04 f2 04 f2 00 f2 f2 f2 00 f2 f2 f2
+  0x0ff1638cc650: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0ff1638cc660: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x0ff1638cc670:[04]f3 f3 f3 f3 f3 f3 f3 f3 f3 f3 f3 00 00 00 00
+  0x0ff1638cc680: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0ff1638cc690: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0ff1638cc6a0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0ff1638cc6b0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0ff1638cc6c0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+  Shadow gap:              cc
+==3795==ABORTING

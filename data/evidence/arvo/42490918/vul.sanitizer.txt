@@ -1,0 +1,82 @@
+Accepting input from '/tmp/poc'
+Usage for fuzzing: honggfuzz -P [flags] -- /out/fuzz_pkcs15_reader
+=================================================================
+==7==ERROR: AddressSanitizer: heap-use-after-free on address 0x615000001dc0 at pc 0x000000a37b88 bp 0x7ffecd7e43e0 sp 0x7ffecd7e43d8
+READ of size 4 at 0x615000001dc0 thread T0
+SCARINESS: 45 (4-byte-read-heap-use-after-free)
+    #0 0xa37b87 in sc_file_valid /src/opensc/src/libopensc/sc.c:810:15
+    #1 0xa376c9 in sc_file_free /src/opensc/src/libopensc/sc.c:619:23
+    #2 0x9c2655 in sc_oberthur_read_file /src/opensc/src/libopensc/pkcs15-oberthur.c:331:2
+    #3 0x9bf119 in sc_pkcs15emu_oberthur_init /src/opensc/src/libopensc/pkcs15-oberthur.c:1029:8
+    #4 0x9bc7a1 in sc_pkcs15emu_oberthur_init_ex /src/opensc/src/libopensc/pkcs15-oberthur.c:1065:8
+    #5 0x57e579 in sc_pkcs15_bind_synthetic /src/opensc/src/libopensc/pkcs15-syn.c:125:8
+    #6 0x513c0d in sc_pkcs15_bind /src/opensc/src/libopensc/pkcs15.c:1273:8
+    #7 0x4c85ad in LLVMFuzzerTestOneInput /src/opensc/src/tests/fuzzing/fuzz_pkcs15_reader.c:210:5
+    #8 0x4ca69d in main (/out/fuzz_pkcs15_reader+0x4ca69d)
+    #9 0x7f73cf21f82f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+    #10 0x41e468 in _start (/out/fuzz_pkcs15_reader+0x41e468)
+
+DEDUP_TOKEN: sc_file_valid--sc_file_free--sc_oberthur_read_file
+0x615000001dc0 is located 448 bytes inside of 456-byte region [0x615000001c00,0x615000001dc8)
+freed by thread T0 here:
+    #0 0x4964cd in free /src/llvm-project/compiler-rt/lib/asan/asan_malloc_linux.cpp:123:3
+    #1 0xa37a51 in sc_file_free /src/opensc/src/libopensc/sc.c:632:2
+    #2 0x9c1bfb in sc_oberthur_read_file /src/opensc/src/libopensc/pkcs15-oberthur.c:307:4
+    #3 0x9bf119 in sc_pkcs15emu_oberthur_init /src/opensc/src/libopensc/pkcs15-oberthur.c:1029:8
+    #4 0x9bc7a1 in sc_pkcs15emu_oberthur_init_ex /src/opensc/src/libopensc/pkcs15-oberthur.c:1065:8
+    #5 0x57e579 in sc_pkcs15_bind_synthetic /src/opensc/src/libopensc/pkcs15-syn.c:125:8
+    #6 0x513c0d in sc_pkcs15_bind /src/opensc/src/libopensc/pkcs15.c:1273:8
+    #7 0x4c85ad in LLVMFuzzerTestOneInput /src/opensc/src/tests/fuzzing/fuzz_pkcs15_reader.c:210:5
+    #8 0x4ca69d in main (/out/fuzz_pkcs15_reader+0x4ca69d)
+
+DEDUP_TOKEN: free--sc_file_free--sc_oberthur_read_file
+previously allocated by thread T0 here:
+    #0 0x4968c2 in calloc /src/llvm-project/compiler-rt/lib/asan/asan_malloc_linux.cpp:154:3
+    #1 0xa375a5 in sc_file_new /src/opensc/src/libopensc/sc.c:608:33
+    #2 0xa37c6e in sc_file_dup /src/opensc/src/libopensc/sc.c:644:9
+    #3 0x678eb9 in auth_select_file /src/opensc/src/libopensc/card-oberthur.c:506:4
+    #4 0x679e2e in auth_select_file /src/opensc/src/libopensc/card-oberthur.c:552:10
+    #5 0x4f0428 in sc_select_file /src/opensc/src/libopensc/card.c:865:6
+    #6 0x9c0f3d in sc_oberthur_read_file /src/opensc/src/libopensc/pkcs15-oberthur.c:253:7
+    #7 0x9bf119 in sc_pkcs15emu_oberthur_init /src/opensc/src/libopensc/pkcs15-oberthur.c:1029:8
+    #8 0x9bc7a1 in sc_pkcs15emu_oberthur_init_ex /src/opensc/src/libopensc/pkcs15-oberthur.c:1065:8
+    #9 0x57e579 in sc_pkcs15_bind_synthetic /src/opensc/src/libopensc/pkcs15-syn.c:125:8
+    #10 0x513c0d in sc_pkcs15_bind /src/opensc/src/libopensc/pkcs15.c:1273:8
+    #11 0x4c85ad in LLVMFuzzerTestOneInput /src/opensc/src/tests/fuzzing/fuzz_pkcs15_reader.c:210:5
+    #12 0x4ca69d in main (/out/fuzz_pkcs15_reader+0x4ca69d)
+
+DEDUP_TOKEN: calloc--sc_file_new--sc_file_dup
+SUMMARY: AddressSanitizer: heap-use-after-free /src/opensc/src/libopensc/sc.c:810:15 in sc_file_valid
+Shadow bytes around the buggy address:
+  0x0c2a7fff8360: 00 00 00 00 00 00 00 00 00 fa fa fa fa fa fa fa
+  0x0c2a7fff8370: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c2a7fff8380: fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd
+  0x0c2a7fff8390: fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd
+  0x0c2a7fff83a0: fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd
+=>0x0c2a7fff83b0: fd fd fd fd fd fd fd fd[fd]fa fa fa fa fa fa fa
+  0x0c2a7fff83c0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c2a7fff83d0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c2a7fff83e0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c2a7fff83f0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c2a7fff8400: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+  Shadow gap:              cc
+==7==ABORTING

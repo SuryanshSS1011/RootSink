@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042530135",
+  "chain": "CWE-1284->CWE-125",
+  "project": "exiv2",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42530135",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "79ab2f6ae21059e394883f6c8e3b2a0bb97e7e48",
+      "fix_commits": [
+        "79ab2f6ae21059e394883f6c8e3b2a0bb97e7e48"
+      ],
+      "repo": "https://github.com/Exiv2/exiv2"
+    },
+    "patch": "diff --git a/src/quicktimevideo.cpp b/src/quicktimevideo.cpp\nindex 5c3a25bdf4..fccc08dc9f 100644\n--- a/src/quicktimevideo.cpp\n+++ b/src/quicktimevideo.cpp\n@@ -906,7 +906,7 @@ void QuickTimeVideo::userDataDecoder(size_t size_external) {\n \n void QuickTimeVideo::NikonTagsDecoder(size_t size_external) {\n   size_t cur_pos = io_->tell();\n-  DataBuf buf(200);\n+  DataBuf buf(201);\n   DataBuf buf2(4 + 1);\n   uint32_t TagID = 0;\n   uint16_t dataLength = 0;\n@@ -1027,14 +1027,16 @@ void QuickTimeVideo::NikonTagsDecoder(size_t size_external) {\n       std::memset(buf.data(), 0x0, buf.size());\n \n       // Sanity check with an \"unreasonably\" large number\n-      if (dataLength > 200) {\n+      if (dataLength >= buf.size()) {\n #ifndef SUPPRESS_WARNINGS\n         EXV_ERROR << \"Xmp.video Nikon Tags, dataLength was found to be larger than 200.\"\n                   << \" Entries considered invalid. Not Processed.\\n\";\n #endif\n         io_->seek(io_->tell() + dataLength, BasicIo::beg);\n+        buf.data()[0] = '\\0';\n       } else {\n         io_->readOrThrow(buf.data(), dataLength);\n+        buf.data()[dataLength] = '\\0';\n       }\n \n       if (td) {\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42530135-vul",
+      "digest": "sha256:5c604c888cc5a4de064f6cfd73d3408cd3d75a191f9a46495af98ec08ab8c65b"
+    },
+    "patched": {
+      "ref": "n132/arvo:42530135-fix",
+      "digest": "sha256:e375a9ff39a5f7c0b3441e3159edfe412d7bb1ce9fbf26342fabd7572fd2f19f"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/exiv2/include/exiv2/types.hpp:472",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/exiv2/include/exiv2/types.hpp:472"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

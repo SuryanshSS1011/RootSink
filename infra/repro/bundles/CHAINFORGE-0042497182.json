@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042497182",
+  "chain": "CWE-20->CWE-787",
+  "project": "vlc",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42497182",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "bf1ba89a400038deee7742c97327037bbd58f1d3",
+      "fix_commits": [
+        "bf1ba89a400038deee7742c97327037bbd58f1d3"
+      ],
+      "repo": "https://github.com/videolan/vlc"
+    },
+    "patch": "diff --git a/src/input/demux.c b/src/input/demux.c\nindex 1daf74b4a99d..673213102bac 100644\n--- a/src/input/demux.c\n+++ b/src/input/demux.c\n@@ -118,6 +118,12 @@ demux_t *demux_NewAdvanced( vlc_object_t *p_obj, input_thread_t *p_input,\n                             const char *module, const char *url,\n                             stream_t *s, es_out_t *out, bool b_preparsing )\n {\n+    const char *p = strstr(url, \"://\");\n+    if (p == NULL) {\n+        errno = EINVAL;\n+        return NULL;\n+    }\n+\n     struct vlc_demux_private *priv;\n     demux_t *p_demux = vlc_stream_CustomNew(p_obj, demux_DestroyDemux,\n                                             sizeof (*priv), \"demux\");\n@@ -137,8 +143,7 @@ demux_t *demux_NewAdvanced( vlc_object_t *p_obj, input_thread_t *p_input,\n     if (unlikely(p_demux->psz_url == NULL))\n         goto error;\n \n-    const char *p = strstr(p_demux->psz_url, \"://\");\n-    p_demux->psz_location = (p != NULL) ? (p + 3) : \"\";\n+    p_demux->psz_location = p_demux->psz_url + 3 + (p - url);\n     p_demux->psz_filepath = get_path(p_demux->psz_location); /* parse URL */\n \n     if( !b_preparsing )\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42497182-vul",
+      "digest": "sha256:12048a53caf5666307f7f197251c72b3ad6a94feb7cf2a9a26af7d405d95fa85"
+    },
+    "patched": {
+      "ref": "n132/arvo:42497182-fix",
+      "digest": "sha256:9b1333f41320e8cccb23947157c529f19407ea8e23e3c44d176113da3a4a51ba"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/vlc/modules/codec/svcdsub.c:552",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/vlc/modules/codec/svcdsub.c:552"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

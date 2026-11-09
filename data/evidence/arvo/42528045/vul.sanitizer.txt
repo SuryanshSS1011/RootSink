@@ -1,0 +1,74 @@
+Accepting input from '/tmp/poc'
+Usage for fuzzing: honggfuzz -P [flags] -- /out/hts_open_fuzzer
+[W::cram_decode_compression_header] Unrecognised key: €ò
+[W::cram_decode_compression_header] Unrecognised key: U
+=================================================================
+==1824337==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x606000000352 at pc 0x000000694bc9 bp 0x7ffc011bcc50 sp 0x7ffc011bcc48
+READ of size 1 at 0x606000000352 thread T0
+SCARINESS: 12 (1-byte-read-heap-buffer-overflow)
+    #0 0x694bc8 in var_get_u64 /src/htslib/cram/../htscodecs/htscodecs/varint.h:247:17
+    #1 0x694bc8 in uint7_get_64 /src/htslib/cram/cram_io.c:789:14
+    #2 0x7a5759 in cram_huffman_decode_init /src/htslib/cram/cram_codecs.c:2830:31
+    #3 0x7994f4 in cram_decoder_init /src/htslib/cram/cram_codecs.c:3826:25
+    #4 0x610d00 in cram_decode_compression_header /src/htslib/cram/cram_decode.c:466:34
+    #5 0x62a83e in cram_first_slice /src/htslib/cram/cram_decode.c:3162:19
+    #6 0x62a83e in cram_next_slice /src/htslib/cram/cram_decode.c:3181:24
+    #7 0x62a83e in cram_get_seq /src/htslib/cram/cram_decode.c:3457:23
+    #8 0x62caf4 in cram_get_bam_seq /src/htslib/cram/cram_decode.c:3519:16
+    #9 0x574ec4 in sam_read1_cram /src/htslib/sam.c:4068:15
+    #10 0x574ec4 in sam_read1 /src/htslib/sam.c:4186:19
+    #11 0x4dd5ad in view_sam /src/htslib/test/fuzz/hts_open_fuzzer.c:74:12
+    #12 0x4dd5ad in LLVMFuzzerTestOneInput /src/htslib/test/fuzz/hts_open_fuzzer.c:142:13
+    #13 0x4dde2b in main (/out/hts_open_fuzzer+0x4dde2b)
+    #14 0x14a465893082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 1878e6b475720c7c51969e69ab2d276fae6d1dee)
+    #15 0x41ea7d in _start (/out/hts_open_fuzzer+0x41ea7d)
+
+DEDUP_TOKEN: var_get_u64--uint7_get_64--cram_huffman_decode_init
+0x606000000352 is located 0 bytes to the right of 50-byte region [0x606000000320,0x606000000352)
+allocated by thread T0 here:
+    #0 0x49feb6 in malloc /src/llvm-project/compiler-rt/lib/asan/asan_malloc_linux.cpp:69:3
+    #1 0x66c6a7 in cram_read_block /src/htslib/cram/cram_io.c:1439:25
+    #2 0x62a7d6 in cram_first_slice /src/htslib/cram/cram_decode.c:3157:31
+    #3 0x62a7d6 in cram_next_slice /src/htslib/cram/cram_decode.c:3181:24
+    #4 0x62a7d6 in cram_get_seq /src/htslib/cram/cram_decode.c:3457:23
+    #5 0x62caf4 in cram_get_bam_seq /src/htslib/cram/cram_decode.c:3519:16
+    #6 0x574ec4 in sam_read1_cram /src/htslib/sam.c:4068:15
+    #7 0x574ec4 in sam_read1 /src/htslib/sam.c:4186:19
+    #8 0x4dd5ad in view_sam /src/htslib/test/fuzz/hts_open_fuzzer.c:74:12
+    #9 0x4dd5ad in LLVMFuzzerTestOneInput /src/htslib/test/fuzz/hts_open_fuzzer.c:142:13
+    #10 0x4dde2b in main (/out/hts_open_fuzzer+0x4dde2b)
+
+DEDUP_TOKEN: malloc--cram_read_block--cram_first_slice
+SUMMARY: AddressSanitizer: heap-buffer-overflow /src/htslib/cram/../htscodecs/htscodecs/varint.h:247:17 in var_get_u64
+Shadow bytes around the buggy address:
+  0x0c0c7fff8010: 00 00 00 00 00 00 07 fa fa fa fa fa fd fd fd fd
+  0x0c0c7fff8020: fd fd fd fd fa fa fa fa fd fd fd fd fd fd fd fd
+  0x0c0c7fff8030: fa fa fa fa 00 00 00 00 00 00 00 00 fa fa fa fa
+  0x0c0c7fff8040: 00 00 00 00 00 00 00 00 fa fa fa fa 00 00 00 00
+  0x0c0c7fff8050: 00 00 00 fa fa fa fa fa 00 00 00 00 00 00 00 00
+=>0x0c0c7fff8060: fa fa fa fa 00 00 00 00 00 00[02]fa fa fa fa fa
+  0x0c0c7fff8070: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c0c7fff8080: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c0c7fff8090: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c0c7fff80a0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c0c7fff80b0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+==1824337==ABORTING

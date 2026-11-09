@@ -1,0 +1,99 @@
+Accepting input from '/tmp/poc'
+Usage for fuzzing: honggfuzz -P [flags] -- /out/curl_fuzzer
+=================================================================
+==2787805==ERROR: AddressSanitizer: heap-use-after-free on address 0x60d000000118 at pc 0x00000043698c bp 0x7ffdb4c45c00 sp 0x7ffdb4c453a8
+READ of size 3 at 0x60d000000118 thread T0
+SCARINESS: 43 (3-byte-read-heap-use-after-free)
+    #0 0x43698b in MemcmpInterceptorCommon(void*, int (*)(void const*, void const*, unsigned long), void const*, void const*, unsigned long) /src/llvm-project/compiler-rt/lib/asan/../sanitizer_common/sanitizer_common_interceptors.inc:861:7
+    #1 0x436d9b in bcmp /src/llvm-project/compiler-rt/lib/asan/../sanitizer_common/sanitizer_common_interceptors.inc:906:10
+    #2 0x686663 in search_static_table /src/nghttp2/lib/nghttp2_hd.c:1182:9
+    #3 0x686663 in search_hd_table /src/nghttp2/lib/nghttp2_hd.c:1204:12
+    #4 0x686663 in deflate_nv /src/nghttp2/lib/nghttp2_hd.c:1369:9
+    #5 0x686663 in nghttp2_hd_deflate_hd_bufs /src/nghttp2/lib/nghttp2_hd.c:1469:10
+    #6 0x69a6f5 in nghttp2_frame_pack_headers /src/nghttp2/lib/nghttp2_frame.c:352:8
+    #7 0x65dbe6 in session_prep_frame /src/nghttp2/lib/nghttp2_session.c:2147:10
+    #8 0x65dbe6 in nghttp2_session_mem_send_internal /src/nghttp2/lib/nghttp2_session.c:2921:12
+    #9 0x6621e6 in nghttp2_session_send /src/nghttp2/lib/nghttp2_session.c:3243:15
+    #10 0x4e97d1 in h2_session_send /src/curl/lib/http2.c:1612:10
+    #11 0x4e9096 in h2_process_pending_input /src/curl/lib/http2.c:1411:8
+    #12 0x4eb4ac in http2_recv /src/curl/lib/http2.c:1788:8
+    #13 0x5256a8 in Curl_read /src/curl/lib/sendf.c:696:11
+    #14 0x54a898 in readwrite_data /src/curl/lib/transfer.c:562:16
+    #15 0x54a898 in Curl_readwrite /src/curl/lib/transfer.c:1182:14
+    #16 0x511fe4 in multi_runsingle /src/curl/lib/multi.c:2359:16
+    #17 0x50fbef in curl_multi_perform /src/curl/lib/multi.c:2637:14
+    #18 0x4d7203 in fuzz_handle_transfer(fuzz_data*) /src/curl_fuzzer/curl_fuzzer.cc:383:5
+    #19 0x4d6322 in LLVMFuzzerTestOneInput /src/curl_fuzzer/curl_fuzzer.cc:93:3
+    #20 0xafe98b in main (/out/curl_fuzzer+0xafe98b)
+    #21 0x147c7a9d90b2 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x270b2)
+    #22 0x41d74d in _start (/out/curl_fuzzer+0x41d74d)
+
+DEDUP_TOKEN: MemcmpInterceptorCommon(void*, int (*)(void const*, void const*, unsigned long), void const*, void const*, unsigned long)--bcmp--search_static_table
+0x60d000000118 is located 8 bytes inside of 144-byte region [0x60d000000110,0x60d0000001a0)
+freed by thread T0 here:
+    #0 0x49c7e2 in free /src/llvm-project/compiler-rt/lib/asan/asan_malloc_linux.cpp:111:3
+    #1 0x4f454e in curl_dbg_free /src/curl/lib/memdebug.c:292:5
+    #2 0x5a2c99 in Curl_dyn_free /src/curl/lib/dynbuf.c:58:3
+    #3 0x5d5c7f in Curl_buffer_send /src/curl/lib/http.c:1398:3
+    #4 0x5da509 in Curl_http_bodysend /src/curl/lib/http.c:2681:14
+    #5 0x5cf905 in Curl_http /src/curl/lib/http.c:3238:14
+    #6 0x512e18 in multi_do /src/curl/lib/multi.c:1560:14
+    #7 0x512e18 in multi_runsingle /src/curl/lib/multi.c:2109:18
+    #8 0x50fbef in curl_multi_perform /src/curl/lib/multi.c:2637:14
+    #9 0x4d6c0c in fuzz_handle_transfer(fuzz_data*) /src/curl_fuzzer/curl_fuzzer.cc:305:3
+    #10 0x4d6322 in LLVMFuzzerTestOneInput /src/curl_fuzzer/curl_fuzzer.cc:93:3
+    #11 0xafe98b in main (/out/curl_fuzzer+0xafe98b)
+
+DEDUP_TOKEN: free--curl_dbg_free--Curl_dyn_free
+previously allocated by thread T0 here:
+    #0 0x49cd23 in __interceptor_realloc /src/llvm-project/compiler-rt/lib/asan/asan_malloc_linux.cpp:148:3
+    #1 0x4f4352 in curl_dbg_realloc /src/curl/lib/memdebug.c:260:9
+    #2 0x5a32f1 in dyn_nappend /src/curl/lib/dynbuf.c:98:15
+    #3 0x5a2fbe in Curl_dyn_addn /src/curl/lib/dynbuf.c:164:10
+    #4 0x5062ac in alloc_addbyter /src/curl/lib/mprintf.c:1046:6
+    #5 0x5040af in dprintf_formatf /src/curl/lib/mprintf.c:845:11
+    #6 0x5060a5 in Curl_dyn_vprintf /src/curl/lib/mprintf.c:1064:13
+    #7 0x5a3ba8 in Curl_dyn_vaddf /src/curl/lib/dynbuf.c:189:8
+    #8 0x5a3ba8 in Curl_dyn_addf /src/curl/lib/dynbuf.c:219:12
+    #9 0x5cf5ca in Curl_http /src/curl/lib/http.c:3155:5
+    #10 0x512e18 in multi_do /src/curl/lib/multi.c:1560:14
+    #11 0x512e18 in multi_runsingle /src/curl/lib/multi.c:2109:18
+    #12 0x50fbef in curl_multi_perform /src/curl/lib/multi.c:2637:14
+    #13 0x4d6c0c in fuzz_handle_transfer(fuzz_data*) /src/curl_fuzzer/curl_fuzzer.cc:305:3
+    #14 0x4d6322 in LLVMFuzzerTestOneInput /src/curl_fuzzer/curl_fuzzer.cc:93:3
+    #15 0xafe98b in main (/out/curl_fuzzer+0xafe98b)
+
+DEDUP_TOKEN: __interceptor_realloc--curl_dbg_realloc--dyn_nappend
+SUMMARY: AddressSanitizer: heap-use-after-free /src/llvm-project/compiler-rt/lib/asan/../sanitizer_common/sanitizer_common_interceptors.inc:861:7 in MemcmpInterceptorCommon(void*, int (*)(void const*, void const*, unsigned long), void const*, void const*, unsigned long)
+Shadow bytes around the buggy address:
+  0x0c1a7fff7fd0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c1a7fff7fe0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c1a7fff7ff0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c1a7fff8000: fa fa fa fa fa fa fa fa fd fd fd fd fd fd fd fd
+  0x0c1a7fff8010: fd fd fd fd fd fd fd fd fd fa fa fa fa fa fa fa
+=>0x0c1a7fff8020: fa fa fd[fd]fd fd fd fd fd fd fd fd fd fd fd fd
+  0x0c1a7fff8030: fd fd fd fd fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c1a7fff8040: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c1a7fff8050: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c1a7fff8060: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c1a7fff8070: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+==2787805==ABORTING

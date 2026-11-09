@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042493061",
+  "chain": "CWE-416->CWE-125",
+  "project": "tesseract",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42493061",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "e9a2fc0083e784230b5e348185a5a910be644535",
+      "fix_commits": [
+        "e9a2fc0083e784230b5e348185a5a910be644535"
+      ],
+      "repo": "https://github.com/tesseract-ocr/tesseract"
+    },
+    "patch": "From e9a2fc0083e784230b5e348185a5a910be644535 Mon Sep 17 00:00:00 2001\nFrom: Egor Pugin <egor.pugin@gmail.com>\nDate: Wed, 10 Mar 2021 14:36:59 +0300\nSubject: [PATCH] More std::string replacements.\n\n---\n src/api/baseapi.cpp        |  4 ++--\n src/ccmain/docqual.cpp     |  2 +-\n src/ccstruct/ratngs.cpp    |  6 +++---\n src/ccstruct/ratngs.h      | 16 ++++++++--------\n src/ccutil/ccutil.h        | 12 ++++++------\n src/ccutil/params.h        | 12 ++++++------\n src/classify/blobclass.cpp |  4 ++--\n src/classify/blobclass.h   |  2 +-\n src/dict/dict.cpp          |  6 +++---\n 9 files changed, 32 insertions(+), 32 deletions(-)\n\ndiff --git a/src/api/baseapi.cpp b/src/api/baseapi.cpp\nindex 0a9e183..fd3a725 100644\n--- a/src/api/baseapi.cpp\n+++ b/src/api/baseapi.cpp\n@@ -869,7 +869,7 @@ int TessBaseAPI::Recognize(ETEXT_DESC* monitor) {\n     return -1;\n   #ifndef DISABLED_LEGACY_ENGINE\n   } else if (tesseract_->tessedit_train_from_boxes) {\n-    STRING fontname;\n+    std::string fontname;\n     ExtractFontName(output_file_.c_str(), &fontname);\n     tesseract_->ApplyBoxTraining(fontname, page_res_);\n   } else if (tesseract_->tessedit_ambigs_training) {\n@@ -1579,7 +1579,7 @@ char* TessBaseAPI::GetUNLVText() {\n       tilde_crunch_written = false;\n       tesseract_->set_unlv_suspects(word);\n       const char* wordstr = word->best_choice->unichar_string().c_str();\n-      const STRING& lengths = word->best_choice->unichar_lengths();\n+      const auto &lengths = word->best_choice->unichar_lengths();\n       int length = lengths.length();\n       int i = 0;\n       int offset = 0;\ndiff --git a/src/ccmain/docqual.cpp b/src/ccmain/docqual.cpp\nindex f74f9ea..570675f 100644\n--- a/src/ccmain/docqual.cpp\n+++ b/src/ccmain/docqual.cpp\n@@ -486,7 +486,7 @@ bool Tesseract::terrible_word_crunch(WERD_RES* word,\n \n   if ((word->best_choice->unichar_string().length() == 0) ||\n       (strspn(word->best_choice->unichar_string().c_str(), \" \") ==\n-       word->best_choice->unichar_string().unsigned_size()))\n+       word->best_choice->unichar_string().size()))\n     crunch_mode = 1;\n   else {\n     adjusted_len = word->reject_map.length ();\ndiff --git a/src/ccstruct/ratngs.cpp b/src/ccstruct/ratngs.cpp\nindex ea40c85..274b73c 100644\n--- a/src/ccstruct/ratngs.cpp\n+++ b/src/ccstruct/ratngs.cpp\n@@ -222,7 +222,7 @@ WERD_CHOICE::WERD_CHOICE(const char *src_string,\n   if (unicharset.encode_string(cleaned.c_str(), true, &encoding, &lengths,\n                                nullptr)) {\n     lengths.push_back('\\0');\n-    STRING src_lengths = &lengths[0];\n+    std::string src_lengths = &lengths[0];\n     this->init(cleaned.c_str(), src_lengths.c_str(), 0.0, 0.0, NO_PERM);\n   } else {  // There must have been an invalid unichar in the string.\n     this->init(8);\n@@ -444,8 +444,8 @@ bool WERD_CHOICE::has_rtl_unichar_id() const {\n  * Populates the given word_str with unichars from unichar_ids and\n  * and word_lengths_str with the corresponding unichar lengths.\n  */\n-void WERD_CHOICE::string_and_lengths(STRING *word_str,\n-                                     STRING *word_lengths_str) const {\n+void WERD_CHOICE::string_and_lengths(std::string *word_str,\n+                                     std::string *word_lengths_str) const {\n   *word_str = \"\";\n   if (word_lengths_str != nullptr) *word_lengths_str = \"\";\n   for (int i = 0; i < length_; ++i) {\ndiff --git a/src/ccstruct/ratngs.h b/src/ccstruct/ratngs.h\nindex c2bc962..ef2fb19 100644\n--- a/src/ccstruct/ratngs.h\n+++ b/src/ccstruct/ratngs.h\n@@ -494,9 +494,9 @@ class TESS_API WERD_CHOICE : public ELIST_LINK {\n   // The result is useful only for checking against a dictionary.\n   WERD_CHOICE shallow_copy(int start, int end) const;\n \n-  void string_and_lengths(STRING *word_str, STRING *word_lengths_str) const;\n-  const STRING debug_string() const {\n-    STRING word_str;\n+  void string_and_lengths(std::string *word_str, std::string *word_lengths_str) const;\n+  std::string debug_string() const {\n+    std::string word_str;\n     for (int i = 0; i < length_; ++i) {\n       word_str += unicharset_->debug_str(unichar_ids_[i]);\n       word_str += \" \";\n@@ -531,21 +531,21 @@ class TESS_API WERD_CHOICE : public ELIST_LINK {\n \n   // Returns a UTF-8 string equivalent to the current choice\n   // of UNICHAR IDs.\n-  STRING &unichar_string() {\n+  std::string &unichar_string() {\n       this->string_and_lengths(&unichar_string_, &unichar_lengths_);\n       return unichar_string_;\n   }\n \n   // Returns a UTF-8 string equivalent to the current choice\n   // of UNICHAR IDs.\n-  const STRING &unichar_string() const {\n+  const std::string &unichar_string() const {\n     this->string_and_lengths(&unichar_string_, &unichar_lengths_);\n     return unichar_string_;\n   }\n \n   // Returns the lengths, one byte each, representing the number of bytes\n   // required in the unichar_string for each UNICHAR_ID.\n-  const STRING &unichar_lengths() const {\n+  const std::string &unichar_lengths() const {\n     this->string_and_lengths(&unichar_string_, &unichar_lengths_);\n     return unichar_lengths_;\n   }\n@@ -635,8 +635,8 @@ class TESS_API WERD_CHOICE : public ELIST_LINK {\n \n   // The following variables are populated and passed by reference any\n   // time unichar_string() or unichar_lengths() are called.\n-  mutable STRING unichar_string_;\n-  mutable STRING unichar_lengths_;\n+  mutable std::string unichar_string_;\n+  mutable std::string unichar_lengths_;\n };\n \n // Make WERD_CHOICE listable.\ndiff --git a/src/ccutil/ccutil.h b/src/ccutil/ccutil.h\nindex 5cc39f2..af3b24b 100644\n--- a/src/ccutil/ccutil.h\n+++ b/src/ccutil/ccutil.h\n@@ -54,16 +54,16 @@ class TESS_API CCUtil {\n                  );\n   ParamsVectors *params() { return &params_; }\n \n-  STRING datadir;        // dir for data files\n-  STRING imagebasename;  // name of image\n-  STRING lang;\n-  STRING language_data_path_prefix;\n+  std::string datadir;        // dir for data files\n+  std::string imagebasename;  // name of image\n+  std::string lang;\n+  std::string language_data_path_prefix;\n   UNICHARSET unicharset;\n #ifndef DISABLED_LEGACY_ENGINE\n   UnicharAmbigs unichar_ambigs;\n #endif\n-  STRING imagefile;  // image file name\n-  STRING directory;  // main directory\n+  std::string imagefile;  // image file name\n+  std::string directory;  // main directory\n \n  private:\n   ParamsVectors params_;\ndiff --git a/src/ccutil/params.h b/src/ccutil/params.h\nindex 459c1ab..1ec6398 100644\n--- a/src/ccutil/params.h\n+++ b/src/ccutil/params.h\n@@ -211,12 +211,12 @@ class StringParam : public Param {\n     vec->string_params.push_back(this);\n   }\n   ~StringParam() { ParamUtils::RemoveParam<StringParam>(this, params_vec_); }\n-  operator STRING&() { return value_; }\n+  operator std::string &() { return value_; }\n   const char* c_str() const { return value_.c_str(); }\n   bool empty() { return value_.length() <= 0; }\n-  bool operator==(const STRING& other) { return value_ == other; }\n-  void operator=(const STRING& value) { value_ = value; }\n-  void set_value(const STRING& value) { value_ = value; }\n+  bool operator==(const std::string &other) { return value_ == other; }\n+  void operator=(const std::string &value) { value_ = value; }\n+  void set_value(const std::string &value) { value_ = value; }\n   void ResetToDefault() { value_ = default_; }\n   void ResetFrom(const ParamsVectors* vec) {\n     for (auto* param : vec->string_params) {\n@@ -230,8 +230,8 @@ class StringParam : public Param {\n   }\n \n  private:\n-  STRING value_;\n-  STRING default_;\n+  std::string value_;\n+  std::string default_;\n   // Pointer to the vector that contains this param (not owned by this class).\n   std::vector<StringParam*>* params_vec_;\n };\ndiff --git a/src/classify/blobclass.cpp b/src/classify/blobclass.cpp\nindex 497ad04..aee290c 100644\n--- a/src/classify/blobclass.cpp\n+++ b/src/classify/blobclass.cpp\n@@ -40,7 +40,7 @@ static STRING_VAR(classify_font_name, kUnknownFontName,\n // /path/to/dir/[lang].[fontname].exp[num]\n // The [lang], [fontname] and [num] fields should not have '.' characters.\n // If the global parameter classify_font_name is set, its value is used instead.\n-void ExtractFontName(const char* filename, STRING* fontname) {\n+void ExtractFontName(const char* filename, std::string* fontname) {\n   *fontname = classify_font_name;\n   if (*fontname == kUnknownFontName) {\n     // filename is expected to be of the form [lang].[fontname].exp[num]\n@@ -51,7 +51,7 @@ void ExtractFontName(const char* filename, STRING* fontname) {\n     if (firstdot != lastdot && firstdot != nullptr && lastdot != nullptr) {\n       ++firstdot;\n       *fontname = firstdot;\n-      fontname->truncate_at(lastdot - firstdot);\n+      fontname->resize(lastdot - firstdot);\n     }\n   }\n }\ndiff --git a/src/classify/blobclass.h b/src/classify/blobclass.h\nindex 94532fc..c5c83cf 100644\n--- a/src/classify/blobclass.h\n+++ b/src/classify/blobclass.h\n@@ -32,7 +32,7 @@ namespace tesseract {\n // /path/to/dir/[lang].[fontname].exp[num]\n // The [lang], [fontname] and [num] fields should not have '.' characters.\n // If the global parameter classify_font_name is set, its value is used instead.\n-void ExtractFontName(const char* filename, STRING* fontname);\n+void ExtractFontName(const char* filename, std::string* fontname);\n \n }  // namespace tesseract.\n \ndiff --git a/src/dict/dict.cpp b/src/dict/dict.cpp\nindex eb69b56..506f977 100644\n--- a/src/dict/dict.cpp\n+++ b/src/dict/dict.cpp\n@@ -239,7 +239,7 @@ void Dict::Load(const STRING& lang, TessdataManager* data_file) {\n     if (unambig_dawg_) dawgs_ += unambig_dawg_;\n   }\n \n-  STRING name;\n+  std::string name;\n   if (!user_words_suffix.empty() || !user_words_file.empty()) {\n     Trie* trie_ptr = new Trie(DAWG_TYPE_WORD, lang, USER_DAWG_PERM,\n                               getUnicharset().size(), dawg_debug_level);\n@@ -306,7 +306,7 @@ void Dict::LoadLSTM(const STRING& lang, TessdataManager* data_file) {\n \n   // stolen from Dict::Load (but needs params_ from Tesseract\n   // langdata/config/api):\n-  STRING name;\n+  std::string name;\n   if (!user_words_suffix.empty() || !user_words_file.empty()) {\n     Trie* trie_ptr = new Trie(DAWG_TYPE_WORD, lang, USER_DAWG_PERM,\n                               getUnicharset().size(), dawg_debug_level);\n@@ -683,7 +683,7 @@ void Dict::add_document_word(const WERD_CHOICE& best_choice) {\n   }\n \n   if (save_doc_words) {\n-    STRING filename(getCCUtil()->imagefile);\n+    std::string filename(getCCUtil()->imagefile);\n     filename += \".doc\";\n     FILE* doc_word_file = fopen(filename.c_str(), \"a\");\n     if (doc_word_file == nullptr) {\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42493061-vul",
+      "digest": "sha256:a4746e201a9c6134a6900ee3ef8269d222f800024f6f48eaa966309ab4dfad9c"
+    },
+    "patched": {
+      "ref": "n132/arvo:42493061-fix",
+      "digest": "sha256:39bcbae15bc98fb917f484d228fdc88ff2d820d55502393c5303ce78dc6a5d9c"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/tesseract/src/ccmain/reject.cpp:313",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/tesseract/src/ccmain/reject.cpp:313"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

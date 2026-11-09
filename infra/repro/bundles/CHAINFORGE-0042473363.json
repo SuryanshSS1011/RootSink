@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042473363",
+  "chain": "CWE-416->CWE-125",
+  "project": "gnutls",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42473363",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "7265612d87f51c2f52a2e4cf5bdf14f31bd291a2",
+      "fix_commits": [
+        "7265612d87f51c2f52a2e4cf5bdf14f31bd291a2"
+      ],
+      "repo": "https://gitlab.com/gnutls/gnutls.git"
+    },
+    "patch": "diff --git a/lib/x509/pkcs12.c b/lib/x509/pkcs12.c\nindex 16a015cb7dc96cfbf3322d62474a6212cb8aedda..2b7b8d6402f680dd4b64c7b91264913fb425af58 100644\n--- a/lib/x509/pkcs12.c\n+++ b/lib/x509/pkcs12.c\n@@ -1670,6 +1670,7 @@ gnutls_pkcs12_simple_parse(gnutls_pkcs12_t p12,\n \t\t\t\tif (ret < 0) {\n \t\t\t\t\tgnutls_assert();\n \t\t\t\t\tgnutls_x509_crt_deinit(this_cert);\n+\t\t\t\t\tthis_cert = NULL;\n \t\t\t\t\tgoto done;\n \t\t\t\t}\n \n@@ -1682,6 +1683,7 @@ gnutls_pkcs12_simple_parse(gnutls_pkcs12_t p12,\n \t\t\t\tif (ret < 0) {\n \t\t\t\t\tgnutls_assert();\n \t\t\t\t\tgnutls_x509_crt_deinit(this_cert);\n+\t\t\t\t\tthis_cert = NULL;\n \t\t\t\t\tgoto done;\n \t\t\t\t}\n \n@@ -1721,6 +1723,7 @@ gnutls_pkcs12_simple_parse(gnutls_pkcs12_t p12,\n \t\t\t\t\t} else {\n \t\t\t\t\t\tgnutls_x509_crt_deinit\n \t\t\t\t\t\t    (this_cert);\n+\t\t\t\t\t\tthis_cert = NULL;\n \t\t\t\t\t}\n \t\t\t\t}\n \t\t\t\tbreak;\n@@ -1743,6 +1746,7 @@ gnutls_pkcs12_simple_parse(gnutls_pkcs12_t p12,\n \t\t\t\tif (ret < 0) {\n \t\t\t\t\tgnutls_assert();\n \t\t\t\t\tgnutls_x509_crl_deinit(*crl);\n+\t\t\t\t\t*crl = NULL;\n \t\t\t\t\tgoto done;\n \t\t\t\t}\n \t\t\t\tbreak;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42473363-vul",
+      "digest": "sha256:e03f9991c26501f546366deb91e281a4ff03d30a1b252828b629d4b25f3b001e"
+    },
+    "patched": {
+      "ref": "n132/arvo:42473363-fix",
+      "digest": "sha256:ac7d4a3b89ef2f0d55e5ffd1841b272d9b6705c2e9a40c69a7bb6fa6ccd3185c"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/gnutls/lib/x509/crl.c:98",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/gnutls/lib/x509/crl.c:98"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

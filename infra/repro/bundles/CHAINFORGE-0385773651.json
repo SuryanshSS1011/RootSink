@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0385773651",
+  "chain": "CWE-1285->CWE-125",
+  "project": "grok",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "385773651",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "91ea5352a01937612c2b7a9749d93802f42d027f",
+      "fix_commits": [
+        "91ea5352a01937612c2b7a9749d93802f42d027f"
+      ],
+      "repo": "https://github.com/GrokImageCompression/grok"
+    },
+    "patch": "diff --git a/.vscode/launch.json b/.vscode/launch.json\nindex 472c5f73ad..351c170319 100644\n--- a/.vscode/launch.json\n+++ b/.vscode/launch.json\n@@ -47,9 +47,9 @@\n             \"program\": \"${workspaceFolder}/build/bin/grk_decompress\",\n             \"args\": [\n                 \"-i\",\n-                \"~/temp/input_01\",\n+                \"~/Downloads/clusterfuzz-testcase-minimized-grk_decompress_fuzzer-5319359051923456\",\n                 \"-o\",\n-                \"~/temp/input_01.png\",\n+                \"~/temp/fuzz.pgx\",\n                 \"-v\",\n                 \"-d 0,0,1024,1024\"\n             ],\ndiff --git a/src/lib/core/t2/PacketIter.h b/src/lib/core/t2/PacketIter.h\nindex 96adf2aee2..52dd25e531 100644\n--- a/src/lib/core/t2/PacketIter.h\n+++ b/src/lib/core/t2/PacketIter.h\n@@ -38,79 +38,110 @@ enum J2K_T2_MODE\n    FINAL_PASS = 1 /** Function called in Tier 2 process*/\n };\n \n-constexpr size_t GRK_INCLUDE_TRACKER_CHUNK_SIZE = 1024; // Define the size of each chunk\n+/**\n+ * @brief Chunk size for chunked resolution include buffer\n+ *\n+ */\n+constexpr size_t GRK_INCLUDE_TRACKER_CHUNK_SIZE = 1024;\n \n-struct ResIncludeBuffers\n+/**\n+ * @struct LayerIncludeBuffers\n+ * @brief Include buffers for all resolutions in a given layer.\n+ * Each buffer is broken into chunks, and is lazy-allocated\n+ *\n+ */\n+struct LayerIncludeBuffers\n {\n-   ResIncludeBuffers()\n+   /**\n+\t* @brief Construct a new LayerIncludeBuffers object\n+\t*\n+\t*/\n+   LayerIncludeBuffers()\n    {\n \t  for(uint8_t i = 0; i < GRK_MAXRLVLS; ++i)\n-\t  {\n-\t\t buffers[i] = nullptr; // Buffers start as nullptr\n-\t  }\n+\t\t chunkMap[i] = nullptr; // Buffers start as nullptr\n    }\n \n-   ~ResIncludeBuffers()\n+   /**\n+\t* @brief Destroy the LayerIncludeBuffers object\n+\t*\n+\t*/\n+   ~LayerIncludeBuffers()\n    {\n \t  clear();\n    }\n \n-   // Lazily get or allocate the specific byte within a chunk for a given resolution\n-   uint8_t* get_byte(uint8_t resno, uint64_t index)\n+   /**\n+\t* @brief Get the byte object\n+\t* Lazily get or allocate a resolution's specific byte within its include buffer's matching\n+\t* chunk\n+\t*\n+\t* @param resno resolution\n+\t* @param precinctIndex compno * (num precincts for this resolution) + precinct number\n+\t* @return uint8_t* pointer to byte\n+\t*/\n+   bool update(uint8_t resno, uint64_t bitIndex)\n    {\n \t  if(resno >= GRK_MAXRLVLS)\n-\t  {\n \t\t throw std::out_of_range(\"Resolution index out of range\");\n-\t  }\n \n-\t  if(!buffers[resno])\n-\t  {\n-\t\t buffers[resno] = new std::map<size_t, uint8_t*>(); // Lazily allocate the map\n-\t  }\n+\t  if(!chunkMap[resno])\n+\t\t chunkMap[resno] = new std::map<size_t, uint8_t*>(); // Lazily allocate the map\n \n-\t  auto& chunks = *buffers[resno];\n-\t  uint64_t byteIndex = index / 8; // Byte index within the resolution's buffer\n+\t  auto& chunks = *chunkMap[resno];\n+\t  uint64_t byteIndex = bitIndex >> 3; // Byte index within the resolution's buffer\n \t  uint64_t chunkIndex =\n \t\t  byteIndex / GRK_INCLUDE_TRACKER_CHUNK_SIZE; // Determine which chunk to access\n-\t  uint64_t offset = byteIndex % GRK_INCLUDE_TRACKER_CHUNK_SIZE; // Offset within the chunk\n+\t  uint64_t chunkOffset = byteIndex % GRK_INCLUDE_TRACKER_CHUNK_SIZE; // Offset within the chunk\n \n \t  // Lazily allocate the chunk\n \t  if(chunks.find(chunkIndex) == chunks.end())\n-\t  {\n \t\t chunks[chunkIndex] =\n \t\t\t new uint8_t[GRK_INCLUDE_TRACKER_CHUNK_SIZE](); // Allocate chunk lazily\n+\n+\t  auto include = chunks[chunkIndex] + chunkOffset;\n+\t  uint8_t bit = (bitIndex & 7);\n+\t  uint8_t val = include[byteIndex];\n+\t  if(((val >> bit) & 1) == 0)\n+\t  {\n+\t\t include[byteIndex] = (uint8_t)(val | (1 << bit));\n+\t\t return true;\n \t  }\n \n-\t  return chunks[chunkIndex] + offset;\n+\t  return false;\n    }\n \n-   // Clear all allocated memory\n+   /**\n+\t* @brief Clears all chunks and chunkMaps\n+\t*\n+\t*/\n    void clear()\n    {\n \t  for(uint8_t i = 0; i < GRK_MAXRLVLS; ++i)\n \t  {\n-\t\t if(buffers[i])\n+\t\t if(chunkMap[i])\n \t\t {\n-\t\t\tfor(auto& chunk : *buffers[i])\n-\t\t\t{\n+\t\t\tfor(auto& chunk : *chunkMap[i])\n \t\t\t   delete[] chunk.second; // Delete each chunk\n-\t\t\t}\n-\t\t\tdelete buffers[i]; // Delete the map\n-\t\t\tbuffers[i] = nullptr;\n+\t\t\tdelete chunkMap[i]; // Delete the map\n+\t\t\tchunkMap[i] = nullptr;\n \t\t }\n \t  }\n    }\n \n  private:\n-   std::map<size_t, uint8_t*>*\n-\t   buffers[GRK_MAXRLVLS]; // Lazily allocated maps of chunks for each resolution\n+   /**\n+\t* @brief Lazily allocated maps of chunks for each resolution\n+\t*\n+\t*/\n+   std::map<size_t, uint8_t*>* chunkMap[GRK_MAXRLVLS];\n };\n \n struct IncludeTracker\n {\n    IncludeTracker(uint16_t numcomponents)\n-\t   : numcomps(numcomponents), currentLayer(0), currentResBuf(nullptr),\n-\t\t include(new std::map<uint16_t, ResIncludeBuffers*>())\n+\t   : numcomps(numcomponents), currentLayer(0), currentLayerIncludeBuf(nullptr),\n+\t\t include(new std::map<uint16_t, LayerIncludeBuffers*>())\n    {\n \t  resetNumPrecinctsPerRes();\n    }\n@@ -123,27 +154,34 @@ struct IncludeTracker\n \n    bool update(uint16_t layno, uint8_t resno, uint16_t compno, uint64_t precno)\n    {\n-\t  auto include = get_include(layno, resno);\n-\t  auto numprecs = numPrecinctsPerRes[resno];\n-\t  uint64_t index = compno * numprecs + precno;\n-\t  uint64_t include_index = (index >> 3);\n-\t  uint32_t shift = (index & 7);\n-\t  uint8_t val = include[include_index];\n-\t  if(((val >> shift) & 1) == 0)\n+\t  LayerIncludeBuffers* layerBuf = nullptr;\n+\n+\t  // Retrieve or create the ResIncludeBuffers for the current layer\n+\t  if(layno == currentLayer && currentLayerIncludeBuf)\n \t  {\n-\t\t include[include_index] = (uint8_t)(val | (1 << shift));\n-\t\t return true;\n+\t\t layerBuf = currentLayerIncludeBuf;\n+\t  }\n+\t  else\n+\t  {\n+\t\t if(include->find(layno) == include->end())\n+\t\t\tinclude->operator[](layno) = layerBuf = new LayerIncludeBuffers;\n+\t\t else\n+\t\t\tlayerBuf = include->operator[](layno);\n+\t\t currentLayerIncludeBuf = layerBuf;\n+\t\t currentLayer = layno;\n \t  }\n \n-\t  return false;\n+\t  // Calculate the index in bits\n+\t  auto numprecs = numPrecinctsPerRes[resno];\n+\t  uint64_t bitIndex = compno * numprecs + precno;\n+\n+\t  return layerBuf->update(resno, bitIndex);\n    }\n \n    void clear()\n    {\n \t  for(auto it = include->begin(); it != include->end(); ++it)\n-\t  {\n \t\t delete it->second;\n-\t  }\n \t  include->clear();\n    }\n \n@@ -156,51 +194,15 @@ struct IncludeTracker\n    void updateNumPrecinctsPerRes(uint8_t resno, uint64_t numPrecincts)\n    {\n \t  if(numPrecincts > numPrecinctsPerRes[resno])\n-\t  {\n \t\t numPrecinctsPerRes[resno] = numPrecincts;\n-\t  }\n    }\n \n  private:\n-   uint8_t* get_include(uint16_t layerno, uint8_t resno)\n-   {\n-\t  ResIncludeBuffers* resBuf = nullptr;\n-\n-\t  // Retrieve or create the ResIncludeBuffers for the current layer\n-\t  if(layerno == currentLayer && currentResBuf)\n-\t  {\n-\t\t resBuf = currentResBuf;\n-\t  }\n-\t  else\n-\t  {\n-\t\t if(include->find(layerno) == include->end())\n-\t\t {\n-\t\t\tresBuf = new ResIncludeBuffers;\n-\t\t\tinclude->operator[](layerno) = resBuf;\n-\t\t }\n-\t\t else\n-\t\t {\n-\t\t\tresBuf = include->operator[](layerno);\n-\t\t }\n-\t\t currentResBuf = resBuf;\n-\t\t currentLayer = layerno;\n-\t  }\n-\n-\t  // Calculate the index in bits\n-\t  auto numprecs = numPrecinctsPerRes[resno];\n-\t  auto len = (numprecs * numcomps + 7); // Total number of bits\n-\t  assert(len <= std::numeric_limits<size_t>::max());\n-\n-\t  // Use get_byte to allocate lazily\n-\t  return resBuf->get_byte(resno,\n-\t\t\t\t\t\t\t  len - 1); // Access the last byte to ensure the chunk is allocated\n-   }\n-\n    uint64_t numPrecinctsPerRes[GRK_MAXRLVLS];\n    uint16_t numcomps;\n    uint16_t currentLayer;\n-   ResIncludeBuffers* currentResBuf;\n-   std::map<uint16_t, ResIncludeBuffers*>* include;\n+   LayerIncludeBuffers* currentLayerIncludeBuf;\n+   std::map<uint16_t, LayerIncludeBuffers*>* include;\n };\n \n class PacketManager;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:385773651-vul",
+      "digest": "sha256:15821aa858f07760659d6cefbee7117ce476a0dcd2622684c8958d232a5ee5fc"
+    },
+    "patched": {
+      "ref": "n132/arvo:385773651-fix",
+      "digest": "sha256:75e5d60c4ba311e7c05ef933ce78bfce5d6537a261bd922e29fcb4d9d7b8b399"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/grok/src/lib/core/t2/PacketIter.h:131",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/grok/src/lib/core/t2/PacketIter.h:131"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

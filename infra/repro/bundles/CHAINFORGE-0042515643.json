@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042515643",
+  "chain": "CWE-1284->CWE-125",
+  "project": "hunspell",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42515643",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "5aa940a5a3b65263db809953024e9689e191868f",
+      "fix_commits": [
+        "5aa940a5a3b65263db809953024e9689e191868f"
+      ],
+      "repo": "https://github.com/hunspell/hunspell"
+    },
+    "patch": "diff --git a/src/hunspell/suggestmgr.cxx b/src/hunspell/suggestmgr.cxx\nindex 3c59c1dc3..a81e5df4d 100644\n--- a/src/hunspell/suggestmgr.cxx\n+++ b/src/hunspell/suggestmgr.cxx\n@@ -119,7 +119,10 @@ SuggestMgr::SuggestMgr(const std::string& tryme, unsigned int maxn, AffixMgr* ap\n \n   if (!ckey.empty()) {\n     if (utf8) {\n-      ckeyl = u8_u16(ckey_utf, ckey);\n+      int len = u8_u16(ckey_utf, ckey);\n+      if (len != -1) {\n+        ckeyl = len;\n+      }\n     } else {\n       ckeyl = ckey.size();\n     }\n@@ -128,7 +131,10 @@ SuggestMgr::SuggestMgr(const std::string& tryme, unsigned int maxn, AffixMgr* ap\n   ctry = tryme;\n   if (!ctry.empty()) {\n     if (utf8) {\n-      ctryl = u8_u16(ctry_utf, ctry);\n+      int len = u8_u16(ctry_utf, ctry);\n+      if (len != -1) {\n+        ctryl = len;\n+      }\n     } else {\n       ctryl = ctry.size();\n     }\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42515643-vul",
+      "digest": "sha256:ea44ddae143f5c59147ed4c57c1cb62d76a60d76cbb50b1db5a802ad548745ea"
+    },
+    "patched": {
+      "ref": "n132/arvo:42515643-fix",
+      "digest": "sha256:0a51e4a10a286d304e0252f8ab922484e9ea5f76233e69d982331410c4aec6e0"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/hunspell/src/hunspell/suggestmgr.cxx:622",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/hunspell/src/hunspell/suggestmgr.cxx:622"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

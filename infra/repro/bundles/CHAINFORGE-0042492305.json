@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042492305",
+  "chain": "CWE-1284->CWE-125",
+  "project": "fluent-bit",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42492305",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "6e6cb845e96de2474456aceb8d6ffdf42b19942c",
+      "fix_commits": [
+        "6e6cb845e96de2474456aceb8d6ffdf42b19942c"
+      ],
+      "repo": "https://github.com/fluent/fluent-bit"
+    },
+    "patch": "From 6e6cb845e96de2474456aceb8d6ffdf42b19942c Mon Sep 17 00:00:00 2001\nFrom: DavidKorczynski <david@adalogics.com>\nDate: Mon, 26 Apr 2021 19:04:17 +0100\nSubject: [PATCH] parser: json: fix type confusion bug (#3417)\n\nSigned-off-by: davkor <david@adalogics.com>\n---\n src/flb_parser_json.c | 6 ++++++\n 1 file changed, 6 insertions(+)\n\ndiff --git a/src/flb_parser_json.c b/src/flb_parser_json.c\nindex f3a55b3d4fd..1afc39a6a28 100644\n--- a/src/flb_parser_json.c\n+++ b/src/flb_parser_json.c\n@@ -168,6 +168,12 @@ int flb_parser_json_do(struct flb_parser *parser,\n         return *out_size;\n     }\n \n+    /* Ensure we have an accurate type */\n+    if (v->type != MSGPACK_OBJECT_STR) {\n+        msgpack_unpacked_destroy(&result);\n+        return *out_size;\n+    }\n+\n     /* Lookup time */\n     ret = flb_parser_time_lookup(v->via.str.ptr, v->via.str.size,\n                                  0, parser, &tm, &tmfrac);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42492305-vul",
+      "digest": "sha256:3a9d4034ae91e02153d60a156f1f0d1f6fe1ce6a1a4074a92d3951bd0302545c"
+    },
+    "patched": {
+      "ref": "n132/arvo:42492305-fix",
+      "digest": "sha256:34c19f682d0efd80cee103aef1f7082b92b40b0148a7498bca7c250b6df24585"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/fluent-bit/src/flb_parser_json.c:172",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/fluent-bit/src/flb_parser_json.c:172"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

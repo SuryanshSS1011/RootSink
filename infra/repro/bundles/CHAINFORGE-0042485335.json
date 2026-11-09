@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042485335",
+  "chain": "CWE-1285->CWE-125",
+  "project": "glib",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42485335",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "f9d165add1342ecae6cdde1b95e9ce63320768dd",
+      "fix_commits": [
+        "f9d165add1342ecae6cdde1b95e9ce63320768dd"
+      ],
+      "repo": "https://gitlab.gnome.org/GNOME/glib"
+    },
+    "patch": "From f9d165add1342ecae6cdde1b95e9ce63320768dd Mon Sep 17 00:00:00 2001\nFrom: Philip Withnall <withnall@endlessm.com>\nDate: Wed, 1 Jul 2020 11:54:05 +0100\nSubject: [PATCH] guri: Fix buffer overrun when decoding %-encoded URI\n components\nMIME-Version: 1.0\nContent-Type: text/plain; charset=UTF-8\nContent-Transfer-Encoding: 8bit\n\nThere is a limited (1 or 2 byte) read off the end of the buffer if its\nfinal or penultimate byte is `%` and it\u2019s not nul-terminated after that.\nIf the buffer *is* nul-terminated then the first `g_ascii_isxdigit()`\ncall safely returns `FALSE` and the code moves on.\n\nFix it by adding an additional check, and some unit tests to catch the\nbehaviour.\n\nThis bug is present in libsoup, which `GUri` is based on, but not\nexploitable due to how the external API only exposes nul-terminated\nstrings. See https://gitlab.gnome.org/GNOME/libsoup/-/merge_requests/126\nfor the fix there.\n\noss-fuzz#23815\noss-fuzz#23818\n\nSigned-off-by: Philip Withnall <withnall@endlessm.com>\n---\n glib/guri.c      | 5 +++--\n glib/tests/uri.c | 2 ++\n 2 files changed, 5 insertions(+), 2 deletions(-)\n\ndiff --git a/glib/guri.c b/glib/guri.c\nindex de9f438..4c55b5b 100644\n--- a/glib/guri.c\n+++ b/glib/guri.c\n@@ -253,10 +253,11 @@ uri_decoder (gchar       **out,\n     {\n       if (*s == '%')\n         {\n-          if (!g_ascii_isxdigit (s[1]) ||\n+          if (s + 2 >= end ||\n+              !g_ascii_isxdigit (s[1]) ||\n               !g_ascii_isxdigit (s[2]))\n             {\n-              /* % followed by non-hex; this is an error */\n+              /* % followed by non-hex or the end of the string; this is an error */\n               if (flags & G_URI_FLAGS_PARSE_STRICT)\n                 {\n                   g_set_error_literal (error, G_URI_ERROR, parse_error,\ndiff --git a/glib/tests/uri.c b/glib/tests/uri.c\nindex 71bfad2..4e0f073 100644\n--- a/glib/tests/uri.c\n+++ b/glib/tests/uri.c\n@@ -378,6 +378,7 @@ test_uri_unescape_bytes (gconstpointer test_data)\n     {\n       { \"%00%00\", 2, (const guint8 *) \"\\x00\\x00\" },\n       { \"%%\", -1, NULL },\n+      { \"%\", -1, NULL },\n     };\n   gsize i;\n \n@@ -1284,6 +1285,7 @@ test_uri_parse_params (gconstpointer test_data)\n       { \"%00=foo\", '&', FALSE, -1, { NULL, }},\n       { \"p1=%00\", '&', FALSE, -1, { NULL, }},\n       { \"p1=foo&P1=bar\", '&', TRUE, 1, { \"p1\", \"bar\", NULL, }},\n+      { \"=%\", '&', FALSE, 1, { \"\", \"%\", NULL, }},\n     };\n   gsize i;\n \n-- \n2.55.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42485335-vul",
+      "digest": "sha256:4af9c22a2e635f9ff7060c5725509430a94f3938fd0ac4dc49aa3dc17f1146cb"
+    },
+    "patched": {
+      "ref": "n132/arvo:42485335-fix",
+      "digest": "sha256:970471ca457b3f1d7081dacd5f2a476551fdb42f2ca62065c9f7aa9e4138d2e0"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": null,
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": null
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042504789",
+  "chain": "CWE-456->CWE-457",
+  "project": "matio",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42504789",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "30584c0c180c5fc4c5c7bcac82f6384dec195454",
+      "fix_commits": [
+        "30584c0c180c5fc4c5c7bcac82f6384dec195454"
+      ],
+      "repo": "https://github.com/tbeu/matio"
+    },
+    "patch": "From 30584c0c180c5fc4c5c7bcac82f6384dec195454 Mon Sep 17 00:00:00 2001\nFrom: tbeu <tbeu@users.noreply.github.com>\nDate: Tue, 23 Nov 2021 19:57:43 +0100\nSubject: [PATCH] Avoid uninitialized memory access\n\nAs reported by https://bugs.chromium.org/p/oss-fuzz/issues/detail?id=41330\n---\n src/mat5.c | 2 +-\n 1 file changed, 1 insertion(+), 1 deletion(-)\n\ndiff --git a/src/mat5.c b/src/mat5.c\nindex f06455b..680aeeb 100644\n--- a/src/mat5.c\n+++ b/src/mat5.c\n@@ -473,7 +473,7 @@ ReadSparse(mat_t *mat, matvar_t *matvar, mat_uint32_t *n, mat_uint32_t **v)\n {\n     int data_in_tag = 0;\n     enum matio_types packed_type;\n-    mat_uint32_t tag[2];\n+    mat_uint32_t tag[2] = {0, 0};\n     size_t bytesread = 0;\n     mat_uint32_t N = 0;\n \n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42504789-vul",
+      "digest": "sha256:2bb7d935e50552db579e72d4cd29b6116c2f4f2f2e5e88ff3a5c4bc12562cf3b"
+    },
+    "patched": {
+      "ref": "n132/arvo:42504789-fix",
+      "digest": "sha256:06ce7a22c90f60c332c91a112b62dfeefa2a56fc17ecfc9c2e1b67b1f570f24a"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/matio/src/mat5.c:421",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/matio/src/mat5.c:421"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042487756",
+  "chain": "CWE-1284->CWE-787",
+  "project": "opensc",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42487756",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "732ed77ad67e5303c46c0fa767929afd87076c87",
+      "fix_commits": [
+        "732ed77ad67e5303c46c0fa767929afd87076c87"
+      ],
+      "repo": "https://github.com/OpenSC/OpenSC"
+    },
+    "patch": "diff --git a/src/libopensc/card-idprime.c b/src/libopensc/card-idprime.c\nindex e805da15fc..70d18112e6 100644\n--- a/src/libopensc/card-idprime.c\n+++ b/src/libopensc/card-idprime.c\n@@ -526,24 +526,31 @@ static int idprime_read_binary(sc_card_t *card, unsigned int offset,\n \tunsigned char *buf, size_t count, unsigned long flags)\n {\n \tstruct idprime_private_data *priv = card->drv_data;\n-\tint r;\n+\tint r = 0;\n \tint size;\n \n \tsc_log(card->ctx, \"called; %\"SC_FORMAT_LEN_SIZE_T\"u bytes at offset %d\",\n \t\tcount, offset);\n \n \tif (!priv->cached && offset == 0) {\n+\t\t/* Read what was reported by FCI from select command */\n+\t\tint left = priv->file_size;\n+\t\tsize_t read = 0;\n+\n \t\t// this function is called to read and uncompress the certificate\n \t\tu8 buffer[SC_MAX_EXT_APDU_BUFFER_SIZE];\n \t\tif (sizeof(buffer) < count) {\n \t\t\tLOG_FUNC_RETURN(card->ctx, SC_ERROR_INTERNAL);\n \t\t}\n-\t\t/* Read what was reported by FCI from select command */\n-\t\tr = iso_ops->read_binary(card, 0, buffer, priv->file_size, flags);\n-\t\tif (r < 0) {\n-\t\t\tLOG_FUNC_RETURN(card->ctx, r);\n+\t\twhile (left > 0) {\n+\t\t\tr = iso_ops->read_binary(card, read, buffer + read, priv->file_size - read, flags);\n+\t\t\tif (r <= 0) {\n+\t\t\t\tLOG_FUNC_RETURN(card->ctx, r);\n+\t\t\t}\n+\t\t\tleft -= r;\n+\t\t\tread += r;\n \t\t}\n-\t\tif (r < 4) {\n+\t\tif (read < 4 || read != priv->file_size) {\n \t\t\tLOG_FUNC_RETURN(card->ctx, SC_ERROR_INVALID_DATA);\n \t\t}\n \t\tif (buffer[0] == 1 && buffer[1] == 0) {\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42487756-vul",
+      "digest": "sha256:ce53ca6f62d4335db0ea61e74caf6de0941416e4b69b8d4b3bfaf02c0fa33b97"
+    },
+    "patched": {
+      "ref": "n132/arvo:42487756-fix",
+      "digest": "sha256:c98b6f59a5e41923699a0da6cac54c3db7a06d928408357eadad7b2f2828c2d8"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/opensc/src/libopensc/apdu.c:475",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/opensc/src/libopensc/apdu.c:475"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

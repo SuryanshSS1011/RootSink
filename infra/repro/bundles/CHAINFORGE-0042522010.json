@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042522010",
+  "chain": "CWE-416->CWE-125",
+  "project": "cyclonedds",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42522010",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "1ae6bb9985c05f8742cb31c0bd46f3c7bd8777bd",
+      "fix_commits": [
+        "1ae6bb9985c05f8742cb31c0bd46f3c7bd8777bd"
+      ],
+      "repo": "https://github.com/eclipse-cyclonedds/cyclonedds"
+    },
+    "patch": "From 1ae6bb9985c05f8742cb31c0bd46f3c7bd8777bd Mon Sep 17 00:00:00 2001\nFrom: Dennis Potman <dennis@zettascale.tech>\nDate: Mon, 13 Mar 2023 21:49:19 +0100\nSubject: [PATCH] Improve error handling when dealing with invalid type\n identifiers and invalid type objects in xtypes wrapper.\n\nSigned-off-by: Dennis Potman <dennis@zettascale.tech>\n---\n src/core/ddsi/src/ddsi_typelib.c  | 42 ++++++++++++++++++-------------\n src/core/ddsi/src/ddsi_typewrap.c | 15 ++++++-----\n 2 files changed, 31 insertions(+), 26 deletions(-)\n\ndiff --git a/src/core/ddsi/src/ddsi_typelib.c b/src/core/ddsi/src/ddsi_typelib.c\nindex 61d80db..b12946c 100644\n--- a/src/core/ddsi/src/ddsi_typelib.c\n+++ b/src/core/ddsi/src/ddsi_typelib.c\n@@ -350,7 +350,7 @@ static void type_dep_trace (struct ddsi_domaingv *gv, const char *prefix, struct\n   GVTRACE (\"%sdep <%s, %s>\\n\", prefix, ddsi_make_typeid_str (&tistr, &dep->src_type_id), ddsi_make_typeid_str (&tistrdep, &dep->dep_type_id));\n }\n \n-static void ddsi_type_fini (struct ddsi_domaingv *gv, struct ddsi_type *type)\n+static void ddsi_type_free (struct ddsi_domaingv *gv, struct ddsi_type *type)\n {\n   struct ddsi_type_dep key;\n   memset (&key, 0, sizeof (key));\n@@ -360,7 +360,7 @@ static void ddsi_type_fini (struct ddsi_domaingv *gv, struct ddsi_type *type)\n   struct ddsi_type_dep *dep;\n   while ((dep = ddsrt_avl_lookup_succ_eq (&ddsi_typedeps_treedef, &gv->typedeps, &key)) != NULL && !ddsi_typeid_compare (&dep->src_type_id, &key.src_type_id))\n   {\n-    type_dep_trace (gv, \"ddsi_type_fini \", dep);\n+    type_dep_trace (gv, \"ddsi_type_free \", dep);\n     ddsrt_avl_delete (&ddsi_typedeps_treedef, &gv->typedeps, dep);\n     ddsrt_avl_delete (&ddsi_typedeps_reverse_treedef, &gv->typedeps_reverse, dep);\n     if (dep->from_type_info)\n@@ -426,7 +426,7 @@ static dds_return_t ddsi_type_new (struct ddsi_domaingv *gv, struct ddsi_type **\n   GVTRACE (\" new %p\", *type);\n   if ((ret = ddsi_xt_type_init_impl (gv, &(*type)->xt, type_id, type_obj)) != DDS_RETCODE_OK)\n   {\n-    ddsi_type_fini (gv, *type);\n+    ddsi_type_free (gv, *type);\n     *type = NULL;\n     return ret;\n   }\n@@ -489,6 +489,10 @@ static dds_return_t ddsi_type_register_dep_impl (struct ddsi_domaingv *gv, const\n {\n   dds_return_t ret = DDS_RETCODE_OK;\n   struct ddsi_typeid dep_type_id;\n+\n+  if (ddsi_typeid_is_none_impl (dep_tid))\n+    return DDS_RETCODE_BAD_PARAMETER;\n+\n   dep_type_id.x = *dep_tid;\n   struct ddsi_type_dep *dep = ddsrt_calloc (1, sizeof (*dep));\n   ddsi_typeid_copy (&dep->src_type_id, src_type_id);\n@@ -504,6 +508,9 @@ static dds_return_t ddsi_type_register_dep_impl (struct ddsi_domaingv *gv, const\n     {\n       ddsrt_avl_delete (&ddsi_typedeps_treedef, &gv->typedeps, dep);\n       ddsrt_avl_delete (&ddsi_typedeps_reverse_treedef, &gv->typedeps_reverse, dep);\n+      ddsi_typeid_fini (&dep->src_type_id);\n+      ddsi_typeid_fini (&dep->dep_type_id);\n+      ddsrt_free (dep);\n     }\n   }\n   else\n@@ -583,7 +590,9 @@ dds_return_t ddsi_type_ref_id_locked_impl (struct ddsi_domaingv *gv, struct ddsi\n {\n   struct ddsi_typeid_str tistr;\n   dds_return_t ret = DDS_RETCODE_OK;\n-  assert (!ddsi_typeid_is_none_impl (type_id));\n+  if (ddsi_typeid_is_none_impl (type_id))\n+    return DDS_RETCODE_BAD_PARAMETER;\n+\n   GVTRACE (\"ref ddsi_type type-id %s\", ddsi_make_typeid_str_impl (&tistr, type_id));\n   struct ddsi_type *t = ddsi_type_lookup_locked_impl (gv, type_id);\n   if (!t && (ret = ddsi_type_new (gv, &t, type_id, NULL)) != DDS_RETCODE_OK)\n@@ -1061,7 +1070,7 @@ static void ddsi_type_unref_impl_locked (struct ddsi_domaingv *gv, struct ddsi_t\n   {\n     GVTRACE (\" refc 0 remove type \");\n     ddsrt_avl_delete (&ddsi_typelib_treedef, &gv->typelib, type);\n-    ddsi_type_fini (gv, type);\n+    ddsi_type_free (gv, type);\n   }\n   else\n     GVTRACE (\" refc %\" PRIu32 \" \", type->refc);\n@@ -1079,18 +1088,23 @@ void ddsi_type_unreg_proxy (struct ddsi_domaingv *gv, struct ddsi_type *type, co\n   ddsrt_mutex_unlock (&gv->typelib_lock);\n }\n \n-void ddsi_type_unref (struct ddsi_domaingv *gv, struct ddsi_type *type)\n+void ddsi_type_unref_locked (struct ddsi_domaingv *gv, struct ddsi_type *type)\n {\n-  struct ddsi_typeid_str tistr;\n-  if (!type)\n+  if (type == NULL)\n     return;\n-  ddsrt_mutex_lock (&gv->typelib_lock);\n+  struct ddsi_typeid_str tistr;\n   GVTRACE (\"unref ddsi_type id %s\", ddsi_make_typeid_str (&tistr, &type->xt.id));\n   ddsi_type_unref_impl_locked (gv, type);\n-  ddsrt_mutex_unlock (&gv->typelib_lock);\n   GVTRACE (\"\\n\");\n }\n \n+void ddsi_type_unref (struct ddsi_domaingv *gv, struct ddsi_type *type)\n+{\n+  ddsrt_mutex_lock (&gv->typelib_lock);\n+  ddsi_type_unref_locked (gv, type);\n+  ddsrt_mutex_unlock (&gv->typelib_lock);\n+}\n+\n void ddsi_type_unref_sertype (struct ddsi_domaingv *gv, const struct ddsi_sertype *sertype)\n {\n   assert (sertype);\n@@ -1117,14 +1131,6 @@ void ddsi_type_unref_sertype (struct ddsi_domaingv *gv, const struct ddsi_sertyp\n   ddsrt_mutex_unlock (&gv->typelib_lock);\n }\n \n-void ddsi_type_unref_locked (struct ddsi_domaingv *gv, struct ddsi_type *type)\n-{\n-  assert (type);\n-  struct ddsi_typeid_str tistr;\n-  GVTRACE (\"unref ddsi_type id %s\", ddsi_make_typeid_str (&tistr, &type->xt.id));\n-  ddsi_type_unref_impl_locked (gv, type);\n-}\n-\n static void ddsi_type_get_gpe_matches_impl (struct ddsi_domaingv *gv, const struct ddsi_type *type, struct ddsi_generic_proxy_endpoint ***gpe_match_upd, uint32_t *n_match_upd)\n {\n   if (!ddsi_type_proxy_guid_list_count (&type->proxy_guids))\ndiff --git a/src/core/ddsi/src/ddsi_typewrap.c b/src/core/ddsi/src/ddsi_typewrap.c\nindex d402b31..c984430 100644\n--- a/src/core/ddsi/src/ddsi_typewrap.c\n+++ b/src/core/ddsi/src/ddsi_typewrap.c\n@@ -1316,10 +1316,9 @@ dds_return_t ddsi_xt_type_init_impl (struct ddsi_domaingv *gv, struct xt_type *x\n {\n   assert (xt);\n   assert (ti);\n-  dds_return_t ret = DDS_RETCODE_OK, ret_validate = DDS_RETCODE_OK;\n+  dds_return_t ret = DDS_RETCODE_OK;\n \n   ddsi_typeid_copy_impl (&xt->id.x, ti);\n-  xt->kind = ddsi_typeid_kind_impl (ti);\n   if (ti->_d <= DDS_XTypes_TK_STRING16)\n   {\n     if (to != NULL)\n@@ -1383,6 +1382,7 @@ dds_return_t ddsi_xt_type_init_impl (struct ddsi_domaingv *gv, struct xt_type *x\n         if ((ret = ddsi_type_register_dep (gv, &xt->id, &xt->_u.map.key_type, ti->_u.map_sdefn.key_identifier)) != DDS_RETCODE_OK)\n         {\n           ddsi_type_unref_locked (gv, xt->_u.map.c.element_type);\n+          xt->_u.map.c.element_type = NULL;\n           goto err;\n         }\n         break;\n@@ -1395,6 +1395,7 @@ dds_return_t ddsi_xt_type_init_impl (struct ddsi_domaingv *gv, struct xt_type *x\n         if ((ret = ddsi_type_register_dep (gv, &xt->id, &xt->_u.map.key_type, ti->_u.map_ldefn.key_identifier)) != DDS_RETCODE_OK)\n         {\n           ddsi_type_unref_locked (gv, xt->_u.map.c.element_type);\n+          xt->_u.map.c.element_type = NULL;\n           goto err;\n         }\n         break;\n@@ -1416,15 +1417,13 @@ dds_return_t ddsi_xt_type_init_impl (struct ddsi_domaingv *gv, struct xt_type *x\n         break;\n     }\n   }\n-  if (ret != DDS_RETCODE_OK || (ret_validate = ddsi_xt_validate (gv, xt)) != DDS_RETCODE_OK)\n+  if (ret != DDS_RETCODE_OK || (ret = ddsi_xt_validate (gv, xt)) != DDS_RETCODE_OK)\n   {\n-    if (ret == DDS_RETCODE_OK)\n-    {\n-      ddsi_xt_type_fini (gv, xt, true);\n-      ret = ret_validate;\n-    }\n     GVWARNING (\"type \" PTYPEIDFMT \": ddsi_xt_type_init_impl with invalid type object\\n\", PTYPEID (xt->id.x));\n+    goto err;\n   }\n+  xt->kind = ddsi_typeid_kind_impl (ti);\n+\n err:\n   return ret;\n }\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42522010-vul",
+      "digest": "sha256:a87e8bac99d1109452efbc7c9aac6ff9fd38e1ba38b16cd51f3e211085a89c55"
+    },
+    "patched": {
+      "ref": "n132/arvo:42522010-fix",
+      "digest": "sha256:0f6cf1d9bed1859a67855e5e02af8167a3cc8204a877cce77d6f57219a571253"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/cyclonedds/src/core/ddsi/src/ddsi_typelib.c:1060",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/cyclonedds/src/core/ddsi/src/ddsi_typelib.c:1060"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

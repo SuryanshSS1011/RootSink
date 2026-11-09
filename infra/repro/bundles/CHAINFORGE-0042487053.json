@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042487053",
+  "chain": "CWE-456->CWE-457",
+  "project": "libsndfile",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42487053",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "739bc8cdac8d56c2c5f097a50cbf20fa941ff59d",
+      "fix_commits": [
+        "739bc8cdac8d56c2c5f097a50cbf20fa941ff59d"
+      ],
+      "repo": "https://github.com/libsndfile/libsndfile"
+    },
+    "patch": "From 739bc8cdac8d56c2c5f097a50cbf20fa941ff59d Mon Sep 17 00:00:00 2001\nFrom: evpobr <evpobr@gmail.com>\nDate: Thu, 18 Nov 2021 10:07:00 +0500\nSubject: [PATCH] Fix unintialized variable in psf_binheader_readf()\n\nThanks to @shao-hua-li\n---\n CHANGELOG.md | 2 ++\n src/common.c | 2 +-\n 2 files changed, 3 insertions(+), 1 deletion(-)\n\ndiff --git a/CHANGELOG.md b/CHANGELOG.md\nindex 9eacc3d..9faf4c6 100644\n--- a/CHANGELOG.md\n+++ b/CHANGELOG.md\n@@ -103,6 +103,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0\n \n   See https://github.com/msys2/MINGW-packages/issues/5803 for details.\n \n+* Fix unintialized variable in psf_binheader_readf(), thanks @shao-hua-li\n+\n ### Security\n \n * Heap buffer overflow in `wavlike_ima_decode_block`(), thanks @bobsayshilol,\ndiff --git a/src/common.c b/src/common.c\nindex f236ca6..c4ef4a6 100644\n--- a/src/common.c\n+++ b/src/common.c\n@@ -974,7 +974,7 @@ int\n psf_binheader_readf (SF_PRIVATE *psf, char const *format, ...)\n {\tva_list\t\t\targptr ;\n \tsf_count_t\t\t*countptr, countdata ;\n-\tunsigned char\t*ucptr, sixteen_bytes [16] ;\n+\tunsigned char\t*ucptr, sixteen_bytes [16] = { 0 } ;\n \tunsigned int \t*intptr, intdata ;\n \tunsigned short\t*shortptr ;\n \tchar\t\t\t*charptr ;\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42487053-vul",
+      "digest": "sha256:f191eb5e3066a86b10c9c2a651b63e639d6e5af756574017cdd53b2c0a01eeb6"
+    },
+    "patched": {
+      "ref": "n132/arvo:42487053-fix",
+      "digest": "sha256:1e92ed1017fe66cad0dadd393557525be09eab06079a90bdb827229567ed06fd"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/libsndfile/src/common.c:232",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/libsndfile/src/common.c:232"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

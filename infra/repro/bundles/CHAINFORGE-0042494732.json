@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042494732",
+  "chain": "CWE-416->CWE-125",
+  "project": "libredwg",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42494732",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "5b27162afa44042bd43dec3fed8a1177c2c43ebb",
+      "fix_commits": [
+        "5b27162afa44042bd43dec3fed8a1177c2c43ebb"
+      ],
+      "repo": "https://github.com/LibreDWG/libredwg"
+    },
+    "patch": "From 5b27162afa44042bd43dec3fed8a1177c2c43ebb Mon Sep 17 00:00:00 2001\nFrom: Reini Urban <rurban@cpan.org>\nDate: Sat, 20 Mar 2021 16:44:49 +0100\nSubject: [PATCH] fixup indxf use-after-free\n\nfrom 3b47eb0fe81ab7ded5342208feac016076e0e668\ndont just free the pair.\n\nDetected by oss-fuzz issue 32275\n---\n src/in_dxf.c | 2 ++\n 1 file changed, 2 insertions(+)\n\ndiff --git a/src/in_dxf.c b/src/in_dxf.c\nindex 3741dc0..84c7ad6 100644\n--- a/src/in_dxf.c\n+++ b/src/in_dxf.c\n@@ -12282,6 +12282,8 @@ dxf_objects_read (Bit_Chain *restrict dat, Dwg_Data *restrict dwg)\n               DXF_RETURN_ENDSEC (0);\n               LOG_WARN (\"Unhandled 0 %s (%s)\", name, \"objects\");\n               dxf_free_pair (pair);\n+              pair = dxf_read_pair (dat);\n+              DXF_CHECK_EOF;\n             }\n         }\n       dxf_free_pair (pair);\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42494732-vul",
+      "digest": "sha256:261b3f3a8cc122a80e96c17f93c77c132f2e2effd62dc99a688e6c2ad8796717"
+    },
+    "patched": {
+      "ref": "n132/arvo:42494732-fix",
+      "digest": "sha256:f54d4c40e73ac70463450db8d258c6557106bda236c2f1be7e721ffcd0f750e1"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/libredwg/src/in_dxf.c:12267",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/libredwg/src/in_dxf.c:12267"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

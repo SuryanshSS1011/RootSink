@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042491594",
+  "chain": "CWE-20->CWE-787",
+  "project": "selinux",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42491594",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "5681c6275b5ad9cf3d84af243a66b900a0628f72",
+      "fix_commits": [
+        "5681c6275b5ad9cf3d84af243a66b900a0628f72"
+      ],
+      "repo": "https://github.com/SELinuxProject/selinux"
+    },
+    "patch": "diff --git a/libsepol/cil/src/cil_build_ast.c b/libsepol/cil/src/cil_build_ast.c\nindex 5b1e28246b..87043a8fa1 100644\n--- a/libsepol/cil/src/cil_build_ast.c\n+++ b/libsepol/cil/src/cil_build_ast.c\n@@ -444,6 +444,7 @@ int cil_gen_class(struct cil_db *db, struct cil_tree_node *parse_current, struct\n \t\t}\n \t\tif (class->num_perms > CIL_PERMS_PER_CLASS) {\n \t\t\tcil_tree_log(parse_current, CIL_ERR, \"Too many permissions in class '%s'\", class->datum.name);\n+\t\t\trc = SEPOL_ERR;\n \t\t\tgoto exit;\n \t\t}\n \n@@ -1018,6 +1019,7 @@ int cil_gen_common(struct cil_db *db, struct cil_tree_node *parse_current, struc\n \t}\n \tif (common->num_perms > CIL_PERMS_PER_CLASS) {\n \t\tcil_tree_log(parse_current, CIL_ERR, \"Too many permissions in common '%s'\", common->datum.name);\n+\t\trc = SEPOL_ERR;\n \t\tgoto exit;\n \t}\n \n@@ -3209,6 +3211,7 @@ int cil_gen_expandtypeattribute(struct cil_db *db, struct cil_tree_node *parse_c\n \t\texpandattr->expand = CIL_FALSE;\n \t} else {\n \t\tcil_log(CIL_ERR, \"Value must be either \\'true\\' or \\'false\\'\");\n+\t\trc = SEPOL_ERR;\n \t\tgoto exit;\n \t}\n \ndiff --git a/libsepol/cil/src/cil_resolve_ast.c b/libsepol/cil/src/cil_resolve_ast.c\nindex 872b6799b0..5389df43fe 100644\n--- a/libsepol/cil/src/cil_resolve_ast.c\n+++ b/libsepol/cil/src/cil_resolve_ast.c\n@@ -772,6 +772,7 @@ int cil_resolve_classcommon(struct cil_tree_node *current, void *extra_args)\n \tclass->num_perms += common->num_perms;\n \tif (class->num_perms > CIL_PERMS_PER_CLASS) {\n \t\tcil_tree_log(current, CIL_ERR, \"Too many permissions in class '%s' when including common permissions\", class->datum.name);\n+\t\trc = SEPOL_ERR;\n \t\tgoto exit;\n \t}\n \n@@ -1484,6 +1485,7 @@ int cil_resolve_classorder(struct cil_tree_node *current, void *extra_args)\n \t\trc = cil_resolve_name(current, (char *)curr->data, CIL_SYM_CLASSES, extra_args, &datum);\n \t\tif (rc != SEPOL_OK) {\n \t\t\tcil_log(CIL_ERR, \"Failed to resolve class %s in classorder\\n\", (char *)curr->data);\n+\t\t\trc = SEPOL_ERR;\n \t\t\tgoto exit;\n \t\t}\n \t\tcil_list_append(new, CIL_CLASS, datum);\n@@ -2464,6 +2466,7 @@ int cil_resolve_blockabstract(struct cil_tree_node *current, void *extra_args)\n \tblock_node = NODE(block_datum);\n \tif (block_node->flavor != CIL_BLOCK) {\n \t\tcil_log(CIL_ERR, \"Failed to resolve blockabstract to a block, rc: %d\\n\", rc);\n+\t\trc = SEPOL_ERR;\n \t\tgoto exit;\n \t}\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42491594-vul",
+      "digest": "sha256:34dadc9da6af2f4bc17f3701ad9f5f013ed8210866edefb2e55f52a3b47e8532"
+    },
+    "patched": {
+      "ref": "n132/arvo:42491594-fix",
+      "digest": "sha256:51941f6f0043c2607944481a7c28a504cf283926f9b2b78ddc892e24f187d76d"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/selinux/libsepol/src/../cil/src/cil_binary.c:357",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/selinux/libsepol/src/../cil/src/cil_binary.c:357"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

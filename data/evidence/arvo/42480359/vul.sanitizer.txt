@@ -1,0 +1,88 @@
+======================= INFO =========================
+This binary is built for AFL-fuzz.
+To run the target function on individual input(s) execute this:
+  /out/radio-receive-done-fuzzer < INPUT_FILE
+or
+  /out/radio-receive-done-fuzzer INPUT_FILE1 [INPUT_FILE2 ... ]
+To fuzz with afl-fuzz execute this:
+  afl-fuzz [afl-flags] /out/radio-receive-done-fuzzer [-N]
+afl-fuzz will run N iterations before re-spawning the process (default: 1000)
+======================================================
+Reading 56 bytes from /tmp/poc
+=================================================================
+==591279==ERROR: AddressSanitizer: stack-buffer-overflow on address 0x14695c91465a at pc 0x00000049552a bp 0x7ffde0cba1c0 sp 0x7ffde0cb9988
+READ of size 11 at 0x14695c91465a thread T0
+SCARINESS: 41 (multi-byte-read-stack-buffer-overflow)
+    #0 0x495529 in __asan_memcpy /src/llvm/projects/compiler-rt/lib/asan/asan_interceptors_memintrinsics.cpp:22:3
+    #1 0x4d0bf1 in ot::Message::Write(unsigned short, unsigned short, void const*) /src/openthread/src/core/common/message.cpp:569:9
+    #2 0x4d0aca in ot::Message::Append(void const*, unsigned short) /src/openthread/src/core/common/message.cpp:396:20
+    #3 0x51f4b6 in ot::Mle::Mle::AppendResponse(ot::Message&, unsigned char const*, unsigned char) /src/openthread/src/core/thread/mle.cpp:1188:5
+    #4 0x5392eb in ot::Mle::MleRouter::SendChildUpdateResponse(ot::Child*, ot::Ip6::MessageInfo const&, unsigned char const*, unsigned char, ot::Mle::ChallengeTlv const&) /src/openthread/src/core/thread/mle_router.cpp:3011:13
+    #5 0x53889b in ot::Mle::MleRouter::HandleChildUpdateRequest(ot::Message const&, ot::Ip6::MessageInfo const&, unsigned int) /src/openthread/src/core/thread/mle_router.cpp:2270:13
+    #6 0x5268a9 in ot::Mle::Mle::HandleUdpReceive(ot::Message&, ot::Ip6::MessageInfo const&) /src/openthread/src/core/thread/mle.cpp:2799:30
+    #7 0x505156 in ot::Ip6::Udp::HandleMessage(ot::Message&, ot::Ip6::MessageInfo&) /src/openthread/src/core/net/udp6.cpp:390:5
+    #8 0x4f9ec6 in ot::Ip6::Ip6::HandleDatagram(ot::Message&, ot::Ip6::Netif*, void const*, bool) /src/openthread/src/core/net/ip6.cpp:1214:9
+    #9 0x512c75 in ot::MeshForwarder::HandleLowpanHC(unsigned char*, unsigned short, ot::Mac::Address const&, ot::Mac::Address const&, otThreadLinkInfo const&) /src/openthread/src/core/thread/mesh_forwarder.cpp:1353:9
+    #10 0x512181 in ot::MeshForwarder::HandleReceivedFrame(ot::Mac::RxFrame&) /src/openthread/src/core/thread/mesh_forwarder.cpp:1090:13
+    #11 0x4e3e29 in ot::Mac::Mac::HandleReceivedFrame(ot::Mac::RxFrame*, otError) /src/openthread/src/core/mac/mac.cpp:1743:26
+    #12 0x4c8e1b in LLVMFuzzerTestOneInput /src/openthread/tests/fuzz/radio_receive_done.cpp:72:5
+    #13 0x5f1a4e in ExecuteFilesOnyByOne /src/libfuzzer/afl/afl_driver.cpp:216:5
+    #14 0x5f1a4e in main /src/libfuzzer/afl/afl_driver.cpp:253:12
+    #15 0x14695b8ab82f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+    #16 0x41dc98 in _start (/out/radio-receive-done-fuzzer+0x41dc98)
+
+DEDUP_TOKEN: __asan_memcpy--ot::Message::Write(unsigned short, unsigned short, void const*)--ot::Message::Append(void const*, unsigned short)
+Address 0x14695c91465a is located in stack of thread T0 at offset 90 in frame
+    #0 0x5384ff in ot::Mle::MleRouter::HandleChildUpdateRequest(ot::Message const&, ot::Ip6::MessageInfo const&, unsigned int) /src/openthread/src/core/thread/mle_router.cpp:2225
+
+DEDUP_TOKEN: ot::Mle::MleRouter::HandleChildUpdateRequest(ot::Message const&, ot::Ip6::MessageInfo const&, unsigned int)
+  This frame has 13 object(s):
+    [32, 40) 'macAddr' (line 2229)
+    [64, 67) 'mode' (line 2230)
+    [80, 90) 'challenge' (line 2231) <== Memory access at offset 90 overflows this variable
+    [112, 122) 'leaderData' (line 2232)
+    [144, 150) 'timeout' (line 2233)
+    [176, 177) 'oldMode' (line 2235)
+    [192, 202) 'tlvRequest' (line 2236)
+    [224, 234) 'tlvs' (line 2237)
+    [256, 258) 'addressRegistrationOffset' (line 2239)
+    [272, 273) 'ref.tmp' (line 2267)
+    [288, 289) 'tlv' (line 2320)
+    [304, 305) 'iterator' (line 2321)
+    [320, 321) 'ref.tmp129' (line 2338)
+HINT: this may be a false positive if your program uses some custom stack unwind mechanism, swapcontext or vfork
+      (longjmp and C++ exceptions *are* supported)
+SUMMARY: AddressSanitizer: stack-buffer-overflow /src/llvm/projects/compiler-rt/lib/asan/asan_interceptors_memintrinsics.cpp:22:3 in __asan_memcpy
+Shadow bytes around the buggy address:
+  0x028dab91a870: f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5
+  0x028dab91a880: f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5
+  0x028dab91a890: f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5
+  0x028dab91a8a0: f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5
+  0x028dab91a8b0: f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5
+=>0x028dab91a8c0: f1 f1 f1 f1 00 f2 f2 f2 03 f2 00[02]f2 f2 00 02
+  0x028dab91a8d0: f2 f2 06 f2 f2 f2 01 f2 00 02 f2 f2 00 02 f2 f2
+  0x028dab91a8e0: 02 f2 f8 f2 f8 f2 f8 f2 f8 f3 f3 f3 00 00 00 00
+  0x028dab91a8f0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x028dab91a900: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x028dab91a910: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+  Shadow gap:              cc
+==591279==ABORTING

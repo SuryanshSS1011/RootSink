@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042496326",
+  "chain": "CWE-456->CWE-457",
+  "project": "librawspeed",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42496326",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "4d89eaa93466fc78122e04866a40535cf22d3247",
+      "fix_commits": [
+        "4d89eaa93466fc78122e04866a40535cf22d3247"
+      ],
+      "repo": "https://github.com/darktable-org/rawspeed"
+    },
+    "patch": "From 4d89eaa93466fc78122e04866a40535cf22d3247 Mon Sep 17 00:00:00 2001\nFrom: Roman Lebedev <lebedev.ri@gmail.com>\nDate: Thu, 14 Sep 2017 16:01:10 +0300\nSubject: [PATCH] PefDecoder::decodeRawInternal(): don't catch IOException.\n\n---\n src/librawspeed/decoders/PefDecoder.cpp | 12 ++++--------\n 1 file changed, 4 insertions(+), 8 deletions(-)\n\ndiff --git a/src/librawspeed/decoders/PefDecoder.cpp b/src/librawspeed/decoders/PefDecoder.cpp\nindex b772abd..2c8b307 100644\n--- a/src/librawspeed/decoders/PefDecoder.cpp\n+++ b/src/librawspeed/decoders/PefDecoder.cpp\n@@ -79,14 +79,10 @@ RawImage PefDecoder::decodeRawInternal() {\n     ThrowRDE(\"Unexpected image dimensions found: (%u; %u)\", width, height);\n \n   mRaw->dim = iPoint2D(width, height);\n-  try {\n-    PentaxDecompressor p(mRaw, getRootIFD());\n-    mRaw->createData();\n-    p.decompress(bs);\n-  } catch (IOException &e) {\n-    mRaw->setError(e.what());\n-    // Let's ignore it, it may have delivered somewhat useful data.\n-  }\n+\n+  PentaxDecompressor p(mRaw, getRootIFD());\n+  mRaw->createData();\n+  p.decompress(bs);\n \n   return mRaw;\n }\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42496326-vul",
+      "digest": "sha256:749c07d80f3508724a53739c736b49ac98a251b8e07ac0bfe77b4a0504d2e91f"
+    },
+    "patched": {
+      "ref": "n132/arvo:42496326-fix",
+      "digest": "sha256:eec69e9de09c6a972bb62d5deebb81d2370f8b32be8ad5320b87ddcbc8a390da"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/librawspeed/src/librawspeed/common/RawImage.cpp:168",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/librawspeed/src/librawspeed/common/RawImage.cpp:168"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

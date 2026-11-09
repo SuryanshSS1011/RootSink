@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042528799",
+  "chain": "CWE-1284->CWE-125",
+  "project": "skia",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42528799",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "fee7cbaf44553dda1a0dd4bfc87a1dfc0d7dd369",
+      "fix_commits": [
+        "fee7cbaf44553dda1a0dd4bfc87a1dfc0d7dd369"
+      ],
+      "repo": "https://skia.googlesource.com/skia.git"
+    },
+    "patch": "diff --git a/resources/invalid_images/osfuzz6295.webp b/resources/invalid_images/osfuzz6295.webp\nnew file mode 100644\nindex 0000000..bb20aba\n--- /dev/null\n+++ b/resources/invalid_images/osfuzz6295.webp\nBinary files differ\ndiff --git a/src/codec/SkJpegCodec.cpp b/src/codec/SkJpegCodec.cpp\nindex d2c023b..4f48886 100644\n--- a/src/codec/SkJpegCodec.cpp\n+++ b/src/codec/SkJpegCodec.cpp\n@@ -62,7 +62,8 @@\n \n bool is_orientation_marker(const uint8_t* data, size_t data_length, SkEncodedOrigin* orientation) {\n     bool littleEndian;\n-    if (!is_valid_endian_marker(data, &littleEndian)) {\n+    // We need eight bytes to read the endian marker and the offset, below.\n+    if (data_length < 8 || !is_valid_endian_marker(data, &littleEndian)) {\n         return false;\n     }\n \ndiff --git a/tests/CodecTest.cpp b/tests/CodecTest.cpp\nindex df94547..8172751 100644\n--- a/tests/CodecTest.cpp\n+++ b/tests/CodecTest.cpp\n@@ -621,14 +621,20 @@\n }\n \n static void test_invalid(skiatest::Reporter* r, const char path[]) {\n-    std::unique_ptr<SkStream> stream(GetResourceAsStream(path));\n-    if (!stream) {\n+    auto data = GetResourceAsData(path);\n+    if (!data) {\n+        ERRORF(r, \"Failed to get resources %s\", path);\n         return;\n     }\n-    REPORTER_ASSERT(r, !SkCodec::MakeFromStream(std::move(stream)));\n+\n+    REPORTER_ASSERT(r, !SkCodec::MakeFromData(data));\n }\n \n DEF_TEST(Codec_Empty, r) {\n+    if (GetResourcePath().isEmpty()) {\n+        return;\n+    }\n+\n     // Test images that should not be able to create a codec\n     test_invalid(r, \"empty_images/zero-dims.gif\");\n     test_invalid(r, \"empty_images/zero-embedded.ico\");\n@@ -648,6 +654,7 @@\n     test_invalid(r, \"empty_images/zero_height.tiff\");\n #endif\n     test_invalid(r, \"invalid_images/b37623797.ico\");\n+    test_invalid(r, \"invalid_images/osfuzz6295.webp\");\n }\n \n #ifdef PNG_READ_UNKNOWN_CHUNKS_SUPPORTED\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42528799-vul",
+      "digest": "sha256:be5de16747e5059ee9f59d164c09078c47a4f8bb43d85d954300438cd6000765"
+    },
+    "patched": {
+      "ref": "n132/arvo:42528799-fix",
+      "digest": "sha256:958024fb6d780941ea236d4ebf67ea01dbb7745f1dae6f54f6f401fd1f9393ef"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/skia/out/Fuzz/../../src/codec/SkCodecPriv.h:211",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/skia/out/Fuzz/../../src/codec/SkCodecPriv.h:211"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

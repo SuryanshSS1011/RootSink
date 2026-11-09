@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-968420148",
+  "chain": "CWE-456->CWE-457",
+  "project": "curl",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42508325",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/curl/curl/commit/2a1951519e78c1aa404ec0201b9eaeae469d757b",
+      "fix_commits": [
+        "2a1951519e78c1aa404ec0201b9eaeae469d757b"
+      ],
+      "repo": "https://github.com/curl/curl"
+    },
+    "patch": "diff --git a/lib/http2.c b/lib/http2.c\nindex be7c24b4651d..26ab2aa81dba 100644\n--- a/lib/http2.c\n+++ b/lib/http2.c\n@@ -1922,6 +1922,7 @@ static ssize_t http2_send(struct Curl_easy *data, int sockindex,\n       nva[i].namelen = hreq->header[i].namelen;\n       nva[i].value = (unsigned char *)hreq->header[i].value;\n       nva[i].valuelen = hreq->header[i].valuelen;\n+      nva[i].flags = NGHTTP2_NV_FLAG_NONE;\n     }\n     Curl_pseudo_free(hreq);\n   }\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42508325-vul",
+      "digest": "sha256:d16a010d7765ca5f154b1592cd9007da0ef54822d7f8fc71031778157564f84b"
+    },
+    "patched": {
+      "ref": "n132/arvo:42508325-fix",
+      "digest": "sha256:e2f8bef963fccc1f51c41ad32e8f197240d46fb7dc4b698ff6e79150be9b47bf"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/nghttp2/lib/nghttp2_frame.c:973",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/nghttp2/lib/nghttp2_frame.c:973"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

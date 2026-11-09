@@ -1,0 +1,82 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-30042509777",
+  "chain": "CWE-1284->CWE-190->CWE-125",
+  "project": "libjxl",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42509777",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "d3ccd9060bf52848970d331c4025f64fe93a3490",
+      "fix_commits": [
+        "d3ccd9060bf52848970d331c4025f64fe93a3490"
+      ],
+      "repo": "https://github.com/libjxl/libjxl"
+    },
+    "patch": "diff --git a/lib/jxl/render_pipeline/stage_blending.cc b/lib/jxl/render_pipeline/stage_blending.cc\nindex d2d583be0fa..b1e569dabd0 100644\n--- a/lib/jxl/render_pipeline/stage_blending.cc\n+++ b/lib/jxl/render_pipeline/stage_blending.cc\n@@ -126,7 +126,8 @@ class BlendingStage : public RenderPipelineStage {\n     }\n     std::vector<const float*> bg_row_ptrs_(input_rows.size());\n     std::vector<float*> fg_row_ptrs_(input_rows.size());\n-    for (size_t c = 0; c < input_rows.size(); ++c) {\n+    size_t num_c = std::min(input_rows.size(), extra_channel_info_->size() + 3);\n+    for (size_t c = 0; c < num_c; ++c) {\n       fg_row_ptrs_[c] = GetInputRow(input_rows, c, 0) + offset;\n       if (c < 3) {\n         bg_row_ptrs_[c] =\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42509777-vul",
+      "digest": "sha256:b616047adadd1bcf79936ce99cb473bc7b6a79e0fe2ed91ffbe1804a9e1c5c6d"
+    },
+    "patched": {
+      "ref": "n132/arvo:42509777-fix",
+      "digest": "sha256:810625d8ee3bf27e4da1622be7e1dc79d222eb485f0326e4bc246b129f0346a6"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/libjxl/lib/jxl/render_pipeline/stage_blending.cc:141",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 190,
+      "role": "intermediate",
+      "witness": {
+        "method": "ubsan-rebuild",
+        "recipe": "SANITIZER=undefined compile && $ENTRYPOINT",
+        "ubsan_options": "print_stacktrace=1:halt_on_error=0:silence_unsigned_overflow=0:symbolize=1"
+      },
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/libjxl/lib/jxl/render_pipeline/stage_blending.cc:141"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

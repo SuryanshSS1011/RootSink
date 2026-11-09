@@ -1,0 +1,50 @@
+Accepting input from '/tmp/poc'
+Usage for fuzzing: honggfuzz -P [flags] -- /out/ssh2_client_fuzzer
+=================================================================
+==316029==ERROR: AddressSanitizer: attempting double-free on 0x602000000bf0 in thread T0:
+SCARINESS: 42 (double-free)
+    #0 0x4a0f92 in __interceptor_free /src/llvm-project/compiler-rt/lib/asan/asan_malloc_linux.cpp:52:3
+    #1 0x4dfc37 in libssh2_default_free /src/libssh2/src/session.c:86:5
+    #2 0x4e69bf in session_free /src/libssh2/src/session.c:1135:9
+    #3 0x4e25b8 in libssh2_session_free /src/libssh2/src/session.c:1160:5
+    #4 0x4de8ad in LLVMFuzzerTestOneInput /src/libssh2/tests/ossfuzz/ssh2_client_fuzzer.cc:84:5
+    #5 0x58f92b in main (/out/ssh2_client_fuzzer+0x58f92b)
+    #6 0x14fcfa818082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: eebe5d5f4b608b8a53ec446b63981bba373ca0ca)
+    #7 0x41fdfd in _start (/out/ssh2_client_fuzzer+0x41fdfd)
+
+DEDUP_TOKEN: __interceptor_free--libssh2_default_free--session_free
+0x602000000bf0 is located 0 bytes inside of 6-byte region [0x602000000bf0,0x602000000bf6)
+freed by thread T0 here:
+    #0 0x4a0f92 in __interceptor_free /src/llvm-project/compiler-rt/lib/asan/asan_malloc_linux.cpp:52:3
+    #1 0x4dfc37 in libssh2_default_free /src/libssh2/src/session.c:86:5
+    #2 0x55311b in diffie_hellman_sha_algo /src/libssh2/src/kex.c:387:13
+    #3 0x55daa8 in kex_method_diffie_hellman_group1_sha1_key_exchange /src/libssh2/src/kex.c:975:11
+    #4 0x52ddff in _libssh2_kex_exchange /src/libssh2/src/kex.c:3941:23
+    #5 0x4e1a96 in session_startup /src/libssh2/src/session.c:772:14
+    #6 0x4e1094 in libssh2_session_handshake /src/libssh2/src/session.c:863:5
+    #7 0x4de83d in LLVMFuzzerTestOneInput /src/libssh2/tests/ossfuzz/ssh2_client_fuzzer.cc:67:6
+    #8 0x58f92b in main (/out/ssh2_client_fuzzer+0x58f92b)
+
+DEDUP_TOKEN: __interceptor_free--libssh2_default_free--diffie_hellman_sha_algo
+previously allocated by thread T0 here:
+    #0 0x4a1236 in malloc /src/llvm-project/compiler-rt/lib/asan/asan_malloc_linux.cpp:69:3
+    #1 0x4dfbf7 in libssh2_default_alloc /src/libssh2/src/session.c:77:12
+    #2 0x566955 in _libssh2_copy_string /src/libssh2/src/misc.c:920:19
+    #3 0x553143 in diffie_hellman_sha_algo /src/libssh2/src/kex.c:389:12
+    #4 0x55daa8 in kex_method_diffie_hellman_group1_sha1_key_exchange /src/libssh2/src/kex.c:975:11
+    #5 0x52ddff in _libssh2_kex_exchange /src/libssh2/src/kex.c:3941:23
+    #6 0x56e412 in _libssh2_packet_add /src/libssh2/src/packet.c:1387:14
+    #7 0x4f4993 in fullpacket /src/libssh2/src/transport.c:319:14
+    #8 0x4f0dca in _libssh2_transport_read /src/libssh2/src/transport.c:736:18
+    #9 0x576021 in _libssh2_packet_burn /src/libssh2/src/packet.c:1571:15
+    #10 0x5529ca in diffie_hellman_sha_algo /src/libssh2/src/kex.c:336:17
+    #11 0x55daa8 in kex_method_diffie_hellman_group1_sha1_key_exchange /src/libssh2/src/kex.c:975:11
+    #12 0x52ddff in _libssh2_kex_exchange /src/libssh2/src/kex.c:3941:23
+    #13 0x4e1a96 in session_startup /src/libssh2/src/session.c:772:14
+    #14 0x4e1094 in libssh2_session_handshake /src/libssh2/src/session.c:863:5
+    #15 0x4de83d in LLVMFuzzerTestOneInput /src/libssh2/tests/ossfuzz/ssh2_client_fuzzer.cc:67:6
+    #16 0x58f92b in main (/out/ssh2_client_fuzzer+0x58f92b)
+
+DEDUP_TOKEN: malloc--libssh2_default_alloc--_libssh2_copy_string
+SUMMARY: AddressSanitizer: double-free /src/llvm-project/compiler-rt/lib/asan/asan_malloc_linux.cpp:52:3 in __interceptor_free
+==316029==ABORTING

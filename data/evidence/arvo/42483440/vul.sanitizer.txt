@@ -1,0 +1,83 @@
+Reading 44 bytes from /tmp/poc
+======================= INFO =========================
+This binary is built for AFL-fuzz.
+To run the target function on individual input(s) execute this:
+  /out/colorquant_fuzzer < INPUT_FILE
+or
+  /out/colorquant_fuzzer INPUT_FILE1 [INPUT_FILE2 ... ]
+To fuzz with afl-fuzz execute this:
+  afl-fuzz [afl-flags] /out/colorquant_fuzzer [-N]
+afl-fuzz will run N iterations before re-spawning the process (default: 1000)
+======================================================
+=================================================================
+==7==ERROR: AddressSanitizer: heap-use-after-free on address 0x603000000070 at pc 0x0000004e329b bp 0x7ffe0c0b0860 sp 0x7ffe0c0b0858
+READ of size 8 at 0x603000000070 thread T0
+SCARINESS: 51 (8-byte-read-heap-use-after-free)
+    #0 0x4e329a in pixcmapDestroy /src/leptonica/src/colormap.c:292:5
+    #1 0x4ca23b in LLVMFuzzerTestOneInput /src/leptonica/prog/fuzzing/colorquant_fuzzer.cc:48:5
+    #2 0xf6623e in ExecuteFilesOnyByOne /src/libfuzzer/afl/afl_driver.cpp:216:5
+    #3 0xf6623e in main /src/libfuzzer/afl/afl_driver.cpp:253:12
+    #4 0x7f4a1267b82f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+    #5 0x41e9e8 in _start (/out/colorquant_fuzzer+0x41e9e8)
+
+DEDUP_TOKEN: pixcmapDestroy--LLVMFuzzerTestOneInput--ExecuteFilesOnyByOne
+0x603000000070 is located 0 bytes inside of 24-byte region [0x603000000070,0x603000000088)
+freed by thread T0 here:
+    #0 0x49734d in free /src/llvm-project/compiler-rt/lib/asan/asan_malloc_linux.cpp:123:3
+    #1 0x4e31f9 in pixcmapDestroy /src/leptonica/src/colormap.c:293:5
+    #2 0x57a9c1 in pixDestroyColormap /src/leptonica/src/pix1.c:1662:9
+    #3 0x579f60 in pixFree /src/leptonica/src/pix1.c:645:9
+    #4 0x5782f9 in pixDestroy /src/leptonica/src/pix1.c:615:5
+    #5 0x4ca1e4 in LLVMFuzzerTestOneInput /src/leptonica/prog/fuzzing/colorquant_fuzzer.cc:37:5
+    #6 0xf6623e in ExecuteFilesOnyByOne /src/libfuzzer/afl/afl_driver.cpp:216:5
+    #7 0xf6623e in main /src/libfuzzer/afl/afl_driver.cpp:253:12
+    #8 0x7f4a1267b82f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+
+DEDUP_TOKEN: free--pixcmapDestroy--pixDestroyColormap
+previously allocated by thread T0 here:
+    #0 0x497742 in calloc /src/llvm-project/compiler-rt/lib/asan/asan_malloc_linux.cpp:154:3
+    #1 0x4e2244 in pixcmapCreate /src/leptonica/src/colormap.c:134:23
+    #2 0x4e9b7b in pixcmapConvertTo8 /src/leptonica/src/colormap.c:1684:13
+    #3 0x62116d in pixConvert4To8 /src/leptonica/src/pixconv.c:2569:21
+    #4 0x57538a in pixColorGrayCmap /src/leptonica/src/paintcmap.c:357:16
+    #5 0x4dc555 in pixColorGray /src/leptonica/src/coloring.c:260:16
+    #6 0x4c9f23 in LLVMFuzzerTestOneInput /src/leptonica/prog/fuzzing/colorquant_fuzzer.cc:17:5
+    #7 0xf6623e in ExecuteFilesOnyByOne /src/libfuzzer/afl/afl_driver.cpp:216:5
+    #8 0xf6623e in main /src/libfuzzer/afl/afl_driver.cpp:253:12
+    #9 0x7f4a1267b82f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+
+DEDUP_TOKEN: calloc--pixcmapCreate--pixcmapConvertTo8
+SUMMARY: AddressSanitizer: heap-use-after-free /src/leptonica/src/colormap.c:292:5 in pixcmapDestroy
+Shadow bytes around the buggy address:
+  0x0c067fff7fb0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c067fff7fc0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c067fff7fd0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c067fff7fe0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c067fff7ff0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x0c067fff8000: fa fa fd fd fd fa fa fa fd fd fd fa fa fa[fd]fd
+  0x0c067fff8010: fd fa fa fa fd fd fd fa fa fa fd fd fd fa fa fa
+  0x0c067fff8020: fd fd fd fd fa fa fd fd fd fa fa fa fd fd fd fa
+  0x0c067fff8030: fa fa fd fd fd fd fa fa fd fd fd fa fa fa fd fd
+  0x0c067fff8040: fd fa fa fa fd fd fd fa fa fa fd fd fd fa fa fa
+  0x0c067fff8050: fd fd fd fa fa fa fd fd fd fa fa fa fd fd fd fa
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+  Shadow gap:              cc
+==7==ABORTING

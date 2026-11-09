@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-960625871",
+  "chain": "CWE-456->CWE-457",
+  "project": "imagemagick",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42475853",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/imagemagick/imagemagick/commit/cdddf99e151c9c2750af70e172d4b6dcb481e1b0",
+      "fix_commits": [
+        "cdddf99e151c9c2750af70e172d4b6dcb481e1b0"
+      ],
+      "repo": "https://github.com/imagemagick/imagemagick"
+    },
+    "patch": "diff --git a/coders/heic.c b/coders/heic.c\nindex ed59192e849..10d60c4772c 100644\n--- a/coders/heic.c\n+++ b/coders/heic.c\n@@ -340,6 +340,11 @@ static MagickBooleanType ReadHEICImageByID(const ImageInfo *image_info,\n     (void) SetImageProperty(image,\"exif:Orientation\",\"1\",exception);\n   error=heif_decode_image(image_handle,&heif_image,heif_colorspace_YCbCr,\n     heif_chroma_420,decode_options);\n+  if (IsHeifSuccess(&error,image,exception) == MagickFalse)\n+    {\n+      heif_image_handle_release(image_handle);\n+      return(MagickFalse);\n+    }\n   if (decode_options != (struct heif_decoding_options *) NULL)\n     {\n       /*\n@@ -349,13 +354,12 @@ static MagickBooleanType ReadHEICImageByID(const ImageInfo *image_info,\n       image->rows=(size_t) heif_image_get_height(heif_image,heif_channel_Y);\n       status=SetImageExtent(image,image->columns,image->rows,exception);\n       heif_decoding_options_free(decode_options);\n-    }\n-  if ((IsHeifSuccess(&error,image,exception) == MagickFalse) ||\n-      (status == MagickFalse))\n-    {\n-      heif_image_release(heif_image);\n-      heif_image_handle_release(image_handle);\n-      return(MagickFalse);\n+      if (status == MagickFalse)\n+        {\n+          heif_image_release(heif_image);\n+          heif_image_handle_release(image_handle);\n+          return(MagickFalse);\n+        }\n     }\n   p_y=heif_image_get_plane(heif_image,heif_channel_Y,&stride_y);\n   p_cb=heif_image_get_plane(heif_image,heif_channel_Cb,&stride_cb);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42475853-vul",
+      "digest": "sha256:30a6430352ae81fe401313b8e0509fbc8ae72466094003b222323031333b4051"
+    },
+    "patched": {
+      "ref": "n132/arvo:42475853-fix",
+      "digest": "sha256:d61ef184934c46606e6d435836245d611f226c0bee01467c623a82532e6f8305"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/libheif/libheif/heif.cc:609",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/libheif/libheif/heif.cc:609"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

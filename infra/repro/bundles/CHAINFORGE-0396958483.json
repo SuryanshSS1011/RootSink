@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0396958483",
+  "chain": "CWE-416->CWE-125",
+  "project": "mupdf",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "396958483",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "1cae05c192654334ae1afd46fff8bfd3c4190fc6",
+      "fix_commits": [
+        "1cae05c192654334ae1afd46fff8bfd3c4190fc6"
+      ],
+      "repo": "git://git.ghostscript.com/mupdf.git"
+    },
+    "patch": "From 1cae05c192654334ae1afd46fff8bfd3c4190fc6 Mon Sep 17 00:00:00 2001\nFrom: Sebastian Rasmussen <sebras@gmail.com>\nDate: Sun, 16 Feb 2025 23:37:06 +0100\nSubject: [PATCH] Avoid double drop of fz_html_tree upon exception in\n xml_to_boxes().\n\nUpon exception xml_to_boxes() drops the fz_html_tree passed to it.\n\nConsider the case where write_rich_content() calls fz_new_story()\nto create a fz_story (which contains fz_html_tree). Upon\nexception write_rich_content() drops the fz_story, but it also\ncalls fz_place_story() which ends up in convert_to_boxes(), which\ncalls xml_to_boxes(). If an exception is thrown here, then first\nxml_to_boxes() will drop the fz_story's fz_html_tree, and later\nwrite_rich_content() will also drop the same fz_story and its\nfz_html_tree .\n\nThe only other function that calls xml_to_boxes() is\nfz_parse_html_tree() which is only called by fz_parse_html()\nwhich upon exception also drops the fz_html_tree is has created.\n\nThe conclusion is that the functions, write_rich_content() and\nfz_parse_html_tree(), retain ownership of the fz_html_tree they\ncreated, and consequently drop their fz_html_tree's upon\nexception, while xml_to_boxes() erroneously assumes that it takes\nownership of the fz_html_tree passed to it.\n\nThe fix is to remove the drop from xml_to_boxes().\n\nThis fixes oss-fuzz issue 396958483.\n---\n source/html/html-parse.c | 2 --\n 1 file changed, 2 deletions(-)\n\ndiff --git a/source/html/html-parse.c b/source/html/html-parse.c\nindex d215576..d78952e 100644\n--- a/source/html/html-parse.c\n+++ b/source/html/html-parse.c\n@@ -1764,8 +1764,6 @@ xml_to_boxes(fz_context *ctx, fz_html_font_set *set, fz_archive *zip, const char\n \t\t\tfz_free(ctx, *rtitle);\n \t\t\t*rtitle = NULL;\n \t\t}\n-\t\t/* Dropping the tree works regardless of whether the tree is part of an fz_html or not. */\n-\t\tfz_drop_html_tree(ctx, tree);\n \t\tfz_rethrow(ctx);\n \t}\n }\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:396958483-vul",
+      "digest": "sha256:1990ae8231d1278c5596986f414e9d0dadfb340982facbb23c1b6fb468856d9d"
+    },
+    "patched": {
+      "ref": "n132/arvo:396958483-fix",
+      "digest": "sha256:9e5eaf88934f2e08f5ccc858908fa13e8b4385c61d7aabb2e33b6d1709272165"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/mupdf/source/html/html-parse.c:2301",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/mupdf/source/html/html-parse.c:2301"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

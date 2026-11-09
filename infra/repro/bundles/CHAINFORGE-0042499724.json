@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042499724",
+  "chain": "CWE-416->CWE-125",
+  "project": "ffmpeg",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42499724",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "f0d4077c53b7960e8fe52c6cbe5047e18c81be4e",
+      "fix_commits": [
+        "f0d4077c53b7960e8fe52c6cbe5047e18c81be4e"
+      ],
+      "repo": "https://git.ffmpeg.org/ffmpeg.git"
+    },
+    "patch": "From f0d4077c53b7960e8fe52c6cbe5047e18c81be4e Mon Sep 17 00:00:00 2001\nFrom: Marton Balint <cus@passwd.hu>\nDate: Wed, 11 Aug 2021 20:30:55 +0200\nSubject: [PATCH] avformat/mxfdec: store parition score instead of partition\n pointer in metadata\n\nPartition struct may be reallocated, so let's store the score directly in order\nto avoid use-after-free.\n\nAlso mxf->current_partition might be null when reading some local tags.\n\nSigned-off-by: Marton Balint <cus@passwd.hu>\n---\n libavformat/mxfdec.c | 31 +++++++++++++++++--------------\n 1 file changed, 17 insertions(+), 14 deletions(-)\n\ndiff --git a/libavformat/mxfdec.c b/libavformat/mxfdec.c\nindex 34cbd2c..55f2e5c 100644\n--- a/libavformat/mxfdec.c\n+++ b/libavformat/mxfdec.c\n@@ -108,7 +108,7 @@ typedef struct MXFPartition {\n \n typedef struct MXFMetadataSet {\n     UID uid;\n-    MXFPartition *partition;\n+    uint64_t partition_score;\n     enum MXFMetadataSetType type;\n } MXFMetadataSet;\n \n@@ -831,21 +831,25 @@ static int mxf_read_partition_pack(void *arg, AVIOContext *pb, int tag, int size\n     return 0;\n }\n \n-static int partition_score(MXFPartition *p)\n+static uint64_t partition_score(MXFPartition *p)\n {\n+    uint64_t score;\n+    if (!p)\n+        return 0;\n     if (p->type == Footer)\n-        return 5;\n-    if (p->complete)\n-        return 4;\n-    if (p->closed)\n-        return 3;\n-    return 1;\n+        score = 5;\n+    else if (p->complete)\n+        score = 4;\n+    else if (p->closed)\n+        score = 3;\n+    else\n+        score = 1;\n+    return (score << 60) | ((uint64_t)p->this_partition >> 4);\n }\n \n static int mxf_add_metadata_set(MXFContext *mxf, MXFMetadataSet **metadata_set)\n {\n     MXFMetadataSet **tmp;\n-    MXFPartition *new_p = (*metadata_set)->partition;\n     enum MXFMetadataSetType type = (*metadata_set)->type;\n \n     // Index Table is special because it might be added manually without\n@@ -854,10 +858,9 @@ static int mxf_add_metadata_set(MXFContext *mxf, MXFMetadataSet **metadata_set)\n     if (type != IndexTableSegment) {\n         for (int i = 0; i < mxf->metadata_sets_count; i++) {\n             if (!memcmp((*metadata_set)->uid, mxf->metadata_sets[i]->uid, 16) && type == mxf->metadata_sets[i]->type) {\n-                MXFPartition *old_p = mxf->metadata_sets[i]->partition;\n-                int old_s = partition_score(old_p);\n-                int new_s = partition_score(new_p);\n-                if (old_s > new_s || old_s == new_s && old_p->this_partition > new_p->this_partition) {\n+                uint64_t old_s = mxf->metadata_sets[i]->partition_score;\n+                uint64_t new_s = (*metadata_set)->partition_score;\n+                if (old_s > new_s) {\n                      mxf_free_metadataset(metadata_set, 1);\n                      return 0;\n                 }\n@@ -2894,7 +2897,7 @@ static const MXFMetadataReadTableEntry mxf_metadata_read_table[] = {\n static int mxf_metadataset_init(MXFMetadataSet *ctx, enum MXFMetadataSetType type, MXFPartition *partition)\n {\n     ctx->type = type;\n-    ctx->partition = partition;\n+    ctx->partition_score = partition_score(partition);\n     switch (type){\n     case MultipleDescriptor:\n     case Descriptor:\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42499724-vul",
+      "digest": "sha256:d078121b7d8d4ce33ad2a7b22dbbfc42c4a902a17a4b2da16a43a96ce9fe41dd"
+    },
+    "patched": {
+      "ref": "n132/arvo:42499724-fix",
+      "digest": "sha256:05822e9ae62bd74af2ee5d6fb691a9b42ddbc486f073efeab76ce2789cfc364d"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/ffmpeg/libavformat/mxfdec.c:860",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/ffmpeg/libavformat/mxfdec.c:860"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

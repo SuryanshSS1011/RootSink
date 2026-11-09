@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042493692",
+  "chain": "CWE-1284->CWE-125",
+  "project": "libiec61850",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42493692",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "aac6caaa22c2c6f017d3926856c54646155ff898",
+      "fix_commits": [
+        "aac6caaa22c2c6f017d3926856c54646155ff898"
+      ],
+      "repo": "https://github.com/mz-automation/libiec61850"
+    },
+    "patch": "diff --git a/src/mms/asn1/ber_decode.c b/src/mms/asn1/ber_decode.c\nindex bcc4352cd5..42141a5a64 100644\n--- a/src/mms/asn1/ber_decode.c\n+++ b/src/mms/asn1/ber_decode.c\n@@ -30,7 +30,7 @@ getIndefiniteLength(uint8_t* buffer, int bufPos, int maxBufPos)\n     int length = 0;\n \n     while (bufPos < maxBufPos) {\n-        if ((buffer[bufPos] == 0) && (buffer[bufPos+1] == 0)) {\n+        if ((buffer[bufPos] == 0) && ((bufPos + 1) < maxBufPos) && (buffer[bufPos+1] == 0)) {\n             return length + 2;\n         }\n         else {\n@@ -80,6 +80,9 @@ BerDecoder_decodeLength(uint8_t* buffer, int* length, int bufPos, int maxBufPos)\n                 if (bufPos >= maxBufPos)\n                     return -1;\n \n+                if (bufPos + (*length) > maxBufPos)\n+                    return -1;\n+\n                 *length <<= 8;\n                 *length += buffer[bufPos++];\n             }\ndiff --git a/src/mms/iso_mms/server/mms_access_result.c b/src/mms/iso_mms/server/mms_access_result.c\nindex 4671211fa2..d4d8fdae6f 100644\n--- a/src/mms/iso_mms/server/mms_access_result.c\n+++ b/src/mms/iso_mms/server/mms_access_result.c\n@@ -159,6 +159,9 @@ MmsValue_decodeMmsData(uint8_t* buffer, int bufPos, int bufferLength, int* endBu\n \n     int dataEndBufPos = bufferLength;\n \n+    if (bufferLength < 1)\n+        goto exit_with_error;\n+\n     uint8_t tag = buffer[bufPos++];\n \n     int dataLength;\n@@ -168,6 +171,10 @@ MmsValue_decodeMmsData(uint8_t* buffer, int bufPos, int bufferLength, int* endBu\n     if (bufPos < 0)\n         goto exit_with_error;\n \n+    /* if not indefinite length end tag, data length must be > 0 */\n+    if ((tag != 0) && (dataLength == 0))\n+        goto exit_with_error;\n+\n     switch (tag) {\n \n     case 0xa1: /* MMS_ARRAY */\n@@ -253,6 +260,7 @@ MmsValue_decodeMmsData(uint8_t* buffer, int bufPos, int bufferLength, int* endBu\n         value = MmsValue_newUnsigned(dataLength * 8);\n         memcpy(value->value.integer->octets, buffer + bufPos, dataLength);\n         value->value.integer->size = dataLength;\n+\n         bufPos += dataLength;\n         break;\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42493692-vul",
+      "digest": "sha256:68914e5eace8a2777e2f17e0a7832a439004e62eb713c5a1f3e00090f45a91e6"
+    },
+    "patched": {
+      "ref": "n132/arvo:42493692-fix",
+      "digest": "sha256:ffd2267c6862b8b4e54496c83f6ec4d8181b1b48fd1e10f21421c7858cecfd1e"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/libiec61850/src/mms/iso_mms/server/mms_access_result.c:227",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/libiec61850/src/mms/iso_mms/server/mms_access_result.c:227"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

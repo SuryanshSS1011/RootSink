@@ -1,0 +1,81 @@
+======================= INFO =========================
+This binary is built for AFL-fuzz.
+To run the target function on individual input(s) execute this:
+  /out/arrow-ipc-stream-fuzz < INPUT_FILE
+or
+  /out/arrow-ipc-stream-fuzz INPUT_FILE1 [INPUT_FILE2 ... ]
+To fuzz with afl-fuzz execute this:
+  afl-fuzz [afl-flags] /out/arrow-ipc-stream-fuzz [-N]
+afl-fuzz will run N iterations before re-spawning the process (default: 1000)
+======================================================
+Reading 1068 bytes from /tmp/poc
+=================================================================
+==1303680==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x6190000004ac at pc 0x00000073dbf1 bp 0x7ffd8dfe5f30 sp 0x7ffd8dfe5f28
+READ of size 4 at 0x6190000004ac thread T0
+SCARINESS: 17 (4-byte-read-heap-buffer-overflow)
+    #0 0x73dbf0 in PutOffsets<int> /src/arrow/cpp/src/arrow/array/concatenate.cc:139:26
+    #1 0x73dbf0 in arrow::Status arrow::ConcatenateOffsets<int>(std::__1::vector<std::__1::shared_ptr<arrow::Buffer>, std::__1::allocator<std::__1::shared_ptr<arrow::Buffer> > > const&, arrow::MemoryPool*, std::__1::shared_ptr<arrow::Buffer>*, std::__1::vector<arrow::Range, std::__1::allocator<arrow::Range> >*) /src/arrow/cpp/src/arrow/array/concatenate.cc:120:5
+    #2 0x73357c in arrow::ConcatenateImpl::Visit(arrow::BinaryType const&) /src/arrow/cpp/src/arrow/array/concatenate.cc:197:5
+    #3 0x731b2b in arrow::Status arrow::VisitTypeInline<arrow::ConcatenateImpl>(arrow::DataType const&, arrow::ConcatenateImpl*) /src/arrow/cpp/src/arrow/visitor_inline.h:88:5
+    #4 0x72cf1b in arrow::ConcatenateImpl::Concatenate(std::__1::shared_ptr<arrow::ArrayData>*) && /src/arrow/cpp/src/arrow/array/concatenate.cc:179:5
+    #5 0x728e5e in arrow::Concatenate(std::__1::vector<std::__1::shared_ptr<arrow::Array>, std::__1::allocator<std::__1::shared_ptr<arrow::Array> > > const&, arrow::MemoryPool*) /src/arrow/cpp/src/arrow/array/concatenate.cc:388:3
+    #6 0x15bd6fb in arrow::ipc::DictionaryMemo::AddDictionaryDelta(long, std::__1::shared_ptr<arrow::Array> const&, arrow::MemoryPool*) /src/arrow/cpp/src/arrow/ipc/dictionary.cc:152:3
+    #7 0x5e784c in arrow::ipc::ReadDictionary(arrow::Buffer const&, arrow::ipc::DictionaryMemo*, arrow::ipc::IpcReadOptions const&, arrow::io::RandomAccessFile*) /src/arrow/cpp/src/arrow/ipc/reader.cc:688:29
+    #8 0x5eb00f in arrow::ipc::ParseDictionary(arrow::ipc::Message const&, arrow::ipc::DictionaryMemo*, arrow::ipc::IpcReadOptions const&) /src/arrow/cpp/src/arrow/ipc/reader.cc:699:10
+    #9 0x6ae3c4 in UpdateDictionaries /src/arrow/cpp/src/arrow/ipc/reader.cc:704:10
+    #10 0x6ae3c4 in arrow::ipc::RecordBatchStreamReaderImpl::ReadNext(std::__1::shared_ptr<arrow::RecordBatch>*) /src/arrow/cpp/src/arrow/ipc/reader.cc:750:7
+    #11 0x6410ed in arrow::ipc::internal::FuzzIpcStream(unsigned char const*, long) /src/arrow/cpp/src/arrow/ipc/reader.cc:1615:5
+    #12 0x5c16d9 in LLVMFuzzerTestOneInput /src/arrow/cpp/src/arrow/ipc/stream_fuzz.cc:25:17
+    #13 0x5bfd6e in ExecuteFilesOnyByOne /src/libfuzzer/afl/afl_driver.cpp:217:5
+    #14 0x5bfd6e in main /src/libfuzzer/afl/afl_driver.cpp:254:12
+    #15 0x1553925cb82f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+    #16 0x515258 in _start (/out/arrow-ipc-stream-fuzz+0x515258)
+
+DEDUP_TOKEN: PutOffsets<int>--arrow::Status arrow::ConcatenateOffsets<int>(std::__1::vector<std::__1::shared_ptr<arrow::Buffer>, std::__1::allocator<std::__1::shared_ptr<arrow::Buffer> > > const&, arrow::MemoryPool*, std::__1::shared_ptr<arrow::Buffer>*, std::__1::vector<arrow::Range, std::__1::allocator<arrow::Range> >*)--arrow::ConcatenateImpl::Visit(arrow::BinaryType const&)
+0x6190000004ac is located 0 bytes to the right of 1068-byte region [0x619000000080,0x6190000004ac)
+allocated by thread T0 here:
+    #0 0x5bd07d in operator new(unsigned long) /src/llvm-project/compiler-rt/lib/asan/asan_new_delete.cpp:99:3
+    #1 0x5bfd07 in __libcpp_allocate /usr/local/bin/../include/c++/v1/new:253:10
+    #2 0x5bfd07 in allocate /usr/local/bin/../include/c++/v1/memory:1789:34
+    #3 0x5bfd07 in allocate /usr/local/bin/../include/c++/v1/memory:1525:21
+    #4 0x5bfd07 in __vallocate /usr/local/bin/../include/c++/v1/vector:996:37
+    #5 0x5bfd07 in vector /usr/local/bin/../include/c++/v1/vector:1129:9
+    #6 0x5bfd07 in ExecuteFilesOnyByOne /src/libfuzzer/afl/afl_driver.cpp:214:23
+    #7 0x5bfd07 in main /src/libfuzzer/afl/afl_driver.cpp:254:12
+    #8 0x1553925cb82f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+
+DEDUP_TOKEN: operator new(unsigned long)--__libcpp_allocate--allocate
+SUMMARY: AddressSanitizer: heap-buffer-overflow /src/arrow/cpp/src/arrow/array/concatenate.cc:139:26 in PutOffsets<int>
+Shadow bytes around the buggy address:
+  0x0c327fff8040: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c327fff8050: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c327fff8060: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c327fff8070: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0c327fff8080: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x0c327fff8090: 00 00 00 00 00[04]fa fa fa fa fa fa fa fa fa fa
+  0x0c327fff80a0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c327fff80b0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c327fff80c0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c327fff80d0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x0c327fff80e0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+  Shadow gap:              cc
+==1303680==ABORTING

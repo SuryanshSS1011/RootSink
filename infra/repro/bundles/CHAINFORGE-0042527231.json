@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042527231",
+  "chain": "CWE-1285->CWE-125",
+  "project": "ntopng",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42527231",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "49d51e7baaca1a61334a90e9c8d3a4c8f2c07742",
+      "fix_commits": [
+        "49d51e7baaca1a61334a90e9c8d3a4c8f2c07742"
+      ],
+      "repo": "https://github.com/ntop/ntopng"
+    },
+    "patch": "diff --git a/src/Flow.cpp b/src/Flow.cpp\nindex 55d47a31b5c7..5879ef37249d 100644\n--- a/src/Flow.cpp\n+++ b/src/Flow.cpp\n@@ -6148,13 +6148,14 @@ void Flow::dissectMDNS(u_int8_t *payload, u_int16_t payload_len) {\n         if (!protos.mdns.name) protos.mdns.name = strdup(name);\n \n         if ((rsp_type == 0x10 /* TXT */) && (data_len > 0)) {\n-          char *txt = (char *)&payload[i + sizeof(rsp)], txt_buf[256];\n+\t  u_int16_t base_off = i + sizeof(rsp);\n+          char *txt = (char *)&payload[base_off], txt_buf[256];\n           u_int16_t off = 0;\n \n-          while (off < data_len) {\n+          while((off < data_len) && ((off+base_off) < payload_len)) {\n             u_int8_t txt_len = (u_int8_t)txt[off];\n \n-            if (txt_len < data_len) {\n+            if(txt_len < data_len) {\n               txt_len = min_val(data_len - off, txt_len);\n \n               off++;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42527231-vul",
+      "digest": "sha256:74ba504f48b2b9853a8338ce2433cb6250f196e44d5e653bfb4a24136d16518f"
+    },
+    "patched": {
+      "ref": "n132/arvo:42527231-fix",
+      "digest": "sha256:64269b6deff7903ef94a163ea7dbc28e1d94e6420766a549df1089eb8c03e952"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/ntopng/src/Flow.cpp:6071",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/ntopng/src/Flow.cpp:6071"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-961614369",
+  "chain": "CWE-456->CWE-457",
+  "project": "open62541",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42470668",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/open62541/open62541/commit/27dc05196fc43036a2efcea060ae3711b3209cf2",
+      "fix_commits": [
+        "27dc05196fc43036a2efcea060ae3711b3209cf2"
+      ],
+      "repo": "https://github.com/open62541/open62541"
+    },
+    "patch": "diff --git a/src/client/ua_client_connect.c b/src/client/ua_client_connect.c\nindex 6320f2080ff..a1ba687d3c9 100644\n--- a/src/client/ua_client_connect.c\n+++ b/src/client/ua_client_connect.c\n@@ -724,7 +724,8 @@ sendCloseSecureChannel(UA_Client *client) {\n                                           UA_MESSAGETYPE_CLO, &request,\n                                           &UA_TYPES[UA_TYPES_CLOSESECURECHANNELREQUEST]);\n     UA_CloseSecureChannelRequest_deleteMembers(&request);\n-    UA_SecureChannel_deleteMembersCleanup(&client->channel);\n+    UA_SecureChannel_close(&client->channel);\n+    UA_SecureChannel_deleteMembers(&client->channel);\n }\n \n UA_StatusCode\ndiff --git a/src/client/ua_client_connect_async.c b/src/client/ua_client_connect_async.c\nindex d97011227d2..3860d6d1d4c 100644\n--- a/src/client/ua_client_connect_async.c\n+++ b/src/client/ua_client_connect_async.c\n@@ -657,7 +657,8 @@ sendCloseSecureChannelAsync(UA_Client *client, void *userdata,\n     UA_SecureChannel_sendSymmetricMessage(\n             channel, ++client->requestId, UA_MESSAGETYPE_CLO, &request,\n             &UA_TYPES[UA_TYPES_CLOSESECURECHANNELREQUEST]);\n-    UA_SecureChannel_deleteMembersCleanup(&client->channel);\n+    UA_SecureChannel_close(&client->channel);\n+    UA_SecureChannel_deleteMembers(&client->channel);\n }\n \n static void\ndiff --git a/src/server/ua_securechannel_manager.c b/src/server/ua_securechannel_manager.c\nindex f91a55e426a..925aa3a67bb 100644\n--- a/src/server/ua_securechannel_manager.c\n+++ b/src/server/ua_securechannel_manager.c\n@@ -34,18 +34,22 @@ UA_SecureChannelManager_deleteMembers(UA_SecureChannelManager *cm) {\n     channel_entry *entry, *temp;\n     TAILQ_FOREACH_SAFE(entry, &cm->channels, pointers, temp) {\n         TAILQ_REMOVE(&cm->channels, entry, pointers);\n-        UA_SecureChannel_deleteMembersCleanup(&entry->channel);\n+        UA_SecureChannel_close(&entry->channel);\n+        UA_SecureChannel_deleteMembers(&entry->channel);\n         UA_free(entry);\n     }\n }\n \n static void\n removeSecureChannelCallback(void *_, channel_entry *entry) {\n-    UA_SecureChannel_deleteMembersCleanup(&entry->channel);\n+    UA_SecureChannel_deleteMembers(&entry->channel);\n }\n \n static void\n removeSecureChannel(UA_SecureChannelManager *cm, channel_entry *entry) {\n+    /* Close the SecureChannel */\n+    UA_SecureChannel_close(&entry->channel);\n+\n     /* Detach the channel and make the capacity available */\n     TAILQ_REMOVE(&cm->channels, entry, pointers);\n     UA_atomic_subUInt32(&cm->currentChannelCount, 1);\ndiff --git a/src/server/ua_server_binary.c b/src/server/ua_server_binary.c\nindex 01a5b07e83e..bba88c72892 100644\n--- a/src/server/ua_server_binary.c\n+++ b/src/server/ua_server_binary.c\n@@ -778,14 +778,18 @@ UA_Server_processBinaryMessage(UA_Server *server, UA_Connection *connection,\n         return;\n     }\n \n-    if(!connection->channel)\n+    UA_SecureChannel *channel = connection->channel;\n+    if(!channel)\n         return;\n \n     /* Process complete messages */\n-    UA_SecureChannel_processCompleteMessages(connection->channel, server,\n-                                             processSecureChannelMessage);\n+    UA_SecureChannel_processCompleteMessages(channel, server, processSecureChannelMessage);\n+\n+    /* Is the channel still open? */\n+    if(channel->state == UA_SECURECHANNELSTATE_CLOSED)\n+        return;\n \n-    /* Store unused chunks internally in the SecureChannel */\n+    /* Store unused decoded chunks internally in the SecureChannel */\n     UA_SecureChannel_persistIncompleteMessages(connection->channel);\n }\n \ndiff --git a/src/ua_securechannel.c b/src/ua_securechannel.c\nindex 773e7d09115..3736d40433d 100644\n--- a/src/ua_securechannel.c\n+++ b/src/ua_securechannel.c\n@@ -118,7 +118,7 @@ UA_SecureChannel_deleteMessages(UA_SecureChannel *channel) {\n }\n \n void\n-UA_SecureChannel_deleteMembersCleanup(UA_SecureChannel *channel) {\n+UA_SecureChannel_deleteMembers(UA_SecureChannel *channel) {\n     /* Delete members */\n     UA_ByteString_deleteMembers(&channel->remoteCertificate);\n     UA_ByteString_deleteMembers(&channel->localNonce);\n@@ -130,6 +130,16 @@ UA_SecureChannel_deleteMembersCleanup(UA_SecureChannel *channel) {\n     if(channel->securityPolicy)\n         channel->securityPolicy->channelModule.deleteContext(channel->channelContext);\n \n+\n+    /* Remove the buffered messages */\n+    UA_SecureChannel_deleteMessages(channel);\n+}\n+\n+void\n+UA_SecureChannel_close(UA_SecureChannel *channel) {\n+    /* Set the status to closed */\n+    channel->state = UA_SECURECHANNELSTATE_CLOSED;\n+\n     /* Detach from the connection and close the connection */\n     if(channel->connection) {\n         if(channel->connection->state != UA_CONNECTION_CLOSED)\n@@ -144,9 +154,6 @@ UA_SecureChannel_deleteMembersCleanup(UA_SecureChannel *channel) {\n         sh->channel = NULL;\n         LIST_REMOVE(sh, pointers);\n     }\n-\n-    /* Remove the buffered messages */\n-    UA_SecureChannel_deleteMessages(channel);\n }\n \n UA_StatusCode\n@@ -961,6 +968,10 @@ UA_SecureChannel_processCompleteMessages(UA_SecureChannel *channel, void *applic\n         if(!message->final)\n             break;\n \n+        /* Has the channel been closed (during the last message)? */\n+        if(channel->state == UA_SECURECHANNELSTATE_CLOSED)\n+            break;\n+\n         /* Remove the current message before processing */\n         TAILQ_REMOVE(&channel->messages, message, pointers);\n \n@@ -1195,7 +1206,7 @@ checkSymHeader(UA_SecureChannel *const channel,\n            (channel->securityToken.createdAt +\n             (channel->securityToken.revisedLifetime * UA_DATETIME_MSEC))\n            < UA_DateTime_nowMonotonic()) {\n-            UA_SecureChannel_deleteMembersCleanup(channel);\n+            UA_SecureChannel_close(channel);\n             return UA_STATUSCODE_BADSECURECHANNELCLOSED;\n         }\n     }\n@@ -1356,7 +1367,8 @@ UA_SecureChannel_decryptAddChunk(UA_SecureChannel *channel, const UA_ByteString\n \n     UA_StatusCode retval = decryptAddChunk(channel, chunk, allowPreviousToken);\n     if(retval != UA_STATUSCODE_GOOD)\n-        UA_SecureChannel_deleteMembersCleanup(channel);\n+        UA_SecureChannel_close(channel);\n+\n     return retval;\n }\n \n@@ -1371,7 +1383,7 @@ UA_SecureChannel_persistIncompleteMessages(UA_SecureChannel *channel) {\n             UA_ByteString copy;\n             UA_StatusCode retval = UA_ByteString_copy(&cp->bytes, &copy);\n             if(retval != UA_STATUSCODE_GOOD) {\n-                UA_SecureChannel_deleteMembersCleanup(channel);\n+                UA_SecureChannel_close(channel);\n                 return retval;\n             }\n             cp->bytes = copy;\ndiff --git a/src/ua_securechannel.h b/src/ua_securechannel.h\nindex fdd973dff4a..c1572dc04f8 100644\n--- a/src/ua_securechannel.h\n+++ b/src/ua_securechannel.h\n@@ -106,6 +106,8 @@ struct UA_SecureChannel {\n \n void UA_SecureChannel_init(UA_SecureChannel *channel);\n \n+void UA_SecureChannel_close(UA_SecureChannel *channel);\n+\n UA_StatusCode\n UA_SecureChannel_setSecurityPolicy(UA_SecureChannel *channel,\n                                    const UA_SecurityPolicy *securityPolicy,\n@@ -114,7 +116,7 @@ UA_SecureChannel_setSecurityPolicy(UA_SecureChannel *channel,\n /* Remove (partially) received unprocessed messages */\n void UA_SecureChannel_deleteMessages(UA_SecureChannel *channel);\n \n-void UA_SecureChannel_deleteMembersCleanup(UA_SecureChannel *channel);\n+void UA_SecureChannel_deleteMembers(UA_SecureChannel *channel);\n \n /* Generates new keys and sets them in the channel context */\n UA_StatusCode\ndiff --git a/tests/check_securechannel.c b/tests/check_securechannel.c\nindex e11a035e23c..af8434dd2c9 100644\n--- a/tests/check_securechannel.c\n+++ b/tests/check_securechannel.c\n@@ -54,7 +54,8 @@ setup_secureChannel(void) {\n \n static void\n teardown_secureChannel(void) {\n-    UA_SecureChannel_deleteMembersCleanup(&testChannel);\n+    UA_SecureChannel_close(&testChannel);\n+    UA_SecureChannel_deleteMembers(&testChannel);\n     dummyPolicy.deleteMembers(&dummyPolicy);\n     testingConnection.close(&testingConnection);\n }\n@@ -107,7 +108,8 @@ START_TEST(SecureChannel_initAndDelete)\n         ck_assert_msg(fCalled.makeCertificateThumbprint, \"Expected makeCertificateThumbprint to have been called\");\n         ck_assert_msg(channel.securityPolicy == &dummyPolicy, \"SecurityPolicy not set correctly\");\n \n-        UA_SecureChannel_deleteMembersCleanup(&channel);\n+        UA_SecureChannel_close(&channel);\n+        UA_SecureChannel_deleteMembers(&channel);\n         ck_assert_msg(fCalled.deleteContext, \"Expected deleteContext to have been called\");\n \n         dummyPolicy.deleteMembers(&dummyPolicy);\ndiff --git a/tests/server/check_server_monitoringspeed.c b/tests/server/check_server_monitoringspeed.c\nindex 9ff54a2c924..ef4ddb3162d 100644\n--- a/tests/server/check_server_monitoringspeed.c\n+++ b/tests/server/check_server_monitoringspeed.c\n@@ -39,7 +39,8 @@ static void setup(void) {\n }\n \n static void teardown(void) {\n-    UA_SecureChannel_deleteMembersCleanup(&testChannel);\n+    UA_SecureChannel_close(&testChannel);\n+    UA_SecureChannel_deleteMembers(&testChannel);\n     dummyPolicy.deleteMembers(&dummyPolicy);\n     testingConnection.close(&testingConnection);\n \ndiff --git a/tests/server/check_server_readspeed.c b/tests/server/check_server_readspeed.c\nindex 8c0febccdc0..fc004896c91 100644\n--- a/tests/server/check_server_readspeed.c\n+++ b/tests/server/check_server_readspeed.c\n@@ -40,7 +40,8 @@ static void setup(void) {\n }\n \n static void teardown(void) {\n-    UA_SecureChannel_deleteMembersCleanup(&testChannel);\n+    UA_SecureChannel_close(&testChannel);\n+    UA_SecureChannel_deleteMembers(&testChannel);\n     dummyPolicy.deleteMembers(&dummyPolicy);\n     testingConnection.close(&testingConnection);\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42470668-vul",
+      "digest": "sha256:7e71832c72916cfecd0caa0acbe1a57fe9b56cf00821ca80b86eff2008d7c41a"
+    },
+    "patched": {
+      "ref": "n132/arvo:42470668-fix",
+      "digest": "sha256:8709cfb288ed1b9f0b83e7572f2aa1b622a6b26472637ea6083bdd2e800e78bd"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/open62541/src/ua_workqueue.c:252",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/open62541/src/ua_workqueue.c:252"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

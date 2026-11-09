@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042533844",
+  "chain": "CWE-1285->CWE-125",
+  "project": "libdwarf",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42533844",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "2930f3121ee6b07da405103934c329bbeca0382f",
+      "fix_commits": [
+        "2930f3121ee6b07da405103934c329bbeca0382f"
+      ],
+      "repo": "https://github.com/davea42/libdwarf-code"
+    },
+    "patch": "diff --git a/bugxml/data.txt b/bugxml/data.txt\nindex 04c1b593c..a88d1486b 100644\n--- a/bugxml/data.txt\n+++ b/bugxml/data.txt\n@@ -1,3 +1,22 @@\n+id: DW202403-001\n+fuzzer: ossfuzz id: 67490\n+datereported: 2024-03-18\n+reportedby: David Korczynski\n+vulnerability: Reads past end of line table\n+product: libdwarf\n+description: A carefully corrupted line table\n+  header can cause libdwarf to read outside of its\n+  allowed areas in a .debug_line section reading\n+  the file names part of the header.\n+  The failure to check for end-of-section following the\n+  very last byte in section has been present for many years. \n+datefixed: 2024-02-19\n+references: regressiontests/ossfuzz67490/fuzz_srcfiles-5195296927711232\n+gitfixid: \n+tarrelease:\n+endrec: DW202403-001\n+\n+\n id: DW202402-003\n fuzzer: hongg\n datereported: 2024-02-18\ndiff --git a/src/lib/libdwarf/dwarf_line_table_reader_common.h b/src/lib/libdwarf/dwarf_line_table_reader_common.h\nindex edcde1cd1..75ea31262 100644\n--- a/src/lib/libdwarf/dwarf_line_table_reader_common.h\n+++ b/src/lib/libdwarf/dwarf_line_table_reader_common.h\n@@ -911,6 +911,16 @@ _dwarf_read_line_table_header(Dwarf_Debug dbg,\n                     filename_entry_pairs[j].up_first;\n                 Dwarf_Unsigned lnform =\n                     filename_entry_pairs[j].up_second;\n+\n+                if (line_ptr >= line_ptr_end) {\n+                    free(filename_entry_pairs);\n+                    _dwarf_error_string(dbg, err,\n+                        DW_DLE_LINE_NUMBER_HEADER_ERROR,\n+                        \"DW_DLE_LINE_NUMBER_HEADER_ERROR: \"\n+                        \"file name format count too large \"\n+                        \"to be correct. Corrupt DWARF/\");\n+                    return DW_DLV_ERROR;\n+                }\n                 switch (lntype) {\n                 /* The LLVM LNCT is documented in\n                     https://releases.llvm.org/9.0.0/docs\n@@ -1064,8 +1074,11 @@ _dwarf_read_line_table_header(Dwarf_Debug dbg,\n                 }\n                 if (line_ptr > line_ptr_end) {\n                     free(filename_entry_pairs);\n-                    _dwarf_error(dbg, err,\n-                        DW_DLE_LINE_NUMBER_HEADER_ERROR);\n+                    _dwarf_error_string(dbg, err,\n+                        DW_DLE_LINE_NUMBER_HEADER_ERROR,\n+                        \"DW_DLE_LINE_NUMBER_HEADER_ERROR: \"\n+                        \"Reading line table header filenames \"\n+                        \"runs off end of section. Corrupt Dwarf\");\n                     return DW_DLV_ERROR;\n                 }\n             }\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42533844-vul",
+      "digest": "sha256:6de21aadfddf3776135cf35c17bcdead77f9ea2c1e81af4c518004deb3223e9e"
+    },
+    "patched": {
+      "ref": "n132/arvo:42533844-fix",
+      "digest": "sha256:8be343c56166b08a1685a23a3e66cea748aa504b9d61974cf93e1effbf4dcf5a"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/libdwarf/src/lib/libdwarf/dwarf_line.c:2107",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/libdwarf/src/lib/libdwarf/dwarf_line.c:2107"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

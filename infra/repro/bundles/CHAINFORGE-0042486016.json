@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042486016",
+  "chain": "CWE-456->CWE-457",
+  "project": "skia",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42486016",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "4470ba1491e555c4bb9d6695eb444b6a1b3a0c6b",
+      "fix_commits": [
+        "4470ba1491e555c4bb9d6695eb444b6a1b3a0c6b"
+      ],
+      "repo": "https://skia.googlesource.com/skia.git"
+    },
+    "patch": "diff --git a/third_party/skcms/skcms.cc b/third_party/skcms/skcms.cc\nindex 0489a8a..3b78060 100644\n--- a/third_party/skcms/skcms.cc\n+++ b/third_party/skcms/skcms.cc\n@@ -1314,7 +1314,10 @@\n     // skcms_252_random_bytes are 252 of a random shuffle of all possible bytes.\n     // 252 is evenly divisible by 3 and 4.  Only 192, 10, 241, and 43 are missing.\n \n-    if (A->data_color_space != B->data_color_space) {\n+    // We want to allow otherwise equivalent profiles tagged as grayscale and RGB\n+    // to be treated as equal.  But CMYK profiles are a totally different ballgame.\n+    const auto CMYK = skcms_Signature_CMYK;\n+    if ((A->data_color_space == CMYK) != (B->data_color_space == CMYK)) {\n         return false;\n     }\n \ndiff --git a/third_party/skcms/version.sha1 b/third_party/skcms/version.sha1\nindex 468e9bd..ec34288 100755\n--- a/third_party/skcms/version.sha1\n+++ b/third_party/skcms/version.sha1\n@@ -1 +1 @@\n-8da4cb002cb43834cf9b4e8929f2a064a536b2b1\n+b1f9041ffe31d604fe15883415a32daed476316c\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42486016-vul",
+      "digest": "sha256:2cc3ccc1e70614309b66c15e030a9093a14f4faad564dfc74912abce76ad0d0f"
+    },
+    "patched": {
+      "ref": "n132/arvo:42486016-fix",
+      "digest": "sha256:cd1105f7b7443a92ed0c9620f162e8271e3bd5b408b89d858c68e3ac4e021c76"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/skia/out/Fuzz/../../src/opts/SkBlitRow_opts.h:165",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/skia/out/Fuzz/../../src/opts/SkBlitRow_opts.h:165"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

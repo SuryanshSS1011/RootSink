@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042474797",
+  "chain": "CWE-416->CWE-787",
+  "project": "libarchive",
+  "tier": "silver",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42474797",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "2fce6f81cc59144bf4f2f66f7620233d609b41ef",
+      "fix_commits": [
+        "2fce6f81cc59144bf4f2f66f7620233d609b41ef"
+      ],
+      "repo": "https://github.com/libarchive/libarchive"
+    },
+    "patch": "diff --git a/libarchive/archive_read_support_format_rar5.c b/libarchive/archive_read_support_format_rar5.c\nindex 7123e408a9..a43afbfa0f 100644\n--- a/libarchive/archive_read_support_format_rar5.c\n+++ b/libarchive/archive_read_support_format_rar5.c\n@@ -1352,8 +1352,8 @@ static int parse_file_extra_owner(struct archive_read* a,\n \t        *extra_data_size -= name_size + 1;\n \t\tif(!read_ahead(a, name_size, &p))\n \t\t\treturn ARCHIVE_EOF;\n-\t\tif (name_size > OWNER_MAXNAMELEN)\n-\t\t\tname_len = OWNER_MAXNAMELEN;\n+\t\tif (name_size >= OWNER_MAXNAMELEN)\n+\t\t\tname_len = OWNER_MAXNAMELEN - 1;\n \t\telse\n \t\t\tname_len = name_size;\n \t\tmemcpy(namebuf, p, name_len);\n@@ -1369,8 +1369,8 @@ static int parse_file_extra_owner(struct archive_read* a,\n \t        *extra_data_size -= name_size + 1;\n \t\tif(!read_ahead(a, name_size, &p))\n \t\t\treturn ARCHIVE_EOF;\n-\t\tif (name_size > OWNER_MAXNAMELEN)\n-\t\t\tname_len = OWNER_MAXNAMELEN;\n+\t\tif (name_size >= OWNER_MAXNAMELEN)\n+\t\t\tname_len = OWNER_MAXNAMELEN - 1;\n \t\telse\n \t\t\tname_len = name_size;\n \t\tmemcpy(namebuf, p, name_len);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42474797-vul",
+      "digest": "sha256:2482250be04b36709ba1228efe7cf9aa11b6727d1d8adceed2d53d993488346d"
+    },
+    "patched": {
+      "ref": "n132/arvo:42474797-fix",
+      "digest": "sha256:3ddca783fd3aa78d38cfbc504415f79dc1be6a40a9c8d73e3115004d22c9ae2a"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/libarchive/libarchive/archive_read_support_format_rar5.c:1377",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "stack-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/libarchive/libarchive/archive_read_support_format_rar5.c:1377"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

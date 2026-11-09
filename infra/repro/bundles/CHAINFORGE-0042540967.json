@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042540967",
+  "chain": "CWE-1284->CWE-125",
+  "project": "openvswitch",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42540967",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "4fe08016068514be7a8751d86f6ad30bde344949",
+      "fix_commits": [
+        "4fe08016068514be7a8751d86f6ad30bde344949"
+      ],
+      "repo": "https://github.com/openvswitch/ovs"
+    },
+    "patch": "diff --git a/lib/flow.c b/lib/flow.c\nindex a785e63a82f..76a8b9aaeaa 100644\n--- a/lib/flow.c\n+++ b/lib/flow.c\n@@ -677,7 +677,7 @@ ipv6_sanity_check(const struct ovs_16aligned_ip6_hdr *nh, size_t size)\n     }\n \n     plen = ntohs(nh->ip6_plen);\n-    if (OVS_UNLIKELY(plen > size)) {\n+    if (OVS_UNLIKELY(plen + IPV6_HEADER_LEN > size)) {\n         return false;\n     }\n     /* Jumbo Payload option not supported yet. */\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42540967-vul",
+      "digest": "sha256:74a6e1c804b637ea137f3148e37a0a9cef5660b8bf0650cd61d408626db2244f"
+    },
+    "patched": {
+      "ref": "n132/arvo:42540967-fix",
+      "digest": "sha256:0cfc76df618624e5f6633deea98c9378f47658cbeaf8911be1b199ef16efda79"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/openvswitch/lib/ofp-print.c:88",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1284,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/openvswitch/lib/ofp-print.c:88"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

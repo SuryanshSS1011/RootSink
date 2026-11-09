@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042538578",
+  "chain": "CWE-416->CWE-125",
+  "project": "mruby",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42538578",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "9ea6bda7811b0ab46e438dd8c0a602dd051f9c1b",
+      "fix_commits": [
+        "9ea6bda7811b0ab46e438dd8c0a602dd051f9c1b"
+      ],
+      "repo": "https://github.com/mruby/mruby"
+    },
+    "patch": "diff --git a/src/vm.c b/src/vm.c\nindex 40a8a8971b..4d78035ad7 100644\n--- a/src/vm.c\n+++ b/src/vm.c\n@@ -1373,6 +1373,7 @@ hash_new_from_regs(mrb_state *mrb, mrb_int argc, mrb_int idx)\n   mrb_callinfo *ci = mrb->c->ci;\n   while (argc--) {\n     mrb_hash_set(mrb, hash, regs[idx+0], regs[idx+1]);\n+    ci = mrb->c->ci;\n     idx += 2;\n   }\n   return hash;\n@@ -1601,6 +1602,7 @@ mrb_vm_exec(mrb_state *mrb, const struct RProc *begin_proc, const mrb_code *iseq\n         break;\n       case MRB_TT_HASH:\n         va = mrb_hash_get(mrb, va, vb);\n+        ci = mrb->c->ci;\n         regs[a] = va;\n         break;\n       case MRB_TT_STRING:\n@@ -1875,6 +1877,7 @@ mrb_vm_exec(mrb_state *mrb, const struct RProc *begin_proc, const mrb_code *iseq\n         else if (nk > 0) {  /* pack keyword arguments */\n           mrb_int kidx = a+(n==CALL_MAXARGS?1:n)+1;\n           mrb_value kdict = hash_new_from_regs(mrb, nk, kidx);\n+          ci = mrb->c->ci;\n           regs[kidx] = kdict;\n           nk = CALL_MAXARGS;\n           c = n | (nk<<4);\n@@ -2247,8 +2250,10 @@ mrb_vm_exec(mrb_state *mrb, const struct RProc *begin_proc, const mrb_code *iseq\n         RAISE_FORMAT(mrb, E_ARGUMENT_ERROR, \"missing keyword: %v\", k);\n       }\n       v = mrb_hash_get(mrb, kdict, k);\n+      ci = mrb->c->ci;\n       regs[a] = v;\n       mrb_hash_delete_key(mrb, kdict, k);\n+      ci = mrb->c->ci;\n       NEXT;\n     }\n \n@@ -2260,6 +2265,7 @@ mrb_vm_exec(mrb_state *mrb, const struct RProc *begin_proc, const mrb_code *iseq\n \n       if (kidx >= 0 && mrb_hash_p(kdict=regs[kidx])) {\n         key_p = mrb_hash_key_p(mrb, kdict, k);\n+        ci = mrb->c->ci;\n       }\n       regs[a] = mrb_bool_value(key_p);\n       NEXT;\n@@ -2669,6 +2675,7 @@ mrb_vm_exec(mrb_state *mrb, const struct RProc *begin_proc, const mrb_code *iseq\n \n     CASE(OP_ARYCAT, B) {\n       mrb_value splat = mrb_ary_splat(mrb, regs[a+1]);\n+      ci = mrb->c->ci;\n       if (mrb_nil_p(regs[a])) {\n         regs[a] = splat;\n       }\n@@ -2690,6 +2697,7 @@ mrb_vm_exec(mrb_state *mrb, const struct RProc *begin_proc, const mrb_code *iseq\n \n     CASE(OP_ARYSPLAT, B) {\n       mrb_value ary = mrb_ary_splat(mrb, regs[a]);\n+      ci = mrb->c->ci;\n       regs[a] = ary;\n       mrb_gc_arena_restore(mrb, ai);\n       NEXT;\n@@ -2804,6 +2812,7 @@ mrb_vm_exec(mrb_state *mrb, const struct RProc *begin_proc, const mrb_code *iseq\n \n       for (int i=a; i<lim; i+=2) {\n         mrb_hash_set(mrb, hash, regs[i], regs[i+1]);\n+        ci = mrb->c->ci;\n       }\n       regs[a] = hash;\n       mrb_gc_arena_restore(mrb, ai);\n@@ -2818,6 +2827,7 @@ mrb_vm_exec(mrb_state *mrb, const struct RProc *begin_proc, const mrb_code *iseq\n       mrb_ensure_hash_type(mrb, hash);\n       for (int i=a+1; i<lim; i+=2) {\n         mrb_hash_set(mrb, hash, regs[i], regs[i+1]);\n+        ci = mrb->c->ci;\n       }\n       mrb_gc_arena_restore(mrb, ai);\n       NEXT;\n@@ -2827,6 +2837,7 @@ mrb_vm_exec(mrb_state *mrb, const struct RProc *begin_proc, const mrb_code *iseq\n \n       mrb_assert(mrb_hash_p(hash));\n       mrb_hash_merge(mrb, hash, regs[a+1]);\n+      ci = mrb->c->ci;\n       mrb_gc_arena_restore(mrb, ai);\n       NEXT;\n     }\n@@ -2860,13 +2871,16 @@ mrb_vm_exec(mrb_state *mrb, const struct RProc *begin_proc, const mrb_code *iseq\n     }\n \n     CASE(OP_RANGE_INC, B) {\n-      regs[a] = mrb_range_new(mrb, regs[a], regs[a+1], FALSE);\n+      mrb_value v = mrb_range_new(mrb, regs[a], regs[a+1], FALSE);\n+      ci = mrb->c->ci;\n+      regs[a] = v;\n       mrb_gc_arena_restore(mrb, ai);\n       NEXT;\n     }\n \n     CASE(OP_RANGE_EXC, B) {\n       mrb_value v = mrb_range_new(mrb, regs[a], regs[a+1], TRUE);\n+      ci = mrb->c->ci;\n       regs[a] = v;\n       mrb_gc_arena_restore(mrb, ai);\n       NEXT;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42538578-vul",
+      "digest": "sha256:4d028db31922d28cae115d03cf7a66a1584651b8779713bbe1c718033026f358"
+    },
+    "patched": {
+      "ref": "n132/arvo:42538578-fix",
+      "digest": "sha256:36f5252c8a661eb1546dd4f09f55a6093061cc25bbff93cc7852ff0ebd819729"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "crash_site": "/src/mruby/src/vm.c:2712",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 416,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-use-after-free",
+        "direction": "READ",
+        "site": "/src/mruby/src/vm.c:2712"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-951849938",
+  "chain": "CWE-843->CWE-119",
+  "project": "gdal",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42489781",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/OSGeo/gdal/commit/0e7947b4efb00d8f42c1341c55a1f1a413a2d2e3",
+      "fix_commits": [
+        "0e7947b4efb00d8f42c1341c55a1f1a413a2d2e3"
+      ],
+      "repo": "https://github.com/OSGeo/gdal"
+    },
+    "patch": "diff --git a/gdal/ogr/ogrsf_frmts/sdts/ogrsdtslayer.cpp b/gdal/ogr/ogrsf_frmts/sdts/ogrsdtslayer.cpp\nindex 75fc99245801..71822466b2cc 100644\n--- a/gdal/ogr/ogrsf_frmts/sdts/ogrsdtslayer.cpp\n+++ b/gdal/ogr/ogrsf_frmts/sdts/ogrsdtslayer.cpp\n@@ -106,8 +106,8 @@ OGRSDTSLayer::OGRSDTSLayer( SDTSTransfer * poTransferIn, int iLayerIn,\n         const int nLayerIdx = poTransfer->FindLayer( papszATIDRefs[iTable] );\n         if( nLayerIdx < 0 )\n             continue;\n-        SDTSAttrReader *poAttrReader = (SDTSAttrReader *)\n-            poTransfer->GetLayerIndexedReader(nLayerIdx);\n+        SDTSAttrReader *poAttrReader = dynamic_cast<SDTSAttrReader *>(\n+            poTransfer->GetLayerIndexedReader(nLayerIdx));\n \n         if( poAttrReader == NULL )\n             continue;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42489781-vul",
+      "digest": "sha256:23bbf21f96b15f943906b17115c60982c4f33b54f3aaaa9a9a93668f8ffeac00"
+    },
+    "patched": {
+      "ref": "n132/arvo:42489781-fix",
+      "digest": "sha256:39414bc557b4cab240afb7a7eb74f28c2040d5a9dd6be6b6783737be322daa11"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "crash_site": "/src/gdal/gdal/ogr/ogrsf_frmts/sdts/ogrsdtslayer.cpp:109",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 843,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 119,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "site": "/src/gdal/gdal/ogr/ogrsf_frmts/sdts/ogrsdtslayer.cpp:109"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

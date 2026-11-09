@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042471578",
+  "chain": "CWE-20->CWE-787",
+  "project": "librawspeed",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42471578",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "0bcf3488a4989c2724f0c4383401b0d0dcfc3dcc",
+      "fix_commits": [
+        "0bcf3488a4989c2724f0c4383401b0d0dcfc3dcc"
+      ],
+      "repo": "https://github.com/darktable-org/rawspeed"
+    },
+    "patch": "diff --git a/src/librawspeed/decompressors/VC5Decompressor.cpp b/src/librawspeed/decompressors/VC5Decompressor.cpp\nindex cffa9bae6..b0c7e7385 100644\n--- a/src/librawspeed/decompressors/VC5Decompressor.cpp\n+++ b/src/librawspeed/decompressors/VC5Decompressor.cpp\n@@ -544,7 +544,7 @@ void VC5Decompressor::Wavelet::HighPassBand::decode(const Wavelet& wavelet) {\n   for (int iPixel = 0; iPixel < nPixels;) {\n     getRLV(&bits, &pixelValue, &count);\n     for (; count > 0; --count) {\n-      if (iPixel > nPixels)\n+      if (iPixel >= nPixels)\n         ThrowRDE(\"Buffer overflow\");\n       data[iPixel] = dequantize(pixelValue);\n       ++iPixel;\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42471578-vul",
+      "digest": "sha256:9e7261295d904be376adc76a7bc34d47264a33e4e40f05c202650570949333f4"
+    },
+    "patched": {
+      "ref": "n132/arvo:42471578-fix",
+      "digest": "sha256:db6cee5f162377489be67d830c85339d3607941ecbf946142c8a983df4eb9f48"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/librawspeed/src/librawspeed/decompressors/VC5Decompressor.cpp:530",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/librawspeed/src/librawspeed/decompressors/VC5Decompressor.cpp:530"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

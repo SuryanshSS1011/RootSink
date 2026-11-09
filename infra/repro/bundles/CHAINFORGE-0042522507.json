@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042522507",
+  "chain": "CWE-1285->CWE-125",
+  "project": "libxml2",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42522507",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "7fbd454d9f70f0f0c0a0c27a7d541fed4d038c2a",
+      "fix_commits": [
+        "7fbd454d9f70f0f0c0a0c27a7d541fed4d038c2a"
+      ],
+      "repo": "https://gitlab.gnome.org/GNOME/libxml2.git"
+    },
+    "patch": "diff --git a/HTMLparser.c b/HTMLparser.c\nindex 3bebda6e2b21054c6ca3b5b4df52a6541f114ea7..b8b6bd230cff92f6010f7dd1a43bb103c405a926 100644\n--- a/HTMLparser.c\n+++ b/HTMLparser.c\n@@ -411,7 +411,7 @@ htmlCurrentChar(xmlParserCtxtPtr ctxt, int *len) {\n \treturn(ctxt->token);\n     }\n \n-    if ((ctxt->input->end - ctxt->input->cur < 4) &&\n+    if ((ctxt->input->end - ctxt->input->cur < INPUT_CHUNK) &&\n         (xmlParserGrow(ctxt) < 0))\n         return(0);\n \ndiff --git a/parserInternals.c b/parserInternals.c\nindex a06bb76abcc2967e3fdfe99917fc649c4fdcfc1c..52491505cb8ccf45d647704352d4b7923e5e29d8 100644\n--- a/parserInternals.c\n+++ b/parserInternals.c\n@@ -527,7 +527,7 @@ xmlNextChar(xmlParserCtxtPtr ctxt)\n \treturn;\n     }\n \n-    if (ctxt->input->end - ctxt->input->cur < 4) {\n+    if (ctxt->input->end - ctxt->input->cur < INPUT_CHUNK) {\n         if (xmlParserGrow(ctxt) < 0)\n             return;\n         if (ctxt->input->cur >= ctxt->input->end)\n@@ -674,7 +674,7 @@ xmlCurrentChar(xmlParserCtxtPtr ctxt, int *len) {\n     if (ctxt->instate == XML_PARSER_EOF)\n \treturn(0);\n \n-    if ((ctxt->input->end - ctxt->input->cur < 4) &&\n+    if ((ctxt->input->end - ctxt->input->cur < INPUT_CHUNK) &&\n         (xmlParserGrow(ctxt) < 0))\n         return(0);\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42522507-vul",
+      "digest": "sha256:7e2ffc56e9aea8d960124a3de4a6e35456e4878b636870ee6f30675abaaa0fc8"
+    },
+    "patched": {
+      "ref": "n132/arvo:42522507-fix",
+      "digest": "sha256:8c3d831a807f581c5c71499d9f05eb1aa41898d36fc10944b0b252678f5caaab"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "global-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/libxml2/xmlstring.c:53",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "global-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/libxml2/xmlstring.c:53"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

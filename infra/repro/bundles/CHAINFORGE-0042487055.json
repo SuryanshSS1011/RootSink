@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042487055",
+  "chain": "CWE-456->CWE-457",
+  "project": "libsndfile",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42487055",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "288764df0959a91741a47a124b39c6365af1b005",
+      "fix_commits": [
+        "288764df0959a91741a47a124b39c6365af1b005"
+      ],
+      "repo": "https://github.com/libsndfile/libsndfile"
+    },
+    "patch": "From 288764df0959a91741a47a124b39c6365af1b005 Mon Sep 17 00:00:00 2001\nFrom: evpobr <evpobr@gmail.com>\nDate: Tue, 19 Jan 2021 20:28:28 +0500\nSubject: [PATCH] Fix use of uninitialized value in endswap_int64_t_array\n\nhttps://bugs.chromium.org/p/oss-fuzz/issues/detail?id=25366\n\nCredit to OSS-Fuzz.\n---\n src/double64.c | 2 +-\n 1 file changed, 1 insertion(+), 1 deletion(-)\n\ndiff --git a/src/double64.c b/src/double64.c\nindex 3ee4e99..fb6d468 100644\n--- a/src/double64.c\n+++ b/src/double64.c\n@@ -631,7 +631,7 @@ host_read_d2f\t(SF_PRIVATE *psf, float *ptr, sf_count_t len)\n \t\treadcount = psf_fread (ubuf.dbuf, sizeof (double), bufferlen, psf) ;\n \n \t\tif (psf->data_endswap == SF_TRUE)\n-\t\t\tendswap_double_array (ubuf.dbuf, bufferlen) ;\n+\t\t\tendswap_double_array (ubuf.dbuf, readcount) ;\n \n \t\td2f_array (ubuf.dbuf, readcount, ptr + total) ;\n \t\ttotal += readcount ;\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42487055-vul",
+      "digest": "sha256:7e285a236c2f193fe02dddd0d988678d6071a05b6ece4cac6d09f122e308fbb9"
+    },
+    "patched": {
+      "ref": "n132/arvo:42487055-fix",
+      "digest": "sha256:3183c915cb576e155675a2dd96ca1da24e33b85a39b6adce78f58112e4658db7"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/libsndfile/./src/sfendian.h:341",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/libsndfile/./src/sfendian.h:341"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

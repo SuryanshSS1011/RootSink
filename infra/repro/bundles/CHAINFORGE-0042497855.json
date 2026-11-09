@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042497855",
+  "chain": "CWE-1285->CWE-125",
+  "project": "c-blosc2",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42497855",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "1600817ed4961b13bbe6eed5f308c9abc78eee1e",
+      "fix_commits": [
+        "1600817ed4961b13bbe6eed5f308c9abc78eee1e"
+      ],
+      "repo": "https://github.com/Blosc/c-blosc2"
+    },
+    "patch": "From 1600817ed4961b13bbe6eed5f308c9abc78eee1e Mon Sep 17 00:00:00 2001\nFrom: Nathan Moinvaziri <nathan@nathanm.com>\nDate: Sun, 27 Jun 2021 14:19:48 -0700\nSubject: [PATCH] Fixed integer overflow checking for valid header and trailer\n read lengths. https://oss-fuzz.com/testcase-detail/5957284579639296\n\n---\n blosc/frame.c | 8 ++++----\n 1 file changed, 4 insertions(+), 4 deletions(-)\n\ndiff --git a/blosc/frame.c b/blosc/frame.c\nindex 43c6545..6423155 100644\n--- a/blosc/frame.c\n+++ b/blosc/frame.c\n@@ -1291,7 +1291,7 @@ static int get_meta_from_header(blosc2_frame_s* frame, blosc2_schunk* schunk, ui\n     }\n     // Go to offset and see if we have the correct marker\n     uint8_t* content_marker = header + offset;\n-    if (header_len < offset + 1 + 4) {\n+    if (header_len < (size_t)offset + 1 + 4) {\n       return BLOSC2_ERROR_READ_BUFFER;\n     }\n     if (*content_marker != 0xc6) {\n@@ -1307,7 +1307,7 @@ static int get_meta_from_header(blosc2_frame_s* frame, blosc2_schunk* schunk, ui\n     metalayer->content_len = content_len;\n \n     // Finally, read the content\n-    if (header_len < offset + 1 + 4 + content_len) {\n+    if (header_len < (size_t)offset + 1 + 4 + content_len) {\n       return BLOSC2_ERROR_READ_BUFFER;\n     }\n     char* content = malloc((size_t)content_len);\n@@ -1461,7 +1461,7 @@ static int get_vlmeta_from_trailer(blosc2_frame_s* frame, blosc2_schunk* schunk,\n     }\n     // Go to offset and see if we have the correct marker\n     uint8_t* content_marker = trailer + offset;\n-    if (trailer_len < offset + 1 + 4) {\n+    if (trailer_len < (size_t)offset + 1 + 4) {\n       return BLOSC2_ERROR_READ_BUFFER;\n     }\n     if (*content_marker != 0xc6) {\n@@ -1477,7 +1477,7 @@ static int get_vlmeta_from_trailer(blosc2_frame_s* frame, blosc2_schunk* schunk,\n     metalayer->content_len = content_len;\n \n     // Finally, read the content\n-    if (trailer_len < offset + 1 + 4 + content_len) {\n+    if (trailer_len < (size_t)offset + 1 + 4 + content_len) {\n       return BLOSC2_ERROR_READ_BUFFER;\n     }\n     char* content = malloc((size_t)content_len);\n-- \n2.55.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42497855-vul",
+      "digest": "sha256:6df0d3ef4979ffb371efc2fc1740904733e169f4f6ff1d019f25c476441f20b8"
+    },
+    "patched": {
+      "ref": "n132/arvo:42497855-fix",
+      "digest": "sha256:eba9687a91cbd1434cff849f26014dfd47e6fdb55cca61df9505dd2db1d94dea"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/c-blosc2/blosc/frame.c:1480",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 1285,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/c-blosc2/blosc/frame.c:1480"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

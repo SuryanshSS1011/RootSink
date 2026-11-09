@@ -1,0 +1,77 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042527734",
+  "chain": "CWE-190->CWE-787",
+  "project": "ffmpeg",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42527734",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "d2e8974699a9e35cc1a926bf74a972300d629cd5",
+      "fix_commits": [
+        "d2e8974699a9e35cc1a926bf74a972300d629cd5"
+      ],
+      "repo": "https://git.ffmpeg.org/ffmpeg.git"
+    },
+    "patch": "From d2e8974699a9e35cc1a926bf74a972300d629cd5 Mon Sep 17 00:00:00 2001\nFrom: Michael Niedermayer <michael@niedermayer.cc>\nDate: Sun, 10 Sep 2023 02:28:05 +0200\nSubject: [PATCH] avformat/jpegxl_anim_dec: Check that size fits within\n argument\n\nFixes: out of array access\nFixes: 61991/clusterfuzz-testcase-minimized-ffmpeg_dem_JPEGXL_ANIM_fuzzer-5524679648215040\nFixes: 62181/clusterfuzz-testcase-minimized-ffmpeg_dem_JPEGXL_ANIM_fuzzer-5504964305485824\nFixes: 62214/clusterfuzz-testcase-minimized-ffmpeg_dem_JPEGXL_ANIM_fuzzer-4782972823535616\n\nFound-by: continuous fuzzing process https://github.com/google/oss-fuzz/tree/master/projects/ffmpeg\nSigned-off-by: Michael Niedermayer <michael@niedermayer.cc>\n---\n libavformat/jpegxl_anim_dec.c | 2 ++\n 1 file changed, 2 insertions(+)\n\ndiff --git a/libavformat/jpegxl_anim_dec.c b/libavformat/jpegxl_anim_dec.c\nindex fc95a17..54cd6e4 100644\n--- a/libavformat/jpegxl_anim_dec.c\n+++ b/libavformat/jpegxl_anim_dec.c\n@@ -152,6 +152,8 @@ static int jpegxl_anim_read_packet(AVFormatContext *s, AVPacket *pkt)\n     size = avio_size(pb);\n     if (size < 0)\n         return size;\n+    if (size > INT_MAX)\n+        return AVERROR(EDOM);\n     if (size == 0)\n         size = 4096;\n \n-- \n2.55.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42527734-vul",
+      "digest": "sha256:37683e2a5113c24aecc48bce5c565575cfb5eda4fbff2ab941e143e4bec2b179"
+    },
+    "patched": {
+      "ref": "n132/arvo:42527734-fix",
+      "digest": "sha256:4325a33b39932baa91191729da9f5cb2d4073c0ea8f00c025bb1f7fd7cedb7a9"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "crash_site": "/src/ffmpeg/libavformat/jpegxl_anim_dec.c:167",
+        "implies_sink_cwe": 787
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 190,
+      "role": "source",
+      "witness": {
+        "method": "ubsan-rebuild",
+        "recipe": "SANITIZER=undefined compile && $ENTRYPOINT",
+        "ubsan_options": "print_stacktrace=1:halt_on_error=0:silence_unsigned_overflow=0:symbolize=1"
+      },
+      "witnessed": false
+    },
+    {
+      "cwe_id": 787,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "WRITE",
+        "site": "/src/ffmpeg/libavformat/jpegxl_anim_dec.c:167"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

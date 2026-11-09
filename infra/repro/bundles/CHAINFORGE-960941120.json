@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-960941120",
+  "chain": "CWE-456->CWE-457",
+  "project": "unrar",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42510129",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/aawc/unrar/commit/9866c9649507f177233ca96feefac8b12e36a91f",
+      "fix_commits": [
+        "9866c9649507f177233ca96feefac8b12e36a91f"
+      ],
+      "repo": "https://github.com/aawc/unrar"
+    },
+    "patch": "diff --git a/arccmt.cpp b/arccmt.cpp\nindex 33f2204..ca98b10 100644\n--- a/arccmt.cpp\n+++ b/arccmt.cpp\n@@ -22,7 +22,7 @@ bool Archive::GetComment(Array<wchar> *CmtData)\n       // Old style (RAR 2.9) archive comment embedded into the main \n       // archive header.\n       Seek(SFXSize+SIZEOF_MARKHEAD3+SIZEOF_MAINHEAD3,SEEK_SET);\n-      if (!ReadHeader())\n+      if (!ReadHeader() || GetHeaderType()!=HEAD3_CMT)\n         return false;\n     }\n     else\ndiff --git a/archive.cpp b/archive.cpp\nindex 401fc34..23372b1 100644\n--- a/archive.cpp\n+++ b/archive.cpp\n@@ -34,8 +34,6 @@ Archive::Archive(RAROptions *InitCmd)\n   CurBlockPos=0;\n   NextBlockPos=0;\n \n-  RecoverySize=-1;\n-  RecoveryPercent=-1;\n \n   memset(&MainHead,0,sizeof(MainHead));\n   memset(&CryptHead,0,sizeof(CryptHead));\ndiff --git a/archive.hpp b/archive.hpp\nindex 473912f..5b53a68 100644\n--- a/archive.hpp\n+++ b/archive.hpp\n@@ -45,8 +45,6 @@ class Archive:public File\n     bool DummyCmd;\n     RAROptions *Cmd;\n \n-    int64 RecoverySize;\n-    int RecoveryPercent;\n \n     RarTime LatestTime;\n     int LastReadBlock;\ndiff --git a/arcmem.cpp b/arcmem.cpp\nindex a849785..e916ec3 100644\n--- a/arcmem.cpp\n+++ b/arcmem.cpp\n@@ -39,7 +39,12 @@ bool ArcMemory::Seek(int64 Offset,int Method)\n   if (!Loaded)\n     return false;\n   if (Method==SEEK_SET)\n-    SeekPos=Min(Offset,ArcData.Size());\n+  {\n+    if (Offset<0)\n+      SeekPos=0;\n+    else\n+      SeekPos=Min((uint64)Offset,ArcData.Size());\n+  }\n   else\n     if (Method==SEEK_CUR || Method==SEEK_END)\n     {\ndiff --git a/arcread.cpp b/arcread.cpp\nindex 6b3de71..7694e01 100644\n--- a/arcread.cpp\n+++ b/arcread.cpp\n@@ -264,6 +264,11 @@ size_t Archive::ReadHeader15()\n \n         uint FileTime=Raw.Get4();\n         hd->UnpVer=Raw.Get1();\n+\n+        // RAR15 did not use the special dictionary size to mark dirs.\n+        if (hd->UnpVer<20 && (hd->FileAttr & 0x10)!=0)\n+          hd->Dir=true;\n+\n         hd->Method=Raw.Get1()-0x30;\n         size_t NameSize=Raw.Get2();\n         hd->FileAttr=Raw.Get4();\n@@ -333,7 +338,7 @@ size_t Archive::ReadHeader15()\n             size_t Length=strlen(FileName);\n             Length++;\n             if (ReadNameSize>Length)\n-              NameCoder.Decode(FileName,(byte *)FileName+Length,\n+              NameCoder.Decode(FileName,ReadNameSize,(byte *)FileName+Length,\n                                ReadNameSize-Length,hd->FileName,\n                                ASIZE(hd->FileName));\n           }\n@@ -361,17 +366,7 @@ size_t Archive::ReadHeader15()\n             // They are stored after the file name and before salt.\n             hd->SubData.Alloc(DataSize);\n             Raw.GetB(&hd->SubData[0],DataSize);\n-            if (hd->CmpName(SUBHEAD_TYPE_RR))\n-            {\n-              byte *D=&hd->SubData[8];\n-              RecoverySize=D[0]+((uint)D[1]<<8)+((uint)D[2]<<16)+((uint)D[3]<<24);\n-              RecoverySize*=512; // Sectors to size.\n-              int64 CurPos=Tell();\n-              RecoveryPercent=ToPercent(RecoverySize,CurPos);\n-              // Round fractional percent exceeding .5 to upper value.\n-              if (ToPercent(RecoverySize+CurPos/200,CurPos)>RecoveryPercent)\n-                RecoveryPercent++;\n-            }\n+\n           }\n \n           if (hd->CmpName(SUBHEAD_TYPE_CMT))\n@@ -475,7 +470,6 @@ size_t Archive::ReadHeader15()\n       ProtectHead.TotalBlocks=Raw.Get4();\n       Raw.GetB(ProtectHead.Mark,8);\n       NextBlockPos+=ProtectHead.DataSize;\n-      RecoverySize=ProtectHead.RecSectors*512;\n       break;\n     case HEAD3_OLDSERVICE:\n       *(BaseBlock *)&SubBlockHead=ShortBlock;\n@@ -1227,6 +1221,7 @@ size_t Archive::ReadHeader14()\n \n     FileHead.PackSize=FileHead.DataSize;\n     FileHead.WinSize=0x10000;\n+    FileHead.Dir=(FileHead.FileAttr & 0x10)!=0;\n \n     FileHead.HostOS=HOST_MSDOS;\n     FileHead.HSType=HSYS_WINDOWS;\n@@ -1335,8 +1330,6 @@ void Archive::ConvertAttributes()\n \n void Archive::ConvertFileHeader(FileHeader *hd)\n {\n-  if (Format==RARFMT15 && hd->UnpVer<20 && (hd->FileAttr & 0x10))\n-    hd->Dir=true;\n   if (hd->HSType==HSYS_UNKNOWN)\n     if (hd->Dir)\n       hd->FileAttr=0x10;\ndiff --git a/dll.cpp b/dll.cpp\nindex c88337d..b5eada5 100644\n--- a/dll.cpp\n+++ b/dll.cpp\n@@ -35,6 +35,8 @@ HANDLE PASCAL RAROpenArchiveEx(struct RAROpenArchiveDataEx *r)\n   DataSet *Data=NULL;\n   try\n   {\n+    ErrHandler.Clean();\n+\n     r->OpenResult=0;\n     Data=new DataSet;\n     Data->Cmd.DllError=0;\ndiff --git a/encname.cpp b/encname.cpp\nindex 5556af3..84731a7 100644\n--- a/encname.cpp\n+++ b/encname.cpp\n@@ -11,8 +11,8 @@ EncodeFileName::EncodeFileName()\n \n \n \n-void EncodeFileName::Decode(char *Name,byte *EncName,size_t EncSize,wchar *NameW,\n-                            size_t MaxDecSize)\n+void EncodeFileName::Decode(char *Name,size_t NameSize,byte *EncName,size_t EncSize,\n+                            wchar *NameW,size_t MaxDecSize)\n {\n   size_t EncPos=0,DecPos=0;\n   byte HighByte=EncPos<EncSize ? EncName[EncPos++] : 0;\n@@ -53,11 +53,11 @@ void EncodeFileName::Decode(char *Name,byte *EncName,size_t EncSize,wchar *NameW\n             if (EncPos>=EncSize)\n               break;\n             byte Correction=EncName[EncPos++];\n-            for (Length=(Length&0x7f)+2;Length>0 && DecPos<MaxDecSize;Length--,DecPos++)\n+            for (Length=(Length&0x7f)+2;Length>0 && DecPos<MaxDecSize && DecPos<NameSize;Length--,DecPos++)\n               NameW[DecPos]=((Name[DecPos]+Correction)&0xff)+(HighByte<<8);\n           }\n           else\n-            for (Length+=2;Length>0 && DecPos<MaxDecSize;Length--,DecPos++)\n+            for (Length+=2;Length>0 && DecPos<MaxDecSize && DecPos<NameSize;Length--,DecPos++)\n               NameW[DecPos]=Name[DecPos];\n         }\n         break;\ndiff --git a/encname.hpp b/encname.hpp\nindex 3e7786f..538bcb6 100644\n--- a/encname.hpp\n+++ b/encname.hpp\n@@ -14,7 +14,7 @@ class EncodeFileName\n   public:\n     EncodeFileName();\n     size_t Encode(char *Name,wchar *NameW,byte *EncName);\n-    void Decode(char *Name,byte *EncName,size_t EncSize,wchar *NameW,size_t MaxDecSize);\n+    void Decode(char *Name,size_t NameSize,byte *EncName,size_t EncSize,wchar *NameW,size_t MaxDecSize);\n };\n \n #endif\ndiff --git a/errhnd.cpp b/errhnd.cpp\nindex e862bb3..b2f76a8 100644\n--- a/errhnd.cpp\n+++ b/errhnd.cpp\n@@ -45,6 +45,7 @@ void ErrorHandler::CloseError(const wchar *FileName)\n   // is called from File object destructor and can be invoked when stack\n   // unwinding while handling another exception. Throwing a new exception\n   // when stack unwinding is prohibited and terminates a program.\n+  // If necessary, we can check std::uncaught_exception() before throw.\n   SetErrorCode(RARX_FATAL);\n }\n \n@@ -324,36 +325,15 @@ void ErrorHandler::Throw(RAR_EXIT Code)\n }\n \n \n-void ErrorHandler::SysErrMsg()\n+bool ErrorHandler::GetSysErrMsg(wchar *Msg,size_t Size)\n {\n #if !defined(SFX_MODULE) && !defined(SILENT)\n #ifdef _WIN_ALL\n-  wchar *lpMsgBuf=NULL;\n   int ErrType=GetLastError();\n-  if (ErrType!=0 && FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER|FORMAT_MESSAGE_FROM_SYSTEM,\n-              NULL,ErrType,MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),\n-              (LPTSTR)&lpMsgBuf,0,NULL))\n-  {\n-    wchar *CurMsg=lpMsgBuf;\n-    while (CurMsg!=NULL)\n-    {\n-      while (*CurMsg=='\\r' || *CurMsg=='\\n')\n-        CurMsg++;\n-      if (*CurMsg==0)\n-        break;\n-      wchar *EndMsg=wcschr(CurMsg,'\\r');\n-      if (EndMsg==NULL)\n-        EndMsg=wcschr(CurMsg,'\\n');\n-      if (EndMsg!=NULL)\n-      {\n-        *EndMsg=0;\n-        EndMsg++;\n-      }\n-      uiMsg(UIERROR_SYSERRMSG,CurMsg);\n-      CurMsg=EndMsg;\n-    }\n-  }\n-  LocalFree( lpMsgBuf );\n+  if (ErrType!=0)\n+    return FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM|FORMAT_MESSAGE_IGNORE_INSERTS,\n+                         NULL,ErrType,MAKELANGID(LANG_NEUTRAL,SUBLANG_DEFAULT),\n+                         Msg,(DWORD)Size,NULL)!=0;\n #endif\n \n #if defined(_UNIX) || defined(_EMX)\n@@ -362,12 +342,46 @@ void ErrorHandler::SysErrMsg()\n     char *err=strerror(errno);\n     if (err!=NULL)\n     {\n-      wchar Msg[1024];\n-      CharToWide(err,Msg,ASIZE(Msg));\n-      uiMsg(UIERROR_SYSERRMSG,Msg);\n+      CharToWide(err,Msg,Size);\n+      return true;\n     }\n   }\n #endif\n+#endif\n+  return false;\n+}\n+\n+\n+void ErrorHandler::SysErrMsg()\n+{\n+#if !defined(SFX_MODULE) && !defined(SILENT)\n+  wchar Msg[1024];\n+  if (!GetSysErrMsg(Msg,ASIZE(Msg)))\n+    return;\n+#ifdef _WIN_ALL\n+  wchar *CurMsg=Msg;\n+  while (CurMsg!=NULL)\n+  {\n+    while (*CurMsg=='\\r' || *CurMsg=='\\n')\n+      CurMsg++;\n+    if (*CurMsg==0)\n+      break;\n+    wchar *EndMsg=wcschr(CurMsg,'\\r');\n+    if (EndMsg==NULL)\n+      EndMsg=wcschr(CurMsg,'\\n');\n+    if (EndMsg!=NULL)\n+    {\n+      *EndMsg=0;\n+      EndMsg++;\n+    }\n+    uiMsg(UIERROR_SYSERRMSG,CurMsg);\n+    CurMsg=EndMsg;\n+  }\n+#endif\n+\n+#if defined(_UNIX) || defined(_EMX)\n+  uiMsg(UIERROR_SYSERRMSG,Msg);\n+#endif\n \n #endif\n }\ndiff --git a/errhnd.hpp b/errhnd.hpp\nindex 26df96d..c360c6c 100644\n--- a/errhnd.hpp\n+++ b/errhnd.hpp\n@@ -57,6 +57,7 @@ class ErrorHandler\n     void SetSignalHandlers(bool Enable);\n     void Throw(RAR_EXIT Code);\n     void SetSilent(bool Mode) {Silent=Mode;};\n+    bool GetSysErrMsg(wchar *Msg,size_t Size);\n     void SysErrMsg();\n     int GetSystemErrorCode();\n     void SetSystemErrorCode(int Code);\ndiff --git a/qopen.cpp b/qopen.cpp\nindex 97851ca..f0a4d87 100644\n--- a/qopen.cpp\n+++ b/qopen.cpp\n@@ -101,7 +101,10 @@ void QuickOpen::Load(uint64 BlockPos)\n                          Arc->SubHead.HashKey,Arc->SubHead.PswCheck);\n     else\n #endif\n+    {\n+      Loaded=false;\n       return;\n+    }\n   }\n \n   RawDataPos=0;\ndiff --git a/savepos.hpp b/savepos.hpp\nindex df61710..10a0664 100644\n--- a/savepos.hpp\n+++ b/savepos.hpp\n@@ -14,7 +14,13 @@ class SaveFilePos\n     }\n     ~SaveFilePos()\n     {\n-      SaveFile->Seek(SavePos,SEEK_SET);\n+      // If file is already closed by current exception processing,\n+      // we would get uneeded error messages and an exception inside of\n+      // exception and terminate if we try to seek without checking\n+      // if file is still opened. We should not also restore the position\n+      // if external code closed the file on purpose.\n+      if (SaveFile->IsOpened())\n+        SaveFile->Seek(SavePos,SEEK_SET);\n     }\n };\n \ndiff --git a/strfn.cpp b/strfn.cpp\nindex 283c67b..4ecc719 100644\n--- a/strfn.cpp\n+++ b/strfn.cpp\n@@ -28,7 +28,8 @@ void IntToExt(const char *Src,char *Dest,size_t DestSize)\n }\n \n \n-// Convert archived names to Unicode. Allow user to select a code page in GUI.\n+// Convert archived names and comments to Unicode.\n+// Allows user to select a code page in GUI.\n void ArcCharToWide(const char *Src,wchar *Dest,size_t DestSize,ACTW_ENCODING Encoding)\n {\n #if defined(_WIN_ALL) // Console Windows RAR.\n@@ -36,11 +37,12 @@ void ArcCharToWide(const char *Src,wchar *Dest,size_t DestSize,ACTW_ENCODING Enc\n     UtfToWide(Src,Dest,DestSize);\n   else\n   {\n-    char NameA[NM];\n+    Array<char> NameA;\n     if (Encoding==ACTW_OEM)\n     {\n-      IntToExt(Src,NameA,ASIZE(NameA));\n-      Src=NameA;\n+      NameA.Alloc(DestSize+1);\n+      IntToExt(Src,&NameA[0],NameA.Size());\n+      Src=&NameA[0];\n     }\n     CharToWide(Src,Dest,DestSize);\n   }\n@@ -58,6 +60,8 @@ void ArcCharToWide(const char *Src,wchar *Dest,size_t DestSize,ACTW_ENCODING Enc\n }\n \n \n+\n+\n int stricomp(const char *s1,const char *s2)\n {\n #ifdef _WIN_ALL\ndiff --git a/strfn.hpp b/strfn.hpp\nindex 7faac42..6c47b2a 100644\n--- a/strfn.hpp\n+++ b/strfn.hpp\n@@ -8,6 +8,7 @@ void IntToExt(const char *Src,char *Dest,size_t DestSize);\n enum ACTW_ENCODING { ACTW_DEFAULT, ACTW_OEM, ACTW_UTF8};\n void ArcCharToWide(const char *Src,wchar *Dest,size_t DestSize,ACTW_ENCODING Encoding);\n \n+\n int stricomp(const char *s1,const char *s2);\n int strnicomp(const char *s1,const char *s2,size_t n);\n wchar* RemoveEOL(wchar *Str);\ndiff --git a/unpack20.cpp b/unpack20.cpp\nindex a7a41c3..93c8ba0 100644\n--- a/unpack20.cpp\n+++ b/unpack20.cpp\n@@ -2,7 +2,8 @@\n \n void Unpack::CopyString20(uint Length,uint Distance)\n {\n-  LastDist=OldDist[OldDistPtr++ & 3]=Distance;\n+  LastDist=OldDist[OldDistPtr++]=Distance;\n+  OldDistPtr = OldDistPtr & 3; // Needed if RAR 1.5 file is called after RAR 2.0.\n   LastLength=Length;\n   DestUnpSize-=Length;\n   CopyString(Length,Distance);\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42510129-vul",
+      "digest": "sha256:67a43738562a8afe5a01948572dee01cbf63791bfed76d22129e61a88dfa68dc"
+    },
+    "patched": {
+      "ref": "n132/arvo:42510129-fix",
+      "digest": "sha256:25ca973c6b914268cb7673f3633f77e4b729908bc9d89de05c3ed23513b0dcc0"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/unrar/arcread.cpp:1337",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/unrar/arcread.cpp:1337"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

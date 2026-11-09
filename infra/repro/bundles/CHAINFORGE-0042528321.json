@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042528321",
+  "chain": "CWE-456->CWE-457",
+  "project": "graphicsmagick",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42528321",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "de05af6c7e6895f845579bd72ebc0a1fb6f0c320",
+      "fix_commits": [
+        "de05af6c7e6895f845579bd72ebc0a1fb6f0c320"
+      ],
+      "repo": "https://foss.heptapod.net/graphicsmagick/graphicsmagick"
+    },
+    "patch": "diff --git a/ChangeLog b/ChangeLog\nindex 72785f88a3617b0a5d8b7818be0019e5ee0c5099_Q2hhbmdlTG9n..de05af6c7e6895f845579bd72ebc0a1fb6f0c320_Q2hhbmdlTG9n 100644\n--- a/ChangeLog\n+++ b/ChangeLog\n@@ -1,4 +1,8 @@\n-2023-09-16  Fojtik Jaroslav  <JaFojtik@yandex.com>\n+2023-09-21  Fojtik Jaroslav  <JaFojtik@yandex.com>\n+\t* coders/bmp.c Only 16bpp and 32bpp is supported for BI_BITFIELDS\n+\tcompression type. 8bpp is not implemented.\n+\n+2023-09-20  Fojtik Jaroslav  <JaFojtik@yandex.com>\n \t* coders/bmp.c Remove duplicity, same information has been logged twice.\n \t22:54:49 0:0.002746  0.000u 9688 bmp.c/ReadBMPImage/750/Coder:\n \tFile size: Claimed=8, Actual=1129\ndiff --git a/coders/bmp.c b/coders/bmp.c\nindex 72785f88a3617b0a5d8b7818be0019e5ee0c5099_Y29kZXJzL2JtcC5j..de05af6c7e6895f845579bd72ebc0a1fb6f0c320_Y29kZXJzL2JtcC5j 100644\n--- a/coders/bmp.c\n+++ b/coders/bmp.c\n@@ -1125,22 +1125,27 @@\n         case BI_BITFIELDS:\n           if(bmp_info.size==40)\n             {\n-                 /* TODO: check for gap size >=12*/\n+              if(bmp_info.ba_offset>0 && bmp_info.ba_offset<52)\n+                 ThrowBMPReaderException(CorruptImageError,CorruptImage,image);\t/* check for gap size >=12*/\n               bmp_info.red_mask=ReadBlobLSBLong(image);\n               bmp_info.green_mask=ReadBlobLSBLong(image);\n               bmp_info.blue_mask=ReadBlobLSBLong(image);\n             }\n-          break;\n+          goto CheckBitSize;\n         case BI_ALPHABITFIELDS:\n           if(bmp_info.size==40)\n             {\n-                 /* TODO: check for gap size >=12*/\n+              if(bmp_info.ba_offset>0 && bmp_info.ba_offset<56)\n+                 ThrowBMPReaderException(CorruptImageError,CorruptImage,image);\t/* check for gap size >=16*/\n               bmp_info.red_mask=ReadBlobLSBLong(image);\n               bmp_info.green_mask=ReadBlobLSBLong(image);\n               bmp_info.blue_mask=ReadBlobLSBLong(image);\n                  /* TODO: check for gap size >=16*/\n               bmp_info.alpha_mask=ReadBlobLSBLong(image);\n             }\n+CheckBitSize:\n+          if(!(bmp_info.bits_per_pixel==16 || bmp_info.bits_per_pixel==32))\n+              ThrowBMPReaderException(CorruptImageError,CorruptImage,image);\n           break;\n \n         case BI_RGB:\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42528321-vul",
+      "digest": "sha256:0124d74bc13d18fbb74004c5d5d62e8de8d8a454b01193565e080da9378eacd8"
+    },
+    "patched": {
+      "ref": "n132/arvo:42528321-fix",
+      "digest": "sha256:bba1e609b11a33d753ce7767b49dc2ba3453f72952ec0e9061338160dae9b359"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/graphicsmagick/coders/bmp.c:446",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/graphicsmagick/coders/bmp.c:446"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

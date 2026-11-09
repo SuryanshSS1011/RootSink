@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042482688",
+  "chain": "CWE-456->CWE-457",
+  "project": "leptonica",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42482688",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "ad50d81027f7e7716f2b9ab28b7aa476eae2d741",
+      "fix_commits": [
+        "ad50d81027f7e7716f2b9ab28b7aa476eae2d741"
+      ],
+      "repo": "https://github.com/DanBloomberg/leptonica"
+    },
+    "patch": "From ad50d81027f7e7716f2b9ab28b7aa476eae2d741 Mon Sep 17 00:00:00 2001\nFrom: Dan Bloomberg <dan.bloomberg@gmail.com>\nDate: Mon, 30 Mar 2020 11:23:02 -0700\nSubject: [PATCH] A multiple free fuzzer crash with ojpeg. * Check earlier for\n invalid ojpeg file.\n\n---\n src/tiffio.c | 12 +++++-------\n 1 file changed, 5 insertions(+), 7 deletions(-)\n\ndiff --git a/src/tiffio.c b/src/tiffio.c\nindex 82975a5..8bd92b2 100644\n--- a/src/tiffio.c\n+++ b/src/tiffio.c\n@@ -548,6 +548,11 @@ PIXCMAP   *cmap;\n         return NULL;\n     }\n \n+    TIFFGetFieldDefaulted(tif, TIFFTAG_COMPRESSION, &tiffcomp);\n+    if (tiffcomp == COMPRESSION_OJPEG && d != 8) {\n+        return (PIX *)ERROR_PTR(\"invalid ojpeg file\", procName, NULL);\n+    }\n+\n     if ((pix = pixCreate(w, h, d)) == NULL)\n         return (PIX *)ERROR_PTR(\"pix not made\", procName, NULL);\n     pixSetInputFormat(pix, IFF_TIFF);\n@@ -555,8 +560,6 @@ PIXCMAP   *cmap;\n     wpl = pixGetWpl(pix);\n     bpl = 4 * wpl;\n \n-    TIFFGetFieldDefaulted(tif, TIFFTAG_COMPRESSION, &tiffcomp);\n-\n         /* Thanks to Jeff Breidenbach, we now support reading 8 bpp\n          * images encoded in the long-deprecated old jpeg format,\n          * COMPRESSION_OJPEG.  TIFFReadScanline() fails on this format,\n@@ -618,11 +621,6 @@ PIXCMAP   *cmap;\n         }\n \n         if (spp == 1) {  /* 8 bpp, old jpeg format */\n-            if (pixGetDepth(pix) != 8) {\n-                LEPT_FREE(tiffdata);\n-                pixDestroy(&pix);\n-                return (PIX *)ERROR_PTR(\"invalid ojpeg file\", procName, NULL);\n-            }\n             pixdata = pixGetData(pix);\n             for (i = 0; i < h; i++) {\n                 line = pixdata + i * wpl;\n-- \n2.43.0\n\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42482688-vul",
+      "digest": "sha256:5b70457e43e34ed82bddc106a27f3d8909dbfc6660e4a3757fb43c4330686a8a"
+    },
+    "patched": {
+      "ref": "n132/arvo:42482688-fix",
+      "digest": "sha256:500b768a340a0d7e830a311ab1478dc3daafa077d6daf7c702d377e08d921cfd"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "crash_site": "/src/libtiff/libtiff/tif_getimage.c:1423",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 456,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 457,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "memory",
+        "bug_class": "use-of-uninitialized-value",
+        "direction": null,
+        "site": "/src/libtiff/libtiff/tif_getimage.c:1423"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

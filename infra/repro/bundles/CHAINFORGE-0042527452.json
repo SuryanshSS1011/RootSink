@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-0042527452",
+  "chain": "CWE-20->CWE-125",
+  "project": "ntopng",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42527452",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "d31de871d3bc8e9a24bace37cf9b480867705ab3",
+      "fix_commits": [
+        "d31de871d3bc8e9a24bace37cf9b480867705ab3"
+      ],
+      "repo": "https://github.com/ntop/ntopng"
+    },
+    "patch": "diff --git a/src/Flow.cpp b/src/Flow.cpp\nindex 968a1452cc83..6bce395e9176 100644\n--- a/src/Flow.cpp\n+++ b/src/Flow.cpp\n@@ -5644,7 +5644,12 @@ void Flow::dissectBittorrent(char *payload, u_int16_t payload_len) {\n     char *bt_proto = ndpi_strnstr((const char *)&payload[20],\n                                   \"BitTorrent protocol\", payload_len - 20);\n \n-    if (bt_proto) setBittorrentHash(&bt_proto[27]);\n+    if(bt_proto) {\n+      u_int l = strlen(bt_proto);\n+\n+      if(l >= 27)\n+\tsetBittorrentHash(&bt_proto[27]);\n+    }\n   }\n }\n \n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42527452-vul",
+      "digest": "sha256:52c269350f28eea89582a913a1bcbfc866ba7626fb87047741677a1d6a0e62a5"
+    },
+    "patched": {
+      "ref": "n132/arvo:42527452-fix",
+      "digest": "sha256:cc558901befa38cde611c2b09055d597d10e66efc4cf7c5f8be6b8fa984b9ed4"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "crash_site": "/src/ntopng/src/Flow.cpp:5516",
+        "implies_sink_cwe": 125
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 20,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 125,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "address",
+        "bug_class": "heap-buffer-overflow",
+        "direction": "READ",
+        "site": "/src/ntopng/src/Flow.cpp:5516"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}

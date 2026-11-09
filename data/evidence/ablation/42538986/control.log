@@ -1,0 +1,75 @@
+======================= INFO =========================
+This binary is built for AFL-fuzz.
+To run the target function on individual input(s) execute this:
+  /out/encoder_heic_fuzzer < INPUT_FILE
+or
+  /out/encoder_heic_fuzzer INPUT_FILE1 [INPUT_FILE2 ... ]
+To fuzz with afl-fuzz execute this:
+  afl-fuzz [afl-flags] /out/encoder_heic_fuzzer [-N]
+afl-fuzz will run N iterations before re-spawning the process (default: 1000)
+======================================================
+Reading 4146 bytes from /tmp/poc
+=================================================================
+==55796==ERROR: AddressSanitizer: stack-buffer-overflow on address 0x7f99f407a420 at pc 0x0000004e8f35 bp 0x7ffc23d0dfd0 sp 0x7ffc23d0d780
+WRITE of size 1560 at 0x7f99f407a420 thread T0
+SCARINESS: 60 (multi-byte-write-stack-buffer-overflow)
+    #0 0x4e8f34 in __asan_memcpy /src/llvm/projects/compiler-rt/lib/asan/asan_interceptors_memintrinsics.cc:23
+    #1 0x9f98b4 in ParseHvcCAtom /src/imagemagick/coders/heic.c:339:3
+    #2 0x9f8adf in ParseIpcoAtom /src/imagemagick/coders/heic.c:421:9
+    #3 0x9f7fac in ParseAtom /src/imagemagick/coders/heic.c:682:16
+    #4 0x9f82da in ParseBox /src/imagemagick/coders/heic.c:318:9
+    #5 0x9f7ff3 in ParseAtom /src/imagemagick/coders/heic.c:673:16
+    #6 0x9f795a in ParseFullBox /src/imagemagick/coders/heic.c:304:9
+    #7 0x9f5aa2 in ParseRootAtom /src/imagemagick/coders/heic.c:770:18
+    #8 0x9f4564 in ReadHEICImage /src/imagemagick/coders/heic.c:1130:9
+    #9 0x636276 in ReadImage /src/imagemagick/MagickCore/constitute.c:500:13
+    #10 0x5d784f in BlobToImage /src/imagemagick/MagickCore/blob.c:469:13
+    #11 0x52faa4 in Magick::Image::read(Magick::Blob const&) /src/imagemagick/Magick++/lib/Image.cpp:4015:12
+    #12 0x52629b in LLVMFuzzerTestOneInput /src/imagemagick/Magick++/fuzz/encoder_fuzzer.cc:43:11
+    #13 0x52698f in ExecuteFilesOnyByOne(int, char**) /src/libfuzzer/afl/afl_driver.cpp:279:5
+    #14 0x526f2f in main /src/libfuzzer/afl/afl_driver.cpp:316:12
+    #15 0x7f99f307382f in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x2082f)
+    #16 0x41dff8 in _start (/out/encoder_heic_fuzzer+0x41dff8)
+
+DEDUP_TOKEN: __asan_memcpy--ParseHvcCAtom--ParseIpcoAtom
+Address 0x7f99f407a420 is located in stack of thread T0 at offset 1056 in frame
+    #0 0x9f979f in ParseHvcCAtom /src/imagemagick/coders/heic.c:326
+
+DEDUP_TOKEN: ParseHvcCAtom
+  This frame has 1 object(s):
+    [32, 1056) 'buffer' (line 330) <== Memory access at offset 1056 overflows this variable
+HINT: this may be a false positive if your program uses some custom stack unwind mechanism or swapcontext
+      (longjmp and C++ exceptions *are* supported)
+SUMMARY: AddressSanitizer: stack-buffer-overflow /src/llvm/projects/compiler-rt/lib/asan/asan_interceptors_memintrinsics.cc:23 in __asan_memcpy
+Shadow bytes around the buggy address:
+  0x0ff3be807430: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0ff3be807440: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0ff3be807450: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0ff3be807460: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0ff3be807470: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x0ff3be807480: 00 00 00 00[f3]f3 f3 f3 f3 f3 f3 f3 f3 f3 f3 f3
+  0x0ff3be807490: f3 f3 f3 f3 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0ff3be8074a0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0ff3be8074b0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0ff3be8074c0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x0ff3be8074d0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+==55796==ABORTING

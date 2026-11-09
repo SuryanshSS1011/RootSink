@@ -1,0 +1,72 @@
+{
+  "crb_version": "1.0",
+  "record_id": "CHAINFORGE-959420352",
+  "chain": "CWE-843->CWE-119",
+  "project": "serenity",
+  "tier": "gold",
+  "repro_kind": "oss-fuzz-container",
+  "source": {
+    "upstream": "ARVO / OSS-Fuzz",
+    "local_id": "42496486",
+    "commit_range": {
+      "introduced": null,
+      "fixed": "https://github.com/SerenityOS/serenity/commit/f1d49d391ee3b466b758e8d6d2301eccd1eb382c",
+      "fix_commits": [
+        "f1d49d391ee3b466b758e8d6d2301eccd1eb382c"
+      ],
+      "repo": "https://github.com/SerenityOS/serenity"
+    },
+    "patch": "diff --git a/Userland/Shell/Parser.cpp b/Userland/Shell/Parser.cpp\nindex 0507f055cd46a0..7d980909df856c 100644\n--- a/Userland/Shell/Parser.cpp\n+++ b/Userland/Shell/Parser.cpp\n@@ -1943,10 +1943,14 @@ RefPtr<AST::Node> Parser::parse_heredoc_initiation_record()\n \n     // StringLiteral | bareword\n     if (auto bareword = parse_bareword()) {\n-        if (bareword->is_syntax_error())\n-            syntax_error_node = bareword->syntax_error_node();\n-        else\n-            record.end = static_cast<AST::BarewordLiteral*>(bareword.ptr())->text();\n+        if (!bareword->is_bareword()) {\n+            syntax_error_node = create<AST::SyntaxError>(String::formatted(\"Expected a bareword or a quoted string, not {}\", bareword->class_name()));\n+        } else {\n+            if (bareword->is_syntax_error())\n+                syntax_error_node = bareword->syntax_error_node();\n+            else\n+                record.end = static_cast<AST::BarewordLiteral*>(bareword.ptr())->text();\n+        }\n \n         record.interpolate = true;\n     } else if (peek() == '\\'') {\n@@ -1981,6 +1985,10 @@ bool Parser::parse_heredoc_entries()\n     // Try to parse heredoc entries, as reverse recorded in the initiation records\n     for (auto& record : m_heredoc_initiations) {\n         auto rule_start = push_start();\n+        if (m_rule_start_offsets.size() > max_allowed_nested_rule_depth) {\n+            record.node->set_is_syntax_error(*create<AST::SyntaxError>(String::formatted(\"Expression nested too deep (max allowed is {})\", max_allowed_nested_rule_depth)));\n+            continue;\n+        }\n         bool found_key = false;\n         if (!record.interpolate) {\n             // Since no interpolation is allowed, just read lines until we hit the key\n"
+  },
+  "images": {
+    "vulnerable": {
+      "ref": "n132/arvo:42496486-vul",
+      "digest": "sha256:e2ad81d8e983adf9e8cf2c447170747e79c388d8863fdbd745453c6658bd36df"
+    },
+    "patched": {
+      "ref": "n132/arvo:42496486-fix",
+      "digest": "sha256:ef2cb7c294d2fafe90846b0634426c6e40cd9c8ae9539b79cfb897ae7961f868"
+    }
+  },
+  "entrypoint": {
+    "command": [
+      "arvo"
+    ],
+    "pov_path": "/tmp/poc"
+  },
+  "expected": {
+    "vulnerable": {
+      "crashes": true,
+      "witness": {
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "crash_site": "/src/serenity/Userland/Shell/Parser.cpp:1949",
+        "implies_sink_cwe": null
+      }
+    },
+    "patched": {
+      "crashes": false
+    }
+  },
+  "links": [
+    {
+      "cwe_id": 843,
+      "role": "source",
+      "witnessed": false
+    },
+    {
+      "cwe_id": 119,
+      "role": "sink",
+      "witness": {
+        "method": "asan-replay",
+        "sanitizer": "undefined",
+        "bug_class": "undefined-behavior",
+        "direction": null,
+        "site": "/src/serenity/Userland/Shell/Parser.cpp:1949"
+      },
+      "witnessed": true
+    }
+  ],
+  "verify": "infra/repro/verify.sh <bundle.json>"
+}
