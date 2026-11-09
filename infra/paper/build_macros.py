@@ -21,7 +21,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "infra" / "verify")
 from chainforge.evidence import bare_function, locality  # noqa: E402
 from chainforge.field_policy import (  # noqa: E402
     LEAKAGE_FIELDS,
-    canonical_project,
+    codebase,
     fixed_after,
     held_out_accuracy,
     localization_eligible,
@@ -336,7 +336,7 @@ def revision_counts(rows: list[dict], gold: list[dict]) -> dict:
         if (r.get("fix_attribution") or {}).get("status") is True
         and r.get("evidence_floor") == "execution"
     ]
-    m["NCoreFixExec"], m["NCoreProjects"] = len(core), len({r["project"] for r in core})
+    m["NCoreFixExec"], m["NCoreProjects"] = len(core), len({codebase(r["project"]) for r in core})
     # Tested repair sites against the crash.
     rel = collections.Counter(
         r.get("root_site_relation")
@@ -623,7 +623,7 @@ def composition_table(gold: list[dict], top: int = 8) -> str:
         k = r["chain_string"].replace("CWE-", "").replace("->", r"$\to$")
         kind = r["chain"][0].get("evidence_kind")
         by[k][kind if kind in ("causally-proven", "execution", "attested") else "weaker"] += 1
-        proj[k].add(r["project"])
+        proj[k].add(codebase(r["project"]))
         edges = [kinds.get(e["kind"], "modeling") for e in r["mitre_chain"]["edges"]]
         rel[k] = "+".join(dict.fromkeys(edges)) if edges else "---"
     keys = sorted(by, key=lambda k: -sum(by[k].values()))
@@ -643,7 +643,7 @@ def composition_table(gold: list[dict], top: int = 8) -> str:
     if rest:
         p_rest = len(set().union(*(proj[k] for k in rest)))
         body.append(line(f"{len(rest)} other types", other, "mixed", p_rest))
-    p_all = len({r["project"] for r in gold})
+    p_all = len({codebase(r["project"]) for r in gold})
     return (
         "\n".join(
             [
@@ -834,7 +834,7 @@ def main(argv=None) -> int:
         "NSilver": tier["silver"],
         "NBronze": tier["bronze"],
         # One codebase arrives under several names (gdal, OSGeo/gdal); count codebases.
-        "NProjects": len({canonical_project(r["project"]) for r in rows}),
+        "NProjects": len({codebase(r["project"]) for r in rows}),
         # Records mined from advisories alone: no crash or image of their own (Sec. III).
         "NAdvisoryOnly": sum(
             r.get("provenance") in ("nvd-race", "nvd-mined", "osv-git", "osv-git-len3")
@@ -849,13 +849,19 @@ def main(argv=None) -> int:
         ),
         "DatasetMB": f"{round(Path('data/release/dataset.jsonl').stat().st_size / 1e6)}\\,MB",
         "LogsGB": f"{_tree_bytes(Path('data/evidence')) / 1e9:.1f}\\,GB",
-        "NProjectsGold": len({canonical_project(r["project"]) for r in gold}),
+        "NProjectsGold": len({codebase(r["project"]) for r in gold}),
         "NArms": len({r["chain_string"] for r in rows}),
         "NArmsGold": len({r["chain_string"] for r in gold}),
         "NLenThree": sum(len(r["chain"]) == 3 for r in rows),
         "NGoldCrashes": len({crash_key(r) for r in gold}),
         "NGoldKernel": sum(r["provenance"] == "syzbot" for r in gold),
         "NGoldArvo": sum(r["provenance"] != "syzbot" for r in gold),
+        # 1.0.9: crashing inputs copied out of the images the records pin.
+        "NGoldArvoInput": sum(
+            r["provenance"] != "syzbot"
+            and str(r.get("pov_input") or "").startswith("data/evidence/arvo/")
+            for r in gold
+        ),
         "PctGoldArvo": f"{man['gold_arvo_share_pct']}\\%",
         "NGoldAllExecution": sum(
             r["evidence_floor"] in ("execution", "causally-proven") for r in gold
@@ -879,7 +885,7 @@ def main(argv=None) -> int:
         ),
         "NGoldLenThree": sum(len(r["chain"]) == 3 for r in gold),
         "NProven": len(proven),
-        "NProvenProjects": len({r["project"] for r in proven}),
+        "NProvenProjects": len({codebase(r["project"]) for r in proven}),
         "NProvenRelabelled": ops["PR4-relabel-source"],
         "NSiteProofs": len(sites),
         "NIdenticalRows": ops["PR3-I1-identical-row-removed"],
@@ -964,6 +970,13 @@ def main(argv=None) -> int:
     m |= guard_off_stack(gold)
     m |= review_counts(rows, gold)
     m |= revision_counts(rows, gold)
+    # The paper's input sentence (1.0.9), over every ARVO record.
+    arvo = [r for r in rows if r["provenance"] != "syzbot" and r.get("docker_image_ref")]
+    n_in = sum(str(r.get("pov_input") or "").startswith("data/evidence/arvo/") for r in arvo)
+    m["NArvoInput"], m["NArvoRecords"] = n_in, len(arvo)
+    m["ArvoInputPhrase"] = (
+        "every ARVO record" if n_in == len(arvo) else f"{n_in} of the {len(arvo)} ARVO records"
+    )
 
     # The most common GOLD chain shapes, named in the paper's Contents paragraph (detail: Table S2).
     def _chain(r):
@@ -1263,7 +1276,7 @@ def main(argv=None) -> int:
         by = {r["id"]: r for r in rows}
         got = [by[i] for i in ids if i in by]
         m |= {
-            "RerunCleanProjects": len({r["project"] for r in got}),
+            "RerunCleanProjects": len({codebase(r["project"]) for r in got}),
             "RerunCleanRoutes": len({r["provenance"] for r in got}),
             "RerunCleanTypes": len({r["chain_string"] for r in got}),
             "RerunCleanStillGold": sum(r["label_confidence_tier"] == "gold" for r in got),
@@ -1445,6 +1458,7 @@ def main(argv=None) -> int:
             ready["measured"],
             ready["same_tree_as_scorer"],
         )
+        m["NFixDistReadyDiff"] = ready["measured"] - ready["same_tree_as_scorer"]
     # How each GOLD root's current single-hunk test is known to apply with exact context.
     app = collections.Counter()
     for r in gold:

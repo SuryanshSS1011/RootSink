@@ -33,7 +33,7 @@ from duplicate_audit import UnionFind, keys, near_pairs  # noqa: E402
 from chainforge.evidence import locality  # noqa: E402
 from chainforge.field_policy import (  # noqa: E402
     LEAKAGE_FIELDS,
-    canonical_project,
+    codebase,
     held_out_accuracy,
 )
 
@@ -219,7 +219,7 @@ def summarize(rows: list[dict], log: list[dict], read, ls) -> dict:
 
     def nproj(rs):
         raw = len({r["project"] for r in rs})
-        return f"{raw} / {len({canonical_project(r['project']) for r in rs})}"
+        return f"{raw} / {len({codebase(r['project']) for r in rs})}"
 
     out["projects: raw names / canonical"] = nproj(rows)
     out["projects (raw) by source"] = {

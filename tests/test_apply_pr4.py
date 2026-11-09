@@ -1,4 +1,4 @@
-"""dataflow_evidence must state a causal proof only while the record carries a logged one."""
+"""dataflow_evidence must describe a hunk test only while the record carries a logged one."""
 
 import importlib.util
 from pathlib import Path
@@ -34,7 +34,8 @@ def test_logged_proof_keeps_one_sentence():
     proof = {"file": "a.c", "control_log": "c.log", "guard_only_log": "g.log"}
     r = _record(proof, "Sites." + LEGACY * 6)
     pr4.sync_narrative(r)
-    assert r["dataflow_evidence"].count("CAUSAL PROOF:") == 1
+    assert r["dataflow_evidence"].count("HUNK TEST:") == 1  # the 1.0.9 wording replaces it
+    assert "CAUSAL PROOF" not in r["dataflow_evidence"]
     assert r["chain"][0]["evidence"]["causal_proof"] is proof
 
 

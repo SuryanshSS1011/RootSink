@@ -93,3 +93,11 @@ def test_canonical_project_folds_aliases_and_branch_projects():
     assert canonical_project("libssh2") != canonical_project("libssh")
     assert canonical_project("re2") != canonical_project("re")
     assert canonical_project("proj.4") == "proj.4"
+
+
+def test_codebase_counts_the_kernel_once_but_splits_keep_it_apart():
+    from chainforge.field_policy import canonical_project, codebase
+
+    assert codebase("linux") == codebase("torvalds/linux") == codebase("linux-kernel")
+    assert canonical_project("linux") != canonical_project("linux-kernel")
+    assert codebase("ImageMagick/ImageMagick.git") == "imagemagick"

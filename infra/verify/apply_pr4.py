@@ -22,7 +22,6 @@ from __future__ import annotations
 import argparse
 import collections
 import json
-import re
 import shutil
 import sys
 from pathlib import Path
@@ -30,10 +29,16 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 from chainforge.cwe import is_admissible_edge  # noqa: E402
 from chainforge.evidence import (  # noqa: E402
+    HUNK_NARRATIVE,
+    HUNK_SITE_STAGE_NO_CWE,
     chain_kind,
     classify_link,
     floor,
     guard_site,
+    hunk_site_note_no_cwe,
+    hunk_test_narrative,
+    hunk_test_note,
+    is_hunk_test_note,
     is_non_guard_path,
     site_kind,
     source_for_guard,
@@ -49,9 +54,7 @@ from chainforge.mitre_chains import CWE_CATALOG_VERSION, classify_chain  # noqa:
 
 # apply_causal_proof.py (pre-PR-4) appended this on every run; it must say only what the record's
 # proof currently establishes, so it is removed and re-written from the proof itself.
-_NARRATIVE = re.compile(
-    r"\s*CAUSAL PROOF: the unmodified rebuild reproduces the sink;.*?rather than attested\."
-)
+_NARRATIVE = HUNK_NARRATIVE
 
 
 def sync_narrative(r: dict) -> None:
@@ -66,18 +69,11 @@ def sync_narrative(r: dict) -> None:
             "source_cwe": None,
             "why": "PR-4 addendum: no archived log showing the guard-only run executed",
         }
-        ev["patch_hunk_ref"] = (
-            f"guard site proven by ablation ({cp.get('file')}); "
-            "source CWE not established by the guard (PR-4)"
-        )
+        ev["patch_hunk_ref"] = hunk_site_note_no_cwe(cp.get("file"))
         cp = None
     text = _NARRATIVE.sub("", r.get("dataflow_evidence") or "").rstrip()
     if cp:
-        text += (
-            " CAUSAL PROOF: the unmodified rebuild reproduces the sink; rebuilding with only the "
-            f"guard hunk in {cp.get('file')} applied runs clean on the same input, so the source "
-            "link is demonstrated rather than attested."
-        )
+        text += hunk_test_narrative(cp.get("file"))
     r["dataflow_evidence"] = text or None
 
 
@@ -248,12 +244,9 @@ def main(argv=None) -> int:
             if site and origin:
                 ev["tested_site"] = site
             elif site and not (ev.get("location") or {}).get("file"):
-                ev["location"] = {**site, "stage": "proven guard site; CWE not established (PR-4)"}
-            if (ev.get("patch_hunk_ref") or "").startswith("CAUSALLY PROVEN"):
-                ev["patch_hunk_ref"] = (
-                    f"guard site proven by ablation ({g.get('file')}); "
-                    "source CWE not established by the guard (PR-4)"
-                )
+                ev["location"] = {**site, "stage": HUNK_SITE_STAGE_NO_CWE}
+            if is_hunk_test_note(ev.get("patch_hunk_ref")):
+                ev["patch_hunk_ref"] = hunk_site_note_no_cwe(g.get("file"))
             stats["site proof only (no CWE credited)"] += 1
         else:
             ev.pop("guard_site_proof", None)
@@ -278,12 +271,7 @@ def main(argv=None) -> int:
                     ev["tested_site"] = site
                 else:
                     ev["location"] = site
-            ev["patch_hunk_ref"] = (
-                f"CAUSALLY PROVEN: applying {g.get('file')} "
-                f"(+{g.get('added')} lines) alone to the vulnerable revision "
-                "silences the sanitizer; the guard it adds establishes "
-                f"CWE-{derived} (PR-4)"
-            )
+            ev["patch_hunk_ref"] = hunk_test_note(g.get("file"), g.get("added"), derived)
             if derived != src["cwe_id"]:
                 log.append(
                     {

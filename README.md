@@ -5,7 +5,7 @@
 [![Code: MIT](https://img.shields.io/badge/code-MIT-blue.svg)](LICENSE)
 [![Data: CC BY 4.0](https://img.shields.io/badge/data-CC%20BY%204.0-lightgrey.svg)](LICENSE-DATA)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](pyproject.toml)
-[![Release 1.0.8](https://img.shields.io/badge/release-1.0.8-brightgreen.svg)](data/release/dataset.manifest.json)
+[![Release 1.0.9](https://img.shields.io/badge/release-1.0.9-brightgreen.svg)](data/release/dataset.manifest.json)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.24068722.svg)](https://doi.org/10.5281/zenodo.24068722)
 
 When a C or C++ program crashes under a memory-error detector (a *sanitizer*), the report points
@@ -302,8 +302,11 @@ runners. An `inconclusive` result is no verdict, never a negative score.
 ### Docker images for OSS-Fuzz bugs
 
 Each OSS-Fuzz record runs in two of ARVO's public images, one vulnerable and one fixed. The
-crashing input is inside the image. `docker_image_ref` pins both by content digest, so a retagged
-image cannot silently change a result.
+crashing input is inside the image at `/tmp/poc`. Since release 1.0.9 the release also keeps a copy
+of it, taken from the image the record pins, at the path in `pov_input`
+(`data/evidence/arvo/<arvo_id>/poc`; digests and sha256 in `data/evidence/arvo_inputs.jsonl`), so
+the inputs outlive the images. `docker_image_ref` pins both images by content digest, so a
+retagged image cannot silently change a result.
 
 ```bash
 docker pull "n132/arvo@sha256:<digest from docker_image_ref>"
@@ -473,7 +476,7 @@ Known defects and their status are tracked in [`docs/OPEN_ISSUES.md`](docs/OPEN_
 | `commit_range` | The fix repository, `fix_commits`, and the source's own form in `fixed`. |
 | `patch_diff` | The developer's fix. |
 | `docker_image_ref` | The vulnerable and fixed images, pinned by digest (OSS-Fuzz records). |
-| `pov_input` | The crashing input or kernel reproducer when it ships as a file (OSS-Fuzz inputs live inside the images). |
+| `pov_input` | The crashing input or kernel reproducer as a file in the release. OSS-Fuzz inputs are copies of each pinned image's `/tmp/poc` (release 1.0.9). |
 | `sanitizer_reports` | Every run's report, with its revision and log path. |
 | `split`, `duplicate_group`, `sampling_weight` | See [Splits, duplicates and weights](#splits-duplicates-and-weights). |
 | `fix_date`, `license` | The fix's date, and the project's licence where known. |

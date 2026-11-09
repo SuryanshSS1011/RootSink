@@ -34,7 +34,12 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[1] / "src"))
 from chainforge.cwe import is_admissible_edge  # noqa: E402
-from chainforge.evidence import chain_kind, source_for_guard  # noqa: E402
+from chainforge.evidence import (  # noqa: E402
+    chain_kind,
+    hunk_site_note_no_cwe,
+    is_hunk_test_note,
+    source_for_guard,
+)
 
 sys.path.insert(0, str(HERE))
 from apply_pr4 import mitre  # noqa: E402
@@ -116,7 +121,7 @@ def main(argv=None) -> int:
         if new is not None:
             p["source_cwe"] = new
             for k in ("patch_hunk_ref",):
-                if (ev.get(k) or "").startswith("CAUSALLY PROVEN"):
+                if is_hunk_test_note(ev.get(k)):
                     ev[k] = ev[k].replace(f"CWE-{old} (PR-4)", f"CWE-{new} (PR-4)")
             relabel(r, new)
             log.append({"id": r["id"], "op": "PR4-amend-relabel", "from": old, "to": new})
@@ -129,11 +134,8 @@ def main(argv=None) -> int:
             "source_cwe": None,
             "why": "PR-4 amendment 2026-10-29: the class came only from re-indented lines",
         }
-        if (ev.get("patch_hunk_ref") or "").startswith("CAUSALLY PROVEN"):
-            ev["patch_hunk_ref"] = (
-                f"guard site proven by ablation ({p.get('file')}); "
-                "source CWE not established by the guard (PR-4)"
-            )
+        if is_hunk_test_note(ev.get("patch_hunk_ref")):
+            ev["patch_hunk_ref"] = hunk_site_note_no_cwe(p.get("file"))
         if r["id"] in mined:
             # PR-7: "a case with a proven site but no derived CWE is logged, not added".
             drop.append(

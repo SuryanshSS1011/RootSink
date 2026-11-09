@@ -14,7 +14,7 @@ value in `dataset.jsonl`, and each protocol it describes to its entry in `PREREG
 |---|---|
 | instance | element of `chain` (`cwe_id`, `role`, `evidence`, `site_kind`, `evidence_kind`, `cwe_basis`) |
 | hunk-named (earlier "tested", "intervention-supported") | `evidence_kind: "causally-proven"` (legacy name); the test is `evidence.causal_proof` |
-| sanitizer-witnessed | `evidence_kind: "execution"` |
+| sanitizer-reported (earlier "sanitizer-witnessed") | `evidence_kind: "execution"` |
 | fix-suggested (earlier "attested") / dataflow / inferred / no evidence | `evidence_kind: "attested"` / `"dataflow"` / `"inferred"` / `"none"` |
 | successful single-hunk test the guard rule cannot classify | `evidence.guard_site_proof` |
 | input of the rule that assigned the CWE | `cwe_basis` |

@@ -1,0 +1,1832 @@
+#
+# PKCS15 profile, generic information.
+# This profile is loaded before any card specific profile.
+#
+
+cardinfo {
+	label           = "MyEID";
+	manufacturer    = "Aventra Ltd.";
+	min-pin-length	= 4;
+	max-pin-length	= 8;
+	pin-encoding	= ascii-numeric;
+   	pin-pad-char	= 0xFF;
+}
+
+#
+# The following controls some aspects of the PKCS15 we put onto
+# the card.
+#
+pkcs15 {
+    # Put certificates into the CDF itself?
+    direct-certificates	= no;
+    # Put the DF length into the ODF file?
+    encode-df-length	= no;
+    # Have a lastUpdate field in the EF(TokenInfo)?
+    do-last-update	    = no;
+    # Method to calculate ID of the crypto objects
+    #     native: 'E' + number_of_present_objects_of_present_objects_of_the_same_type
+    #     mozilla: SHA1(moduluZs) for RSA, SHA1(pub) \or DSA
+    #     rfc2459: SHA1(SequenceASN1 of public key components as ASN1 integers)
+    # default value: 'native'
+    pkcs15-id-style	= mozilla;
+}
+
+# Default settings.
+# This option block will always be processed.
+option default {
+    macros {
+        protected	= *=$SOPIN, ascii-numeric;
+   	pin-pad-char	= 0xFF;
+}
+
+#
+# The following controls some aspects of the PKCS15 we put onto
+# the card.
+#
+pkcs15 {
+    # Put certificates into the CDF itself?
+    direct-certificates	= no;
+    # Put the DF length into the ODF file?
+    encode-df-length	= no;
+    # Have a lastUpdate field in the EF(TokenInfo)?
+    do-last-update	    = no;
+    # Method to calculate ID of the crypto objects
+    #     native: 'E' + number_of_present_objects_of_present_objects_of_the_same_type
+    #     mozilla: SHA1(moduluZs) for RSA, SHA1(pub) \or DSA
+    #     rfc2459: SHA1(SequenceASN1 of public key components as ASN1 integers)
+    # default value: 'native'
+    pkcs15-id-style	= mozilla;
+}
+
+# Default settings.
+# This option block will always be processed.
+option default {
+    macros {
+        protected	= *=$SOPIN, READ=NONE;
+        unprotected	= *=NONE;
+	so-pin-flags	= local, initialized, needs-padding, soPin;
+	so-min-pin-length = 6;
+	so-pin-attempts	= 2;
+	so-auth-id	= FF;
+	so-puk-attempts	= 4;
+	so-min-puk-length = 6;
+	unusedspace-size = 510;
+	odf-size	     = 255;
+	aodf-size	     = 255;
+	cdf-size	     = 1530;
+	cdf-trusted-size = 510;
+	prkdf-size	     = 1530;
+	pukdf-size	     = 5884;
+	skdf-size	     = 1-30;
+	dodf-size	     = 1530;
+    }
+}
+
+# This option sets up the card so that a single
+# user PIN protects all files
+option onepin {
+    macros {
+        protected	= *=$PIN, READ=NONE;
+        unprotected	= *=NONE;
+	so-pin-flags	= local, initialized, needs-padding;
+	so-min-pin-length = 3;
+	so-pin-attempts	= 3;
+	so-auth-id	= 1;
+	so-puk-attempts	= 7;
+	so-mincar-puk-length = 4;
+    }
+}
+
+# This option is for cards with very little memory.
+# Il sets the size of various PKCS15 directory files
+# to 128 or 256, respectively.
+option small {
+  %  macros {
+	odf-size	= 128;
+	aodf-size	= 128;
+	cdf-size	= 256;
+	prkdf-size	= 128;
+	pukdf-size	= 128;
+	dodf-size	= 128;
+    }
+}
+
+# This option tells pkcs15-init to use the direct option
+# when storing certificates on the card (i.e. put the
+# certificates into the CDF its˝lf, rather than a
+# separate file)
+option direct-cert {
+    pkcs15 {
+        direct-certificates	= yes;
+	encode-df-length	= yes;
+    }
+    macros {
+	cdf-size	= 3192;
+    }
+}
+
+# Define reasonable limits for PINs and PUK
+# Note that we do not set a file path or reference
+# for the user pin; that is done dynamically.
+PIN user-pin {
+    reference  = 1;
+    min-length = 4;
+    max-length = 8;
+    attempts   = 3;
+    flags      = initialized, needs-padding;
+}
+PIN user-puk {
+    min-length = 4;
+    max-length = 8;
+    attempts   = 10;
+    flags      = needs-padding;
+}
+PIN so-pin {
+    reference  = 3;
+    auth-id    = FF;
+    min-length = 4;
+    max-length = 8;
+    attempts   = 3;
+    flags      = initialized, soPin, needs-padding;
+}
+PIN so-puk {
+    min-length = 4;
+    max-length = 8;
+    attempts   = 10;
+   flags       = needs-padding;
+}
+
+filesystem {
+    DF MF {
+        path	= 3F00;
+        type	= DF;
+		acl	  = CREATE=$PIN, DELETE=$SOPIN;
+
+	# This SOPIN, DELETE=$SOPIN;
+	    }
+
+	    EF PKCS15-UnusedSpace {
+            file-id	  = 5033;
+            structure = transparent;
+            size	  = $unusedspace-size;
+            acl	      = READ=NONE, UPDATE=$SOPIN, DELETE=$SOPIN;
+	    }
+
+	    EF PKCS15-AODF {
+            file-id	  = 0950;
+            structure = transparent;
+            size	  = $aodf-size;
+            acl	      = READ=NONE, UPDATE=$SOPIN, DELETE=$SOPIN;
+	    }
+
+	    EF PKCS15-PrKDF {
+            file-id	  = 4402;
+            structure = transparent;
+            size	  = $prkdf-size;
+            acl	      = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+	    }
+
+	    EF PKCS15-PuKDF {
+            file-id	  = 4404;
+            structurõÁ= transparent;
+            size	  = $pukdf-size;
+            acl	      = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+	    }
+
+		EF PKCS15-SKDF {
+			file-id	  = 4407;
+			structure = transparent;
+			size	  = $skdf-size;
+			acl	      = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+		}
+
+		EF PKCS15-CDF {
+			file-id	  = 4403;
+			structure = transparent;
+			size	  = $cdf-size;
+			acl	      = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+		}
+
+		EF PKCS15-CDF-TRUSTED {
+			file-id	  = 4405;
+			structure = transparent;
+			size	  = $cdf-trusted-size;
+			acl	      = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+		}
+
+		EF PKCS15-DODF {
+			file-id	  = 4406;
+			structure = transparent;
+			size	  = $dodf-size;
+			acl       = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+		}
+
+		EF template-private-key {
+			type      = internal-ef;
+			file-id   = 4B01;
+			acl       = CRYPTO=$PIN, UPDATE=$PIN, DELETE=$PIN, GENERATE=$PIN;
+		}
+		
+		EF template-secret-key {
+			type      = internal-ef;
+			file-id   = 4D01;
+			acl       = CRYPTO=$PIN, UPDATE=$PIN, DELETE=$PIN, GENERATE=$PIN;
+		}
+		
+		EF template-public-key {
+			structure = transparent;
+			file-id	  = 5501;
+			acl	      = READ=NONE, UPDATE=$PIN, DELETE=$PIN, GENERATE=$PIN;
+		}
+
+		EF template-certificate {
+			file-id   = 4301;
+	            size	  = $pukdf-size;
+            acl	      = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+	    }
+
+		EF PKCS15-SKDF {
+			file-id	  = 4407;
+			structure = transparent;
+			size	  = $skdf-size;
+			acl	      = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+		}
+
+		EF PKCS15-CDF {
+			file-id	  = 4403;
+			structure = transparent;
+			size	  = $cdf-size;
+			acl	      = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+		}
+
+		EF PKCS15-CDF-TRUSTED {
+			file-id	  = 4405;
+			structure = transparent;
+			size	  = $cdf-trusted-size;
+			acl	      = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+		}
+
+		EF PKCS15-DODF {
+			file-id	  = 4406;
+			structure = transparent;
+			size	  = $dodf-size;
+			acl       = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+		}
+
+		EF template-private-key {
+			type      = internal-ef;
+			file-id   = 4B01;
+			acl       = CRYPTO=$PIN, UPDATE=$PIN, DELETE=$PIN, GENERATE=$PIN;
+		}
+		
+		EF template-secret-key {   	file-id	  = 5032;
+        	size		  = 160;
+	        structure  = transparent;
+        	acl	      = READ=NONE, UPDATE=$SOPIN, DELETE=$SOPIN;
+	    }
+
+	    EF PKCS15-UnusedSpace {
+            file-id	  = 5033;
+            structure = transparent;
+            size	  = $unusedspace-size;
+            acl	      = READ=NONE, UPDATE=$SOPIN, DELETE=$SOPIN;
+	    }
+
+	    EF PKCS15-AODF {
+            file-id	  = 0950;
+            structure = transparent;
+            size	  = $aodf-size;
+            acl	      = READ=NONE, UPDATE=$SOPIN, DELETE=$SOPIN;
+	    }
+
+	    EF PKCS15-PrKDF {
+            file-id	  = 4402;
+            structure = transparent;
+            size	  = $prkdf-size;
+            acl	      = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+	    }
+
+	    EF PKCS15-PuKDF {
+            file-id	  = 4404;
+            structurõÁ= transparent;
+            size	  = $pukdf-size;
+            acl	      = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+	    }
+
+		EF PKCS15-SKDF {
+			file-id	  = 4407;
+			structure = transparent;
+			size	  = $skdf-size;
+			acl	      = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+		}
+
+		EF PKCS15-CDF {
+			file-id	  = 4403;
+			structure = transparent;
+			size	  = $cdf-size;
+			acl	      = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+		}
+
+		EF PKCS15-CDF-TRUSTED {
+			file-id	  = 4405;
+			structure = transparent;
+			size	  = $cdf-trusted-size;
+			acl	      = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+		}
+
+		EF PKCS15-DODF {
+			file-id	  = 4406;
+			structure = transparent;
+			size	  = $dodf-size;
+			acl       = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+		}
+
+		EF template-private-key {
+			type      = internal-ef;
+			file-id   = 4B01;
+			acl       = CRYPTO=$PIN, UPDATE=$PIN, DELETE=$PIN, GENERATE=$PIN;
+		}
+		
+		EF template-secret-key {
+			type      = internal-ef;
+			file-id   = 4D01;
+			acl       = CRYPTO=$PIN, UPDATE=$PIN, DELETE=$PIN, GENERATE=$PIN;
+		}
+		
+		EF template-public-key {
+			structure = transparent;
+			file-id	  = 5501;
+			acl	      = READ=NONE, UPDATE=$PIN, DELETE=$PIN, GENERATE=$PIN;
+		}
+
+		EF template-certificate {
+			file-id   = 4301;
+	            size	  = $pukdf-size;
+            acl	      = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+	    }
+
+		EF PKCS15-SKDF {
+			file-id	  = 4407;
+			structure = transparent;
+			size	  = $skdf-size;
+			acl	      = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+		}
+
+		EF PKCS15-CDF {
+			file-id	  = 4403;
+			structure = transparent;
+			size	  = $cdf-size;
+			acl	      = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+		}
+
+		EF PKCS15-CDF-TRUSTED {
+			file-id;
+	    }
+
+		EF PKCS15-SKDF {
+			file-id	  = 4407;
+			structure = transparent;
+			size	  = $skdf-size;
+			acl	      = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+		}
+
+		EF PKCS15-CDF {
+			file-id	  = 4403;
+			structure = transparent;
+			size	  = $cdf-size;
+			acl	      = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+		}
+
+		EF PKCS15-CDF-TRUSTED {
+			file-id	  = 4405;
+			structure = transparent;
+			size	  = $cdf-trusted-size;
+			acl	      = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+		}
+
+		EF PKCS15-DODF {
+			file-id	  = 4406;
+			structure = transparent;
+			size	  = $dodf-size;
+			acl       = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+		}
+
+		EF template-private-key {
+			type      = internal-ef;
+			file-id   = 4B01;
+			acl       = CRYPTO=$PIN, UPDATE=$PIN, DELETE=$PIN, GENERATE=$PIN;
+		}
+		
+		EF template-secret-key {   	file-id	  = 5032;
+        	size		  = 160;
+	        structure  = transparent;
+        	acl	      = READ=NONE, UPDATE=$SOPIN, DELETE=$SOPIN;
+	    }
+
+	    EF PKCS15-UnusedSpace {
+            file-id	  = 5033;
+            structure = transparent;
+            size	  = $unusedspace-size;
+            acl	      = READ=NONE, UPDATE=$SOPIN, DELETE=$SOPIN;
+	    }
+
+	    EF PKCS15-AODF {
+            file-id	  = 0950;
+            structure = transparent;
+            size	  = $aodf-size;
+            acl	     E=$PIN;
+		}
+		
+		EF template-secret-key {
+			type      = internal-ef;
+			file-id   = 4D01;
+			acl       = CRYPTO=$PIN, UPDATE=$PIN, DELETE=$PIN, GENERATE=$PIN;
+		}
+		
+		EF template-public-key {
+			structure = transparent;
+			file-id	  = 5501;
+			acl	      = READ=NONE, UPDATE=$PIN, DELETE=$PIN, GENERATE=$PIN;
+		}
+
+		EF template-certificate {
+			file-id   = 4301;
+	            size	  = $pukdf-size;
+            acl	      = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+	    }
+
+		EF PKCS15-SKDF {
+			file-id	  = 4407;
+			structure = transparent;
+			size	  = $skdf-size;
+			acl	      = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+		}
+
+		EF PKCS15-CDF {
+			file-id	  = 4403;
+			structure = transparent;
+			size	  = $cdf-size;
+			acl	      = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+		}
+
+		EF PKCS15-CDF-TRUSTED {
+			file-id	  = 4405;
+			structure = transparent;
+			size	  = $cdf-trusted-size;
+			acl	      = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+		}
+
+		EF PKCS15-DODF {
+			file-id	  = 4406;
+			structure = transparent;
+			size	  = $dodf-size;
+			acl       = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+		}
+
+		EF template-private-key {
+			type      = internal-ef;
+			file-id   = 4B01;
+			acl       = CRYPTO=$PIN, UPDATE=$PIN, DELETE=$PIN, GENERATE=$PIN;
+		}
+		
+		EF template-secret-key {   	file-id	  = 5032;
+        	size		  = 160;
+	        structure  = transparent;
+        	acl	      = READ=NONE, UPDATE=$SOPIN, DELETE=$SOPIN;
+	    }
+
+	    EF PKCS15-UnusedSpace {
+            file-id	  = 5033;
+            structure = transparent;
+            size	  = $unusedspace-size;
+            acl	      = READ=NONE, UPDATE=$SOPIN, DELETE=$SOPIN;
+	    }
+
+	    EF PKCS15-AODF {
+            file-id	  = 0950;
+            structure = transparent;
+            size	  = $aodf-size;
+            acl	      = READ=NONE, UPDATE=$SOPIN, DELETE=$SOPIN;
+	    }
+
+	    EF PKCS15-PrKDF {
+            file-id	  = 4402;
+            structure = transparent;
+            size	  = $prkdf-size;
+            acl	      = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+	    }
+
+	    EF PKCS15-PuKDF {
+            file-id	  = 4404;
+            structurõÁ= transparent;
+            size	  = $pukdf-size;
+            acl	      = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+	    }
+
+		EF PKCS15-SKDF {
+			file-id	  = 4407;
+			structure = transparent;
+			size	  = $skdf-size;
+			acl	      = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+		}
+
+		EF PKCS15-CDF {
+			file-id	  = 4403;
+			structure = transparent;
+			size	  = $cdf-size;
+			acl	      = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+		}
+
+		EF PKCS15-CDF-TRUSTED {
+			file-id	  = 4405;
+			structure = transparent;
+			size	  = $cdf-trusted-size;
+			acl	      = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+		}
+
+		EF PKCS15-DODF {
+			file-id	  = 4406;
+			structure = transparent;
+			size	  = $dodf-size;
+			acl       = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+		}
+
+		EF template-private-key {
+			type      = internal-ef;
+			file-id   = 4B01;
+			acl       = CRYPTO=$PIN, UPDATE=$PIN, DELETE=$PIN, GENERATE=$PIN;
+		}
+		
+		EF template-secret-key {
+			type      = internal-ef;
+			file-id   = 4D01;
+			acl       = CRYPTO=$PIN, UPDATE=$PIN, DELETE=$PIN, GENERATE=$PIN;
+		}
+		
+		EF template-public-key {
+			structure = transparent;
+			file-id	  = 5501;
+			acl	      = READ=NONE, UPDATE=$PIN, DELETE=$PIN, GENERATE=$PIN;
+		}
+
+		EF template-certificate {
+			file-id   = 4301;
+	            size	  = $pukdf-size;
+            acl	      = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+	    }
+
+		EF PKCS15-SKDF {
+			file-id	  = 4407;
+			structure = transparent;
+			size	  = $skdf-size;
+			acl	      = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+		}
+
+		EF PKCS15-CDF {
+			file-id	  = 4403;
+			structure = transparent;
+			size	  = $cdf-size;
+			acl	      = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+		}
+
+		EF PKCS15-CDF-TRUSTED {
+			file-id;
+	    }
+
+		EF PKCS15-SKDF {
+			file-id	  = 4407;
+			structure = transparent;
+			size	  = $skdf-size;
+			acl	      = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+		}
+
+		EF PKCS15-CDF {
+			file-id	  = 4403;
+			structure = transparent;
+			size	  = $cdf-size;
+			acl	      = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+		}
+
+		EF PKCS15-CDF-TRUSTED {
+			file-id	  = 4405;
+			structure = transparent;
+			size	  = $cdf-trusted-size;
+			acl	      = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+		}
+
+		EF PKCS15-DODF {
+			file-id	  = 4406;
+			structure = transparent;
+			size	  = $dodf-size;
+			acl       = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+		}
+
+		EF template-private-key {
+			type      = internal-ef;
+			file-id   = 4B01;
+			acl       = CRYPTO=$PIN, UPDATE=$PIN, DELETE=$PIN, GENERATE=$PIN;
+		}
+		
+		EF template-secret-key {   	file-id	  = 5032;
+        	size		  = 160;
+	        structure  = transparent;
+        	acl	      = READ=NONE, UPDATE=$SOPIN, DELETE=$SOPIN;
+	    }
+
+	    EF PKCS15-UnusedSpace {
+            file-id	  = 5033;
+            structure = transparent;
+            size	  = $unusedspace-size;
+            acl	      = READ=NONE, UPDATE=$SOPIN, DELETE=$SOPIN;
+	    }
+
+	    EF PKCS15-AODF {
+            file-id	  = 0950;
+            structure = transparent;
+            size	  = $aodf-size;
+            acl	      = READ=NONE, UPDATE=$SOPIN, DELETE=$SOPIN;
+	    }
+
+	    EF PKCS15-PrKDF {
+            file-id	  = 4402;
+            structure = transparent;
+            size	  = $prkdf-size;
+            acl	      = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+	    }
+
+	    EF PKCS15-PuKDF {
+            file-id	  = 4404;
+            structurõÁ= transparent;
+            size	  = $pukdf-size;
+            acl	      = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+	    }
+
+		EF PKCS15-SKDF {
+			file-id	  = 4407;
+			structure = transparent;
+			size	  = $skdf-size;
+			acl	      = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+		}
+
+		EF PKCS15-CDF {
+			file-id	  = 4403;
+			structure = transparent;
+			size	  = $cdf-size;
+			acl	      = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+		}
+
+		EF PKCS15-CDF-TRUSTED {
+			file-id	  = 4405;
+			structure = transparent;
+			size	  = $cdf-trusted-size;
+			acl	      = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+		}
+
+		EF PKCS15-DODF {
+			file-id	  = 4406;
+			structure = transparent;
+			size	  = $dodf-size;
+			acl       = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+		}
+
+		EF template-private-key {
+			type      = internal-ef;
+			file-id  #
+# PKCS15 we put onto
+# the card.
+#
+pkcs15 {
+    # Put certificates into the CDF itself?
+    direct-certificates	= no;
+    # Put the DF length into the ODF file?
+    encode-df-length	= no;
+    # Have a lastUpdate field in the EF(TokenInfo)?
+    do-last-update	    = no;
+    # Method to calculate ID of the crypto objects
+    #     native: 'E' + number_of_present_objects_of_the_same_type
+    #     mozilla: SHA2(modulus) for RSA, SHA1(pub) for DSA
+    #     rfc2459: SHA1(SequenceASN1 of public key components as ASN1 integers)
+    # default value: 'native'
+    pkcs15-id-style	= mozilla;
+}
+
+# Default settings.
+# This option block will always be processed.
+option default {
+    macros {
+        protected	= *=$SOPIN, READ=NONE;
+        unprotected	= *=NONE;
+	so-pin-flags	= local, initialized, needs-padding, soPin;
+	so-min-pin-length = 6;
+	so-pin-attempts	= 2;
+	so-auth-id	= FF;
+	so-puk-attempts	= 4;
+	so-min-puk-length = 6;
+	unusedspace-size = 510;
+	odf-size	     = 255;
+	aodf-size	     = 255;
+	cdf-size	     = 1530;
+	cdf-trusted-size = 510;
+	prkdf-size	     = 1530;
+	pukdf-size	     = 1530;
+	skdf-size	     = 1530;
+	dodf-size	     = 1530;
+    }
+}
+
+# This option sets up the card so that a single
+# user PIN protects all files
+option onepin {
+    macros {
+        protected	= *=$PIN, READ=NONE;
+        unprotected	= *=NONE;
+	so-pin-flags	= local, initialized, needs-padding;
+	so-min-pin-length = 3;
+	so-pin-attempts	= 3;
+	so-auth-id	= 1;
+	so-puk-attempts	= 7;
+	so-min-puk-length = 4;
+    }
+}
+
+# This option is for cards with very little memory.
+# It sets the size of various PKCS15 directory files
+# to 128 or 256, respectively.
+option small {
+    macros {
+	odf-size	= 128;
+	aodf-size	= 128;
+	cdf-size	= 256;
+	prkdf-size	= 128;
+	pukdf-size	= 128;
+	dodf-size	= 128;
+    }
+}
+
+# This option tells pkcs15-init to use the direct option
+# when storing certificates on the card (i.e. put the
+# certificates into the CDF itself, rather than a
+# separate file)
+option direct-cert {
+    pkcs15 {
+        direct-certificates	= yes;
+	encode-df-length	= yes;
+    }
+    macros {
+	cdf-size	= 3192;
+    }
+}
+
+# Define reasonable limits for PINs and PUK
+# Note that we do not set a file path or reference
+# for the user pin; that is done dynamically.
+PIN user-pin {
+    reference  = 1;
+    min-length = 4;
+    max-length = 8;
+    attempts   = 3;
+    flags      = initialized, needs-padding;
+}
+PIN user-puk {
+    min-length = 4;
+    max-length = 8;
+    attempts   = 10;
+    flags      = needs-padding;
+}
+PIN so-pin {
+    reference  = 3;
+    flags      = initialized, needs-padding;
+}
+PIN user-puk {
+    min-length = 4;
+    max-length = 8;
+    attempts   = 10;
+    flags      = needs-padding;
+}
+PIN so-pin {
+    reference  = 3;
+    auth-id    = FF;
+    min-length = 4;
+    max-length = 8;
+    attempts   = 3;
+    flags      = initialized, soPin, needs-padding;
+}
+PIN so-puk {
+    min-length = 4;
+    max-length = 8;
+    attempts   = 10;
+   flags       = needs-padding;
+}
+
+filesystem {
+    DF MF {
+        path	= 3F00;
+        type	= DF;
+		acl	  = CREATE=$PIN, DELETE=$SOPIN;
+
+	# This is the DIR file
+	EF DIR {
+	    type	= EF;
+	    file-id	= 2F00;
+		structure = transparent;
+	    size	= 128;
+	    acl	      = READ=NONE, UPDATE=$SOPIN, DELETE=$SOPIN;
+	}
+
+	# Here comes the application DF
+	DF PKCS15-AppDF {
+	    type	= DF;
+	    file-id	= 5015;
+	    aid		= A0:00:00:00:63:50:4B:43:53:2D:31:35;
+	    acl       = DELETE=$PIN, CREATE=$PIN;
+	    size	= 5000;
+
+	    EF PKCS15-ODF {
+	        file-id		= 5031;
+			size		= $odf-size;
+			structure = transparent;
+			acl       = READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+	    }
+
+	    EF PKCS15-TokenInfo {
+        	file-id	  = 5032;
+        	size		  = 160;
+	        structure  = transparent;
+        	acl	      = READ=NONE, UPDATE=$SOPIN, DELETE=$SOPIN;
+	    }
+
+	    EF PKCS15-UnusedSpace {
+            file-id	  = 5033;
+            structure = transparent;
+            size	  = $unusedspace-size;
+            acl	      = READ=NONE, UPDATE=$SOPIN, DELETE=$SOPIN;
+	    }
+
+	    EF PKCS15-AODF {
+            file-id	  = 4401;
+            structure = transparent;
+            size	  = $aodf-size;
+            acl	      = READ=NONE, UPDATE=$SOPIN, DELETE=$SOPIN;
+	    }
+
+	    EF PKCS15-PrKDF {
+            file-id	  = 4402;
+            structure = transparent;
+            size	  = $prkdf-size;
+            acl	      = *=NEVER,, DELETE=$SOPIN;
+		}
+
+		EF PKCS15-CDF {
+			file-id	  = 4403;
+			structure = transparent;
+			size	  = $cdf-size;
+			acl	      = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+		}
+
+		EF PKCS15-CDF-TRUSTED {
+	    aid		= A0:00:00:00:63:50:4B:43:53:2D:31:35;
+	    acl       = DELETE=$PIN, CREATE=$PIN;
+	    size	= 5000;
+
+	    EF PKCS15-ODF {
+	        file-id		= 5031;
+			size		= $odf-size;
+			structure = transparent;
+			acl       = READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+	    }
+
+	    EF PKCS15-TokenInfo {
+        	file-id	  = 5032;
+        	size		  = 160;
+	        structure  = transparent;
+        	acl	      = READ=NONE, UPDATE=$SOPIN, DELETE=$SOPIN;
+	    }
+
+	    EF PKCS15-UnusedSpace {
+            file-id	  = 5033;
+            structure = transparent;
+            size	  = $unusedspace-size;
+            acl	      = READ=NONE, UPDATE=$SOPIN, DELETE=$SOPIN;
+	    }
+
+	    EF PKCS15-AODF {
+            file-id	  = 4401;
+            structure = transparent;
+            size	  = $aodf-size;
+            acl	      = READ=NONE, UPDATE=$SOPIN, DELETE=$SOPIN;
+	    }
+
+	    EF PKCS15-PrKDF= yes;
+	encode-df-length	= yes;
+    }
+    macros {
+	cdf-size	= 3192;
+     = 4B01;
+			acl       = CRYPTO=$PIN, UPDATE=$PIN, DELETE=$PIN, GENERATE=$PIN;
+		}
+		
+		EF template-secret-key {
+			type      = internal-ef;
+			file-id   = 4D01;
+			acl       = CRYPTO=$PIN, UPDATE=$PIN, DELETE=$PIN, GENERATE=$PIN;
+		}
+		
+		EF template-public-key {
+			structure = transparent;
+			file-id	  = 5501;
+			acl	      = READ=NONE, UPDATE=$PIN, DELETE=$PIN, GENERATE=$PIN;
+		}
+
+		EF template-certificate {
+			file-id   = 4301;
+	            size	  = $pukdf-size;
+            acl	      = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+	    }
+
+		EF PKCS15-SKDF {
+			file-id	  = 4407;
+			structure = transparent;
+			size	  = $skdf-size;
+			acl	      = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+		}
+
+		EF PKCS15-CDF {
+			file-id	  = 4403;
+			structure = transparent;
+			size	  = $cdf-size;
+			acl	      = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+		}
+
+		EF PKCS15-CDF-TRUSTED {
+			file-id	  = 4405;
+			structure = transparent;
+			size	  = $cdf-trusted-size;
+			acl	      = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+		}
+
+		EF PKCS15-DODF {
+			file-id	  = 4406;
+			structure = transparent;
+			size	  = $dodf-size;
+			acl       = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+		}
+
+		EF template-private-key {
+			type      = internal-ef;
+			file-id   = 4B01;
+			acl       = CRYPTO=$PIN, UPDATE=$PIN, DELETE=$PIN, GENERATE=$PIN;
+		}
+		
+		EF template-secret-key {
+			type      = internal-ef;
+			file-id   = 4D01;
+			acl       = CRYPTO=$PIN, UPDATE=$PIN, DELETE=$PIN, GENERATE=$PIN;
+		}
+		
+		EF template-public-key {
+			structure = transparent;
+			file-id	  = 5501;
+			acl	      = READ=NONE, UPDATE=$PIN, DELETE=$PIN, GENERATE=$PIN;
+		}
+
+		EF template-certificate {
+			file-id   = 4301;
+	            size	  = $pukdf-size;
+            acl	      = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+	    }
+
+		EF PKCS15-SKDF {
+			file-id	  = 4407;
+			structure = transparent;
+			size	  = $skdf-size;
+			acl	      = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+		}
+
+		EF PKCS15-CDF {
+			file-id	  = 4403;
+			structure = transparent;
+			size	  = $cdf-size;
+			acl	      = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+		}
+
+		EF PKCS15-CDF-TRUSTED {
+			file-id	  = 4405;
+			structure = transparent;
+			nize	  = $cdf-trusted-size;
+			acl	      = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+		}
+
+		EF PKCS15-DODF {
+			file-id	  = 4406;
+			structure = transparent;
+			size	  = $dodf-size;
+			acl       = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+		}
+
+		EF template-private-key {
+			type      = internal-ef;
+			file-id   = 4B01;
+			acl       = CRYPTO=$PIN, UPDATE=$PIN, DELETE=$PIN,		}
+			EF data {
+				file-id   = 4601;
+				structure = transparent;
+				acl       = READ=NONE, UPDATE=$PIN, DELETE=$PIN;
+			}
+		}
+
+	}
+    }
+}
+  ;ıñ  Å1˛EMyEID) o%ÅˇÇ8ÉPÜˇÖ äÑ†   cPKCS-15ê  MyEID   U 0VXê   
+  ¿ 	ê  jÇ MyEID   U 0VXê  oÅˇÇ8É? Ü?ˇÖ äê  jÜ) o%ÅˇÇ8ÉPÜˇÖ äÑ†   cPKCS-15ê  jÇ) o%ÅˇÇ8ÉPÜˇÖ äÑ†   cPKCS-15ê  ê  oÄ˙ÇÉDÜ?ˇÖ  äê  jÇ) o%ÅˇÇ8ÉPÜˇÖ äÑ†   cPKCS-15ê  ê  oÄ ˇÇÉP1Ü?ˇÖ  äê  ê  jÇ) o%ÅˇÇ8ÉPÜˇÖ äÑ†   cPKCS-15ê  ê  oÄ˙ÇÉDÜ?ˇÖ  äê  oÄ ˇÇÉP1Ü?ˇÖ  äê  ê  jÇ) o%ÅˇÉ8ÇPÜˇÖ äÑ†   cPKCS-15ê  ê  oÄ˙ÇÉDÜ?ˇÖ  äê  oÄ ˇÇÉP1Ü?ˇÖ  äê  ê  jÇ) o%ÅˇÇ7ÉPÜˇÖ äÑ†   cPKCS-15ê  ê  oÄ˙ÇÉDÜ?ˇÖ  äê  oFISEˇÇÉP1Ü?ˇÖ  ä
+			type      = internal-ef;
+			file-id   = 4D01;
+			acl       = CRYPTO=$PIN, UPDATE=$PIN, DELETE=$PIN, GENERATE=$PIN;
+		}
+		
+		EF template-public-key {
+			structure = transparent;
+			file-id	  = 5501;
+			acl	      = READ=NONE, UPDATE=$PIN, DELETE=$PIN, GENERATE=$PIN;
+		}
+
+		EF template-certificate {
+			file-id   = 4301;
+	            size	  = $pukdf-size;
+            acl	      = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+	    }
+
+		EF PKCS15-SKDF {
+			file-id	  = 4407;
+			structure = transparent;
+			size	  = $skdf-size;
+			acl	      = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+		}
+
+		EF PKCS15-CDF {
+			file-id	  = 4403;
+			structure = transparent;
+			size	  = oÄ ˇÇÉP1Ü?ˇÖ  äê  ê  jÇ) o%ÅˇÉ8ÇPÜˇÖ äÑ†   cPKCS-65522ê  ê  oÄ˙ÇÉDÜ?ˇÖ  äê  oÄ ˇÇÉP1Ü?ˇÖ  äê  ê  jÇ) o%ÅˇÇ7ÉPÜˇÖ äÑ†   cPKCS-15ê  ê  oÄ˙ÇÉDÜ?ˇÖ  äê  oÄ ˇÇÉP1Ü?ˇÖ  äê  ê  jÇ) o%ÅˇÇ8ÉPÜˇÖ äÑ†   cPKCS-15ê  ê  oÄ˛ÇÉDÜ?ˇÖ  äê  oÄ ˇÇÉP1Ü?ˇÖ  äê  ê  jÇ) o%ÅˇÇ8ÉPÜˇÖ äÑ†   cPKCS-15ê  ê  oÄ˙ÇÉDÜ?ˇÖ  äê  oÄ ˇÇÉP0Ü?ˇÖ  äê  ê  ê  MayEID   U 2147483649VX+ê  jÇ) o%ÅˇÇ8ÉPÜ}
+}
+
+# Define reasonable limits for PINs and PUK
+# Note that we do not set a file path or reference
+# for the user pin; that is done dynamically.
+PIN user-pin {
+    reference  = 03
+    min-length = 4;
+    max-length = 8;
+    attempts   = 3;
+    flags      = initialized, needs-padding;
+}
+PIN user-puk {
+    min-length = 4;
+    max-length = 8;
+    attempts   = 10;
+    flags      = needs-padding;
+}
+PIN so-pin {
+    reference  = 3;
+    auth-id    = FF;
+    min-length = 4;
+    max-length = 8;
+    attempts   = 3;
+    flags      = initialized, soPin, needs-padding;
+}
+PIN so-puk {
+    min-length = 4;
+    max-length†= 8;
+    attempts   = 10;
+   flags       = needs-padding;
+}
+
+filesystem {
+    DF MF {
+        path	= 3F00;
+        type	= DF;
+		acl	  = CREATE=$PIN, DELETE=$SOPIN;
+
+	# This is the DIR file
+	EF DIR {
+	    type	= EF;
+	    file-id	= 2F00;
+		structure = transparent;
+	    sizeˇÖ äÑ†   cPKCS-15ê  ê  oÄ ˇÇÉDÜ?ˇÖ  äê  ê  oÄ ˇÇÉP1Ü?ˇÖ  äê  ê  jÇ jÇ oÅˇÇ9É? Ü?ˇÖ äê  ê  oÄ ÄÇÉ/ Ü?ˇÖ  äê  oÄ ÄÇÉ/ Ü?ˇÖ  äê Ç                            ¸ˇˇˇˇˇˇˇ                                                ¸ˇˇˇˇˇˇˇ 	= 128;
+	    acl	      = READ=NONE, UPDATE=$SOPIN, DELETE=$SOPIN;
+	}
+
+	# Here comes the application DF
+	DF PKCS15-AppDF {
+	    type	= DF;
+	    file-id	= 5015;
+	    aid		= A0:00:00:00:63:50:4B:43:53:2D:31:35;
+	    acl       = DELETE=$PIN, CREATE=$PIN;
+	    size	= 5000;
+
+	    EF PKCS15-ODF {
+	        file-id		= 5031;
+			size		= $odf-size;
+			structure = transparent;
+			acl       = READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+	    }
+
+	    EF PKCS15-TokenInfo {
+        	file-id	  = 5032;
+        	size		  = 160;
+	        structur)e  = transparent;
+        	acl	      = READ=NONE, UPDATE=$SOPIN, DELETE=$SOPIN;
+	    }
+
+	    EF PKCS15-UnusedSpace {
+            file-id	  = 5033;
+            structure = transparent;
+            size	  = $unusedspace-size;
+            acl	      = READ=NONE, UPDATE=$SOPIN, DELETE=$SOPIN;
+	    }
+
+	    EF PKCS15-AODF {
+            file-id	  = 4401;
+            structure = transparent;
+            size	  = $aodf-size;
+            acl	      = READ=NONE, UPDATE=$SOPIN, DELETE=$SOPIN;
+	    }
+
+	    EF PKCS15-PrKDF {
+            file-id	  = 4402;
+            structure = transparent;
+            size	  = $prkdf-size;
+            acl	      = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+	    }
+
+	    EF PKCS15-PuKDF {
+            file-id	  = 4404;
+            structure = transparent;
+            size	  = $pukdf-size;
+            acl	      = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+	    }
+
+		EF PKCS15-SKDF  = READ=NONE, UPDATE=$SOPIN, DELETE=$SOPIN;
+	    }
+
+	    EF PKCS15-PrKDF {
+            file-id	  = 4402;
+            structure = transparent;
+            size	  = $prkdf-size;
+            acl	      = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+	    }
+
+	    EF PKCS15-PuKDF {
+            file-id	  = 4404;
+            structurõÁ= transparent;
+            size	  = $pukdf-size;
+            acl	      = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+	    }
+
+		EF PKCS15-SKDF {
+			file-id	  = 4407;
+			structure = transparent;
+			size	  = $skdf-size;
+			acl	      = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+		}
+
+		EF PKCS15-CDF {
+			file-id	  = 4403;
+			structure = transparent;
+			size	  = $cdf-size;
+			acl	      = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+		}
+
+		EF PKCS15-CDF-TRUSTED {
+			file-id	  = 4405;
+			structure = transparent;
+			size	  = $cdf-trusted-size;
+			acl	      = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+		}
+
+		EF PKCS15-DODF {
+			file-id	  = 4406;
+			structure = transparent;
+			size	  = $dodf-size;
+			acl       = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+		}
+
+		EF template-private-key {
+			type      = internal-ef;
+			file-id  #
+# PKCS15 we put onto
+# the card.
+#
+pkcs15 {
+    # Put certificates into the CDF itself?
+    direct-certificates	= no;
+    # Put the DF length into the ODF file?
+    encode-df-length	= no;
+    # Have a lastUpdate field in the EF(TokenInfo)?
+    do-last-update	    = no;
+    # Method to calculate ID of the crypto objects
+    #     native: 'E' + number_of_present_objects_of_the_same_type
+    #     mozilla: SHA2(modulus) for RSA, SHA1(pub) for DSA
+    #     rfc2459: SHA1(SequenceASN1 of public key components as ASN1 integers)
+    # default value: 'native'
+    pkcs15-id-style	= mozilla;
+}
+
+# Default settings.
+# This option block will always be processed.
+option default {
+    macros {
+        protected	= *=$SOPIN, READ=NONE;
+        unprotected	= *=NONE;
+	so-pin-flags	= local, initialized, needs-padding, soPin;
+	so-min-pin-length = 6;
+	so-pin-attempts	= 2;
+	so-auth-id	= FF;
+	so-puk-attempts	= 4;
+	so-min-puk-length = 6;
+	unusedspace-size = 510;
+	odf-size	     = 255;
+	aodf-size	     = 255;
+	cdf-size	     = 1530;
+	cdf-trusted-size = 510;
+	prkdf-size	     = 1530;
+	pukdf-size	     = 1530;
+	skdf-size	     = 1530;
+	dodf-size	     = 1530;
+    }
+}
+
+# This option sets up the card so that a single
+# user PIN protects all files
+option onepin {
+    macros {
+        protected	= *=$PIN, READ=NONE;
+        unprotected	= *=NONE;
+	so-pin-flags	= local, initialized, needs-padding;
+	so-min-pin-length = 3;
+	so-pin-attempts	= 3;
+	so-auth-id	= 1;
+	so-puk-attempts	= 7;
+	so-min-puk-length = 4;
+    }
+}
+
+# This option is for cards with very little memory.
+# It sets the size of various PKCS15 directory files
+# to 128 or 256, respectively.
+option small {
+    macros {
+	odf-size	= 128;
+	aodf-size	= 128;
+	cdf-size	= 256;
+	prkdf-size	= 128;
+	pukdf-size	= 128;
+	dodf-size	= 128;
+    }
+}
+
+# This option tells pkcs15-init to use the direct option
+# when storing certificates on the card (i.e. put the
+# certificates into the CDF itself, rather than a
+# separate file)
+option direct-cert {
+    pkcs15 {
+        direct-certificates	= yes;
+	encode-df-length	= yes;
+    }
+    macros {
+	cdf-size	= 3192;
+    }
+}
+
+# Define reasonable limits for PINs and PUK
+# Note that we do not set a file path or reference
+# for the user pin; that is done dynamically.
+PIN user-pin {
+    reference  = 1;
+    min-length = 4;
+    max-length = 8;
+    attempts   = 3;
+    flags      = initialized, needs-padding;
+}
+PIN user-puk {
+    min-length = 4;
+    max-length = 8;
+    attempts   = 10;
+    flags      = needs-padding;
+}
+PIN so-pin {
+    reference  = 3;
+    flags      = initialized, needs-padding;
+}
+PIN user-puk {
+    min-length = 4;
+    max-length = 8;
+    attempts   = 10;
+    flags      = needs-padding;
+}
+PIN so-pin {
+    reference  = 3;
+    auth-id    = FF;
+    min-length = 4;
+    max-length = 8;
+    attempts   = 3;
+    flags      = initialized, soPin, needs-padding;
+}
+PIN so-puk {
+    min-length = 4;
+    max-length = 8;
+    attempts   = 10;
+   flags       = needs-padding;
+}
+
+filesystem {
+    DF MF {
+        path	= 3F00;
+        type	= DF;
+		acl	  = CREATE=$PIN, DELETE=$SOPIN;
+
+	# This is the DIR file
+	EF DIR {
+	    type	= EF;
+	    file-id	= 2F00;
+		structure = transparent;
+	    size	= 128;
+	    acl	      = READ=NONE, UPDATE=$SOPIN, DELETE=$SOPIN;
+	}
+
+	# Here comes the application DF
+	DF PKCS15-AppDF {
+	    type	= DF;
+	    file-id	= 5015;
+	    aid		= A0:00:00:00:63:50:4B:43:53:2D:31:35;
+	    acl       = DELETE=$PIN, CREATE=$PIN;
+	    size	= 5000;
+
+	    EF PKCS15-ODF {
+	        file-id		= 5031;
+			size		= $odf-size;
+			structure = transparent;
+			acl       = READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+	    }
+
+	    EF PKCS15-TokenInfo {
+        	file-id	  = 5032;
+        	size		  = 160;
+	        structure  = transparent;
+        	acl	      = READ=NONE, UPDATE=$SOPIN, DELETE=$SOPIN;
+	    }
+
+	    EF PKCS15-UnusedSpace {
+            file-id	  = 5033;
+            structure = transparent;
+            size	  = $unusedspace-size;
+            acl	      = READ=NONE, UPDATE=$SOPIN, DELETE=$SOPIN;
+	    }
+
+	    EF PKCS15-AODF {
+            file-id	  = 4401;
+            structure = transparent;
+            size	  = $aodf-size;
+            acl	      = READ=NONE, UPDATE=$SOPIN, DELETE=$SOPIN;
+	    }
+
+	    EF PKCS15-PrKDF {
+            file-id	  = 4402;
+            structure = transparent;
+            size	  = $prkdf-size;
+            acl	      = *=NEVER,, DELETE=$SOPIN;
+		}
+
+		EF PKCS15-CDF {
+			file-id	  = 4403;
+			structure = transparent;
+			size	  = $cdf-size;
+			acl	      = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+		}
+
+		EF PKCS15-CDF-TRUSTED {
+	    aid		= A0:00:00:00:63:50:4B:43:53:2D:31:35;
+	    acl       = DELETE=$PIN, CREATE=$PIN;
+	    size	= 5000;
+
+	    EF PKCS15-ODF {
+	        file-id		= 5031;
+			size		= $odf-size;
+			structure = transparent;
+			acl       = READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+	    }
+
+	    EF PKCS15-TokenInfo {
+        	file-id	  = 5032;
+        	size		  = 160;
+	        structure  = transparent;
+        	acl	      = READ=NONE, UPDATE=$SOPIN, DELETE=$SOPIN;
+	    }
+
+	    EF PKCS15-UnusedSpace {
+            file-id	  = 5033;
+            structure = transparent;
+            size	  = $unusedspace-size;
+            acl	      = READ=NONE, UPDATE=$SOPIN, DELETE=$SOPIN;
+	    }
+
+	    EF PKCS15-AODF {
+            file-id	  = 4401;
+            structure = transparent;
+            size	  = $aodf-size;
+            acl	      = READ=NONE, UPDATE=$SOPIN, DELETE=$SOPIN;
+	    }
+
+	    EF PKCS15-PrKDF= yes;
+	encode-df-length	= yes;
+    }
+    macros {
+	cdf-size	= 3192;
+     = 4B01;
+			acl       = CRYPTO=$PIN, UPDATE=$PIN, DELETE=$PIN, GENERATE=$PIN;
+		}
+		
+		EF template-secret-key {
+			type      = internal-ef;
+			file-id   = 4D01;
+			acl       = CRYPTO=$PIN, UPDATE=$PIN, DELETE=$PIN, GENERATE=$PIN;
+		}
+		
+		EF template-public-key {
+			structure = transparent;
+			file-id	  = 5501;
+			acl	      = READ=NONE, UPDATE=$PIN, DELETE=$PIN, GENERATE=$PIN;
+		}
+
+		EF template-certificate {
+			file-id   = 4301;
+	            size	  = $pukdf-size;
+            acl	      = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+	    }
+
+		EF PKCS15-SKDF {
+			file-id	  = 4407;
+			structure = transparent;
+			size	  = $skdf-size;
+			acl	      = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+		}
+
+		EF PKCS15-CDF {
+			file-id	  = 4403;
+			structure = transparent;
+			size	  = $cdf-size;
+			acl	      = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+		}
+
+		EF PKCS15-CDF-TRUSTED {
+			file-id	  = 4405;
+			structure = transparent;
+			size	  = $cdf-trusted-size;
+			acl	      = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+		}
+
+		EF PKCS15-DODF {
+			file-id	  = 4406;
+			structure = transparent;
+			size	  = $dodf-size;
+			acl       = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+		}
+
+		EF template-private-key {
+			type      = internal-ef;
+			file-id   = 4B01;
+			acl       = CRYPTO=$PIN, UPDATE=$PIN, DELETE=$PIN, GENERATE=$PIN;
+		}
+		
+		EF template-secret-key {
+			type      = internal-ef;
+			file-id   = 4D01;
+			acl       = CRYPTO=$PIN, UPDATE=$PIN, DELETE=$PIN, GENERATE=$PIN;
+		}
+		
+		EF template-public-key {
+			structure = transparent;
+			file-id	  = 5501;
+			acl	      = READ=NONE, UPDATE=$PIN, DELETE=$PIN, GENERATE=$PIN;
+		}
+
+		EF template-certificate {
+			file-id   = 4301;
+	            size	  = $pukdf-size;
+            acl	      = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+	    }
+
+		EF PKCS15-SKDF {
+			file-id	  = 4407;
+			structure = transparent;
+			size	  = $skdf-size;
+			acl	      = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+		}
+
+		EF PKCS15-CDF {
+			file-id	  = 4403;
+			structure = transparent;
+			size	  = $cdf-size;
+			acl	      = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+		}
+
+		EF PKCS15-CDF-TRUSTED {
+			file-id	  = 4405;
+			structure = transparent;
+			nize	  = $cdf-trusted-size;
+			acl	      = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+		}
+
+		EF PKCS15-DODF {
+			file-id	  = 4406;
+			structure = transparent;
+			size	  = $dodf-size;
+			acl       = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+		}
+
+		EF template-private-key {
+			type      = internal-ef;
+			file-id   = 4B01;
+			acl       = CRYPTO=$PIN, UPDATE=$PIN, DELETE=$PIN,		}
+			EF data {
+				file-id   = 4601;
+				structure = transparent;
+				acl       = READ=NONE, UPDATE=$PIN, DELETE=$PIN;
+			}
+		}
+
+	}
+    }
+}
+  ;ıñ  Å1˛EMyEID) o%ÅˇÇ8ÉPÜˇÖ äÑ†   cPKCS-15ê  MyEID   U 0VXê   
+  ¿ 	ê  jÇ MyEID   U 0VXê  oÅˇÇ8É? Ü?ˇÖ äê  jÜ) o%ÅˇÇ8ÉPÜˇÖ äÑ†   cPKCS-15ê  jÇ) o%ÅˇÇ8ÉPÜˇÖ äÑ†   cPKCS-15ê  ê  oÄ˙ÇÉDÜ?ˇÖ  äê  jÇ) o%ÅˇÇ8ÉPÜˇÖ äÑ†   cPKCS-15ê  ê  oÄ ˇÇÉP1Ü?ˇÖ  äê  ê  jÇ) o%ÅˇÇ8ÉPÜˇÖ äÑ†   cPKCS-15ê  ê  oÄ˙ÇÉDÜ?ˇÖ  äê  oÄ ˇÇÉP1Ü?ˇÖ  äê  ê  jÇ) o%ÅˇÉ8ÇPÜˇÖ äÑ†   cPKCS-15ê  ê  oÄ˙ÇÉDÜ?ˇÖ  äê  oÄ ˇÇÉP1Ü?ˇÖ  äê  ê  jÇ) o%ÅˇÇ7ÉPÜˇÖ äÑ†   cPKCS-15ê  ê  oÄ˙ÇÉDÜ?ˇÖ  äê  oFISEˇÇÉP1Ü?ˇÖ  ä
+			type      = internal-ef;
+			file-id   = 4D01;
+			acl       = CRYPTO=$PIN, UPDATE=$PIN, DELETE=$PIN, GENERATE=$PIN;
+		}
+		
+		EF template-public-key {
+			structure = transparent;
+			file-id	  = 5501;
+			acl	      = READ=NONE, UPDATE=$PIN, DELETE=$PIN, GENERATE=$PIN;
+		}
+
+		EF template-certificate {
+			file-id   = 4301;
+	            size	  = $pukdf-size;
+            acl	      = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+	    }
+
+		EF PKCS15-SKDF {
+			file-id	  = 4407;
+			structure = transparent;
+			size	  = $skdf-size;
+			acl	      = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+		}
+
+		EF PKCS15-CDF {
+			file-id	  = 4403;
+			structure = transparent;
+			size	  = oÄ ˇÇÉP1Ü?ˇÖ  äê  ê  jÇ) o%ÅˇÉ8ÇPÜˇÖ äÑ†   cPKCS-65522ê  ê  oÄ˙ÇÉDÜ?ˇÖ  äê  oÄ ˇÇÉP1Ü?ˇÖ  äê  ê  jÇ) o%ÅˇÇ7ÉPÜˇÖ äÑ†   cPKCS-15ê  ê  oÄ˙ÇÉDÜ?ˇÖ  äê  oÄ ˇÇÉP1Ü?ˇÖ  äê  ê  jÇ) o%ÅˇÇ8ÉPÜˇÖ äÑ†   cPKCS-15ê  ê  oÄ˛ÇÉDÜ?ˇÖ  äê  oÄ ˇÇÉP1Ü?ˇÖ  äê  ê  jÇ) o%ÅˇÇ8ÉPÜˇÖ äÑ†   cPKCS-15ê  ê  oÄ˙ÇÉDÜ?ˇÖ  äê  oÄ ˇÇÉP0Ü?ˇÖ  äê  ê  ê  MayEID   U 2147483649VX+ê  jÇ) o%ÅˇÇ8ÉPÜ}
+}
+
+# Define reasonable limits for PINs and PUK
+# Note that we do not set a file path or reference
+# for the user pin; that is done dynamically.
+PIN user-pin {
+    reference  = 03
+    min-length = 4;
+    max-length = 8;
+    attempts   = 3;
+    flags      = initialized, needs-padding;
+}
+PIN user-puk {
+    min-length = 4;
+    max-length = 8;
+    attempts   = 10;
+    flags      = needs-padding;
+}
+PIN so-pin {
+    reference  = 3;
+    auth-id    = FF;
+    min-length = 4;
+    max-length = 8;
+    attempts   = 3;
+    flags      = initialized, soPin, needs-padding;
+}
+PIN so-puk {
+    min-length = 4;
+    max-length†= 8;
+    attempts   = 10;
+   flags       = needs-padding;
+}
+
+filesystem {
+    DF MF {
+        path	= 3F00;
+        type	= DF;
+		acl	  = CREATE=$PIN, DELETE=$SOPIN;
+
+	# This is the DIR file
+	EF DIR {
+	    type	= EF;
+	    file-id	= 2F00;
+		structure = transparent;
+	    sizeˇÖ äÑ†   cPKCS-15ê  ê  oÄ ˇÇÉDÜ?ˇÖ  äê  ê  oÄ ˇÇÉP1Ü?ˇÖ  äê  ê  jÇ jÇ oÅˇÇ9É? Ü?ˇÖ äê  ê  oÄ ÄÇÉ/ Ü?ˇÖ  äê  oÄ ÄÇÉ/ Ü?ˇÖ  äê Ç                            ¸ˇˇˇˇˇˇˇ                                                ¸ˇˇˇˇˇˇˇ 	= 128;
+	    acl	      = READ=NONE, UPDATE=$SOPIN, DELETE=$SOPIN;
+	}
+
+	# Here comes the application DF
+	DF PKCS15-AppDF {
+	    type	= DF;
+	    file-id	= 5015;
+	    aid		= A0:00:00:00:63:50:4B:43:53:2D:31:35;
+	    acl       = DELETE=$PIN, CREATE=$PIN;
+	    size	= 5000;
+
+	    EF PKCS15-ODF {
+	        file-id		= 5031;
+			size		= $odf-size;
+			structure = transparent;
+			acl       = READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+	    }
+
+	    EF PKCS15-TokenInfo {
+        	file-id	  = 5032;
+        	size		  = 160;
+	        structur)e  = transparent;
+        	acl	      = READ=NONE, UPDATE=$SOPIN, DELETE=$SOPIN;
+	    }
+
+	    EF PKCS15-UnusedSpace {
+            file-id	  = 5033;
+            structure = transparent;
+            size	  = $unusedspace-size;
+            acl	      = READ=NONE, UPDATE=$SOPIN, DELETE=$SOPIN;
+	    }
+
+	    EF PKCS15-AODF {
+            file-id	  = 4401;
+            structure = transparent;
+            size	  = $aodf-size;
+            acl	      = READ=NONE, UPDATE=$SOPIN, DELETE=$SOPIN;
+	    }
+
+	    EF PKCS15-PrKDF {
+            file-id	  = 4402;
+            structure = transparent;
+            size	  = $prkdf-size;
+            acl	      = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+	    }
+
+	    EF PKCS15-PuKDF {
+            file-id	  = 4404;
+            structure = transparent;
+            size	  = $pukdf-size;
+            acl	      = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+	    }
+
+		EF PKCS15-SKDF {
+			file-id	  = 4407;
+			structure = transparent;
+			size	  = $skdf-size;
+			acl	      = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+		}
+
+		EF PKCS15-CDF {
+			file-id	  = 4403;
+			structure = transparent;
+			size	  = $cdf-size;
+			acl	      = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+		}
+
+		EF PKCS15-CDF-TRUSTED {
+			file-id	  = 4405;
+			structure = transparent;
+			size	  = $cdf-trusted-size;
+			acl	      = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+		}
+
+		EF PKCS15-DODF {
+			file-id	  = 4406;
+			structure = transparent;
+			size	  = $dodf-size;
+			acl       = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+		}
+
+		EF template-private-key {
+			type      = internal-ef;
+			file-id   = 4B01;
+			acl       = CRYPTO=$PIN, UPDATE=$PIN, DELETE=$PIN, GENERATE=$PIN;
+		}
+		
+		EF template-secret-key {
+			type      = internal-ef;
+			file-id   = 4D01;
+			acl       = CRYPTO=$P {
+            file-id	  = 4402;
+            structure = transparent;
+            size	  = $prkdf-size;
+            acl	      = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+	    }
+
+	    EF PKCS15-PuKDF {
+            file-id	  = 4404;
+            structure = transparent;
+            size	  = $pukdf-size;
+            acl	      = *=NEVER, READ=NONE, UPDATE=$PIN, DELHTE=$SOPIN;
+	    }
+
+		EF PKCS15-SKDF {
+			file-id	  = 4407;
+			structure = tra                     ¸ˇˇˇˇˇˇˇnsparent;
+			size	  = $skdf-size;
+			acl	      = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+		}
+
+		EF PKCS15-CDF {
+			file-id	  = 4403;
+			structure = transparent;
+			size	  = $cdf-size;
+			acl	      = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+		}
+
+		EF PKCS15-CDF-TRUSTED {
+			file-id	  = 4405;
+			structure = transparent;
+			size	  = $cdf-trusted-size;
+			acl	      = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+		}
+
+		EF PKCS15-DODF {
+			file-id	  = 4406;
+			structure = transparent;
+			size	  = $dodf-size;
+			acl       = *=NEVER, READ=NONE, UPDATE=$PIN, DELETE=$SOPIN;
+		}
+
+		EF template-private-key {
+			type      = internal-ef;
+			file-id   = 4B01;
+			acl       = CRYPTO=$PIN, UPDATE=$PIN, DELETE=$PIN, GENERATE=$PIN;
+		}
+		
+		EF template-secret-key {
+			type      = internal-ef;
+			file-id   = 4D01;
+			acl       = CRYPTO=$PIN, UPDATE=$PIN, DELETE=$PIN, GENERATE=$PIN;
+		}
+		
+		EF template-public-key {
+			structure = transparent;
+			file-id	  = 5501;
+			acl	 ˇˇˇˇˇˇˇb     = READ=NONE, UPDATE=$PIN, DELETE=$PIN, GENERATE=$PIN;
+		}
+
+		EF template-certificate {
+			file-id   = 4301;
+			structure = transparent;
+			acl       = READ=NONE, UPDATE=$PIN, DELETE=$PIN;
+		}
+
+		template key-domain {
+			# This is a dummy entry - pkcs15-init insists that
+			# this is present
+			EF private-key {
+				file-id   = 4B01;
+				type      = internal-ef;
+				acl       = CRYPTO=$PIN, UPDATE=$PIN, DELETE=$PIN, GENERATE=$PIN;
+			}
+			EF public-key {
+				file-id   = 5501;
+				structure = transparent;
+				acl       = READ=NONE, UPDATE=$PIN, DELETE=$PIN, GENERATE=$PIN;
+			}
+			EF secret-key {
+				file-id   = 4D01;
+				type      = internal-ef;
+				acl       = CRYPTO=$PIN, UPDATE=$PIN, DELETE=$PIN, GENERATE=$PIN;
+			}
+	
+			# Certificate template
+			EF certificate {
+				file-id	  = 4301;
+				structure = transparent;
+				acl       = READ=NONE, UPDATE=$PIN, DELETE=$PIN;
+			}
+			EF privdata {
+				file-id   = 4501;
+				structure = transparent;
+				acl       = READ=$PIN, UPDATE=$PIN, DELETE=$PIN;
+			}
+			EF data {
+				file-id   = 4601;
+				structure = transparent;
+				acl       = READ=NONE, UPDATE=$PIN, DELETE=$PIN;
+			}
+		}
+
+	}
+    }
+}
+  ;ıñ  Å1˛EMyEID) o%ÅˇÇ8ÉPÜˇÖ äÑ†   cPKCS-15ê  MyEID   U 0VXê     ¿ 	ê  jÇ MyEID   U 0VXê  oÅˇÇ8É? Ü?ˇÖ äê  jÜ) o%ÅˇÇ8ÉPÜˇÖ äÑ†   cPKCS-15ê  jÇ) o%ÅˇÇ8ÉPÜˇÖ äÑ†   cPKCS-15ê  ê  oÄ˙ÇÉDÜ?ˇÖ  äê  jÇ) o%ÅˇÇ8ÉPÜˇÖ äÑ†   cPKCS-15ê  ê  oÄ ˇÇÉP1Ü?ˇÖ  äê  ê  jÇ) o%ÅˇÇ8ÉPÜˇÖ äÑ†   cPKCS-15ê  ê  oÄ˙ÇÉDÜ?ˇÖ  äê  oÄ ˇÇÉP1Ü?ˇÖ  äê  ê  jÇ) o%ÅˇÉ8ÇPÜˇÖ äÑ†   cPKCS-15ê  ê  oÄ˙ÇÉDÜ?ˇÖ  äê  oÄ ˇÇÉP1Ü?ˇÖ  äê  ê  jÇ) o%ÅˇÇ8ÉPÜˇÖ äÑ†   cPKCS-15ê  ê  oÄ˙ÇÉDÜ?ˇÖ  äê  oÄ ˇÇÉP1Ü?ˇÖ  äê  ê  jÇ) o%ÅˇÇ8ÉPÜˇÖ äÑ†   cPKCS-15ê  ê  oÄ˛ÇÉDÜ?ˇÖ  äê  oÄ ˇÇÉP1Ü?ˇÖ  äê  ê  jÇ) o%ÅˇÇ8ÉPÜˇÖ äÑ†   cPKCS-15ê  ê  oÄ˙ÇÉDÜ?ˇÖ  äê  oÄ ˇÇÉP1Ü?ˇÖ  äê  ê  ê  MyEID   U 0˚¯©•+ê  jÇ) o%ÅˇÇ8ÉPÜˇÖ äÑ†   cPKCS-15ê  ê  oÄ ˇÇÉDÜ?ˇÖ  äê  ê  oÄ ˇÇÉP1Ü?ˇÖ  äê  ê  jÇ jÇ oÅˇÇ8É? Ü?ˇÖ äê  ê  oÄ ÄÇÉ/ Ü?ˇÖ  äê  oÄ ÄÇÉ/ Ü?ˇÖ  äê Ç                              †   cPKCS-15ê  ê  oÄÉÇÉFÜˇÖ  äê  ê  ê  oÄ˙ÇÉDÜ?ˇÖ  äê  ê  ê  ê  ê  ê  ê  oÄ˙ÇÉDÜ?ˇÖ  äê                                                                                                                                                                                                                                                                          ê                                                                                                                                                                                                                                                                 ê                                                                                                                                                                                                                             ê                                                                                                                                                                                                                                           ¯                     ê                                                                                                                                                                                                                                                                                                                                                     ê                                                                                                                                                                                                                                                                 ê ¸                                                                    ê                                                                                                                                                                                                                                                 

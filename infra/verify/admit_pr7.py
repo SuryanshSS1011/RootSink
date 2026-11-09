@@ -45,6 +45,8 @@ from chainforge.evidence import (  # noqa: E402
     clip_patch,
     floor,
     guard_site,
+    hunk_test_narrative,
+    hunk_test_note,
     is_non_guard_path,
     locality,
     source_for_guard,
@@ -242,11 +244,7 @@ def build(
     source_ev = {
         "dataflow_path": None,
         "sanitizer_report_ref": None,
-        "patch_hunk_ref": (
-            f"CAUSALLY PROVEN: applying {g.get('file')} (+{g.get('added')} lines) alone to the "
-            f"vulnerable revision silences the sanitizer; the guard it adds establishes "
-            f"CWE-{src_cwe} (PR-4)"
-        ),
+        "patch_hunk_ref": hunk_test_note(g.get("file"), g.get("added"), src_cwe),
         "causal_proof": {
             "method": "guard-ablation",
             "hunk": g["hunk"],
@@ -310,10 +308,7 @@ def build(
         "patch_diff": got["patch"],
         "label_confidence_tier": "silver",
         "dataflow_evidence": (
-            f"{marker} (execution-first, no static labelling). CAUSAL "
-            "PROOF: the unmodified rebuild reproduces the sink; rebuilding with only the guard "
-            f"hunk in {g.get('file')} applied runs clean on the same input, so the source link "
-            "is demonstrated rather than attested."
+            f"{marker} (execution-first, no static labelling)." + hunk_test_narrative(g.get("file"))
         ),
         "synthetic": False,
         "link_validation": [],

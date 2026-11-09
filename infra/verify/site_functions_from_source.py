@@ -29,7 +29,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 from chainforge.evidence import C_KEYWORDS, bare_function  # noqa: E402
 
-HUNK_STAGES = ("missing guard", "proven guard site")
+HUNK_STAGES = ("missing guard", "tested guard site", "proven guard site")  # last: before 1.0.9
 _COMMIT = re.compile(r"^(https?://.+?)/(?:-/)?commit/([0-9a-f]{7,40})")
 
 

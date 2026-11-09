@@ -356,8 +356,57 @@ def guard_site(hunk: str, file: str) -> dict | None:
         "file": file,
         "line": line,
         "function": name,
-        "stage": "missing guard (vulnerable revision, from the proven hunk)",
+        "stage": HUNK_SITE_STAGE,
     }
+
+
+# The notes a successful single-hunk test (PR-4) leaves on a root. Releases before 1.0.9 wrote
+# "CAUSALLY PROVEN" and "the source link is demonstrated", which overstate what one input shows:
+# the hunk suffices for this input, and its site is a tested repair site, not a proven defect.
+HUNK_NOTE = "HUNK TEST:"
+_OLD_HUNK_NOTE = "CAUSALLY PROVEN"
+
+
+# Stage labels for a hunk test's site, and the note when the test named no CWE (1.0.9 wording;
+# earlier releases said "from the proven hunk", "proven guard site" and "guard site proven").
+HUNK_SITE_STAGE = "missing guard (vulnerable revision, from the tested hunk)"
+HUNK_SITE_STAGE_NO_CWE = "tested guard site; CWE not established (PR-4)"
+
+
+def hunk_site_note_no_cwe(file: str | None) -> str:
+    """`patch_hunk_ref` for a tested guard site whose hunk named no source CWE."""
+    return (
+        f"guard site from a successful hunk test ({file}); "
+        "source CWE not established by the guard (PR-4)"
+    )
+
+
+def hunk_test_note(file: str | None, added, cwe: int | None) -> str:
+    """`patch_hunk_ref` for a root whose single-hunk test succeeded."""
+    note = (
+        f"{HUNK_NOTE} applying {file} (+{added} lines) alone to the vulnerable revision "
+        "silences the sanitizer on this input, which marks a tested repair site"
+    )
+    return note + (f"; the check it adds names CWE-{cwe} (PR-4)" if cwe is not None else "")
+
+
+def is_hunk_test_note(text: str | None) -> bool:
+    return (text or "").startswith((HUNK_NOTE, _OLD_HUNK_NOTE))
+
+
+def hunk_test_narrative(file: str | None) -> str:
+    """The sentence `dataflow_evidence` carries for such a root."""
+    return (
+        " HUNK TEST: the unmodified rebuild reproduces the sink; rebuilding with only the hunk in "
+        f"{file} applied runs clean on the same input, which marks a tested repair site."
+    )
+
+
+# Both wordings of that sentence, so a rewrite can remove either.
+HUNK_NARRATIVE = re.compile(
+    r"\s*(?:CAUSAL PROOF: the unmodified rebuild reproduces the sink;.*?rather than attested\."
+    r"|HUNK TEST: the unmodified rebuild reproduces the sink;.*?marks a tested repair site\.)"
+)
 
 
 def normalize_path(path: str) -> str:

@@ -85,6 +85,18 @@ def canonical_project(name: str) -> str:
 
 # One codebase under another name: an OSS-Fuzz project name, or a fix URL cut short.
 _PROJECT_ALIASES = {"freetype2": "freetype", "cpython3": "cpython", "llama": "llama.cpp"}
+# The Linux kernel arrives as `linux-kernel` (syzbot) and `linux` (NVD race advisories, and
+# `torvalds/linux` from fix URLs). Splits keep the two apart on purpose (the kernel splits by
+# subsystem, the advisory races are a catch-all), so they are merged only for counting codebases
+# (release 1.0.9).
+_COUNT_ALIASES = {"linux": "linux-kernel"}
+
+
+def codebase(name: str) -> str:
+    """The codebase a project name belongs to, for counting projects. Splits use
+    `canonical_project`, which keeps the kernel's two pipelines apart."""
+    n = canonical_project(name)
+    return _COUNT_ALIASES.get(n, n)
 _BRANCH_SUFFIX = re.compile(r"\.(dev|main|master|\d+(\.\d+)*\.x)$")
 
 

@@ -22,12 +22,16 @@ import json
 import os
 import re
 import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
+from chainforge.evidence import hunk_test_narrative, hunk_test_note  # noqa: E402
 
 
 def main(argv):
     ap = argparse.ArgumentParser()
     ap.add_argument("dataset")
-    ap.add_argument("results", help='json: {arvo_id: ablate result.json}')
+    ap.add_argument("results", help="json: {arvo_id: ablate result.json}")
     ap.add_argument("--hunks", help="dir of <arvo_id>/<hunk>.patch files, to carry the guard")
     ap.add_argument("--out", required=True)
     args = ap.parse_args(argv)
@@ -69,16 +73,11 @@ def main(argv):
                 with open(hp) as fh:
                     ev["minimal_guard_patch"] = fh.read()[:40_000]
                 st["minimal guard patch carried"] += 1
-        ev["patch_hunk_ref"] = (
-            f"CAUSALLY PROVEN: applying {guard.get('file')} (+{guard.get('added')} lines) alone "
-            "to the vulnerable revision silences the sanitizer on the same PoV"
-        )[:160]
+        ev["patch_hunk_ref"] = hunk_test_note(guard.get("file"), guard.get("added"), None)
         rec["dataflow_evidence"] = (rec.get("dataflow_evidence") or "").rstrip() + (
-            " CAUSAL PROOF: the unmodified rebuild reproduces the sink; rebuilding with only "
-            f"the guard hunk in {guard.get('file')} applied runs clean on the same input, so "
-            "the source link is demonstrated rather than attested."
+            hunk_test_narrative(guard.get("file"))
         )
-        st["CAUSALLY PROVEN source attached"] += 1
+        st["hunk-tested source attached"] += 1
 
     with open(args.out, "w") as fh:
         for rec in rows:

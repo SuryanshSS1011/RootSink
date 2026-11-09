@@ -1553,3 +1553,51 @@ site choice, a tier or a figure in the paper other than the dataset hash.
    audit sample, which raters saw with their libc++ origins; the audit scores CWEs and site
    roles, not origin lines, so its figures do not change. Thirteen GOLD roots at tested sites keep
    an origin in harness code, and their CWE may be wrong; this is OPEN_ISSUES #39.
+
+## Release 1.0.9: the kernel counted once (2026-11-09)
+
+A review of the 1.0.8 paper found that the project count counted the Linux kernel twice. Its
+syzbot records are named `linux-kernel` and its NVD race advisories `linux` (with `torvalds/linux`
+from fix URLs), and `canonical_project` keeps the two apart, because the kernel splits by
+subsystem and the advisory races are a catch-all. Release 1.0.9 adds `codebase()` in
+`field_policy.py`, which merges them for counting only, and every project count the paper and the
+supplement report now uses it. Splits, `canonical_project` and the release gate are unchanged,
+and no record changes. The count of projects falls by one, and per-chain and fresh-run project
+counts change only where a project appeared under two names. The paper's text was corrected at
+the same time; those edits change no number.
+
+## Release 1.0.9: hunk-test notes say what the test shows (2026-11-09)
+
+The same review found that a root whose single-hunk test succeeded carried free-text notes
+stronger than the paper and the datasheet: `patch_hunk_ref` began "CAUSALLY PROVEN: ... the
+guard it adds establishes CWE-N (PR-4)", and `dataflow_evidence` ended "CAUSAL PROOF: ... so the
+source link is demonstrated rather than attested." The site's stage said "from the proven hunk"
+or "proven guard site", and a test that named no CWE left "guard site proven by ablation". One
+input shows only that the hunk suffices for it, so its site is a tested repair site, not a proven
+defect. `reword_hunk_notes.py` rewrites these to "HUNK TEST: ... which marks a tested repair
+site; the check it adds names CWE-N (PR-4)", "from the tested hunk", "tested guard site" and
+"guard site from a successful hunk test", and every script that writes them now uses that
+wording (`chainforge.evidence`). A review before release found the stage labels and the no-CWE
+note still unchanged, and they were added to the step then. No label, site, tier or evidence
+kind changes. The evidence kind keeps its stored value, `causally-proven`, which the datasheet
+maps to the paper's hunk-named.
+
+## Release 1.0.9: the crashing inputs ship with the release (2026-11-09)
+
+Through release 1.0.8 an OSS-Fuzz record's crashing input existed only inside ARVO's vulnerable
+image (`/tmp/poc`), hosted in an unarchived personal Docker Hub account. For release 1.0.9 each
+input was copied out of the image the record pins, by digest, without pulling the image:
+`infra/repro/extract_arvo_inputs.py` reads the image manifest and streams its layers from the top
+until `/tmp/poc` appears. It ran sharded on GitHub-hosted runners (chainforge-runner, workflow
+`pocs.yml`), and 46 images were also copied from a second machine as a check.
+
+Outcome (recorded after copying):
+1. All 2,196 distinct vulnerable images of the 2,241 ARVO records gave an input (1,721 images for
+   the 1,763 Reproduced-tier records, 475 for the Partial tier). The 46 checked copies are
+   identical to the runners'.
+2. Each input is at `data/evidence/arvo/<arvo_id>/poc`, listed with its image digest and sha256 in
+   `data/evidence/arvo_inputs.jsonl`; `attach_arvo_inputs.py` points `pov_input` at it only when
+   the record pins that digest and the file has that sha256 (op `input-attached`).
+3. The inputs total about 32 MB. Seven are empty files, as they are in the images, whose
+   two-sided runs reproduced with them.
+4. No label, site, tier or split changes. Replay still needs the images.
