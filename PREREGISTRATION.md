@@ -1449,3 +1449,107 @@ was regenerated from 1.0.6 with items 1 to 4 applied.
 3. As a use-after-free read, each chain is now one weakness in two stages (`chain_kind`
    `stage-decomposition`), and its MITRE grounding was recomputed.
 4. This cures OPEN_ISSUES #37, so item 6.3 of the corrections entry above no longer holds.
+
+## Release 1.0.8: findings of a second independent check of 1.0.7 (2026-11-09)
+
+A second independent check, of the heap-deallocation relabel and of the corrections above,
+confirmed the 48 relabels, the unchanged tiers and the paper's figures. It found the points
+below. Release 1.0.7 was published before they were applied, so release 1.0.8 carries items 1 to
+3. Items 1 and 2 change no record. For item 3, the relabel step brings the notes of the 48 records
+relabelled in 1.0.7 up to date and logs each as `freed-msan-note-rewritten`. Regenerated from
+1.0.6 instead, the 48 records and every tier come out the same.
+
+1. **Narrower matching.** The relabel and I2's new allowance read only the log's first
+   MemorySanitizer report, which must be a use of an uninitialized value whose origin is a heap
+   deallocation (`chainforge.integrity.freed_msan_origin`). A root whose CWE a single-hunk test
+   named is left to the guard rule. None of the 48 is affected, since each log holds one report.
+2. **Write sinks.** I2-sink now rejects a CWE-787 sink on such a report, since MSan cannot see
+   writes. No record has one.
+3. **Stale notes.** The relabel now also rewrites the `dataflow_evidence` note of these records,
+   which still described CWE-456 and CWE-457, and its `patch_hunk_ref` says the memory was freed
+   at the origin site, which for a moved root is `evidence.origin_site`.
+4. **"The origin it already records is the free" holds for 45 of the 48.** For 3 the recorded
+   frame is libc++'s deallocation routine rather than project code, and one of these hides a free
+   in the fuzz harness. Three other relabelled GOLD records free in harness code. These are
+   OPEN_ISSUES #38 and are not changed in 1.0.7.
+5. **The CWE-125 sink is a convention.** As for ASan, a read of freed memory is CWE-125. MSan
+   reports the first use of the freed value, and in 6 of the 48 the bytes were copied before that
+   use, so the read happened elsewhere. OPEN_ISSUES #37 and the README say so.
+6. **Corrections to entries above.** `root_site_relation` changed for 219 records, not 220, after
+   the configure.ac correction. Item 6.4 of the corrections entry should read that every moved
+   root keeps its evidence kind, which is `execution` for 356 of the 425. The 144 moved records in
+   item 6.1 are counted among the records the debugger probe covered. Of the 12 promotions, 9 are
+   logged as `contract-retier` and 3 inside `evidence-kind-restamp` entries, because that step
+   re-tiers the records it touches.
+7. **Audit wording.** Two audited GOLD records were relabelled, and both raters had answered
+   CWE-456 and CWE-457 for them, so the hierarchy agreement against today's labels falls from 73%
+   and 80% to 72% and 78% because of this rule, not the CWE-20 mapping. The paper now says "today's
+   labels" rather than "today's mapped labels".
+
+## Release 1.0.8: an origin site on a C++ standard-library frame moves to the first project frame (2026-11-09, written before it is applied)
+
+1. **The defect (OPEN_ISSUES #38).** An origin site is the first frame after the sanitizer's
+   interceptor in the report's origin stack, ASan's free stack for a use after free and MSan's
+   creation stack otherwise. In C++ code that frame is often libc++ code (`operator delete`
+   wrappers, `std::allocator::deallocate`, `unique_ptr`, `std::function`), which says nothing
+   about the program and hides where it freed or created the memory.
+2. **Change.** Such an origin moves to the first frame of the same stack that is neither
+   sanitizer runtime nor C++ standard-library code (`infra/verify/fix_library_origins.py`, run
+   after `relabel_freed_msan.py`). For a root whose site is the origin, the site moves; for a root
+   already moved to its tested site, `evidence.origin_site` moves. Stage, CWE and evidence kind
+   stay, and a stack with no such frame is left alone. The new frame can be fuzz-harness code,
+   which the contract then judges as it judges any root site.
+3. **Counts before applying.** Counted on the 1.0.7 data before this entry: 25 origins move (14
+   GOLD root sites, 8 GOLD `origin_site` fields and 3 silver root sites), and 1 silver record has
+   no project frame and stays. Four GOLD records are expected to leave GOLD under I2's harness
+   rule, because their origin is then in the fuzz harness: CHAINFORGE-969006916, -966097059 and
+   -961479512 (BoringSSL, MSan origin in the harness) and CHAINFORGE-0042492862 (wolfMQTT, a free
+   in the harness). CHAINFORGE-960034212 also gets a harness origin, but its root is its tested
+   site in library code, so its tier should not change. The outcome is checked against these
+   expectations.
+
+## Release 1.0.8 outcome (recorded after applying, 2026-11-09)
+
+1. 25 origins moved as counted (14 GOLD root sites, 8 GOLD `origin_site` fields, 3 silver root
+   sites), and the silver record with no project frame (CHAINFORGE-0042504315) kept its site.
+2. Exactly the four expected GOLD records left GOLD for I2's harness rule, so the Reproduced tier
+   falls from 1958 to 1954. CHAINFORGE-960034212 kept its tier. No other tier or gap changed and no
+   split moved.
+3. `root_site_relation` changed for 4 records and sampling weights for 1517, recomputed by
+   `rebuild_derived.sh`.
+4. This cures OPEN_ISSUES #38.
+5. Built from the published 1.0.7, the relabel step also rewrote the note and hunk reference of
+   the 48 records it relabelled in 1.0.7 (item 3 of the second check above) and changed nothing
+   else. The records are identical to those of 1.0.8 regenerated from 1.0.6.
+
+## Release 1.0.8 corrections from an independent check (2026-11-09, before release)
+
+An independent check of the 1.0.8 change confirmed the 25 moves, their frames, the four
+demotions, the unchanged tiers and the paper's figures, and replayed the release from 1.0.7 byte
+for byte. It found the points below. Items 1 to 4 were applied before release; none changes a
+site choice, a tier or a figure in the paper other than the dataset hash.
+
+1. **Stale notes.** `fix_library_origins.py` now also rewrites the record's `dataflow_evidence`
+   note, which still named the libc++ frame, for 6 MSan records.
+2. **Paths.** The moved site's path is now normalised by `chainforge.evidence.normalize_path`,
+   as every witnessed path is. Five stored paths change (three skia paths kept `out/Fuzz/../../`,
+   one tesseract path a leading `./`, and an ots path kept the build-tree prefix); `same_file`
+   matched all of them before, so no derived value changes.
+3. **Runtime frames.** The runtime pattern skipped any frame under `llvm-project`, which would have
+   skipped LLVM's own code; it now skips compiler-rt, sanitizer-common and libFuzzer frames only.
+   No origin is affected.
+4. **Debugger probe.** `chain[0].path_observed` (PR-14, 2026-10-21) still described the site the
+   probe ran on for roots moved since, in 1.0.7 and 1.0.8. `stamp_probed_site.py` now records that
+   site as `path_observed.probed_site` for every probed record, from the probe supply; the DATASHEET
+   says so. The PR-14 figures in the paper come from the probe's own results and do not change.
+5. **Wording of the entries above.** "First project frame" means the first frame that has a file
+   and line and is neither sanitizer runtime nor C++ standard-library code; four new sites are in
+   libraries the project builds from source. The stored origin was not always "the first frame
+   after the interceptor": for the 8 moved origins on a `/v1/` path it was frame #2, #3 or #4. The
+   silver record of outcome item 1 (CHAINFORGE-0042504315) does not lack a project frame: its
+   archived log holds no sanitizer report, because 32-bit ASan aborted at startup.
+6. **Disclosed, not changed.** Six new sites are compiler-generated destructors at the line
+   declaring their class. Two moved records (CHAINFORGE-0042531940, -0042492862) are in the rater
+   audit sample, which raters saw with their libc++ origins; the audit scores CWEs and site
+   roles, not origin lines, so its figures do not change. Thirteen GOLD roots at tested sites keep
+   an origin in harness code, and their CWE may be wrong; this is OPEN_ISSUES #39.

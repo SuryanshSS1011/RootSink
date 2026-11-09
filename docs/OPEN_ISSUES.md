@@ -426,6 +426,48 @@ drop the dangling references with a changelog entry, or ship the two witness log
 
 ---
 
+### 37. MSan origins created by a heap deallocation were labelled CWE-456 — **cured in 1.0.7** (found 2026-11-09)
+
+Through release 1.0.6 the MSan arm labelled every origin CWE-456 -> CWE-457, including origins
+"created by a heap deallocation", which are reads of freed memory. Release 1.0.7 relabels these
+CWE-416 -> CWE-125 (`relabel_freed_msan.py`, rule log 2026-11-09) and amends PR-3 I2 to accept
+such a report. 48 records changed (44 GOLD, 4 silver) and no tier changed. As for ASan, the
+CWE-125 sink is a convention: MSan reports the first use of the freed value, and in 6 of the 48
+the stale bytes were copied before that use, so the read itself happened elsewhere.
+
+### 38. Some origin sites were a libc++ frame, hiding a fuzz-harness origin — **cured in 1.0.8** (found 2026-11-09)
+
+Through release 1.0.7 the stored origin frame was the first frame past the sanitizer's
+interceptor, or for some records a later frame of the same stack, and in C++ code it was often a
+libc++ frame. For 3 of the 48 records #37 relabels, it was libc++'s `std::allocator::deallocate`
+(`/v1/__memory/allocator.h`) rather than project code (CHAINFORGE-0042535524, -0432073014,
+-960034212), and at least eleven ASan use-after-free GOLD roots are placed the same way. In
+CHAINFORGE-960034212, a GOLD record since 1.0.6, the libc++ frame hides a free in the fuzz
+harness, which I2's harness rule would otherwise flag. Three more relabelled GOLD records free in
+harness code (CHAINFORGE-960119277, -968677141, -966445108); their roots now sit at tested sites in
+library code. Release 1.0.8 moves every origin on a C++ standard-library frame to the first frame of the same
+stack that has a file and line and is neither sanitizer runtime nor standard-library code
+(`fix_library_origins.py`, rule log 2026-11-09): 25 origins moved, and four GOLD records whose
+origin is then in the fuzz harness left GOLD under I2's harness rule. The new frame is the
+project's code or a library it builds from source (libjxl, libde265, libheif). Six new sites are
+compiler-generated destructors at the line declaring their class (skia, duckdb, assimp, libheif),
+which name the object whose destruction freed the memory rather than a statement. One silver
+record (CHAINFORGE-0042504315) stays on its libc++ frame: its archived log holds no sanitizer
+report, because 32-bit ASan aborted at startup, and its site came from ARVO's archived output.
+
+---
+
+### 39. Thirteen GOLD roots keep an origin in fuzz-harness code — **open** (found 2026-11-09)
+
+Thirteen GOLD records whose root moved to a tested site in library code (1.0.7) keep an
+`evidence.origin_site` in fuzz-harness code: 9 MSan allocations (CWE-456 -> CWE-457) and 4 frees
+(CWE-416 -> CWE-125), for example CHAINFORGE-960034212 (wolfMQTT), whose freed chunk belongs to
+the harness and whose fix adds bounds checks. The contract checks only the root's own site, so these stay GOLD, and
+their sites are sound, but their CWE comes from the harness-side origin. Where the tested hunk adds
+a bounds check, the defect is more likely an over-read (CWE-125) than a use after free or an
+uninitialised read. Cure: re-derive the CWE of these roots from their tested hunk under a new
+dated rule, in a later release.
+
 ## Genuinely without a cure
 
 Nothing currently qualifies.
@@ -435,12 +477,3 @@ three were wrong — each had been asserted after a single look rather than inve
 pattern (declaring a route closed too early) has now cost real time three times in this project:
 the CWE-457 arm, the "Docker-only" UBSan rebuild, and this section. Where a route is genuinely
 bounded, the bound is stated with the measurement that establishes it.
-
-### 37. MSan origins created by a heap deallocation are labelled CWE-456 — **cured in 1.0.7** (found 2026-11-09)
-
-In release 1.0.7, 44 GOLD records have a CWE-456 root whose MSan origin block says the value was
-"created by a heap deallocation". That is a read of freed memory, which fits CWE-416, but the
-MSan arm labels every origin CWE-456. The pattern predates 1.0.7, and three of the twelve records
-the 1.0.7 root move promoted carry it. Release 1.0.7 relabels these records CWE-416 -> CWE-125 under a dated
-rule (`relabel_freed_msan.py`), with PR-3 I2 amended to accept such a report; 48 records
-changed (44 GOLD, 4 silver) and no tier changed.

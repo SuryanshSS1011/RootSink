@@ -96,6 +96,8 @@ ADMISSIBLE_PAIRS: frozenset[tuple[int, int]] = frozenset(
         # adds the initialisation). An earlier attempt to attribute the source from
         # patches scored only 6/29 and led to a wrong rejection - the sanitizer had the
         # answer all along.
+        # A heap-deallocation MSan origin is a read of freed memory and is labelled
+        # (416, 125) instead (rule log 2026-11-09, release 1.0.7, relabel_freed_msan.py).
         (456, 457),
         (362, 415),  # race -> double free; 364->415 is mitre-direct and 362 is 364's parent.
         # ARVO Heap-double-free sink is ASan-witnessed; race precedence from patch/structure.

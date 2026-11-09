@@ -49,6 +49,16 @@ def ran_clean(log_text: str, declared_marker: str | None = None) -> bool:
 FREED_ORIGIN = re.compile(r"Uninitiali[sz]ed value was created by a heap deallocation")
 
 
+def freed_msan_origin(log_text: str) -> bool:
+    """True if the log's first MemorySanitizer report is a use of an uninitialized value whose
+    origin is a heap deallocation, i.e. a read of freed memory. Only that report counts."""
+    start = log_text.find("WARNING: MemorySanitizer: use-of-uninitialized-value")
+    if start < 0:
+        return False
+    end = log_text.find("SUMMARY:", start)
+    return bool(FREED_ORIGIN.search(log_text[start : end if end > 0 else None]))
+
+
 def crash_facts(log_text: str) -> dict:
     """Crash class, whether it is a NULL dereference, the access direction, and whether an MSan
     origin is a heap deallocation (a read of freed memory), from one log."""
@@ -58,7 +68,7 @@ def crash_facts(log_text: str) -> dict:
         "class": m.group(1) if m else None,
         "null_deref": bool(_NULL_PAGE.search(log_text)),
         "access": (a.group(1) or a.group(2)).upper() if a else None,
-        "freed_origin": bool(FREED_ORIGIN.search(log_text)),
+        "freed_origin": freed_msan_origin(log_text),
     }
 
 
@@ -111,6 +121,8 @@ def sink_contradiction(rec: dict, facts: dict | None) -> str | None:
     cls = facts.get("class") or ""
     if sink in (125, 787) and "use-after" in cls and (len(chain) < 2 or chain[-2]["cwe_id"] != 416):
         return f"CWE-{sink} sink but the report is {cls} with no CWE-416 link before it"
+    if sink == 787 and facts.get("freed_origin"):
+        return "CWE-787 sink but MSan reports a read of freed memory (it cannot see writes)"
     if not facts.get("access"):
         return None
     want = {787: "WRITE", 125: "READ"}.get(sink)

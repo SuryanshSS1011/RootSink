@@ -85,7 +85,7 @@ Evidence kinds, strongest first:
 | kind | means | example |
 |---|---|---|
 | `causally-proven` | applying **only** the guard hunk to the vulnerable revision, rebuilding and replaying the same PoV silences the sanitizer | skia `SkSwizzler.cpp` +9 lines: control crashes, guard-only build runs clean |
-| `execution` | a sanitizer report attributes this link to a concrete site (a file, or the function a kernel report names); from 1.0.7 a root moved to its tested site keeps this kind, and the reported site is `evidence.origin_site` | MSan origin block names the allocation or declaration that created the uninitialised value |
+| `execution` | a sanitizer report attributes this link to a concrete site (a file, or the function a kernel report names); from 1.0.7 a root moved to its tested site keeps this kind, and the reported site is `evidence.origin_site`; from 1.0.8 a reported origin on a C++ standard-library frame is the first project frame of the same stack | MSan origin block names the allocation or declaration that created the uninitialised value |
 | `attested` | the fix demonstrably adds the guard whose absence is the link | patch adds `if (len > MAX) return -1;` for a CWE-190 source |
 | `dataflow` | a static path (Joern/CodeQL) supports the ordering; nothing ran | `reachableBy` finds a source-to-sink path |
 | `inferred` | derived from crash class or CWE assignment, with nothing observed | CWE-20 assigned because the sink was an OOB read |

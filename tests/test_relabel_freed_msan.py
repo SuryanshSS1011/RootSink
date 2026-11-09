@@ -9,7 +9,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "infra" / "verify")
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 import relabel_freed_msan  # noqa: E402
 
-from chainforge.integrity import crash_facts, source_contradiction  # noqa: E402
+from chainforge.integrity import crash_facts, sink_contradiction, source_contradiction  # noqa: E402
 
 FREED = """==1==WARNING: MemorySanitizer: use-of-uninitialized-value
     #0 0x1 in use_it lib/a.c:9:3
@@ -73,3 +73,43 @@ def test_contract_accepts_cwe416_on_a_freed_msan_origin():
     rec = {"chain": [{"cwe_id": 416, "evidence_kind": "execution"}, {"cwe_id": 125}]}
     assert source_contradiction(rec, crash_facts(FREED)) is None
     assert source_contradiction(rec, crash_facts(CREATED)) is not None
+
+
+def test_contract_rejects_a_write_sink_on_a_freed_msan_origin():
+    rec = {"chain": [{"cwe_id": 416, "evidence_kind": "execution"}, {"cwe_id": 787}]}
+    assert sink_contradiction(rec, crash_facts(FREED)) is not None
+
+
+def test_only_the_first_report_counts():
+    other = "==2==WARNING: MemorySanitizer: use-of-uninitialized-value\nSUMMARY: x\n"
+    assert crash_facts(other + FREED.replace("WARNING", "NOTE"))["freed_origin"] is False
+
+
+def test_hunk_named_root_is_left_to_the_guard_rule(tmp_path):
+    r = record(tmp_path, FREED)
+    r["chain"][0]["evidence"]["causal_proof"] = {"hunk": "hunk00.patch"}
+    out = run(tmp_path, [r])
+    assert out[0]["chain_string"] == "CWE-456->CWE-457"
+
+
+def test_record_relabelled_before_the_note_update_gets_the_new_note(tmp_path):
+    old = "CWE-456 at the origin block's creation site, CWE-457 at the SUMMARY use site"
+    r = record(tmp_path, FREED)
+    r["dataflow_evidence"] = old
+    out = run(tmp_path, [r])
+    new_note = out[0]["dataflow_evidence"]
+    new_ref = out[0]["chain"][0]["evidence"]["patch_hunk_ref"]
+    # A 1.0.7-style record: relabelled, but with the old note and hunk reference.
+    out[0]["dataflow_evidence"] = old
+    out[0]["chain"][0]["evidence"]["patch_hunk_ref"] = "MSan origin block: memory freed here"
+    rel = tmp_path / "release"
+    (rel / "corrections_changelog.jsonl").unlink()
+    again = run(tmp_path, out)
+    assert again[0]["dataflow_evidence"] == new_note and "CWE-456" not in new_note
+    assert again[0]["chain"][0]["evidence"]["patch_hunk_ref"] == new_ref
+    logf = rel / "corrections_changelog.jsonl"
+    assert [json.loads(x)["op"] for x in logf.read_text().splitlines()] == [
+        "freed-msan-note-rewritten"
+    ]
+    run(tmp_path, again)  # idempotent: nothing more to log
+    assert len(logf.read_text().splitlines()) == 1

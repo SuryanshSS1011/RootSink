@@ -19,7 +19,7 @@ value in `dataset.jsonl`, and each protocol it describes to its entry in `PREREG
 | successful single-hunk test the guard rule cannot classify | `evidence.guard_site_proof` |
 | input of the rule that assigned the CWE | `cwe_basis` |
 | evidence floor | `evidence_floor` |
-| tested repair site / origin site / suggested site (earlier "untested site", "annotated source site") | `site_kind: "tested-repair-site"` / `"origin-site"` / `"annotated-site"` (sinks use `"crash-site"`, UBSan intermediates `"witnessed-site"`); from 1.0.7 a tested root keeps any replaced origin in `evidence.origin_site` |
+| tested repair site / origin site / suggested site (earlier "untested site", "annotated source site") | `site_kind: "tested-repair-site"` / `"origin-site"` / `"annotated-site"` (sinks use `"crash-site"`, UBSan intermediates `"witnessed-site"`); from 1.0.7 a tested root keeps any replaced origin in `evidence.origin_site`; from 1.0.8 no origin is a C++ standard-library frame |
 | Reproduced / Upstream / Partial / Candidate tier (earlier GOLD / upstream / silver / bronze) | `label_confidence_tier: "gold"` / `"gold-upstream"` / `"silver"` / `"bronze"` |
 | the Reproduced-tier criteria a record failed | `gold_contract_gaps` (criteria are PR-3 in `src/chainforge/integrity.py`) |
 | duplicate group, sampling weight | `duplicate_group`, `sampling_weight` |
@@ -29,7 +29,7 @@ value in `dataset.jsonl`, and each protocol it describes to its entry in `PREREG
 | CWE mapped from the discouraged CWE-20 (PR-17) | `chain[0].cwe_id` is 1284 or 1285; the original is `chain[0].cwe_class` (20), the rule's outcome `chain[0].cwe_mapping` (`quantity`, `index`, `class-level`) and the text read `chain[0].cwe_mapping_input` |
 | MITRE edge kinds direct / transitive / inherited / hierarchy / modeling | `mitre_chain.edges[].kind`: `mitre-direct`, `mitre-transitive`, `mitre-inherited`, `mitre-hierarchy`, `catalog-only` |
 | ready for reward use | `rl_ready`, details in `rl_scoring` |
-| root line or function executed under a debugger | `chain[0].path_observed` |
+| root line or function executed under a debugger | `chain[0].path_observed`; the site probed (2026-10-21) is `path_observed.probed_site`, which for a root moved since (1.0.7, 1.0.8) is its earlier site |
 | hunk pair, minimized hunk | `evidence.tested_pair`; `minimal_lines` inside the successful test (`causal_proof` or `guard_site_proof`) |
 | hunk that applied only with shifted context | `evidence.fuzzed_test` (withdrawn proofs: `evidence.withdrawn_causal_proof`) |
 
