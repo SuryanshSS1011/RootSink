@@ -131,6 +131,12 @@ def expected_witness(facts, aid):
     }
 
 
+def pinned_digest(rec, side):
+    """The digest the record pins in docker_image_ref (`ref@sha256:...`), or None."""
+    ref = (rec.get("docker_image_ref") or {}).get(side) or ""
+    return ref.split("@", 1)[1] if "@sha256:" in ref else None
+
+
 def build_bundle(rec, aid, resolver, facts):
     vul_ref = f"n132/arvo:{aid}-vul"
     fix_ref = f"n132/arvo:{aid}-fix"
@@ -178,8 +184,15 @@ def build_bundle(rec, aid, resolver, facts):
             "patch": rec.get("patch_diff"),
         },
         "images": {
-            "vulnerable": {"ref": vul_ref, "digest": resolver.resolve(vul_ref)},
-            "patched": {"ref": fix_ref, "digest": resolver.resolve(fix_ref)},
+            # The record's pin wins: a tag looked up now may have moved, or fail and give None.
+            "vulnerable": {
+                "ref": vul_ref,
+                "digest": pinned_digest(rec, "vulnerable") or resolver.resolve(vul_ref),
+            },
+            "patched": {
+                "ref": fix_ref,
+                "digest": pinned_digest(rec, "patched") or resolver.resolve(fix_ref),
+            },
         },
         # The in-image `arvo` helper replays the baked-in PoV. Note it forces
         # silence_unsigned_overflow=1, so a UBSan witness must invoke the target directly.

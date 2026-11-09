@@ -1,243 +1,505 @@
 # RootSink
 
-Reproducible C/C++ crashes, most with a sanitizer-witnessed sink, and a candidate root cause for each whose evidence is stated per record. The Reproduced tier certifies the sink and its two-sided reproduction; the root is a candidate, tested by a single-hunk intervention where the record says so.
+**Reproducible C/C++ crashes: the line that crashed, a candidate for where the bug really is, and the evidence for each.**
 
-RootSink was developed under the working name CHAINFORGE; the Python package (`chainforge`) and
-record ids (`CHAINFORGE-...`) keep that name so existing ids stay stable.
+[![Code: MIT](https://img.shields.io/badge/code-MIT-blue.svg)](LICENSE)
+[![Data: CC BY 4.0](https://img.shields.io/badge/data-CC%20BY%204.0-lightgrey.svg)](LICENSE-DATA)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](pyproject.toml)
+[![Release 1.0.6](https://img.shields.io/badge/release-1.0.6-brightgreen.svg)](data/release/dataset.manifest.json)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.24068722.svg)](https://doi.org/10.5281/zenodo.24068722)
 
-Each record is an ordered list of CWE instances observed in one execution on one input
-(for example `CWE-20 -> CWE-787`). Every instance carries a role (source, intermediate, sink), a
-site (file, line, function) and its own evidence category. A record's tier says how its
-**reproduction** was checked, and it is kept separate from how well its **root cause** is
-supported:
+When a C or C++ program crashes under a memory-error detector (a *sanitizer*), the report points
+at the line where memory went wrong. That line is the **sink**. The mistake behind it, the
+**root cause**, is often somewhere else: a length nobody checked, a pointer freed too early, a
+variable never initialized. A patch that only guards the crashing line makes the crash go away
+and leaves the bug in place.
 
-- **Reproduced** (stored as `label_confidence_tier: "gold"`) means we replayed both revisions. The
-  vulnerable build crashes at a sink a sanitizer report attributes to a site, and the fixed build
-  runs the same input to completion, with no report, twice. It makes no demand on the root cause's
-  evidence. The full rule set is PR-3 in [`PREREGISTRATION.md`](PREREGISTRATION.md);
-  `src/chainforge/integrity.py` enforces it.
-- **Upstream** (`"gold-upstream"`) means the bug reproduced only in the original reporter's run.
-- **Partial** (`"silver"`) means a Reproduced-tier criterion is missed; `gold_contract_gaps` names it.
-- **Candidate** (`"bronze"`) means nothing was executed (candidates from advisory co-occurrence or
-  heuristics).
+RootSink records both ends and says how it knows each. A record gives the sink, the candidate
+root-cause site when one is located, the weakness type ([CWE](https://cwe.mitre.org)) of each, the
+evidence behind each one, and, where we ran the crash, the logs and pinned images to run it again.
+In this release 2,869 of the 3,341 records locate the sink and 2,333 locate a candidate root; for
+959 of those, one hunk of the developer's fix, applied alone, stopped the crash there.
 
-The paper uses these names; the stored values keep their earlier names in 1.0.x.
+---
 
-Root-cause evidence, strongest first (`chain[i].evidence_kind`):
+## Contents
 
-| value | meaning |
-|---|---|
-| `causally-proven` (legacy name; the paper's "hunk-named") | one hunk of the developer's fix, applied alone to the vulnerable revision and rebuilt, stopped the crash on this input. It is a *sufficient tested hunk*: not minimized, not shown to be the only repair, and not a test of intended behaviour. |
-| `execution` | a sanitizer report attributes the instance to a site (for `CWE-456`, MSan's origin: the allocation or declaration that created the uninitialised value) |
-| `attested` | the fix adds the check the instance lacks; no run shows the check matters |
-| `dataflow` | only a static (Joern) path supports it |
-| `inferred` | only a labeling rule supports it |
+1. [One record, explained](#one-record-explained)
+2. [Quick start](#quick-start)
+3. [How much to trust a record](#how-much-to-trust-a-record)
+4. [Tasks](#tasks)
+5. [Scoring a patch](#scoring-a-patch)
+6. [Running the crashes](#running-the-crashes)
+7. [What is in the repository](#what-is-in-the-repository)
+8. [Re-checking our work](#re-checking-our-work)
+9. [Splits, duplicates and weights](#splits-duplicates-and-weights)
+10. [Limitations](#limitations)
+11. [Field reference](#field-reference)
+12. [Names, licences and citation](#names-licences-and-citation)
 
-Every CWE is assigned by a rule. `chain[i].cwe_basis` names the strongest input that rule had
-(`guard-class` for a tested hunk, `msan-origin`, `sanitizer-class`, `fix-pattern`,
-`crash-class-implied`, `dataflow-rank`, `advisory`, `catalogue-default`). An intervention tests the
-site; its CWE comes from the guard classifier (PR-4) and is not itself tested.
+---
 
-`chain[i].site_kind` says what the recorded site is, separately from how its CWE was named:
-`tested-repair-site` (a hunk of the fix, applied alone, stopped the crash there),
-`origin-site` (MSan's creation site for CWE-456, or the free site of a CWE-416),
-`crash-site`, `witnessed-site` (an intermediate a sanitizer placed), or `annotated-site` (a static
-path, fix pattern or labeling rule put it there). A tested repair site is a sufficient repair
-location and an origin site is where the bad state began; neither is a validated defect location
-until the PR-9 audit checks it. An instance is `causally-proven` only when the hunk test succeeded
-**and** the guard rule (PR-4) named its CWE from that hunk; a successful test whose hunk matches
-no guard class is kept as `guard_site_proof` and the instance keeps its other category.
+## One record, explained
 
-`chain_kind` is `stage-decomposition` when the chain's CWEs describe one defect: two consecutive
-CWEs that classify the same faulting operation (`416 -> 125|787`, `843 -> 119`) count once. A first
-CWE defined by an earlier, different operation (a missing check, a computation, a missing
-initialisation, a race) is a separate weakness (PR-5).
+Here is a real record from Wireshark's QUIC parser. A packet carries a one-byte length for its
+connection ID, and the parser copied that many bytes into a fixed-size buffer without checking
+that they fit.
 
-`evidence_floor` is the weakest category over all instances. Edges between instances carry only
-their MITRE CWE 4.20 catalogue status (`mitre_chain.edges[].kind`: direct, transitive, inherited,
-hierarchy, or a declared modeling edge), never observed evidence. `inherited` means an ancestor of
-the source CanPrecede an ancestor of the target (CWE-825, the parent of use-after-free, CanPrecede
-CWE-125 and CWE-787).
-
-Root CWEs follow MITRE's mapping guidance (PR-17). CWE 4.20 marks CWE-20 DISCOURAGED, so a CWE-20
-root names the allowed child its check bounds, CWE-1285 for an index, offset or position and
-CWE-1284 for a quantity; a root whose check bounds neither keeps CWE-20 with
-`cwe_mapping: "class-level"`. The original label stays in `cwe_class`.
-
-Two derived fields place each record. `fix_attribution.status` is true when the recorded fix
-**alone** removes the crash: for ARVO, the vulnerable image plus that fix, applied with exact
-context, replays clean (the Reproduced tier's own patched runs use ARVO's fixed image, which can contain other
-commits); for the kernel, the fix's parent and the fix were built in one tree. `root_site_relation`
-places the root site against the crash (`crash-line`, `crash-function`, `on-stack`, `off-stack`,
-`file-only`); a root at the crash line may guard the symptom rather than repair the defect.
-
-Each record's fix is `commit_range.fix_commits` (every fix sha, canonical) in `commit_range.repo`; `commit_range.fixed` keeps the source's own form.
-
-The recommended core is the Reproduced tier with `evidence_floor == "execution"` and
-`fix_attribution.status == true`.
-
-## What is in the repository
-
-```
-data/release/dataset.jsonl            the records (one JSON object per line)
-data/release/corrections_changelog.jsonl   every change to a record, with the rule that made it
-data/release/dropped.jsonl            records removed, and why
-data/release/croissant.json           Croissant metadata (sha256 of the dataset)
-data/release/dataset.manifest.json    counts and digests of this release
-data/release/dataset_full_consolidated.jsonl   historical input the corrections started from (superseded; use dataset.jsonl)
-data/release/single_weakness.jsonl    records set aside because they hold one weakness, not a chain
-data/evidence/                        sanitizer, intervention and kernel logs referenced by path
-data/validation/                      selections, funnels and validation results
-docs/SPECIFICATION.md                 what a chain is (R1-R10)
-docs/DATASHEET.md                     datasheet
-PREREGISTRATION.md                    labeling rules PR-1..PR-10 with dated amendments
-src/chainforge/                       schema, evidence categories, integrity (Reproduced-tier) contract, views
-infra/repro/score_patch.sh            score a candidate patch by replay (ARVO-backed records)
-infra/cse-kvm/github/kablate_kvm.sh   the same for kernel records, in a KVM virtual machine
-infra/cse-kvm/kdiff_kvm.sh            two-sided kernel replay (syzbot records)
-infra/paper/reconcile_counts.py       every population and unit the paper reports
+```mermaid
+flowchart LR
+    R["<b>Root cause</b> (CWE-1284)<br/>unchecked packet length<br/>quic_extract_header()<br/>packet-quic.c:2168"]
+    S["<b>Sink</b> (CWE-787)<br/>write past a stack buffer<br/>tvb_memcpy()<br/>tvbuff.c:859"]
+    R -- "passes the length to" --> S
 ```
 
-The PR-9 audit is in `data/irr/`: the sampled items (`sample.json`), the packet and codebook the
-raters saw (`packet.md`), both scored sheets with the raters' stated backgrounds (`returned/`) and
-the exploratory AI raters' sheets (`ai/`). `infra/verify/score_audit.py` and `score_ai_raters.py`
-recompute every audit figure in the paper.
+The sanitizer blames `tvb_memcpy`, a generic copy helper used throughout Wireshark. The real
+fix belongs one frame up, in the QUIC parser. RootSink records both, and it records *how it
+knows*.
 
-## Install
+1. **The sink** is reported by AddressSanitizer: a write past the end of a stack buffer, which is
+   CWE-787.
+2. **The root cause** is a *tested repair site*. We applied each hunk of the developer's fix on its
+   own to the vulnerable program, rebuilt it and replayed the crashing input. The three-line hunk in
+   `quic_extract_header` alone stopped the crash, and the check it adds bounds a quantity, so a
+   rule names CWE-1284.
+3. **The reproduction** was checked on both sides. The vulnerable build crashes, the fixed build
+   runs the same input cleanly twice, and the developer's fix applied alone removes the crash.
 
-Python 3.11 or later and [uv](https://docs.astral.sh/uv/).
+Trimmed, the record looks like this.
+
+```json
+{
+  "id": "CHAINFORGE-0042476579",
+  "project": "wireshark",
+  "label_confidence_tier": "gold",
+  "chain_string": "CWE-1284->CWE-787",
+  "chain": [
+    {
+      "cwe_id": 1284, "role": "source",
+      "site_kind": "tested-repair-site", "evidence_kind": "causally-proven",
+      "evidence": {"location": {"file": "epan/dissectors/packet-quic.c", "line": 2168,
+                                "function": "quic_extract_header"}}
+    },
+    {
+      "cwe_id": 787, "role": "sink",
+      "site_kind": "crash-site", "evidence_kind": "execution",
+      "evidence": {"location": {"file": "epan/tvbuff.c", "line": 859, "function": "tvb_memcpy"}}
+    }
+  ],
+  "evidence_floor": "execution",
+  "root_site_relation": "on-stack",
+  "fix_attribution": {"status": true},
+  "commit_range": {"repo": "https://github.com/wireshark/wireshark",
+                   "fix_commits": ["ba54b896969930491645aa3ec4125b76480add9c"]},
+  "docker_image_ref": {"vulnerable": "n132/arvo:42476579-vul@sha256:…",
+                       "patched": "n132/arvo:42476579-fix@sha256:…"},
+  "split": "train"
+}
+```
+
+The logs behind every claim ship with the data. For this record they are the crash report
+(`data/evidence/arvo/42476579/vul.sanitizer.txt`), the two clean fixed-side runs (`fix1`, `fix2`)
+and the single-hunk test (`data/evidence/ablation/42476579/`).
+
+---
+
+## Quick start
+
+You need Python 3.11 or later and [uv](https://docs.astral.sh/uv/).
 
 ```bash
 git clone https://github.com/SuryanshSS1011/RootSink && cd RootSink
-uv sync --extra dev                              # --extra dev installs pytest
-uv run pytest                                    # offline unit tests
-uv run python infra/verify/conformance.py        # re-check every record against the contract
-uv run python infra/paper/reconcile_counts.py    # populations, units and their relations
+uv sync --extra dev        # installs the package and its test tools
+uv run pytest              # offline tests, a few seconds
 ```
 
-Scoring patches needs Docker. Kernel episodes need Linux with KVM (`/dev/kvm`), QEMU and a
-kernel build toolchain.
-
-### Docker images
-
-ARVO's images (`n132/arvo:<id>-vul` and `-fix`) are referenced by digest in each record's
-`docker_image_ref` and are not part of the archive (they total several terabytes). Pull by digest so
-a retagged image cannot change a result. Docker Hub rate-limits anonymous pulls; log in, or pull
-through a registry mirror such as `mirror.gcr.io/n132/arvo@sha256:...`, which `score_patch.sh`
-falls back to. In October 2026 every image the scorer needed was pulled, and on 7 November 2026 every
-pinned digest still resolved on Docker Hub with its tag unmoved (`infra/verify/check_image_digests.py`,
-which sends registry HEAD requests and pulls nothing; counts in `infra/repro/image_availability.json`). The images
-were produced by ARVO's open-source pipeline (github.com/n132/arvo, BSD-2-Clause), which is the
-route to regenerate one. Our own rebuild from the projects' source, without ARVO's images,
-succeeded at both revisions for 13 of 60 sampled records (PR-15), so the images are a real
-dependency.
-
-## Worked example
+Load the records and look around. Every record is one line of
+[`data/release/dataset.jsonl`](data/release/dataset.jsonl).
 
 ```python
 import json
+from collections import Counter
+
+rows = [json.loads(line) for line in open("data/release/dataset.jsonl")]
+print(len(rows), "records")
+print(Counter(r["label_confidence_tier"] for r in rows))   # records per tier
+
+# The recommended core: reproduced by us, every instance hunk-named or sanitizer-reported,
+# and the developer's fix alone removes the crash.
+core = [
+    r for r in rows
+    if r["label_confidence_tier"] == "gold"
+    and r["evidence_floor"] == "execution"
+    and r["fix_attribution"]["status"] is True
+]
+print(len(core), "records in the recommended core")
+print(core[0]["id"], core[0]["chain_string"])
+```
+
+Every count for this release, from records and projects to tiers, evidence and splits, is in
+[`docs/SUPPLEMENT.md`](docs/SUPPLEMENT.md) and
+[`data/release/dataset.manifest.json`](data/release/dataset.manifest.json).
+
+---
+
+## How much to trust a record
+
+RootSink keeps two questions apart. **Did the crash reproduce?** is answered by the record's
+*tier*. **How well supported is the root cause?** is answered per instance by its *evidence*.
+A record can be fully reproduced and still have a weakly supported root cause, and the fields
+say so.
+
+### Tiers: did the crash reproduce?
+
+| Tier | Stored as `label_confidence_tier` | Meaning |
+|---|---|---|
+| **Reproduced** | `gold` | We replayed both versions. The vulnerable build crashes at a sink the sanitizer report locates, the fixed build runs the same input cleanly **twice**, the sink's CWE matches the report, the fix changes real (non-test) code, and any middle step was also sanitizer-reported. |
+| **Upstream** | `gold-upstream` | Every criterion holds, except that the crash is shown only by the original reporter's logs, not by a run of ours. |
+| **Partial** | `silver` | At least one criterion fails, or we never ran it. `gold_contract_gaps` names what is missing. |
+| **Candidate** | `bronze` | No run of ours, and the CWE order rests only on an advisory or a heuristic. |
+
+A run counts as *clean* only if the log shows the input was actually processed. A run that never
+started is an infrastructure failure, never evidence that a bug is fixed. The full rules are PR-3
+in [`PREREGISTRATION.md`](PREREGISTRATION.md), and
+[`src/chainforge/integrity.py`](src/chainforge/integrity.py) enforces them.
+
+The stored values (`gold`, `silver` and so on) keep their original names so that existing code
+keeps working. The paper and these docs use the names in the first column.
+
+### Evidence: how is each instance supported?
+
+Every instance in `chain` has an `evidence_kind`, listed here from strongest to weakest.
+
+| `evidence_kind` | Called in the paper | What it means |
+|---|---|---|
+| `causally-proven` | hunk-named | One hunk of the developer's fix, applied alone and rebuilt, stopped the crash on this input, and a rule named the CWE from the check that hunk adds. The hunk is *sufficient*, not proven to be the only or the best repair. |
+| `execution` | sanitizer-reported | A sanitizer report places the instance at a site. |
+| `attested` | fix-suggested | The fix adds the check the instance lacks, but no run shows the check matters. |
+| `dataflow` | dataflow | Only a static code path supports it. |
+| `inferred` | inferred | Only a labeling rule supports it. |
+| `none` | none | No evidence is declared. The release gate counts these openly rather than hiding them. |
+
+`evidence_floor` is the weakest kind over a record's instances, so filtering on it is the quickest
+way to pick records you can lean on.
+
+### Root sites: where does the candidate come from?
+
+`chain[0].site_kind` says what kind of place the root site is.
+
+| `site_kind` | Meaning |
+|---|---|
+| `tested-repair-site` | A hunk of the fix, applied alone, stopped the crash there. These are the default localization targets. |
+| `origin-site` | Where the bad state began, as the sanitizer report itself prints it: the allocation of memory MemorySanitizer later found uninitialized, or the free before a use-after-free. It need not be the defect. |
+| `annotated-site` | A fix pattern, static analysis or labeling rule placed it. |
+
+Sinks and middle steps use `crash-site` (the top project frame of the crash) and `witnessed-site`
+(an intermediate step a sanitizer placed). The field is empty when no root site is recorded.
+
+### Where does the root sit relative to the crash?
+
+`root_site_relation` places the root site against the crash: `crash-line`, `crash-function`,
+`on-stack` (a caller on the crash's stack), `off-stack` or `file-only`, and it is empty when the
+root is not located. A root at the crash line may only guard the symptom, so this field lets you
+study, or exclude, those cases.
+
+### The recommended core
+
+For evaluation, start from Reproduced-tier records whose `evidence_floor` is `execution` (every
+instance hunk-named or sanitizer-reported) and whose `fix_attribution.status` is `true` (the
+developer's fix alone removes the crash). The quick start shows the filter.
+
+---
+
+## Tasks
+
+RootSink defines three tasks. Each one has an *input view* that withholds its answer, and the
+tests in [`tests/test_field_policy.py`](tests/test_field_policy.py) check that no input leaks
+its target.
+
+| Task | Model input | Target | Scoring |
+|---|---|---|---|
+| **Localize** the root cause | `localization_view(r)`: the vulnerable image, the crashing input, the sink report, and the sink's CWE and site | `task_target(r, "localize")`: the root site's file, line, function and `site_kind` | Match against the root site. By default, score only tested repair sites (`localization_eligible(r)`), because origin sites are printed in the input's own report. |
+| **Label** the chain | `labeling_view(r)`: the repair input plus every instance's site, with no CWE ids | `task_target(r, "label")`: the ordered CWE ids | Compare with the record. |
+| **Repair** the bug | `policy_view(r)`: the vulnerable image, the input and the vulnerable-side report | none | Replay with the patch scorer below. |
+
+```python
 from chainforge.field_policy import (
     labeling_view, localization_eligible, localization_view, policy_view, task_target,
 )
 
-rows = [json.loads(line) for line in open("data/release/dataset.jsonl")]
-reproduced = [r for r in rows if r["label_confidence_tier"] == "gold"]  # the Reproduced tier
-
-# The recommended core: every instance hunk-named or sanitizer-reported, and the fix alone removes
-# the crash (fix-attributed).
-core = [
-    r for r in reproduced
-    if r["evidence_floor"] in ("causally-proven", "execution")
-    and (r.get("fix_attribution") or {}).get("status") is True
-]
-
 r = core[0]
-x = localization_view(r)          # input: vulnerable image, input, sink report, sink CWE and site
-y = task_target(r, "localize")    # target: the root site (file, line, function) and its site_kind
-# Score localization on tested repair sites by default (localization_eligible); origin sites are
-# printed in the input's own sanitizer report, and suggested (annotated) sites are a rule's answer.
-x_label = labeling_view(r)        # input: every instance's site, no CWE ids
-y_label = task_target(r, "label") # target: the ordered CWE ids
-x_repair = policy_view(r)         # input for repair; the fix, chain and fixed image are withheld
+x, y = localization_view(r), task_target(r, "localize")
+if localization_eligible(r):
+    ...  # score your model's predicted site against y
 ```
 
-Each task's input withholds its target (`tests/test_field_policy.py` checks this).
-`annotation_view` returns everything, labels included, and is for reading or auditing only.
-Use the `split` field for training, validation and test, `duplicate_group` to count bugs rather
-than inputs, and `sampling_weight` to even out projects when sampling.
+Pass `with_fix=True` to `localization_view` or `labeling_view` to include the developer's diff,
+and report results under that condition separately. `annotation_view(r)` returns everything,
+labels included, so use it for reading and auditing, never as a model input.
 
-### Scoring a candidate patch
+For a test set newer than a model's training data, `fixed_after(r, "2025-01-01")` keeps records
+whose fix is dated after a cutoff. It returns `None` for undated records, so report how many you
+excluded.
+
+---
+
+## Scoring a patch
+
+### Bugs from OSS-Fuzz (ARVO)
 
 ```bash
-# the record's OSS-Fuzz id is in its aliases ("OSS-Fuzz-<id>"); project is the record's project
-bash infra/repro/score_patch.sh <arvo_id> <project> my.patch out/   # pass | crash | build_fail | patch_fail | not_run
-bash infra/repro/score_patch.sh <arvo_id> <project> - out/nopatch   # the unmodified build: crash
+# <arvo_id> is the number in the record's "OSS-Fuzz-<id>" alias; <project> is its "project" field
+bash infra/repro/score_patch.sh <arvo_id> <project> my.patch out/
+bash infra/repro/score_patch.sh <arvo_id> <project> - out/nopatch   # the unmodified build
 ```
 
-It applies the patch to the record's vulnerable image, rebuilds once, and replays the input twice.
-`pass` means every replay read the input to completion with no sanitizer report. It does not mean
-the root cause was fixed or behaviour kept: a patch that rejects the input early also passes.
-`not_run` is an environment failure, never a negative score. Pin images by the digest in
-`docker_image_ref` for training.
+The scorer starts a fresh container of the record's vulnerable image, applies your patch,
+rebuilds once and replays the crashing input twice. The verdict is in `out/result.json`.
 
-Kernel records are scored the same way in a KVM virtual machine:
-`infra/cse-kvm/github/kablate_kvm.sh <syzbot extid> <fix sha> my.patch` builds `fix^` with
-syzbot's configuration, confirms that the reproducer fires syzbot's bug, applies the patch whole,
-rebuilds and boots twice. It needs `/dev/kvm` and Docker; `infra/cse-kvm/github/kablate.yml` is a
-GitHub Actions setup that runs it on hosted runners. `inconclusive` is no verdict, never a
-negative score.
+| Outcome | Meaning |
+|---|---|
+| `pass` | The patch applied, the build succeeded and every replay ran to completion with no sanitizer report. |
+| `crash` | At least one replay crashed. |
+| `build_fail` | The patched program did not build. |
+| `patch_fail` | A code or build file could not be patched. |
+| `not_run` | A replay never reached the input. This is an environment failure, not a negative score, so retry it. |
 
-**Agent environments.** ARVO's vulnerable images keep the project's git history, and the fix
-commit is reachable in every image we probed. Start agents with `infra/repro/agent_env.sh <arvo_id>`,
-which disables networking and rewrites each repository under `/src` to a single vulnerable
-commit. Do not hand an agent the raw image.
+> [!IMPORTANT]
+> A `pass` shows that the program survived this one input. It does **not** show that the root
+> cause was fixed or that the program still behaves correctly, and a patch that simply rejects
+> the input also passes. For libFuzzer records with a seed corpus, setting `CF_CORPUS=1` and
+> `CF_TARGET=<fuzz target>` also records fuzzing coverage, which exposes patches that reject
+> inputs early.
 
-Resources per episode (measured by the scorer on GitHub-hosted runners, 4 vCPU, 16 GB):
-see [`docs/RESOURCES.md`](docs/RESOURCES.md).
+> [!WARNING]
+> ARVO's vulnerable images keep the project's full git history, and the fix commit is reachable
+> in every image we probed. Never give an agent the raw image. Start it with
+> `bash infra/repro/agent_env.sh <arvo_id>`, which turns off networking and rewrites every
+> repository under `/src` to a single commit holding the vulnerable code.
+
+Resource use per scored episode is in [`docs/RESOURCES.md`](docs/RESOURCES.md).
+
+### Linux kernel bugs (syzbot)
+
+Kernel records are scored the same way, inside a KVM virtual machine.
+
+```bash
+export CF_BASE=$HOME/rootsink-kernel      # scratch space for kernel trees and builds
+bash infra/cse-kvm/github/kablate_kvm.sh <syzbot extid> <fix sha> my.patch
+```
+
+The syzbot extid is the part after `syzbot-` in the record's alias, and the fix sha is in
+`commit_range.fix_commits`. The script builds the kernel just before the fix with syzbot's
+configuration, checks that the reproducer still triggers syzbot's bug, applies your patch, rebuilds
+and boots twice. It needs Linux with `/dev/kvm`, QEMU and Docker, and
+[`infra/cse-kvm/github/kablate.yml`](infra/cse-kvm/github/kablate.yml) runs it on GitHub's hosted
+runners. An `inconclusive` result is no verdict, never a negative score.
+
+---
+
+## Running the crashes
+
+### Docker images for OSS-Fuzz bugs
+
+Each OSS-Fuzz record runs in two of ARVO's public images, one vulnerable and one fixed. The
+crashing input is inside the image. `docker_image_ref` pins both by content digest, so a retagged
+image cannot silently change a result.
+
+```bash
+docker pull "n132/arvo@sha256:<digest from docker_image_ref>"
+```
+
+The images total several terabytes, so they are not part of this repository. Docker Hub limits
+anonymous pulls, so log in, or pull through a mirror such as
+`mirror.gcr.io/n132/arvo@sha256:…`, which `score_patch.sh` falls back to on its own.
+`infra/verify/check_image_digests.py` checks that every pinned digest still resolves without
+pulling anything. The images come from ARVO's open-source pipeline
+([github.com/n132/arvo](https://github.com/n132/arvo)), which can regenerate one.
+
+### Re-running a single record
+
+Every Reproduced-tier OSS-Fuzz record has a reproduction bundle that pins its image, replays its
+input and compares the crash with what the record claims.
+
+```bash
+bash infra/repro/verify.sh infra/repro/bundles/CHAINFORGE-0042476579.json
+```
 
 ### Kernel records
 
-For each kernel record in the Reproduced tier, `data/evidence/kernel/<syzbot extid>/` holds syzbot's
-`kernel.config`, the C reproducer `repro.c`, the vulnerable-side KASAN report and excerpts of the
-fixed-side consoles. Full consoles are too large for git and are archived with the frozen release. No kernel image or root file
-system is shipped. `infra/cse-kvm/kdiff_kvm.sh <extid> <fix sha>` fetches the fix commit, builds
-its parent `fix^` with syzbot's configuration, rebuilds the same tree at the fix, builds a
-minimal root file system around the reproducer (`build_rootfs.sh`) and boots both under KASAN on
-KVM. Expect a full kernel build (tens of minutes on 4 cores), an incremental rebuild, and up to
-10 minutes per boot. Set `CF_BASE` to a scratch directory first, because the scripts otherwise
-default to the authors' cluster path.
+For each Reproduced-tier kernel record, `data/evidence/kernel/<extid>/` holds syzbot's kernel
+configuration (`kernel.config`), the C reproducer (`repro.c`), our vulnerable-side KASAN report
+(`vul.kasan.txt`), excerpts of the fixed-side boots and the run summary (`differential.json`).
+The full boot consoles are in `data/evidence_full/kernel/<extid>/`. No kernel image ships.
+
+```bash
+export CF_BASE=$HOME/rootsink-kernel
+bash infra/cse-kvm/kdiff_kvm.sh <syzbot extid> <fix sha>
+```
+
+`kdiff_kvm.sh` builds the kernel just before the fix and at the fix from the same tree, wraps the
+reproducer in a minimal root file system and boots both under KASAN. Expect a full kernel build
+(tens of minutes on four cores), an incremental rebuild and up to ten minutes per boot.
+
+---
+
+## What is in the repository
+
+```
+data/
+  release/
+    dataset.jsonl                 the records, one JSON object per line
+    corrections_changelog.jsonl   every change to a record, with the rule that made it
+    dropped.jsonl                 records removed, and why
+    dataset.manifest.json         counts and checksums for this release
+    croissant.json                Croissant metadata for ML tooling
+    single_weakness.jsonl         records set aside because they hold one weakness, not a chain
+  evidence/                       sanitizer reports, single-hunk tests, scorer runs and kernel logs
+  evidence_full/kernel/           full kernel boot consoles
+  irr/                            the blind label audit: sample, packet, codebook and rater sheets
+  validation/                     selections, funnels and validation results
+docs/
+  SPECIFICATION.md                what a chain is, rules R1 to R10
+  DATASHEET.md                    the datasheet, mapping every term to its field
+  SUPPLEMENT.md                   the supplementary tables S1 to S5 that the paper cites
+  OPEN_ISSUES.md                  known defects and their status
+  RESOURCES.md                    time, memory and disk per scored episode
+PREREGISTRATION.md                the rule log: every labeling rule, with dated amendments
+src/chainforge/                   schema, evidence kinds, the Reproduced-tier contract, task views
+infra/repro/                      patch scorer, agent environment, reproduction bundles
+infra/cse-kvm/                    kernel replay and scoring in KVM
+infra/verify/                     the pipelines that attach evidence, plus the release gate
+infra/paper/                      count checks, and generators for the supplement and Croissant
+tests/                            offline unit tests
+```
+
+---
+
+## Re-checking our work
+
+Everything we report can be recomputed from this repository.
+
+```bash
+uv run python infra/verify/conformance.py        # re-checks every record against the tier rules
+uv run python infra/paper/reconcile_counts.py    # every population, unit and their relations
+uv run python infra/verify/score_audit.py        # the blind audit's precision and agreement
+uv run python infra/verify/score_ai_raters.py    # the exploratory language-model comparison
+bash infra/verify/rebuild_derived.sh             # regenerates every derived file, then the gate
+```
+
+The audit scripts write their results to `paper_artifacts/`, which git ignores.
+`rebuild_derived.sh` rewrites the derived files in place, offline, so a clean `git status`
+afterwards shows they match the release.
+
+**The label audit.** Two raters who did not build the dataset judged a sample of records, blind
+to our labels. `data/irr/` holds the sampled records with the labels they were scored against
+(`sample.json`), exactly what the raters saw (`packet.md`), both returned sheets with each rater's
+stated background (`returned/`) and the language models' sheets from an exploratory comparison
+(`ai/`).
+
+**Rules and corrections.** Every labeling rule is in [`PREREGISTRATION.md`](PREREGISTRATION.md),
+with dated amendments. Its dates are self-reported, and from 2026-10-19 on each rule was written
+before its outcomes were seen unless its entry says otherwise. Every change to a record is in
+`corrections_changelog.jsonl` with the id of the rule that made it, and every removed record is
+in `dropped.jsonl` with the reason.
+
+---
 
 ## Splits, duplicates and weights
 
-Splits keep each project in one fold, except that kernel records are split by subsystem
-(`linux-kernel/<subsystem>`) and the advisory-race catch-all project `linux` is not
-consolidated. Units are assigned whole, largest first, to the fold furthest below its quota
-(`infra/verify/fix_p0_metadata.py`, targets 70/15/15 over all records). Later mined records join
-their project's fold; a new project goes to the fold furthest below the same targets (mined
-records admitted before 2026-10-20 used 70/10/20 for new projects and keep their folds). `infra/verify/dedup_groups.py` keeps every record sharing a fix
-commit in one fold. `sampling_weight` is `1 / (inputs in the duplicate group x sqrt(bugs in the
-project))`, within tier, rescaled to mean 1 per tier and split.
+1. **Splits.** `split` assigns each record to `train`, `validation` or `test`. Each project
+   stays in one split, and kernel records are split by subsystem (`linux-kernel/<subsystem>`),
+   apart from a catch-all of advisory-only kernel races. Units are assigned whole, largest first,
+   to the split furthest below a 70/15/15 target, and records that share a fix commit always land
+   together.
+2. **Duplicates.** OSS-Fuzz often closes several crash reports with one fix. Those records are
+   kept, because each is a distinct reproduction, but they share a `duplicate_group` named after
+   the project and the fix commit. Count groups when you want bugs rather than inputs.
+3. **Weights.** `sampling_weight` evens out large projects and duplicate groups. It is
+   `1 / (inputs in the duplicate group × √(bugs in the project))`, rescaled to a mean of 1 within
+   each tier and split.
 
-## Rules and history
+---
 
-Labeling rules were developed while the corpus was built and then written down as PR-1..PR-9.
-Their dates are self-reported, because the repository history before 2026-10-19 was squashed.
-Selections and amendments committed since then precede their outcomes in the git history.
-Every change to a record is in `corrections_changelog.jsonl` with its rule id.
+## Limitations
 
-## Regenerating derived files
+RootSink is careful about what it claims, and so should its users be.
 
-```bash
-bash infra/verify/rebuild_derived.sh   # evidence kinds, difficulty, duplicate groups, weights,
-                                       # manifest, paper numbers, Croissant, then the release gate
-```
+1. **Root sites are candidates.** A tested repair site is a place where a fix *suffices* for one
+   input. It is not proven to be the defect, the only repair or the best one.
+2. **Origin sites are rarely the defect.** They mark where bad state began, and the blind audit
+   agreed with them far less often than with tested repair sites.
+3. **CWE order is by rule.** The order of CWEs follows our catalogue of admissible pairs, built
+   from MITRE's CWE relations, not an observed sequence of events.
+4. **Fuzzer bias.** Most Reproduced-tier records come from OSS-Fuzz, so they inherit its bias
+   toward bugs that fuzzers find.
+5. **External images.** ARVO's images are pinned by digest but hosted on a personal Docker Hub
+   account that is not archived. Our own rebuild from the projects' source, without ARVO's
+   images, succeeded at both revisions for 13 of 60 sampled records (PR-15), so the images are a
+   real dependency.
+6. **The audit is small.** Both raters are co-authors and graduate students, not security
+   specialists, which is why their sheets are released for anyone to re-check.
 
-## Licenses
+Known defects and their status are tracked in [`docs/OPEN_ISSUES.md`](docs/OPEN_ISSUES.md).
 
-Code: MIT ([`LICENSE`](LICENSE)). Labels and annotations: CC-BY-4.0. Each record's `license`
-field gives the upstream project's SPDX license where known; logs and diffs remain under their
-projects' licenses.
+---
 
-## Citation
+## Field reference
 
-See [`CITATION.cff`](CITATION.cff).
+<details>
+<summary><b>The fields you will use most</b> (click to expand)</summary>
+
+<br/>
+
+| Field | What it holds |
+|---|---|
+| `id` | A stable record id (`CHAINFORGE-…`). |
+| `project`, `aliases` | The project, and ids such as `OSS-Fuzz-<id>` or `syzbot-<extid>`. |
+| `label_confidence_tier` | The tier (see [Tiers](#tiers-did-the-crash-reproduce)). |
+| `gold_contract_gaps` | For records below the Reproduced tier, which criteria failed and why. |
+| `chain` | The CWE instances in order, root first and sink last. |
+| `chain[i].cwe_id`, `role` | The CWE number, and `source`, `intermediate` or `sink`. |
+| `chain[i].evidence_kind` | How the instance is supported (see [Evidence](#evidence-how-is-each-instance-supported)). |
+| `chain[i].site_kind` | What kind of site it is (see [Root sites](#root-sites-where-does-the-candidate-come-from)). |
+| `chain[i].evidence.location` | The site's `file`, `line` and `function`, when known. |
+| `chain[i].cwe_basis` | The strongest input the CWE rule had, such as `guard-class`, `msan-origin`, `sanitizer-class` or `advisory`. |
+| `chain[i].cwe_class`, `cwe_mapping` | The original broad label, and how it was refined. A `CWE-20` root becomes `CWE-1284` (`quantity`) or `CWE-1285` (`index`), and stays `CWE-20` (`class-level`) when neither fits. |
+| `chain_string` | The chain in one line, such as `CWE-1284->CWE-787`. |
+| `chain_kind` | `stage-decomposition` when consecutive CWEs describe one faulting operation, `multi-weakness` otherwise. |
+| `evidence_floor` | The weakest evidence kind in the record. |
+| `mitre_chain.edges` | Each CWE pair's status in MITRE's catalogue (direct, inherited and so on). This is catalogue support, not observed evidence. |
+| `root_site_relation` | Where the root site lies relative to the crash. |
+| `fix_attribution.status` | `true` when the developer's fix alone removes the crash. |
+| `commit_range` | The fix repository, `fix_commits`, and the source's own form in `fixed`. |
+| `patch_diff` | The developer's fix. |
+| `docker_image_ref` | The vulnerable and fixed images, pinned by digest (OSS-Fuzz records). |
+| `pov_input` | The crashing input or kernel reproducer when it ships as a file (OSS-Fuzz inputs live inside the images). |
+| `sanitizer_reports` | Every run's report, with its revision and log path. |
+| `split`, `duplicate_group`, `sampling_weight` | See [Splits, duplicates and weights](#splits-duplicates-and-weights). |
+| `fix_date`, `license` | The fix's date, and the project's licence where known. |
+
+Every field, and every term the paper uses, is mapped in [`docs/DATASHEET.md`](docs/DATASHEET.md).
+What makes a valid chain is defined in [`docs/SPECIFICATION.md`](docs/SPECIFICATION.md).
+
+</details>
+
+---
+
+## Names, licences and citation
+
+**Why "chainforge"?** RootSink was built under the working name ChainForge. The Python package
+(`chainforge`) and the record ids (`CHAINFORGE-…`) keep that name so that ids stay stable across
+releases.
+
+**Licences.** The code is MIT ([`LICENSE`](LICENSE)). The labels, chains and annotations are
+CC BY 4.0 ([`LICENSE-DATA`](LICENSE-DATA)). Logs and diffs come from each project's own fuzz
+targets and history and stay under that project's licence, which each record names in `license`.
+Every Reproduced-tier bug is already fixed and public, and the only personal data are developer
+names and e-mail addresses that the projects themselves publish.
+
+**Citation.** Please cite RootSink using [`CITATION.cff`](CITATION.cff), or GitHub's
+"Cite this repository" button. Every release is archived on Zenodo under
+[doi:10.5281/zenodo.24068722](https://doi.org/10.5281/zenodo.24068722), which resolves to the
+newest version; each version also has its own DOI there.
+
+**Questions and problems.** Please open an issue on GitHub.

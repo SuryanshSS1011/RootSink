@@ -54,6 +54,7 @@ def main(argv=None) -> int:
         key=lambda p: (meta.get(p.stem.removeprefix("sheet_"), {}).get("returned", "9999"), p.name),
     )
     out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
     if not sheets:
         for f in ("irr_precision.json", "irr_agreement.json"):
             (out / f).unlink(missing_ok=True)
