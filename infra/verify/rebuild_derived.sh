@@ -19,6 +19,7 @@ uv run python infra/verify/apply_pr17.py >/dev/null
 uv run python infra/verify/reground_mitre.py >/dev/null
 uv run python infra/verify/repair_function_names.py >/dev/null
 uv run python infra/verify/restamp_evidence_kinds.py >/dev/null
+uv run python infra/verify/stamp_kernel_attempts.py >/dev/null  # 1.0.10: our kernel attempt outcomes
 uv run python infra/verify/retier_all.py >/dev/null
 uv run python infra/verify/stamp_attribution.py >/dev/null
 uv run python infra/verify/stamp_difficulty.py >/dev/null

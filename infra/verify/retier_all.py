@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
-"""Re-tier every GOLD and SILVER record by chainforge.integrity, in either direction, and log it.
+"""Re-tier every record by chainforge.integrity, in either direction, and log it.
 
 Pipelines re-tier only the records they touch. When the contract's implementation changes (as on
 2026-10-20, when I5's "clean twice" was first enforced as written), every record must be judged
-again by the same code the release gate uses. Gold-upstream is left to the pipelines that set it,
-and so is a Candidate unless a run of ours reached it (release 1.0.5 corrections, item 1).
+again by the same code the release gate uses. Until release 1.0.9 a Candidate was left alone unless
+a run of ours reached it (release 1.0.5 corrections, item 1). From release 1.0.10 every record gets
+the tier the paper's rules give (`chainforge.integrity.expected_tier`): an Upstream record is
+Partial when our own fixed-kernel run crashed with the same bug, and a record no run of ours
+reached is a Candidate when its root CWE rests only on an advisory or the catalogue's default
+(`chainforge.integrity.unreached_tier`). A change made by either rule is logged with its rule.
 Idempotent; run from rebuild_derived.sh.
 
 Usage: retier_all.py [--release data/release] [--dry-run]
@@ -19,7 +23,8 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
-from chainforge.integrity import gold_violations, tier_for, vul_log  # noqa: E402
+from chainforge.evidence import cwe_basis  # noqa: E402
+from chainforge.integrity import expected_tier, reached  # noqa: E402
 
 
 def main(argv=None) -> int:
@@ -33,13 +38,10 @@ def main(argv=None) -> int:
     log, stats = [], collections.Counter()
     for r in rows:
         old = r["label_confidence_tier"]
-        # A Candidate that a run of ours reached is judged like any other run record (release
-        # 1.0.5 corrections, item 1); Candidates no run of ours reached keep their tier.
-        ran = old == "bronze" and vul_log(r, Path(".")) is not None
-        if old not in ("gold", "silver") and not ran:
-            continue
-        v = gold_violations(r, Path("."))
-        new = tier_for(r, v)
+        # Release 1.0.10: every tier, Candidates included, is the one the paper's rules give
+        # (`chainforge.integrity.expected_tier`). Until 1.0.9 a Candidate no run of ours reached
+        # kept its source pipeline's tier (release 1.0.5 corrections, item 1).
+        new, v = expected_tier(r, Path("."))
         if v:
             r["gold_contract_gaps"] = v
         else:
@@ -47,7 +49,14 @@ def main(argv=None) -> int:
         if new != old:
             stats[f"{old} -> {new}"] += 1
             r["label_confidence_tier"] = new
-            log.append({"id": r["id"], "op": "contract-retier", "from": old, "to": new, "rules": v})
+            entry = {"id": r["id"], "op": "contract-retier", "from": old, "to": new, "rules": v}
+            if new == "bronze" or (old == "bronze" and not reached(r, Path("."))):
+                root = (r.get("chain") or [{}])[0]
+                entry["rule"] = "unreached Candidate rule (release 1.0.10)"
+                entry["root_basis"] = cwe_basis(root, r.get("provenance") or "")
+            elif v.get("I5", "").startswith("our "):
+                entry["rule"] = "fixed kernel crashed the same way (release 1.0.10)"
+            log.append(entry)
     print(dict(stats))
     if args.dry_run:
         return 0

@@ -26,7 +26,7 @@ from chainforge.field_policy import (  # noqa: E402
     held_out_accuracy,
     localization_eligible,
 )
-from chainforge.integrity import _CRASHED, ran_clean  # noqa: E402
+from chainforge.integrity import _CRASHED, attempt_ran, ran_clean  # noqa: E402
 
 
 def in_sample(rows: list[dict], key) -> float:
@@ -584,7 +584,11 @@ def review_counts(rows: list[dict], gold: list[dict]) -> dict:
             and s.get("log_ref")
             and Path(s["log_ref"]).is_file()
         )
-        fn_shown += bool(fn and re.search(r"\bin (?:[\w:~<>]*::)?" + re.escape(fn) + r"\b", text))
+        # ASan names a frame `in fn`, KASAN `fn+0x32a/0x5a0`, perhaps with a compiler suffix such
+        # as `.isra.0` (the KASAN form is counted from release 1.0.10).
+        if fn:
+            pattern = r"\bin (?:[\w:~<>]*::)?" + re.escape(fn) + r"\b|\s" + re.escape(fn)
+            fn_shown += bool(re.search(pattern + r"(?:\.[\w.]+)?\+0x", text))
     m["NShownTestedFn"] = fn_shown
     return m
 
@@ -833,6 +837,31 @@ def main(argv=None) -> int:
         "NGoldUpstream": tier["gold-upstream"],
         "NSilver": tier["silver"],
         "NBronze": tier["bronze"],
+        # Release 1.0.10: Upstream records our own kernel runs reached without confirming them,
+        # by the outcome of our last attempt (`kernel_attempt`; its logs were not archived).
+        "NUpstreamRan": sum(
+            attempt_ran(r.get("kernel_attempt"))
+            for r in rows
+            if r["label_confidence_tier"] == "gold-upstream"
+        ),
+        "NUpstreamNoRepro": sum(
+            attempt_ran(r.get("kernel_attempt")) and r["kernel_attempt"]["status"] == "vul_no_repro"
+            for r in rows
+            if r["label_confidence_tier"] == "gold-upstream"
+        ),
+        "NUpstreamOtherBug": sum(
+            (r.get("kernel_attempt") or {}).get("status") == "vul_other_bug"
+            for r in rows
+            if r["label_confidence_tier"] == "gold-upstream"
+        ),
+        "NUpstreamFixUnusable": sum(
+            (r.get("kernel_attempt") or {}).get("status") == "fix_untestable"
+            for r in rows
+            if r["label_confidence_tier"] == "gold-upstream"
+        ),
+        "NFixStillCrashes": sum(
+            (r.get("kernel_attempt") or {}).get("status") == "fix_still_crashes" for r in rows
+        ),
         # One codebase arrives under several names (gdal, OSGeo/gdal); count codebases.
         "NProjects": len({codebase(r["project"]) for r in rows}),
         # Records mined from advisories alone: no crash or image of their own (Sec. III).
@@ -985,10 +1014,10 @@ def main(argv=None) -> int:
     m["NChainUninit"] = sum(_chain(r) == (456, 457) for r in gold)
     m["NChainUafRead"] = sum(_chain(r) == (416, 125) for r in gold)
     m["NChainCheckRead"] = sum(
-        _chain(r)[0] in (20, 1284, 1285) and _chain(r)[1] == 125 for r in gold
-    )
+        _chain(r)[0] in (20, 129, 1284, 1285) and _chain(r)[1] == 125 for r in gold
+    )  # CWE-129 is a ChildOf CWE-1285 (release 1.0.10; it was left out before)
     m["NChainCheckWrite"] = sum(
-        _chain(r)[0] in (20, 1284, 1285) and _chain(r)[1] == 787 for r in gold
+        _chain(r)[0] in (20, 129, 1284, 1285) and _chain(r)[1] == 787 for r in gold
     )
     # Fig. 1's running example (pjsip STUN decoder): facts read from its record, not typed.
     ex = next((r for r in rows if r["id"] == "CHAINFORGE-0042519040"), None)
@@ -1159,8 +1188,12 @@ def main(argv=None) -> int:
         m["NIrrLocated"] = m["NIrrTested"] + m["NIrrOrigin"] + m["NIrrAnnot"]
         if "NIrrBOriginCwe" in m:  # "50 of 51" when the raters agree, else "50 and 48 of 51"
             a, b = m["NIrrOriginCwe"], m["NIrrBOriginCwe"]
-            pair = a if a == b else f"{a} and {b}"
-            m["IrrOriginCwePair"] = f"{pair} of {m['NIrrOrigin']}"
+            n = m[
+                "NIrrOrigin"
+            ]  # "50 of 51 cases each" (release 1.0.10), else "50 and 48 of 51 cases"
+            m["IrrOriginCwePair"] = (
+                f"{a} of {n} cases each" if a == b else f"{a} and {b} of {n} cases"
+            )
             # "97% of items each" when the raters' sink-CWE agreement is equal (added 2026-11-09).
             sa, sb = m["IrrSinkCwePct"], m["IrrBSinkCwePct"]
             m["IrrSinkCweItems"] = f"{sa} of items each" if sa == sb else f"{sa} and {sb} of items"
@@ -1297,9 +1330,9 @@ def main(argv=None) -> int:
         m["NDupSpanning"] = da["clusters_spanning_splits"]
         n = m["NDupSpanning"]  # the paper's split sentence (added 2026-11-09)
         m["DupSpanPhrase"] = (
-            "no duplicate group spans two"
+            "no duplicate group spans two splits"
             if n == 0
-            else f"{n} duplicate group{'s' if n > 1 else ''} span{'' if n > 1 else 's'} two"
+            else f"{n} duplicate group{'s' if n > 1 else ''} span{'' if n > 1 else 's'} two splits"
         )
     funnels = sorted(Path("data/validation").glob("pr7_*_funnel.json"))
     if funnels:  # PREREGISTRATION PR-7 execution-first mining, every batch summed
@@ -1433,9 +1466,17 @@ def main(argv=None) -> int:
                 for k, n in v.items()
                 if k.endswith(" fuzzy")
             )
-        # The withdrawn count's base: tests from both checks (added 2026-11-09).
-        m["NFuzzTestsAll"] = fr["tests"] + (
-            json.loads(f2.read_text())["tests"] if f2.is_file() else 0
+        # The withdrawn count's base: distinct tests across both checks. Nine tests the first
+        # check could not decide were checked again in the second (release 1.0.10; the sum,
+        # 1154, counted them twice). None of the nine was withdrawn by the first check.
+        supplies = [Path("data/validation/fuzzcheck_supply.json")]
+        supplies += [Path("data/validation/fuzzcheck_supply2.json")] if f2.is_file() else []
+        m["NFuzzTestsAll"] = len(
+            {
+                (c["id"], c["kind"], c["key"])
+                for sp in supplies
+                for c in json.loads(sp.read_text())["cases"]
+            }
         )
     ru = Path("data/validation/retest_unresolved.json")  # strict re-tests of unresolved tests
     if ru.is_file():

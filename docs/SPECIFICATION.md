@@ -129,11 +129,18 @@ The tier names a *reproducibility contract*, not a subjective belief.
   PREREGISTRATION PR-3 (I1–I6), enforced by `chainforge.integrity` in both the release
   transform and `conformance.py`. GOLD asserts: *you can re-run this, and we did.*
 - **GOLD-UPSTREAM** (`gold-upstream`) — execution-witnessed by the discovering project (a syzbot
-  KASAN report we cite), one-sided, and not re-performed by us. Never returned by a filter on
-  `gold`, so the obvious query is also the strict one.
-- **SILVER** — a dataflow path or partial witness supports the ordering, but the execution
-  contract is not met.
-- **BRONZE** — ordering rests on co-occurrence or heuristics with no dataflow or execution.
+  KASAN report we cite), one-sided, with no archived run of ours, and the fix and any middle step
+  meet the contract. Our kernel attempts reached some without completing a two-sided run
+  (`kernel_attempt`); one whose fixed kernel crashed with the same bug is SILVER (release 1.0.10).
+  Never returned by a filter on `gold`, so the obvious query is also the strict one.
+- **SILVER** — a run of ours reached it and the contract is not met, or no run reached it and its
+  own material (a dataflow path, a check or lock the fix adds, the reporter's sanitizer report)
+  supports the root CWE.
+- **BRONZE** — no run of ours reached it, and the root CWE rests only on an advisory's listed CWEs
+  or the catalogue's default root for the sink.
+
+From release 1.0.10, `chainforge.integrity.expected_tier` gives every record its tier by these
+rules; `retier_all.py` applies it and `conformance.py` checks it.
 
 Two hard rules on GOLD:
 

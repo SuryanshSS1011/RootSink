@@ -9,7 +9,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from chainforge.evidence import guard_evidence_defect, harness_site
+from chainforge.evidence import cwe_basis, guard_evidence_defect, harness_site
 
 _CLASS = re.compile(
     r"(?:AddressSanitizer|MemorySanitizer|UndefinedBehaviorSanitizer|BUG: KASAN): ([\w-]+)"
@@ -155,6 +155,10 @@ def _two_sided_self_run(rec: dict, root: Path) -> str | None:
     if not any(s.get("triggered") for s in vul_all):
         return "no triggered vulnerable-side report"
     if not any(s.get("triggered") for s in vul):
+        # Release 1.0.10: our own attempt found the fixed kernel crashing the same way. Its log
+        # was not archived, but it contradicts the differential, so the record is not Upstream.
+        if (rec.get("kernel_attempt") or {}).get("status") == "fix_still_crashes":
+            return "our fixed-kernel run crashed with the same bug (attempt log not archived)"
         return "upstream"
     if rec.get("differential_complete") is not True or not fix:
         return "no patched-side run"
@@ -205,6 +209,65 @@ def gold_violations(rec: dict, root: Path, facts: dict | None = None) -> dict[st
     elif chain and chain[-1].get("evidence_kind") not in _WITNESSED:
         out["I5"] = "sink link not attributed to a sanitizer report"
     return out
+
+
+# Kernel attempt outcomes in which a kernel we built booted and ran the reproducer.
+KERNEL_RAN = (
+    "differential",
+    "vul_no_repro",
+    "vul_other_bug",
+    "fix_still_crashes",
+    "fix_untestable",
+)
+
+
+def attempt_ran(attempt: dict | None) -> bool:
+    """A kernel attempt ran the reproducer: a kernel we built booted and the reproducer executed.
+
+    `vul_no_repro` also covers a vulnerable kernel that never booted (detail ends `(no_boot)`) or
+    whose reproducer never started (`(not_run)`); those ran nothing (R10)."""
+    a = attempt or {}
+    if a.get("status") not in KERNEL_RAN:
+        return False
+    if a.get("status") == "vul_no_repro":
+        return not re.search(r"\((?:no_boot|not_run)\)\s*$", a.get("detail") or "")
+    return True
+
+
+def reached(rec: dict, root: Path) -> bool:
+    """A run of ours reached the record: an archived run, a run report of ours, or a kernel
+    attempt that ran the reproducer (not one with no C reproducer, a failed build or no boot)."""
+    if vul_log(rec, root) is not None:
+        return True
+    if attempt_ran(rec.get("kernel_attempt")):
+        return True
+    return any(s.get("observed_by") != "upstream" for s in _sink_runs(rec))
+
+
+# The root CWE rests on nothing of the record's own (release 1.0.10, the paper's Candidate rule).
+WEAK_ROOT_BASES = ("advisory", "catalogue-default")
+
+
+def unreached_tier(rec: dict) -> str:
+    """Tier of a record no run of ours reached: Partial when its own material (a dataflow path, a
+    check or lock the fix adds, the reporter's sanitizer report) supports the root CWE, Candidate
+    when only an advisory's listed CWEs or the catalogue's default root for the sink do."""
+    root = (rec.get("chain") or [{}])[0]
+    weak = cwe_basis(root, rec.get("provenance") or "") in WEAK_ROOT_BASES
+    return "bronze" if weak else "silver"
+
+
+def expected_tier(rec: dict, root: Path) -> tuple[str, dict[str, str]]:
+    """The tier the paper's rules give a record, and the contract gaps behind it (release 1.0.10).
+
+    Reproduced or Upstream by the GOLD contract; otherwise Partial when a run of ours reached it,
+    and, when none did, Partial or Candidate by `unreached_tier`. Used by `retier_all.py` and the
+    gate alike."""
+    v = gold_violations(rec, root)
+    tier = tier_for(rec, v)
+    if tier == "silver" and not reached(rec, root):
+        tier = unreached_tier(rec)
+    return tier, v
 
 
 def tier_for(rec: dict, violations: dict[str, str]) -> str:

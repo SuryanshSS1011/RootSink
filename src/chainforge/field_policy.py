@@ -59,6 +59,7 @@ HARNESS_ONLY = frozenset(
         "synthetic",
         "dataflow_evidence",
         "gold_contract_gaps",
+        "kernel_attempt",  # 1.0.10: outcome of our last kernel attempt (correlates with tier)
         # Derived from runs and the root site: they place the root against the crash.
         "fix_attribution",
         "root_site_relation",
@@ -97,6 +98,8 @@ def codebase(name: str) -> str:
     `canonical_project`, which keeps the kernel's two pipelines apart."""
     n = canonical_project(name)
     return _COUNT_ALIASES.get(n, n)
+
+
 _BRANCH_SUFFIX = re.compile(r"\.(dev|main|master|\d+(\.\d+)*\.x)$")
 
 

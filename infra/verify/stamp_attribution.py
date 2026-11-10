@@ -81,6 +81,46 @@ def crash_stack(log: str) -> str:
     return "\n".join(out)
 
 
+_KFRAME = re.compile(r"^(\?\s+)?([A-Za-z_][\w.]*)(?:\+0x[0-9a-f]+/0x[0-9a-f]+|\s+\S+\.[chS]:\d+)")
+_KPREFIX = re.compile(r"^((?:\[[^\]]*\])*)")
+_KTASK = re.compile(r"\[\s*[TC]\d+\]")
+_KMARKS = ("<TASK>", "<IRQ>", "</IRQ>", "<NMI>", "</NMI>", "<SOFTIRQ>", "</SOFTIRQ>")
+_KSTOP = ("RIP:", "Code:", "RSP:", "Allocated by", "Freed by", "The buggy address")
+
+
+def kernel_crash_stack(log: str) -> list[str]:
+    """Functions on the call trace of a KASAN report (the crash), reliable frames only.
+
+    KASAN frames read `name+0x32a/0x5a0` (or, symbolized, `name file.c:123`), without the ASan
+    `#N ... in` form `frames()` parses, so until release 1.0.10 no kernel root was ever placed on
+    the stack. The trace is the first after the `BUG: KASAN:` line. Console lines from other tasks
+    or CPUs, interleaved with it, are skipped by the trace's `[T..]`/`[C..]` tag. Frames marked `?`
+    are stale stack words, not calls, and are skipped; compiler suffixes such as `.constprop.0` are
+    cut. The trace ends at `</TASK>`, a blank line, the register dump or the next stack."""
+    lines = log.splitlines()
+    bug = next((i for i, ln in enumerate(lines) if "BUG: KASAN:" in ln), 0)
+    start = next(
+        (i for i in range(bug, len(lines)) if lines[i].rstrip().endswith("Call Trace:")), None
+    )
+    if start is None:
+        return []
+    tag = _KTASK.search(_KPREFIX.match(lines[start]).group(1))
+    out = []
+    for ln in lines[start + 1 :]:
+        prefix = _KPREFIX.match(ln).group(1)
+        if tag and prefix and tag.group(0) not in prefix:
+            continue  # another task's console line
+        body = ln[len(prefix) :].strip()
+        if body == "</TASK>" or not body or body.startswith(_KSTOP):
+            break
+        if body in _KMARKS:
+            continue
+        m = _KFRAME.match(body)
+        if m and not m.group(1):
+            out.append(m.group(2).split(".", 1)[0])
+    return out
+
+
 def site_relation(r: dict, root: Path) -> str | None:
     chain = r.get("chain") or []
     if len(chain) < 2:
@@ -97,8 +137,14 @@ def site_relation(r: dict, root: Path) -> str | None:
         near = isinstance(la, int) and isinstance(lb, int) and abs(la - lb) <= 5
         return "crash-line" if near else "crash-function"
     p = vul_log(r, root)
-    stack = frames(crash_stack(p.read_text(errors="replace"))) if p else []
-    if any(bare_function(fn) == fa for fn, _, _ in stack):
+    if p is None:
+        return None  # no archived crash report to place the root against (release 1.0.10)
+    text = p.read_text(errors="replace")
+    if "BUG: KASAN:" in text:  # release 1.0.10: the kernel's frames are read too
+        names = kernel_crash_stack(text)
+    else:
+        names = [fn for fn, _, _ in frames(crash_stack(text))]
+    if any(bare_function(fn) == fa for fn in names):
         return "on-stack"
     return "off-stack"
 

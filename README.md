@@ -5,7 +5,7 @@
 [![Code: MIT](https://img.shields.io/badge/code-MIT-blue.svg)](LICENSE)
 [![Data: CC BY 4.0](https://img.shields.io/badge/data-CC%20BY%204.0-lightgrey.svg)](LICENSE-DATA)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](pyproject.toml)
-[![Release 1.0.9](https://img.shields.io/badge/release-1.0.9-brightgreen.svg)](data/release/dataset.manifest.json)
+[![Release 1.0.10](https://img.shields.io/badge/release-1.0.10-brightgreen.svg)](data/release/dataset.manifest.json)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.24068722.svg)](https://doi.org/10.5281/zenodo.24068722)
 
 When a C or C++ program crashes under a memory-error detector (a *sanitizer*), the report points
@@ -154,9 +154,9 @@ say so.
 | Tier | Stored as `label_confidence_tier` | Meaning |
 |---|---|---|
 | **Reproduced** | `gold` | We replayed both versions. The vulnerable build crashes at a sink the sanitizer report locates, the fixed build runs the same input cleanly **twice**, the sink's CWE matches the report, the fix changes real (non-test) code, and any middle step was also sanitizer-reported. |
-| **Upstream** | `gold-upstream` | Every criterion holds, except that the crash is shown only by the original reporter's logs, not by a run of ours. |
-| **Partial** | `silver` | At least one criterion fails, or we never ran it. `gold_contract_gaps` names what is missing. |
-| **Candidate** | `bronze` | No run of ours, and the CWE order rests only on an advisory or a heuristic. |
+| **Upstream** | `gold-upstream` | The fix changes real code under a recorded commit and any middle step was sanitizer-reported, but the crash is shown only by the original reporter's logs, not by an archived run of ours. Our kernel attempts reached some of these without completing a two-sided run; `kernel_attempt` gives the outcome of the latest attempt that ran the reproducer, or of the latest attempt if none did (release 1.0.10). |
+| **Partial** | `silver` | A run of ours reached it and a criterion fails (from 1.0.10 this includes a fixed kernel that still crashed the same way), or no run reached it and its own material (a dataflow path, a check the fix adds, the reporter's sanitizer report) supports the root CWE. `gold_contract_gaps` names what is missing. |
+| **Candidate** | `bronze` | No run of ours reached it, and the root CWE rests only on an advisory's listed CWEs or the catalogue's default root for the sink (rule applied as stated from 1.0.10). |
 
 A run counts as *clean* only if the log shows the input was actually processed. A run that never
 started is an infrastructure failure, never evidence that a bug is fixed. The full rules are PR-3
@@ -460,6 +460,7 @@ Known defects and their status are tracked in [`docs/OPEN_ISSUES.md`](docs/OPEN_
 | `project`, `aliases` | The project, and ids such as `OSS-Fuzz-<id>` or `syzbot-<extid>`. |
 | `label_confidence_tier` | The tier (see [Tiers](#tiers-did-the-crash-reproduce)). |
 | `gold_contract_gaps` | For records below the Reproduced tier, which criteria failed and why. |
+| `kernel_attempt` | For syzbot records, the outcome of our kernel differential attempts (`status`, `detail`, both commits, number of attempts): the latest attempt that ran the reproducer, or the latest attempt if none did. A `vul_no_repro` whose detail ends `(no_boot)` ran nothing. Only a `differential` attempt's logs are archived, as the record's own `sanitizer_reports` (release 1.0.10). |
 | `chain` | The CWE instances in order, root first and sink last. |
 | `chain[i].cwe_id`, `role` | The CWE number, and `source`, `intermediate` or `sink`. |
 | `chain[i].evidence_kind` | How the instance is supported (see [Evidence](#evidence-how-is-each-instance-supported)). |

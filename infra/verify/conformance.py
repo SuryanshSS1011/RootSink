@@ -29,7 +29,7 @@ from chainforge.evidence import (  # noqa: E402
     patch_is_content,
 )
 from chainforge.field_policy import canonical_project  # noqa: E402
-from chainforge.integrity import gold_violations, tier_for  # noqa: E402
+from chainforge.integrity import expected_tier, gold_violations, tier_for  # noqa: E402
 
 # Provenances we executed ourselves; everything kernel-side cites syzbot's own run.
 SELF_RUN = {"arvo", "arvo-len3", "arvo-newarm", "arvo-msan", "osv-git", "nvd-mined"}
@@ -78,6 +78,13 @@ def audit(rows, root=Path(".")):
             if tier_for(r, v) != r["label_confidence_tier"]:
                 for rule in v or {"tier": ""}:
                     hard[f"{rule:<4}{r['label_confidence_tier']} record breaks PR-3 {rule}"] += 1
+        elif r.get("label_confidence_tier") in ("silver", "bronze"):
+            # Release 1.0.10: a Partial or Candidate record has the tier the paper's rules give
+            # (Partial when a run of ours reached it, else Partial or Candidate by its root basis).
+            want, _ = expected_tier(r, root)
+            if want != r["label_confidence_tier"]:
+                tier = r["label_confidence_tier"]
+                hard[f"R5  {tier} record should be {want} by the tier rules"] += 1
         chain = [c for c in (r.get("chain") or []) if isinstance(c, dict)]
 
         # R1: ordered, admissible pairs

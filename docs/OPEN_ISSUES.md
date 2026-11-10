@@ -468,6 +468,48 @@ a bounds check, the defect is more likely an over-read (CWE-125) than a use afte
 uninitialised read. Cure: re-derive the CWE of these roots from their tested hunk under a new
 dated rule, in a later release.
 
+---
+
+### 40. Fifteen Upstream records our fixed kernel refuted — **cured in 1.0.10** (found 2026-11-09)
+
+The paper defines Upstream as a record whose crash only the reporter's logs show, and says any
+other record our runs reached is Partial. For 15 Upstream records our last kernel differential
+attempt reproduced the bug and the fixed kernel crashed with the same bug (`fix_still_crashes`),
+for example CHAINFORGE-0800050. The outcome was kept only in the changelog, so the GOLD contract
+never saw it. Release 1.0.10 copies each record's latest attempt that ran the reproducer onto it
+as `kernel_attempt`, and `chainforge.integrity` tiers these 15 Partial. This is a new exception
+written after the outcomes were seen (PREREGISTRATION, release 1.0.10). A further 195 Upstream
+records were reached by an attempt that ran the reproducer but did not complete a two-sided run
+(the bug did not reproduce, another bug fired, or the fixed kernel's run was unusable); they stay
+Upstream, since that is not a negative result (R10), and the paper states the count. A
+`vul_no_repro` attempt whose kernel never booted (detail `(no_boot)`) ran nothing and is not
+counted.
+
+### 41. Fourteen Partial records rested only on an advisory or the catalogue — **cured in 1.0.10** (found 2026-11-09)
+
+Thirteen `nvd-mined` records and CHAINFORGE-0800007 were Partial although no run of ours reached
+them and their root CWE rested only on NVD's listed CWEs or the catalogue's default, which the
+paper calls Candidate. `chainforge.integrity.unreached_tier` now encodes the paper's rule,
+`retier_all.py` applies it, and the gate checks it.
+
+### 42. No kernel root was ever placed on the crash stack — **cured in 1.0.10** (found 2026-11-09)
+
+`root_site_relation` read stack frames only in ASan's `#N ... in fn` form, so KASAN call traces
+(`fn+0x32a/0x5a0`) gave no frames and every kernel root off the crashing function was `off-stack`.
+At least 24 tested kernel sites are callers on the trace (for example `media_request_alloc` in
+CHAINFORGE-0800015). Release 1.0.10 reads the call trace after `BUG: KASAN:`, keeping only the
+reporting task's console lines and skipping `?` frames; 30 kernel roots become `on-stack`, and the
+paper's fix-location and stack-baseline figures change with them. Three old kernels' traces mark
+every frame `?` and give no frames, so their roots stay `off-stack`. The relation is now null for
+the 180 records with no archived crash report, which were `off-stack` before.
+
+### 43. Kernel attempt logs were not archived — **open, minor** (found 2026-11-09)
+
+Only attempts that produced a two-sided differential have archived logs. The outcome of every
+other attempt (`kernel_attempt`) is stated but cannot be checked from the release, including the
+15 `fix_still_crashes` records of issue 40. Cure: re-run those attempts on hosted runners and
+archive the logs, in a later release.
+
 ## Genuinely without a cure
 
 Nothing currently qualifies.

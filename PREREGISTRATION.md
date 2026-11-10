@@ -1601,3 +1601,46 @@ Outcome (recorded after copying):
 3. The inputs total about 32 MB. Seven are empty files, as they are in the images, whose
    two-sided runs reproduced with them.
 4. No label, site, tier or split changes. Replay still needs the images.
+
+## Release 1.0.10: tier rules applied as the paper states them, and one new exception (2026-11-09)
+
+A review of the 1.0.9 paper checked each tier against the paper's own definitions and found two
+groups that the code tiered differently. The paper defines Upstream as a record whose crash only
+the reporter's logs show, says any other record our runs reached is Partial, and says a record no
+run reached is Candidate when only an advisory's listed CWEs or our catalogue's default root for
+the sink support its root CWE. Item 2 applies a stated rule as written. Item 1 is a new exception,
+written after the 15 outcomes it moves were seen, and is disclosed as such.
+
+1. Our kernel differential (`kdiff_kvm.sh`) logged the outcome of every attempt in the changelog
+   (op `kernel-differential-attempt`) but archived logs only for two-sided runs. For 15 Upstream
+   records the last attempt reproduced the bug on the vulnerable kernel and the fixed kernel
+   crashed with the same bug (`fix_still_crashes`). Because these logs were not archived, the
+   records fit the Upstream wording, so moving them is a new exception, not the stated rule: our
+   own run contradicts the differential, and we judged that a record our run refutes should not
+   be Upstream. `stamp_kernel_attempts.py` copies onto each record, as `kernel_attempt` (a
+   harness-only field), the latest attempt that ran the reproducer, or the latest attempt if none
+   did, and `chainforge.integrity` returns an I5 reason other than "upstream" when its status is
+   `fix_still_crashes`, so the GOLD contract and the gate tier them Partial. An attempt ran the
+   reproducer when a kernel we built booted and the reproducer executed
+   (`chainforge.integrity.attempt_ran`); a `vul_no_repro` whose detail ends `(no_boot)` ran
+   nothing. Attempts in which the bug did not reproduce, another bug fired, the fixed kernel's run
+   was unusable, or nothing was built or run do not refute a record (R10) and leave it Upstream;
+   the paper states how many Upstream records such attempts reached.
+2. Thirteen `nvd-mined` records and one syzbot record (CHAINFORGE-0800007) were Partial although
+   no run of ours reached them and their root CWE rests only on NVD's listed CWEs or the
+   catalogue's default. `chainforge.integrity.unreached_tier` encodes the paper's rule, and
+   `chainforge.integrity.expected_tier` gives every record the tier the paper's rules give.
+   `retier_all.py` now applies it to every record, Candidates included (until 1.0.9 a Candidate
+   no run reached kept its source pipeline's tier), and the gate checks every Partial and
+   Candidate record against it. No Candidate changes tier; the 212 earlier Candidates now list
+   their failed criteria in `gold_contract_gaps`, like Partial records.
+3. The 1.0.9 paper said Upstream records meet criteria (c) to (e). Criterion (c), the report
+   agreeing with the labels, needs our own log and was never checked for any Upstream record
+   (`gold_violations` skips I2 without one). The 1.0.10 paper says (d) and (e), as the code has
+   always applied it.
+
+Also corrected with these, changing no tier: `root_site_relation` now reads KASAN call traces
+(`name+0x.../0x...` frames from the trace after `BUG: KASAN:`, keeping only the reporting task's
+console lines; frames marked `?` are skipped), which `backfill_functions.frames` never parsed, so
+no kernel root had been placed on the crash stack. It is now null, not `off-stack`, for the 180
+records with no archived crash report to compare against.

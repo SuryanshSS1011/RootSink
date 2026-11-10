@@ -22,10 +22,11 @@ value in `dataset.jsonl`, and each protocol it describes to its entry in `PREREG
 | tested repair site / origin site / suggested site (earlier "untested site", "annotated source site") | `site_kind: "tested-repair-site"` / `"origin-site"` / `"annotated-site"` (sinks use `"crash-site"`, UBSan intermediates `"witnessed-site"`); from 1.0.7 a tested root keeps any replaced origin in `evidence.origin_site`; from 1.0.8 no origin is a C++ standard-library frame |
 | Reproduced / Upstream / Partial / Candidate tier (earlier GOLD / upstream / silver / bronze) | `label_confidence_tier: "gold"` / `"gold-upstream"` / `"silver"` / `"bronze"` |
 | the Reproduced-tier criteria a record failed | `gold_contract_gaps` (criteria are PR-3 in `src/chainforge/integrity.py`) |
+| outcome of our kernel differential attempts (syzbot records; the latest that ran the reproducer, else the latest) | `kernel_attempt`: `status` (`differential`, `vul_no_repro`, `vul_other_bug`, `fix_still_crashes`, `fix_untestable`, `no_crepro`, `vul_build_failed`, `repro_cc_failed`, `toolchain_missing`), `detail`, `vulnerable_commit`, `fix_commit`, `attempts`; logs archived only for `differential` (1.0.10) |
 | duplicate group, sampling weight | `duplicate_group`, `sampling_weight` |
 | the developer's fix commit(s) and repository | `commit_range.fix_commits` (every 40-hex sha, canonical) and `commit_range.repo`; `commit_range.fixed` keeps the value as the source gave it (a sha, a URL, or several shas) |
 | fix-attributed (the recorded fix alone removes the crash) | `fix_attribution.status` (`true`/`false`/`null`) with `fix_attribution.basis` |
-| where the root site sits against the crash | `root_site_relation`: `crash-line`, `crash-function`, `on-stack`, `off-stack`, `file-only` |
+| where the root site sits against the crash | `root_site_relation`: `crash-line`, `crash-function`, `on-stack`, `off-stack`, `file-only`; kernel call traces are read from 1.0.10 (before, no kernel root was `on-stack`); null when no archived crash report exists to compare against (1.0.10) |
 | CWE mapped from the discouraged CWE-20 (PR-17) | `chain[0].cwe_id` is 1284 or 1285; the original is `chain[0].cwe_class` (20), the rule's outcome `chain[0].cwe_mapping` (`quantity`, `index`, `class-level`) and the text read `chain[0].cwe_mapping_input` |
 | MITRE edge kinds direct / transitive / inherited / hierarchy / modeling | `mitre_chain.edges[].kind`: `mitre-direct`, `mitre-transitive`, `mitre-inherited`, `mitre-hierarchy`, `catalog-only` |
 | ready for reward use | `rl_ready`, details in `rl_scoring` |
@@ -74,9 +75,12 @@ PR-3):
 - `gold` (Reproduced in the paper) — we re-ran it both sides: the vulnerable revision crashes with the witnessed sink, the
   patched revision runs the same input clean (the input demonstrably executed), both logs are
   archived here, the patch can carry the guard, and the source does not contradict the crash.
-- `gold-upstream` (Upstream) — execution-witnessed by syzbot, one-sided, not re-performed by us.
-- `silver` (Partial in the paper) — reproduction or dataflow evidence that falls short of the Reproduced-tier contract.
-- `bronze` (Candidate) — ordering from co-occurrence or heuristics only.
+- `gold-upstream` (Upstream) — execution-witnessed by syzbot, one-sided, with no archived run of ours. Our
+  kernel attempts reached some without completing a two-sided run; `kernel_attempt` gives the outcome (1.0.10).
+- `silver` (Partial in the paper) — a run of ours reached it and a criterion fails (from 1.0.10 including a fixed
+  kernel that still crashed the same way), or no run reached it and its own material supports the root CWE.
+- `bronze` (Candidate) — no run of ours reached it, and the root CWE rests only on an advisory's listed CWEs or
+  the catalogue's default root for the sink.
 
 **Per-link evidence kinds**, strongest first: `causally-proven` (guard ablation: the fix's hunk
 alone silences the sanitizer; the source CWE follows from what the guard checks, PR-4),
