@@ -510,6 +510,25 @@ other attempt (`kernel_attempt`) is stated but cannot be checked from the releas
 15 `fix_still_crashes` records of issue 40. Cure: re-run those attempts on hosted runners and
 archive the logs, in a later release.
 
+### 44. Linux 7.0 kernels did not boot in the replay VM on Intel hosts (found 2026-11-16)
+
+Following the README on clean hosted runners, CHAINFORGE-0800011 (its `fix^` is Linux 7.0)
+reproduced on an AMD host and never booted on two Intel hosts. The re-run ended
+`vul_no_repro (no_boot)` and the scorer `control_did_not_crash`, and a boot that never comes up is
+an infrastructure outcome (R10, `integrity.py`). syzbot's built-in command line fakes two NUMA
+nodes (`numa=fake=2`) and the VM declared none. An Intel guest then keeps the vCPUs of its one
+package on different fake nodes, while an AMD guest places each vCPU on its cache's node, node 0,
+as it brings the vCPU up. From Linux 7.0, `set_cpu_sibling_map` warns at boot when one package
+spans nodes, and `panic_on_warn` makes the warning fatal before the reproducer runs. Archived boots
+on Intel hosts with kernels up to 6.19 came up with the same layout. **Cured after release
+1.0.10, on main.** The four kernel
+scripts the README uses (`infra/cse-kvm/kdiff_kvm.sh`, `kablate_kvm.sh` and their `github/`
+copies) give the VM one NUMA node, so every vCPU starts on node 0 whatever the host's vendor. With
+the change, the re-run of CHAINFORGE-0800011 is a full differential on three fresh runners (one
+AMD, two Intel). On each runner, a guest that differs only in the vendor it reports does not boot
+as Intel without the change, and boots as Intel with it or as AMD without it. No record, label or
+tier changes.
+
 ## Genuinely without a cure
 
 Nothing currently qualifies.

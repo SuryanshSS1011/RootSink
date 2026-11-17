@@ -281,17 +281,35 @@ Resource use per scored episode is in [`docs/RESOURCES.md`](docs/RESOURCES.md).
 
 ### Linux kernel bugs (syzbot)
 
-Kernel records are scored the same way, inside a KVM virtual machine.
+Kernel records are scored the same way, inside a KVM virtual machine. The scripts need Linux with
+read and write access to `/dev/kvm`, QEMU, Docker, Python 3.12 and kernel.org's crosstool
+compilers. Run this setup once from the repository root. It is the setup we tested on a clean
+GitHub-hosted Ubuntu runner.
 
 ```bash
-export CF_BASE=$HOME/rootsink-kernel      # scratch space for kernel trees and builds
-bash infra/cse-kvm/github/kablate_kvm.sh <syzbot extid> <fix sha> my.patch
+sudo apt-get install -y qemu-system-x86 flex bison bc libelf-dev libssl-dev cpio e2fsprogs gcc-11 g++-11
+sudo chmod 666 /dev/kvm                   # or add yourself to the kvm group
+export CF_BASE=$HOME/rootsink-kernel CF_QEMU=qemu-system-x86_64 CF_JOBS=4
+mkdir -p "$CF_BASE"/{tools,imgbuild,out,work,logs}
+cp infra/cse-kvm/github/{kdiff_kvm.sh,kablate_kvm.sh,build_rootfs.sh,kimg_apt.sh} "$CF_BASE"/
+ln -s "$PWD" "$CF_BASE/repo"
+for v in 10.5.0 12.3.0 13.2.0; do
+  curl -sSfL "https://mirrors.edge.kernel.org/pub/tools/crosstool/files/bin/x86_64/$v/x86_64-gcc-$v-nolibc-x86_64-linux.tar.xz" | tar xJ -C "$CF_BASE/tools"
+done
+curl -sSfL -o "$CF_BASE/imgbuild/busybox" https://busybox.net/downloads/binaries/1.35.0-x86_64-linux-musl/busybox
+chmod +x "$CF_BASE/imgbuild/busybox"
+```
+
+Then score a patch, or pass `devfix` instead of a file to score the developer's fix.
+
+```bash
+bash "$CF_BASE/kablate_kvm.sh" <syzbot extid> <fix sha> my.patch
 ```
 
 The syzbot extid is the part after `syzbot-` in the record's alias, and the fix sha is in
 `commit_range.fix_commits`. The script builds the kernel just before the fix with syzbot's
 configuration, checks that the reproducer still triggers syzbot's bug, applies your patch, rebuilds
-and boots twice. It needs Linux with `/dev/kvm`, QEMU and Docker, and
+and boots twice. The verdict is in `$CF_BASE/ablate/<extid>/result.json`.
 [`infra/cse-kvm/github/kablate.yml`](infra/cse-kvm/github/kablate.yml) runs it on GitHub's hosted
 runners. An `inconclusive` result is no verdict, never a negative score.
 
@@ -315,6 +333,11 @@ docker pull "n132/arvo@sha256:<digest from docker_image_ref>"
 The images total several terabytes, so they are not part of this repository. Docker Hub limits
 anonymous pulls, so log in, or pull through a mirror such as
 `mirror.gcr.io/n132/arvo@sha256:…`, which `score_patch.sh` falls back to on its own.
+The four images of the two records this README uses, CHAINFORGE-0042476579 and
+CHAINFORGE-0040096184, are also copied with unchanged digests to
+`ghcr.io/suryanshss1011/rootsink-arvo`. Set `CF_ARVO_REPO=ghcr.io/suryanshss1011/rootsink-arvo` for
+`verify.sh`, or `CF_IMAGE=ghcr.io/suryanshss1011/rootsink-arvo:<arvo_id>-vul` for `score_patch.sh`,
+to pull from that copy.
 `infra/verify/check_image_digests.py` checks that every pinned digest still resolves without
 pulling anything. The images come from ARVO's open-source pipeline
 ([github.com/n132/arvo](https://github.com/n132/arvo)), which can regenerate one.
@@ -335,14 +358,17 @@ configuration (`kernel.config`), the C reproducer (`repro.c`), our vulnerable-si
 (`vul.kasan.txt`), excerpts of the fixed-side boots and the run summary (`differential.json`).
 The full boot consoles are in `data/evidence_full/kernel/<extid>/`. No kernel image ships.
 
+After the setup under [Linux kernel bugs](#linux-kernel-bugs-syzbot), this re-runs one record.
+
 ```bash
-export CF_BASE=$HOME/rootsink-kernel
-bash infra/cse-kvm/kdiff_kvm.sh <syzbot extid> <fix sha>
+bash "$CF_BASE/kdiff_kvm.sh" <syzbot extid> <fix sha>
 ```
 
 `kdiff_kvm.sh` builds the kernel just before the fix and at the fix from the same tree, wraps the
 reproducer in a minimal root file system and boots both under KASAN. Expect a full kernel build
-(tens of minutes on four cores), an incremental rebuild and up to ten minutes per boot.
+(tens of minutes on four cores), an incremental rebuild and up to ten minutes per boot. The summary
+is in `$CF_BASE/out/<extid>/differential.json`. The copies in `infra/cse-kvm/` itself are the
+versions for a KVM host without Docker.
 
 ---
 

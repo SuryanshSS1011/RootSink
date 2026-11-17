@@ -1644,3 +1644,37 @@ Also corrected with these, changing no tier: `root_site_relation` now reads KASA
 console lines; frames marked `?` are skipped), which `backfill_functions.frames` never parsed, so
 no kernel root had been placed on the crash stack. It is now null, not `off-stack`, for the 180
 records with no archived crash report to compare against.
+
+## Replay checker: crashes and use-after-free sinks read as the rules state them (2026-11-16, after release 1.0.10)
+
+A clean-machine test of the README found that `infra/repro/verify.sh` reported FAIL for the
+README's own example. Running `infra/repro/check.py`, the comparison `verify.sh` ends with, on every
+bundle against the logs its record cites then showed four defects in the checker. None of the fixes
+changes a label, site, tier, split or bundle, and all were written after those outcomes were seen.
+Release 1.0.10 ships the old checker, so the fixes are on GitHub's main branch and in the next
+release.
+
+1. The public release left out `infra/mac/parse_sanitizer.py`, which `check.py` uses to read the
+   crash, so outside this repository no witness could be compared and every replay read as FAIL.
+   The release now ships it, and building the release stops if `check.py` fails on the README's
+   example against its archived logs. A missing parser now exits 2, an infrastructure failure and
+   never a negative result (R10).
+2. `check.py` looked for a crash only in `ERROR:` lines and spelled UBSan's name
+   `UndefinedSanitizer`. MemorySanitizer reports an uninitialised read as a `WARNING:`, and UBSan
+   names itself `UndefinedBehaviorSanitizer`, so those records read as having no sanitizer
+   signature. The parser had already been fixed for the first, and the checker had not.
+3. For a use-after-free report the parser suggests CWE-416, the report taken alone, while PR-2 and
+   PR-8 make the access the sink, CWE-125 for a READ and CWE-787 for a WRITE, directly behind a
+   CWE-416 link. `check.py` now accepts that declared sink when the link before it is CWE-416, and
+   it still fails a use-after-free sink with no CWE-416 link, as PR-8 does.
+4. Bundles name a report that holds only UBSan runtime errors `undefined-behavior`, while the parser
+   leaves that report's class empty and lists the errors separately. `check.py` now reads the empty
+   class as `undefined-behavior`.
+
+The bundles that still fail were left unchanged. Most are SEGV reports whose bundle records a READ
+or WRITE direction and a CWE-125 or CWE-787 sink, while the parser reads no direction from a SEGV
+report and suggests CWE-476. Which sink a SEGV implies is a labelling question, so the checker was
+not changed for it. Others are Partial records whose use-after-free sink has no CWE-416 link,
+which PR-8 made Partial and the checker rightly fails, and archived logs that show a sanitizer
+self-check failure on our host instead of the bug's report. A few more disagree with the parser on
+one field. `tests/test_replay_check.py` covers items 1 to 4.

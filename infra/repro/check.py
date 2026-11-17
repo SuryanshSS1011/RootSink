@@ -16,13 +16,28 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "mac"))
 try:
     from parse_sanitizer import parse  # shared witness parser
-except Exception:  # pragma: no cover - fallback keeps the verifier usable standalone
+except Exception:  # pragma: no cover - without it no witness can be compared (exit 2)
     parse = None
 
+# MemorySanitizer reports an uninitialised read as a WARNING, not an ERROR, and UBSan names
+# itself UndefinedBehaviorSanitizer.
 CRASH_RE = re.compile(
-    r"ERROR: (Address|Undefined|Memory|Leak)Sanitizer|runtime error:|libFuzzer: deadly signal",
+    r"ERROR: (Address|UndefinedBehavior|Undefined|Memory|Leak)Sanitizer|WARNING: MemorySanitizer"
+    r"|runtime error:|libFuzzer: deadly signal",
     re.I,
 )
+# The parser suggests CWE-416 for a use-after-free report taken alone. The dataset's declared
+# convention (PR-2, PR-8) makes the access the sink, CWE-125 for a READ and CWE-787 for a WRITE,
+# directly behind a CWE-416 link, so a bundle that declares that sink and link agrees with it.
+UAF_SINK = {"READ": 125, "WRITE": 787}
+
+
+def link_before_sink(b):
+    links = b.get("links") or []
+    for i, link in enumerate(links):
+        if link.get("role") == "sink":
+            return links[i - 1].get("cwe_id") if i > 0 else None
+    return None
 
 
 def read(path):
@@ -55,6 +70,10 @@ def main(argv):
     exp = (b.get("expected", {}).get("vulnerable") or {}).get("witness")
     if exp and parse and vul_crashed:
         got = parse(vul)
+        # Bundles name a report with only UBSan runtime errors "undefined-behavior"; the parser
+        # leaves its class empty and lists the errors in ubsan_kinds.
+        if got.get("sanitizer") == "undefined" and not got.get("bug_class"):
+            got["bug_class"] = "undefined-behavior"
         for field in ("bug_class", "direction"):
             want, have = exp.get(field), got.get(field)
             if want:
@@ -62,11 +81,25 @@ def main(argv):
         if exp.get("implies_sink_cwe"):
             want_sink = exp["implies_sink_cwe"]
             have_sink = got.get("suggested_sink_cwe")
-            add(
-                "sink_cwe",
-                want_sink == have_sink,
-                f"expected CWE-{want_sink}, observed CWE-{have_sink}",
+            ok = want_sink == have_sink
+            detail = f"expected CWE-{want_sink}, observed CWE-{have_sink}"
+            if not ok and "use-after" in (got.get("bug_class") or ""):
+                ok = want_sink == UAF_SINK.get(got.get("direction")) and link_before_sink(b) == 416
+                detail += f" for the report alone; CWE-416 -> CWE-{want_sink} declared (PR-8)"
+            add("sink_cwe", ok, detail)
+    elif exp and parse is None:
+        # A missing parser is an infrastructure failure, never a negative result (R10).
+        print(
+            json.dumps(
+                {
+                    "record_id": b.get("record_id"),
+                    "verdict": "INCONCLUSIVE",
+                    "detail": "infra/mac/parse_sanitizer.py not found; no witness compared",
+                },
+                indent=2,
             )
+        )
+        return 2
     elif exp:
         add("witness_comparable", False, "could not parse observed witness")
 

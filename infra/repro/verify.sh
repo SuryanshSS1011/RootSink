@@ -39,9 +39,11 @@ echo "[verify] $rid  chain=$chain"
 
 # Pull BY DIGEST when the bundle pins one: that is the reproducibility guarantee.
 # A tag can be moved or deleted; a digest either matches bit-for-bit or fails.
+# CF_ARVO_REPO pulls the same digest from a copy of n132/arvo (a mirror); the digest pins the
+# content, so a copy cannot change the result. It is ignored when the bundle pins no digest.
 pull(){ # ref digest -> echoes the reference actually used
   local ref="$1" dig="$2" target="$1"
-  if [ -n "$dig" ]; then target="${ref%%:*}@${dig}"; fi
+  if [ -n "$dig" ]; then target="${CF_ARVO_REPO:-${ref%%:*}}@${dig}"; fi
   if ! docker pull --platform "$PLATFORM" "$target" >/dev/null 2>&1; then
     echo "[verify] FATAL: cannot pull $target" >&2; return 1
   fi
